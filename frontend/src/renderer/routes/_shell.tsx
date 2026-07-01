@@ -683,6 +683,33 @@ function ShellLayout() {
 		[navigate, queryClient, setOrchestratorReplacementError, setProjectRestarting],
 	);
 
+	const restartOrchestrator = useCallback(
+		async (projectId: string) => {
+			setProjectRestarting(projectId, true);
+			setOrchestratorReplacementError(projectId, null);
+			try {
+				const sessionId = await spawnOrchestrator(projectId, true);
+				await queryClient.invalidateQueries({ queryKey: workspaceQueryKey });
+				void navigate({
+					to: "/projects/$projectId/sessions/$sessionId",
+					params: { projectId, sessionId },
+				});
+			} catch (error) {
+				const message = error instanceof Error ? error.message : "Could not replace orchestrator";
+				setOrchestratorReplacementError(projectId, message);
+				void captureRendererException(error, {
+					source: "orchestrator-replace",
+					operation: "replace_orchestrator",
+					surface: "shell",
+					project_id: projectId,
+				});
+			} finally {
+				setProjectRestarting(projectId, false);
+			}
+		},
+		[navigate, queryClient, setOrchestratorReplacementError, setProjectRestarting],
+	);
+
 	useEffect(() => {
 		applyDocumentTheme(resolvedTheme);
 	}, [resolvedTheme]);
