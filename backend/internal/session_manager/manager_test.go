@@ -7159,6 +7159,42 @@ func TestRetireForReplacementForceDestroyFailureLeavesSessionActive(t *testing.T
 	}
 }
 
+func TestRetireForReplacementRuntimeDestroyFailureBlocksWorkspaceRelease(t *testing.T) {
+	m, st, rt, ws := newLifecycleManager()
+	rt.destroyErr = errors.New("tmux transient")
+	ws.stashRef = "refs/ao/preserved/mer-orch"
+	st.sessions["mer-orch"] = domain.SessionRecord{
+		ID:        "mer-orch",
+		ProjectID: "mer",
+		Kind:      domain.KindOrchestrator,
+		Metadata:  domain.SessionMetadata{WorkspacePath: "/ws/mer-orch", Branch: "ao/mer-orchestrator", RuntimeHandleID: "orch-handle"},
+		Activity:  domain.Activity{State: domain.ActivityActive},
+	}
+	st.worktrees["mer-orch"] = []domain.SessionWorktreeRecord{{
+		SessionID:    "mer-orch",
+		RepoName:     domain.RootWorkspaceRepoName,
+		Branch:       "ao/mer-orchestrator",
+		WorktreePath: "/ws/mer-orch",
+		PreservedRef: "refs/ao/preserved/old",
+	}}
+
+	err := m.RetireForReplacement(ctx, "mer-orch")
+	if err == nil || !strings.Contains(err.Error(), "runtime") {
+		t.Fatalf("RetireForReplacement err = %v, want runtime failure", err)
+	}
+	if st.sessions["mer-orch"].IsTerminated {
+		t.Fatal("session must remain active when runtime destroy fails")
+	}
+	if rt.destroyed != 1 || rt.destroyedIDs[0] != "orch-handle" {
+		t.Fatalf("runtime destroyed = %d ids=%v, want one attempt for orch-handle", rt.destroyed, rt.destroyedIDs)
+	}
+	for _, call := range ws.calls {
+		if call == "ForceDestroy:mer-orch" {
+			t.Fatalf("ForceDestroy must not run after runtime destroy failure; calls=%v", ws.calls)
+		}
+	}
+}
+
 // TestSaveAndTeardownAll_CleanWorktreeWritesEmptyRef verifies that a clean
 // worktree (StashUncommitted returns "") still writes a worktree row (with
 // empty preserved_ref). The row's presence is the shutdown-saved marker.
