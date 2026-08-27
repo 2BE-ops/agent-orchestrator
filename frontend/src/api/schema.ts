@@ -3223,7 +3223,7 @@ export interface components {
             type: "free_form" | "pr_created" | "artifact" | "checkpoint" | "needs_input" | "stuck" | "done";
         };
         CreateReportResponse: {
-            report: components["schemas"]["ReportResponse"];
+            id: string;
         };
         DegradedProject: {
             id: string;
@@ -3790,16 +3790,6 @@ export interface components {
             needsGitInit: boolean;
             repoPath: string;
             requiredActions: string[];
-        };
-        ReportResponse: {
-            /** Format: date-time */
-            createdAt: string;
-            deliveryState: string;
-            id: string;
-            note: string;
-            projectId: string;
-            sessionId: string;
-            type: string;
         };
         ResolveCommentsResponse: {
             ok: boolean;
