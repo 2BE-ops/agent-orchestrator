@@ -401,7 +401,10 @@ function SessionInspectorRail({
 				animate={{ x: isOpen ? "0%" : "100%" }}
 				onAnimationComplete={handleAnimationComplete}
 				ref={panelRef}
-				style={{ width: `var(${inspectorWidthVar}, ${sizing.defaultWidth}px)` }}
+				style={{
+					width: `var(${inspectorWidthVar}, ${sizing.defaultWidth}px)`,
+					minWidth: sizing.mode === "browser" ? `var(${inspectorWidthVar}, ${sizing.defaultWidth}px)` : undefined,
+				}}
 				transition={transition}
 			>
 				<ResizeHandle
@@ -1386,7 +1389,9 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	const previewUrl = session?.previewUrl?.trim() || undefined;
 	const previewRevision = session?.previewRevision;
 	const browserSlotVisible = Boolean(
-		session && hasInspector && (browserPoppedOut || (isInspectorOpen && inspectorView === "browser")),
+		session &&
+			hasInspector &&
+			(browserPoppedOut || (inspectorView === "browser" && (isInspectorOpen || !inspectorSettledClosed))),
 	);
 	const terminated = session ? !sessionIsActive(session) : false;
 	const browserView = useBrowserView({
