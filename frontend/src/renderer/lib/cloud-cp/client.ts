@@ -11,6 +11,7 @@ import { CloudCpAuthError, CloudCpError } from "./errors";
 import { createSseFrameParser } from "./sse";
 import type {
 	CloudCpAgentProvider,
+	CloudCpAvailableAgentsResponse,
 	CloudCpCancelTurnResponse,
 	CloudCpChatEventsQuery,
 	CloudCpChatEventsResponse,
