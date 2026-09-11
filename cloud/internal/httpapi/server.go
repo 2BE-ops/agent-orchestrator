@@ -160,6 +160,7 @@ type Server struct {
 	environmentControlToken string
 	secretCipher            *secrets.Cipher
 	credentialValidator     credentialValidator
+	repositoryProbeClient   *http.Client
 	webhookMaxBody          int64
 	terminalStreamEnabled   bool
 	terminalRelayEnabled    bool
@@ -195,6 +196,7 @@ type Options struct {
 	EnvironmentControlToken   string
 	SecretCipher              *secrets.Cipher
 	CredentialValidator       credentialValidator
+	RepositoryProbeClient     *http.Client
 	WebhookMaxBody            int64
 	TerminalStreamEnabled     bool
 	TerminalRelayEnabled      bool
@@ -265,6 +267,7 @@ func New(options Options) *Server {
 		environmentControlToken:   options.EnvironmentControlToken,
 		secretCipher:              options.SecretCipher,
 		credentialValidator:       options.CredentialValidator,
+		repositoryProbeClient:     options.RepositoryProbeClient,
 		webhookMaxBody:            webhookMaxBody,
 		terminalStreamEnabled:     options.TerminalStreamEnabled,
 		terminalRelayEnabled:      options.TerminalRelayEnabled,
@@ -274,6 +277,9 @@ func New(options Options) *Server {
 	server.workerBinariesBySHA = indexWorkerBinaries(options.WorkerBinary, options.WorkerHelperBinary)
 	if server.credentialValidator == nil {
 		server.credentialValidator = newAgentCredentialValidator(nil)
+	}
+	if server.repositoryProbeClient == nil {
+		server.repositoryProbeClient = &http.Client{Timeout: 5 * time.Second}
 	}
 	if server.checkoutBroker == nil && options.GitHub != nil {
 		server.checkoutBroker = options.GitHub
