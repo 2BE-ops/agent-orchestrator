@@ -231,6 +231,7 @@ type lifecycleRecorder interface {
 	CancelLaunch(id domain.SessionID, launchID string)
 	ReleaseLaunch(id domain.SessionID, launchID string)
 	MarkSpawned(ctx context.Context, id domain.SessionID, metadata domain.SessionMetadata) error
+	MarkSpawnedRestored(ctx context.Context, id domain.SessionID, metadata domain.SessionMetadata) error
 	MarkChatSpawned(ctx context.Context, id domain.SessionID, metadata domain.SessionMetadata, boundary domain.ConversationBranch) error
 	CommitControllerEpoch(ctx context.Context, id domain.SessionID, source, target domain.SessionMode, nativeConversationID string, startFresh bool) (bool, error)
 	ConfirmAgentSwitchSourceStopped(ctx context.Context, confirmation domain.AgentSwitchSourceStopConfirmation) (bool, error)
@@ -2028,8 +2029,15 @@ func (m *Manager) RestoreWithMode(ctx context.Context, id domain.SessionID) (Res
 	return m.relaunchRestoredSession(ctx, rec, project, ws)
 }
 
+// restoreOperation is the operation label for the startup restore/re-host path
+// (relaunchRestoredSession, reached from Reconcile and RestoreAll). It is the sole
+// operation that preserves a session's existing sort timestamps in MarkSpawned so
+// re-hosting an untouched session does not reshuffle the sidebar; every other
+// relaunch operation is user-initiated and bumps to now.
+const restoreOperation = "restore"
+
 func (m *Manager) relaunchRestoredSession(ctx context.Context, rec domain.SessionRecord, project domain.ProjectRecord, ws ports.WorkspaceInfo) (RestoreResult, error) {
-	result, err := m.relaunchSession(ctx, "restore", rec, project, ws, nil)
+	result, err := m.relaunchSession(ctx, restoreOperation, rec, project, ws, nil)
 	if err != nil {
 		return RestoreResult{}, err
 	}
@@ -2358,7 +2366,13 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 	if (bindNativeIdentity || (requireNativeHistory && !forceFresh)) && strings.TrimSpace(metadata.AgentSessionID) != "" {
 		metadata.AgentSessionIDLaunchID = launchID
 	}
-	if err := m.lcm.MarkSpawned(ctx, rec.ID, metadata); err != nil {
+	markSpawned := m.lcm.MarkSpawned
+	if operation == restoreOperation {
+		// Startup re-host: keep the session's pre-restart sort position instead of
+		// stamping now, so the background relaunch does not reshuffle the sidebar.
+		markSpawned = m.lcm.MarkSpawnedRestored
+	}
+	if err := markSpawned(ctx, rec.ID, metadata); err != nil {
 		_ = m.runtime.Destroy(ctx, handle)
 		m.cleanupSystemPromptDir(rec.ID)
 		return RestoreResult{}, fmt.Errorf("%s %s: completed: %w", operation, rec.ID, err)

@@ -1842,6 +1842,82 @@ func TestMarkSpawned_StampsUTCActivity(t *testing.T) {
 	}
 }
 
+// TestMarkSpawnedRestoredPreservesSortTimestamps locks the startup restore
+// behavior: re-hosting a saved session must carry its pre-restart UpdatedAt and
+// LastActivityAt forward rather than stamping now, so the background relaunch does
+// not reshuffle the sidebar. The runtime-handle facts still update.
+func TestMarkSpawnedRestoredPreservesSortTimestamps(t *testing.T) {
+	m, st, _ := newManager()
+	now := time.Unix(5000, 0).UTC()
+	m.clock = func() time.Time { return now }
+	prior := time.Unix(1000, 0).UTC()
+	st.sessions["mer-1"] = domain.SessionRecord{
+		ID:           "mer-1",
+		ProjectID:    "mer",
+		IsTerminated: true,
+		UpdatedAt:    prior,
+		Activity:     domain.Activity{State: domain.ActivityIdle, LastActivityAt: prior},
+	}
+	if err := m.MarkSpawnedRestored(ctx, "mer-1", domain.SessionMetadata{RuntimeHandleID: "h1"}); err != nil {
+		t.Fatal(err)
+	}
+	got := st.sessions["mer-1"]
+	if !got.UpdatedAt.Equal(prior) {
+		t.Fatalf("UpdatedAt = %v, want preserved %v", got.UpdatedAt, prior)
+	}
+	if !got.Activity.LastActivityAt.Equal(prior) {
+		t.Fatalf("LastActivityAt = %v, want preserved %v", got.Activity.LastActivityAt, prior)
+	}
+	if got.IsTerminated || got.Activity.State != domain.ActivityIdle || got.Metadata.RuntimeHandleID != "h1" {
+		t.Fatalf("runtime facts not updated on restore: %+v", got)
+	}
+}
+
+// TestMarkSpawnedRestoredFallsBackToNow guards the brand-new-session case: with no
+// prior UpdatedAt, the restore variant must still stamp now like MarkSpawned.
+func TestMarkSpawnedRestoredFallsBackToNow(t *testing.T) {
+	m, st, _ := newManager()
+	now := time.Unix(5000, 0).UTC()
+	m.clock = func() time.Time { return now }
+	st.sessions["mer-1"] = domain.SessionRecord{ID: "mer-1", ProjectID: "mer", IsTerminated: true}
+	if err := m.MarkSpawnedRestored(ctx, "mer-1", domain.SessionMetadata{RuntimeHandleID: "h1"}); err != nil {
+		t.Fatal(err)
+	}
+	got := st.sessions["mer-1"]
+	if !got.UpdatedAt.Equal(now) {
+		t.Fatalf("UpdatedAt = %v, want fallback now %v", got.UpdatedAt, now)
+	}
+	if !got.Activity.LastActivityAt.Equal(now) {
+		t.Fatalf("LastActivityAt = %v, want fallback now %v", got.Activity.LastActivityAt, now)
+	}
+}
+
+// TestMarkSpawnedBumpsSortTimestamps proves the genuine user-initiated spawn path
+// still stamps now; only the restore variant preserves.
+func TestMarkSpawnedBumpsSortTimestamps(t *testing.T) {
+	m, st, _ := newManager()
+	now := time.Unix(5000, 0).UTC()
+	m.clock = func() time.Time { return now }
+	prior := time.Unix(1000, 0).UTC()
+	st.sessions["mer-1"] = domain.SessionRecord{
+		ID:           "mer-1",
+		ProjectID:    "mer",
+		IsTerminated: true,
+		UpdatedAt:    prior,
+		Activity:     domain.Activity{State: domain.ActivityIdle, LastActivityAt: prior},
+	}
+	if err := m.MarkSpawned(ctx, "mer-1", domain.SessionMetadata{RuntimeHandleID: "h1"}); err != nil {
+		t.Fatal(err)
+	}
+	got := st.sessions["mer-1"]
+	if !got.UpdatedAt.Equal(now) {
+		t.Fatalf("UpdatedAt = %v, want bumped %v", got.UpdatedAt, now)
+	}
+	if !got.Activity.LastActivityAt.Equal(now) {
+		t.Fatalf("LastActivityAt = %v, want bumped %v", got.Activity.LastActivityAt, now)
+	}
+}
+
 func TestActivity_WaitingInputEntryAndExitEmitTelemetry(t *testing.T) {
 	st := newFakeStore()
 	sink := &telemetrySink{}

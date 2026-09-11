@@ -1100,7 +1100,17 @@ func (m *Manager) resolveNotifications(ctx context.Context, resolutions ...ports
 
 // MarkSpawned marks a newly spawned or restored session live and stores runtime/workspace handles.
 func (m *Manager) MarkSpawned(ctx context.Context, id domain.SessionID, metadata domain.SessionMetadata) error {
-	return m.markSpawned(ctx, id, metadata, nil, nil)
+	return m.markSpawned(ctx, id, metadata, nil, nil, false)
+}
+
+// MarkSpawnedRestored is MarkSpawned for the startup restore/re-host path: it
+// carries the session's existing UpdatedAt/LastActivityAt forward instead of
+// stamping now. The sidebar sorts by updatedAt then lastActivityAt, so re-hosting
+// a saved session the user did not touch must not move it. All other runtime-handle
+// facts (activity reset to idle, runtime ids, cleared signal receipt) still update
+// exactly as MarkSpawned does. A record with no prior UpdatedAt falls back to now.
+func (m *Manager) MarkSpawnedRestored(ctx context.Context, id domain.SessionID, metadata domain.SessionMetadata) error {
+	return m.markSpawned(ctx, id, metadata, nil, nil, true)
 }
 
 // MarkChatSpawned atomically marks a Chat controller live and publishes the
@@ -1117,7 +1127,7 @@ func (m *Manager) MarkChatSpawned(
 		strings.TrimSpace(metadata.ControllerGeneration) == "" {
 		return fmt.Errorf("lifecycle: Chat provider boundary for %q has incomplete or mismatched ownership", id)
 	}
-	return m.markSpawned(ctx, id, metadata, &boundary, nil)
+	return m.markSpawned(ctx, id, metadata, &boundary, nil, false)
 }
 
 // MarkChatSpawnedPrepared publishes native history together with its reserved
@@ -1140,7 +1150,7 @@ func (m *Manager) MarkChatSpawnedPrepared(
 		strings.TrimSpace(metadata.ControllerGeneration) == "" {
 		return fmt.Errorf("lifecycle: Chat provider boundary for %q has incomplete or mismatched ownership", id)
 	}
-	return m.markSpawned(ctx, id, metadata, &boundary, prepare)
+	return m.markSpawned(ctx, id, metadata, &boundary, prepare, false)
 }
 
 func (m *Manager) markSpawned(
@@ -1149,6 +1159,7 @@ func (m *Manager) markSpawned(
 	metadata domain.SessionMetadata,
 	boundary *domain.ConversationBranch,
 	prepare func(context.Context) error,
+	preserveSortTimestamps bool,
 ) error {
 	launchID := strings.TrimSpace(metadata.RuntimeLaunchID)
 	reactivator, err := func() (sessionUsageReactivator, error) {
@@ -1163,8 +1174,21 @@ func (m *Manager) markSpawned(
 			return nil, fmt.Errorf("lifecycle: MarkSpawned for unknown session %q", id)
 		}
 		now := m.clock()
+		// On the startup restore path, carry the pre-restart sort timestamps forward
+		// so re-hosting an untouched session does not reshuffle the sidebar. A record
+		// with no prior value still falls back to now.
+		activityAt := now
+		updatedAt := now
+		if preserveSortTimestamps {
+			if !rec.Activity.LastActivityAt.IsZero() {
+				activityAt = rec.Activity.LastActivityAt
+			}
+			if !rec.UpdatedAt.IsZero() {
+				updatedAt = rec.UpdatedAt
+			}
+		}
 		rec.IsTerminated = false
-		rec.Activity = domain.Activity{State: domain.ActivityIdle, LastActivityAt: now}
+		rec.Activity = domain.Activity{State: domain.ActivityIdle, LastActivityAt: activityAt}
 		// Each spawn/restore must re-prove its hook pipeline: clear the receipt so
 		// a relaunch with broken hooks degrades to no_signal instead of inheriting
 		// a stale "signals worked once" fact.
@@ -1178,7 +1202,7 @@ func (m *Manager) markSpawned(
 			rec.Metadata.RuntimeHandleID = ""
 			rec.Metadata.RuntimeLaunchID = ""
 		}
-		rec.UpdatedAt = now
+		rec.UpdatedAt = updatedAt
 		if boundary == nil {
 			if err := m.store.UpdateSession(ctx, rec); err != nil {
 				return nil, err

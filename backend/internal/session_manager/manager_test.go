@@ -214,6 +214,28 @@ func (l *fakeLCM) MarkSpawned(_ context.Context, id domain.SessionID, metadata d
 	return nil
 }
 
+func (l *fakeLCM) MarkSpawnedRestored(_ context.Context, id domain.SessionID, metadata domain.SessionMetadata) error {
+	l.completed++
+	rec := l.store.sessions[id]
+	rec.IsTerminated = false
+	// Mirror the real restore path: carry the existing sort timestamps forward
+	// (falling back to now when unset) rather than stamping now unconditionally.
+	activityAt := time.Now()
+	if !rec.Activity.LastActivityAt.IsZero() {
+		activityAt = rec.Activity.LastActivityAt
+	}
+	updatedAt := time.Now()
+	if !rec.UpdatedAt.IsZero() {
+		updatedAt = rec.UpdatedAt
+	}
+	rec.Activity = domain.Activity{State: domain.ActivityIdle, LastActivityAt: activityAt}
+	rec.FirstSignalAt = time.Now()
+	rec.UpdatedAt = updatedAt
+	rec.Metadata = metadata
+	l.store.sessions[id] = rec
+	return nil
+}
+
 func (l *fakeLCM) MarkChatSpawned(
 	ctx context.Context,
 	id domain.SessionID,
@@ -3236,6 +3258,30 @@ func TestRestore_ReopensTerminal(t *testing.T) {
 	}
 	if rt.created != 1 {
 		t.Fatal("restore should relaunch")
+	}
+}
+
+// TestRestore_PreservesSortTimestamps proves the startup restore path routes
+// through MarkSpawnedRestored, so re-hosting a saved session carries its prior
+// UpdatedAt/LastActivityAt forward instead of jumping to now and reshuffling the
+// sidebar.
+func TestRestore_PreservesSortTimestamps(t *testing.T) {
+	m, st, _, _ := newManager()
+	seedTerminal(st, "mer-1", domain.SessionMetadata{WorkspacePath: "/ws/mer-1", Branch: "b", AgentSessionID: "agent-x"})
+	prior := time.Unix(1000, 0).UTC()
+	rec := st.sessions["mer-1"]
+	rec.UpdatedAt = prior
+	rec.Activity = domain.Activity{State: domain.ActivityExited, LastActivityAt: prior}
+	st.sessions["mer-1"] = rec
+	if _, err := m.RestoreWithMode(ctx, "mer-1"); err != nil {
+		t.Fatalf("RestoreWithMode: %v", err)
+	}
+	got := st.sessions["mer-1"]
+	if !got.UpdatedAt.Equal(prior) {
+		t.Fatalf("UpdatedAt = %v, want preserved %v", got.UpdatedAt, prior)
+	}
+	if !got.Activity.LastActivityAt.Equal(prior) {
+		t.Fatalf("LastActivityAt = %v, want preserved %v", got.Activity.LastActivityAt, prior)
 	}
 }
 
