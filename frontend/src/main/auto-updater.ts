@@ -2,6 +2,7 @@ import { autoUpdater } from "electron-updater";
 import { CancellationToken } from "builder-util-runtime";
 import { app, dialog, autoUpdater as nativeAutoUpdater } from "electron";
 import { startMacUpdateProgress } from "./mac-update-progress";
+import { markUpdateRelaunch } from "./update-relaunch-flag";
 import { accessSync, constants as fsConstants, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -2283,6 +2284,14 @@ export async function quitAndInstallUpdate(confirmedVersion?: string): Promise<U
       return { state: "confirmation-required", version: stagedVersion,
         releaseNotes: lastStatus.state === "downloaded" && lastStatus.version === stagedVersion ? lastStatus.releaseNotes : undefined };
     }
+    // Signal the next boot that it is a post-update relaunch so the startup loader
+    // shows "Updating / Restarting" copy. macOS gets this via the same marker on
+    // its own path below; here it is the only such signal (no native helper).
+    if (escalationStateDir && stagedVersion) {
+      await markUpdateRelaunch({ stateDir: escalationStateDir, version: stagedVersion }).catch((err) => {
+        console.warn("failed to write post-update relaunch marker:", err);
+      });
+    }
     autoUpdater.quitAndInstall(false, true);
     return;
   }
@@ -2318,6 +2327,12 @@ export async function quitAndInstallUpdate(confirmedVersion?: string): Promise<U
       progress.assertAlive();
       macRestartProgress = progress;
       macRestartRequested = true;
+      // Same cross-platform post-update signal the renderer reads at boot. This
+      // is separate from the helper's active.json handshake above and only drives
+      // the startup loader copy; failing to write it must not abort the install.
+      await markUpdateRelaunch({ stateDir: escalationStateDir, version }).catch((err) => {
+        console.warn("failed to write post-update relaunch marker:", err);
+      });
       autoUpdater.quitAndInstall(false, true);
       if (!macRestartRequested) throw nativePreparationError ?? new Error("The installer could not restart AO.");
     } catch (err) {

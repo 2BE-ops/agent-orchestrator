@@ -1380,6 +1380,8 @@
 	"startup.recommendedInstallGh": "Recomendado: instalar gh",
 	"startup.retryPrefix": "Tentar novamente: {{label}}",
 	"startup.startingServices": "Iniciando serviços locais",
+	"startup.updatingApp": "Atualizando o AO",
+	"startup.restartingApp": "Reiniciando o AO",
 	"status.approved": "Aprovado",
 	"status.changes_requested": "Alterações solicitadas",
 	"status.ci_failed": "CI falhou",
