@@ -242,7 +242,7 @@ export function TaskComposer({
 		projectQuery.data?.config?.worker?.agentConfig?.mode ?? projectQuery.data?.config?.agentConfig?.mode ?? "";
 	const projectModelForSelectedAgent = selectedAgent === defaultWorkerAgent ? defaultWorkerModel : "";
 	const projectModeForSelectedAgent = selectedAgent === defaultWorkerAgent ? defaultWorkerMode : "";
- 	const agentCatalog = agentsQuery.data;
+	const agentCatalog = agentsQuery.data;
 	const providerConnections = useProviderConnections(isCloudProject ? cloudOrg?.id : undefined);
 	const availableAgentsQuery = useQuery({
 		queryKey: ["cloud", "agents", "available", cloudOrg?.id],
