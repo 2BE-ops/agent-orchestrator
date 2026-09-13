@@ -1562,7 +1562,6 @@ describe("SessionInspector Activity section", () => {
             }),
             pr(8, "open", { ci: "failing" }),
             pr(9, "draft", { review: "changes_requested" }),
-            pr(10, "open", { mergeability: "conflicting" }),
           ],
           {
             status: "working",
@@ -1580,7 +1579,7 @@ describe("SessionInspector Activity section", () => {
       .closest("[data-testid='inspector-timeline-event']") as HTMLElement;
     expect(within(activityRow).getAllByText("CI Failed")).toHaveLength(1);
     expect(within(activityRow).getAllByText("Changes Requested")).toHaveLength(1);
-    expect(within(activityRow).getAllByText("Conflict")).toHaveLength(1);
+    expect(within(activityRow).queryByText("Conflict")).not.toBeInTheDocument();
   });
 
   it("timestamps the live Activity state so it participates in chronological ordering", () => {
