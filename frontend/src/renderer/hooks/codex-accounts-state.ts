@@ -14,9 +14,21 @@ export function mergeCodexAccounts(
 	const accounts = mode === "preserveMissing" && current
 		? [...current.accounts.filter((account) => !incoming.accounts.some((next) => next.id === account.id)), ...incoming.accounts]
 		: [...incoming.accounts];
+	const incomingPresentedActiveID = incoming.accounts.find((account) => account.active)?.id;
+	const currentPresentedActiveID = current?.accounts.find((account) => account.active)?.id;
+	const presentedActiveID = incoming.deviceReconciliation?.activeAccountVerified
+		? incoming.activeAccountId
+		: incoming.deviceReconciliation?.status === "checking"
+			? incomingPresentedActiveID ?? (currentPresentedActiveID === incoming.activeAccountId ? currentPresentedActiveID : undefined)
+			: undefined;
 	const normalized = accounts.map((account) => ({
 		...account,
-		active: Boolean(incoming.deviceReconciliation?.activeAccountVerified) && account.id === incoming.activeAccountId,
+		// A targeted ensure performs a short local reconciliation before refreshing
+		// the expanded account. Keep the last matched row presented as active during
+		// that check; otherwise it jumps out of first place and back on every click.
+		// The daemon still routes reads through the isolated saved home until the
+		// credential match is verified, so this is presentation-only continuity.
+		active: account.id === presentedActiveID,
 	}));
 	normalized.sort((left, right) => {
 		if (left.active !== right.active) return left.active ? -1 : 1;

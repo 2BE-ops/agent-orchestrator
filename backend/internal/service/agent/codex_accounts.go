@@ -259,6 +259,13 @@ func (m *codexAccountManager) view(ids []string) (CodexAccounts, error) {
 	deviceAccountID := ""
 	if reconciliation.ActiveAccountVerified {
 		deviceAccountID = active.AccountID
+	} else if reconciliation.Status == domain.CodexDeviceReconciliationChecking {
+		// Reconciliation deliberately stops trusting the global home while it
+		// inspects auth.json, but the last locally matched account remains the best
+		// presentation until that short check finishes. accountContext still uses
+		// ActiveAccountVerified, so this cannot route reads through stale global
+		// credentials or mix one device account into another saved slot.
+		deviceAccountID = m.deviceAccountID
 	}
 	var activeLogin *CodexActiveLogin
 	if m.login != nil && m.login.terminalHandle != "" && !terminalLoginStatus(m.login.snapshot.Status) {
@@ -275,7 +282,7 @@ func (m *codexAccountManager) view(ids []string) (CodexAccounts, error) {
 	accounts := make([]domain.CodexAccountSnapshot, 0, len(records))
 	for _, record := range records {
 		snapshot := record.Snapshot
-		snapshot.Active = reconciliation.ActiveAccountVerified && snapshot.ID == deviceAccountID
+		snapshot.Active = deviceAccountID != "" && snapshot.ID == deviceAccountID
 		snapshot.Capacity = m.capacity.snapshot(snapshot.ID)
 		m.mu.Lock()
 		if usage := m.usage[snapshot.ID]; usage != nil && usage.value != nil {
@@ -285,7 +292,7 @@ func (m *codexAccountManager) view(ids []string) (CodexAccounts, error) {
 		m.mu.Unlock()
 		accounts = append(accounts, snapshot)
 	}
-	if reconciliation.ActiveAccountVerified && deviceAccountID != "" {
+	if deviceAccountID != "" {
 		for i := range accounts {
 			if accounts[i].ID == deviceAccountID && i > 0 {
 				item := accounts[i]

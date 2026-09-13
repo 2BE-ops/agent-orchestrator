@@ -44,6 +44,46 @@ describe("mergeCodexAccounts", () => {
 			expect.objectContaining({ id: "b", active: true }),
 		]);
 	});
+
+	it("keeps the last matched active row stable during a targeted reconciliation check", () => {
+		const current = response([
+			account("a", "2026-01-02T00:00:00Z", true),
+			account("b", "2026-01-01T00:00:00Z"),
+		], "a");
+		const incoming = {
+			...response([account("a", "2026-01-02T00:00:00Z")], "a"),
+			deviceReconciliation: {
+				status: "checking",
+				activeAccountVerified: false,
+				reasonCode: "checking",
+				retryable: false,
+			},
+		} as CodexAccountsResponse;
+
+		const merged = mergeCodexAccounts(current, incoming, "preserveMissing");
+
+		expect(merged.accounts.map(({ id, active }) => [id, active])).toEqual([
+			["a", true],
+			["b", false],
+		]);
+	});
+
+	it("clears the presented active row after reconciliation actually fails", () => {
+		const current = response([account("a", "2026-01-01T00:00:00Z", true)], "a");
+		const incoming = {
+			...response([account("a", "2026-01-01T00:00:00Z")], "a"),
+			deviceReconciliation: {
+				status: "temporarily_unavailable",
+				activeAccountVerified: false,
+				reasonCode: "account_read_inconclusive",
+				retryable: true,
+			},
+		} as CodexAccountsResponse;
+
+		expect(mergeCodexAccounts(current, incoming, "preserveMissing").accounts).toEqual([
+			expect.objectContaining({ id: "a", active: false }),
+		]);
+	});
 });
 
 describe("codexAuthenticationDisplay", () => {

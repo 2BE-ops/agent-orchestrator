@@ -281,6 +281,49 @@ func TestStaleActivePointerUsesSavedHomeDuringTemporaryReconciliationFailure(t *
 	}
 }
 
+func TestCheckingReconciliationKeepsLastMatchedAccountVisibleWithoutUsingGlobalHome(t *testing.T) {
+	manager := newTestCodexAccountManager(t, nil, nil)
+	inactiveID := "11111111-1111-4111-8111-111111111111"
+	ids := []string{inactiveID, testAccountID}
+	nextID := 0
+	manager.catalog.newID = func() string {
+		id := ids[nextID]
+		nextID++
+		return id
+	}
+	inactiveEmail := "inactive@example.com"
+	commitTestAccountWithCredential(t, manager.catalog, manager.pendingRoot, "1c5de3ab-82d0-4a68-a06b-8495cdeab909", []byte("inactive-credential"), ports.CodexAccountObservation{
+		Authentication: domain.AgentAuthenticationAuthorized,
+		Method:         domain.CodexAuthMethodChatGPT,
+		Email:          &inactiveEmail,
+	})
+	activeEmail := "active@example.com"
+	record := commitTestAccountWithCredential(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", []byte("active-credential"), ports.CodexAccountObservation{
+		Authentication: domain.AgentAuthenticationAuthorized,
+		Method:         domain.CodexAuthMethodChatGPT,
+		Email:          &activeEmail,
+	})
+	manager.mu.Lock()
+	manager.active = domain.CodexActiveAccount{AccountID: record.Snapshot.ID, Revision: 2}
+	manager.deviceAccountID = record.Snapshot.ID
+	manager.deferredAccountID = record.Snapshot.ID
+	manager.reconciliation = domain.CodexDeviceReconciliation{
+		Status:                domain.CodexDeviceReconciliationChecking,
+		ActiveAccountVerified: false,
+		ReasonCode:            "checking",
+	}
+	manager.mu.Unlock()
+
+	view := manager.cached()
+	if view.ActiveAccountID != record.Snapshot.ID || len(view.Accounts) != 2 || view.Accounts[0].ID != record.Snapshot.ID || !view.Accounts[0].Active || view.Accounts[1].ID != inactiveID || view.Accounts[1].Active {
+		t.Fatalf("checking reconciliation hid the last matched account: %#v", view)
+	}
+	accountContext := manager.accountContext(record)
+	if accountContext.Home != record.Home || !accountContext.Managed {
+		t.Fatalf("checking reconciliation used the unverified global home: %#v", accountContext)
+	}
+}
+
 func TestNativeLoginTerminalUsesOnePrivatePendingHomeAndNoName(t *testing.T) {
 	manager := newTestCodexAccountManager(t, nil, nil)
 	manager.newID = func() string { return "b60a377d-da68-4a61-86f2-f31f04c571f2" }

@@ -203,9 +203,10 @@ func (m *codexAccountManager) reconcileGlobalWithPolicy(ctx context.Context, for
 		m.reconciliation.NextRetryAt = nil
 		// Stop routing the last-known active slot through the global home until
 		// this attempt has matched the current credential. Otherwise an external
-		// A -> B login can write B's observations into A's saved slot.
+		// A -> B login can write B's observations into A's saved slot. Keep the
+		// last matched device account for presentation only so a fast local check
+		// does not make the active row disappear and reappear in Settings.
 		m.deferredAccountID = m.active.AccountID
-		m.deviceAccountID = ""
 		m.deviceCredentialPresent = false
 		m.unmanaged = nil
 		started = true
@@ -274,7 +275,11 @@ func (m *codexAccountManager) runGlobalReconciliation(call *accountReconcileCall
 		}
 	} else if !errors.Is(call.err, context.Canceled) || m.ctx.Err() == nil {
 		failure := classifyDeviceReconciliationFailure(call.err)
-		m.reconciliation.ActiveAccountVerified = m.deviceAccountID != ""
+		// The retained deviceAccountID is presentation-only while the local check
+		// is running. Once that check fails it is no longer safe to present the
+		// previous association as current.
+		m.deviceAccountID = ""
+		m.reconciliation.ActiveAccountVerified = false
 		m.reconciliation.ReasonCode = failure.reason
 		m.reconciliation.Retryable = failure.retryable
 		if failure.retryable {
