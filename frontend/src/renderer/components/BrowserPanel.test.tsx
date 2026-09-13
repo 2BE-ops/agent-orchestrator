@@ -377,6 +377,19 @@ describe("BrowserPanel", () => {
 		expect(input).toHaveValue("google.com");
 	});
 
+	it("keeps non-HTTP URLs visible when unfocused", () => {
+		hookState.navState = {
+			...hookState.navState,
+			url: "file:///tmp/preview/index.html",
+		};
+
+		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut={false} session={session} />);
+
+		expect(screen.getByRole("textbox", { name: /browser url/i })).toHaveValue(
+			"file:///tmp/preview/index.html",
+		);
+	});
+
 	it("reveals the full URL on focus, reverts to domain when the page takes focus", async () => {
 		const url = "https://www.google.com/search?q=agent+orchestrator#results";
 		hookState.navState = { ...hookState.navState, url, canGoBack: true };
@@ -611,28 +624,25 @@ describe("BrowserPanel", () => {
 		expect(menu.getAttribute("data-browser-native-overlay")).toBe("true");
 	});
 
-	it("does not queue the controls tooltip when the dropdown returns focus to its trigger", async () => {
+	it("does not mount a renderer tooltip when the dropdown returns focus to its trigger", async () => {
 		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut={false} session={session} />);
 		const trigger = screen.getByRole("button", { name: "Browser controls" });
 
 		await userEvent.click(trigger);
 		expect(screen.getByRole("menuitem", { name: "Device preset" })).toBeInTheDocument();
-		fireEvent.pointerLeave(trigger);
 		fireEvent.pointerDown(document.body);
 		await waitFor(() => expect(screen.queryByRole("menuitem", { name: "Device preset" })).not.toBeInTheDocument());
 		fireEvent.focus(trigger);
 
-		await new Promise((resolve) => setTimeout(resolve, 450));
 		expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
 	});
 
-	it("still shows the controls tooltip from an actual mouse hover", async () => {
+	it("uses a native tooltip for browser controls", () => {
 		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut={false} session={session} />);
 		const trigger = screen.getByRole("button", { name: "Browser controls" });
 
-		await userEvent.hover(trigger);
-
-		expect(await screen.findByRole("tooltip")).toHaveTextContent("Browser controls");
+		expect(trigger).toHaveAttribute("title", "Browser controls");
+		expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
 	});
 
 	it("keeps the URL input editable while the browser is maximized", async () => {
@@ -692,10 +702,7 @@ describe("BrowserPanel", () => {
 		expect(hookState.stop).toHaveBeenCalled();
 	});
 
-	it("marks toolbar tooltips as browser overlays so they paint above the live page", async () => {
-		// Same reasoning as the pinned-favicon overlay test: the toolbar sits
-		// directly above the native browser view, so an unmarked tooltip here
-		// would render behind the live page.
+	it("uses native toolbar tooltips without entering the overlay stacking path", () => {
 		hookState.navState = {
 			viewId: "42:sess-1",
 			url: "http://localhost:5173/",
@@ -706,13 +713,12 @@ describe("BrowserPanel", () => {
 		};
 		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut={false} session={session} />);
 
-		fireEvent.focus(screen.getByRole("button", { name: /back/i }));
-
-		const tooltip = await screen.findByRole("tooltip");
-		expect(tooltip.closest('[data-browser-native-overlay="true"]')).not.toBeNull();
+		const backButton = screen.getByRole("button", { name: /back/i });
+		expect(backButton.parentElement).toHaveAttribute("title", "Back");
+		expect(document.querySelector('[data-browser-native-overlay]')).toBeNull();
 	});
 
-	it("uses the same styled browser overlay tooltip while maximized", async () => {
+	it("uses native toolbar tooltips while maximized", () => {
 		hookState.navState = {
 			viewId: "42:sess-1",
 			url: "http://localhost:5173/",
@@ -724,15 +730,11 @@ describe("BrowserPanel", () => {
 		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut session={session} />);
 
 		const annotateButton = screen.getByRole("button", { name: /annotate page/i });
-		expect(annotateButton.closest("[title]")).toBeNull();
-		fireEvent.focus(annotateButton);
-
-		const tooltip = await screen.findByRole("tooltip");
-		expect(tooltip).toHaveTextContent("Annotate page");
-		expect(tooltip.closest('[data-browser-native-overlay="true"]')).not.toBeNull();
+		expect(annotateButton.closest("[title]")).toHaveAttribute("title", "Annotate page");
+		expect(document.querySelector('[data-browser-native-overlay]')).toBeNull();
 	});
 
-	it("still opens a tooltip for a disabled toolbar button", async () => {
+	it("keeps a native tooltip on a disabled toolbar button wrapper", () => {
 		// Disabled buttons never dispatch pointer/focus events natively, so the
 		// hover listener has to live on a wrapping span around the button rather
 		// than on the (potentially disabled) button itself.
@@ -751,9 +753,7 @@ describe("BrowserPanel", () => {
 		const wrapper = backButton.parentElement;
 		expect(wrapper?.tagName).toBe("SPAN");
 
-		fireEvent.pointerMove(wrapper!, { pointerType: "mouse" });
-
-		expect(await screen.findByRole("tooltip")).toHaveTextContent(/back/i);
+		expect(wrapper).toHaveAttribute("title", "Back");
 	});
 
 	it("shows browser tabs in a horizontal tab strip and selects them", async () => {
@@ -977,8 +977,7 @@ describe("BrowserPanel", () => {
 		await openBrowserControls();
 		await userEvent.click(screen.getByRole("menuitem", { name: /pop out/i }));
 
-		expect(onTogglePopOut.mock.calls[0]?.[0]).toBe(true);
-		expect(onTogglePopOut.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ width: expect.any(Number) }));
+		expect(onTogglePopOut).toHaveBeenCalledWith(true);
 	});
 
 	it("keeps workspace sizing controls out of the browser toolbar", async () => {

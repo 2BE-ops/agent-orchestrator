@@ -145,7 +145,7 @@ type BrowserPanelProps = {
 	session: WorkspaceSession;
 	active: boolean;
 	poppedOut: boolean;
-	onTogglePopOut: (next: boolean, sourceRect?: DOMRectReadOnly) => void;
+	onTogglePopOut: (next: boolean) => void;
 	topbarHost?: HTMLElement | null;
 };
 
@@ -389,8 +389,6 @@ export function BrowserPanelView({
 	const [devicePreset, setDevicePreset] = useState<string | null>(null);
 	const [customDeviceWidth, setCustomDeviceWidth] = useState("390");
 	const [controlsView, setControlsView] = useState<"root" | "devices" | "profiles">("root");
-	const [controlsMenuOpen, setControlsMenuOpen] = useState(false);
-	const [controlsTooltipOpen, setControlsTooltipOpen] = useState(false);
 	const [browserProfiles, setBrowserProfiles] = useState<BrowserProfile[]>([]);
 	const [profilesLoading, setProfilesLoading] = useState(false);
 	const openGlobalSettings = useUiStore((state) => state.openGlobalSettings);
@@ -398,9 +396,7 @@ export function BrowserPanelView({
 		devicePreset === CUSTOM_DEVICE_PRESET_ID
 			? clampDeviceFrameWidth(Number(customDeviceWidth))
 			: DEVICE_PRESETS.find((preset) => preset.id === devicePreset)?.width;
-	const panelRef = useRef<HTMLDivElement>(null);
 	const urlInputRef = useRef<HTMLInputElement>(null);
-	const controlsHoverRef = useRef(false);
 	const [draggedTopTabId, setDraggedTopTabId] = useState<string | null>(null);
 	const draggedTopTab = tabs.find((tab) => tab.id === draggedTopTabId);
 	const {
@@ -448,7 +444,7 @@ export function BrowserPanelView({
 		if (tabRect.right > regionRect.right) nextScrollLeft += tabRect.right - regionRect.right;
 		if (nextScrollLeft === region.scrollLeft) return;
 		region.scrollTo({ behavior: "smooth", left: Math.max(0, nextScrollLeft) });
-	}, [activeTabId, tabs, draggedTopTabId, tabScrollRef]);
+	}, [activeTabId, tabs.length, draggedTopTabId, tabScrollRef]);
 
 	useEffect(() => {
 		if (controlsView !== "profiles" || !window.ao?.browserProfiles) return;
@@ -541,7 +537,6 @@ export function BrowserPanelView({
 	const showGlobalToast = useUiStore((state) => state.showGlobalToast);
 	const browserDownloads = useBrowserDownloads();
 	const [downloadsOpen, setDownloadsOpen] = useState(false);
-	const [downloadsTooltipOpen, setDownloadsTooltipOpen] = useState(false);
 	const previousDownloadCount = useRef(0);
 	const hasActiveDownload = browserDownloads.downloads.some(
 		(download) => download.status === "progressing" || download.status === "paused",
@@ -849,7 +844,6 @@ export function BrowserPanelView({
 			onPointerDownCapture={() => {
 				if (viewId) window.ao?.browser.notifyPanelUsed(viewId);
 			}}
-			ref={panelRef}
 			role="tabpanel"
 		>
 			{topbarHost ? createPortal(browserAddressBar, topbarHost) : browserAddressBar}
@@ -859,9 +853,7 @@ export function BrowserPanelView({
 					className="browser-panel__toolbar"
 					data-testid="browser-toolbar"
 				>
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<span className="browser-panel__navigation-control inline-flex">
+				<span className="browser-panel__navigation-control inline-flex" title={t("browser.back")}>
 							<Button
 								aria-label={t("browser.back")}
 								className="browser-panel__navigation-btn"
@@ -873,13 +865,8 @@ export function BrowserPanelView({
 							>
 								<ArrowLeft aria-hidden="true" className="size-icon-base" />
 							</Button>
-						</span>
-					</TooltipTrigger>
-					<TooltipContent data-browser-native-overlay="true" side="bottom">{t("browser.back")}</TooltipContent>
-				</Tooltip>
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<span className="browser-panel__navigation-control inline-flex">
+				</span>
+				<span className="browser-panel__navigation-control inline-flex" title={t("browser.forward")}>
 							<Button
 								aria-label={t("browser.forward")}
 								className="browser-panel__navigation-btn"
@@ -891,17 +878,13 @@ export function BrowserPanelView({
 							>
 								<ArrowRight aria-hidden="true" className="size-icon-base" />
 							</Button>
-						</span>
-					</TooltipTrigger>
-					<TooltipContent data-browser-native-overlay="true" side="bottom">{t("browser.forward")}</TooltipContent>
-				</Tooltip>
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<Button
+				</span>
+				<Button
 							aria-label={navState.isLoading ? t("browser.stop") : t("browser.reload")}
 							className="browser-panel__navigation-btn"
 							onClick={() => void (navState.isLoading ? stop() : reload())}
 							size="icon-sm"
+							title={navState.isLoading ? t("browser.stop") : t("browser.reload")}
 							type="button"
 							variant="ghost"
 						>
@@ -910,10 +893,7 @@ export function BrowserPanelView({
 							) : (
 								<RefreshCw aria-hidden="true" className="size-icon-base" />
 							)}
-						</Button>
-					</TooltipTrigger>
-					<TooltipContent data-browser-native-overlay="true" side="bottom">{navState.isLoading ? t("browser.stop") : t("browser.reload")}</TooltipContent>
-				</Tooltip>
+				</Button>
 				{annotationStatusLabel ? (
 					<span className="sr-only" role="status">
 						{annotationStatusLabel}
@@ -928,9 +908,10 @@ export function BrowserPanelView({
 						{tabNotice}
 					</span>
 				) : null}
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<span className="inline-flex">
+				<span
+					className="inline-flex"
+					title={annotationStatusLabel || agentStatusLabel || (canRetryAnnotation ? t("browser.retryAnnotation") : t("browser.annotate"))}
+				>
 							<Button
 								aria-label={
 									canRetryAnnotation
@@ -960,39 +941,27 @@ export function BrowserPanelView({
 									<span aria-hidden="true" className="pointer-events-none absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-accent" />
 								) : null}
 							</Button>
-						</span>
-					</TooltipTrigger>
-					<TooltipContent data-browser-native-overlay="true" side="bottom">
-						{annotationStatusLabel || agentStatusLabel || (canRetryAnnotation ? t("browser.retryAnnotation") : t("browser.annotate"))}
-					</TooltipContent>
-				</Tooltip>
+				</span>
 				{browserDownloads.downloads.length > 0 ? (
 					<DropdownMenu
 						onOpenChange={(open) => {
 							setDownloadsOpen(open);
-							if (open) setDownloadsTooltipOpen(false);
 						}}
 						open={downloadsOpen}
 					>
-						<Tooltip open={downloadsTooltipOpen && !downloadsOpen}>
-							<TooltipTrigger asChild>
-								<DropdownMenuTrigger asChild>
+						<DropdownMenuTrigger asChild>
 									<Button
 									aria-label={t("browser.downloads.title")}
 									className={cn("relative", hasActiveDownload && "text-accent")}
-									onPointerEnter={() => setDownloadsTooltipOpen(true)}
-									onPointerLeave={() => setDownloadsTooltipOpen(false)}
 										size="icon-sm"
+										title={t("browser.downloads.title")}
 										type="button"
 										variant="ghost"
 									>
 										<Download aria-hidden="true" className="size-icon-base" />
 										{hasActiveDownload ? <span aria-hidden="true" className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-accent" /> : null}
 									</Button>
-								</DropdownMenuTrigger>
-							</TooltipTrigger>
-							<TooltipContent data-browser-native-overlay="true" side="bottom">{t("browser.downloads.title")}</TooltipContent>
-						</Tooltip>
+						</DropdownMenuTrigger>
 						<DropdownMenuContent
 							align="end"
 							className="w-96 p-0"
@@ -1015,42 +984,22 @@ export function BrowserPanelView({
 				) : null}
 				<DropdownMenu
 					onOpenChange={(open) => {
-						setControlsMenuOpen(open);
-						setControlsTooltipOpen(false);
 						if (!open) setControlsView("root");
 					}}
 				>
-					<Tooltip
-						onOpenChange={(open) => setControlsTooltipOpen(open && controlsHoverRef.current && !controlsMenuOpen)}
-						open={controlsTooltipOpen}
-					>
-						<TooltipTrigger asChild>
-							<DropdownMenuTrigger asChild>
+					<DropdownMenuTrigger asChild>
 								<Button
 									aria-label={t("browser.controls")}
-									onPointerEnter={() => {
-										controlsHoverRef.current = true;
-									}}
-									onPointerLeave={() => {
-										controlsHoverRef.current = false;
-										setControlsTooltipOpen(false);
-									}}
 									size="icon-sm"
+									title={t("browser.controls")}
 									type="button"
 									variant="ghost"
 								>
 									<MoreVertical aria-hidden="true" className="size-icon-base" />
 								</Button>
-							</DropdownMenuTrigger>
-						</TooltipTrigger>
-						<TooltipContent data-browser-native-overlay="true" side="bottom">{t("browser.controls")}</TooltipContent>
-					</Tooltip>
-					{/* Opens directly over the live page (the toolbar sits right above the
-					    native browser view), so without this it renders behind the native
-					    view — Electron always paints native view pixels above the
-					    renderer. Marked as a browser overlay so useBrowserView.ts's
-					    MutationObserver raises the transparent shell above the native view
-					    for as long as this stays mounted+open. */}
+					</DropdownMenuTrigger>
+					{/* Menus render over the native page and require the compositor handoff.
+					    Toolbar labels use native title tooltips and never enter this path. */}
 					<DropdownMenuContent
 						align="end"
 						className={controlsView === "root" ? "w-56" : "w-64"}
@@ -1164,7 +1113,7 @@ export function BrowserPanelView({
 							<>
 								<DropdownMenuItem
 									className="gap-2"
-									onSelect={() => onTogglePopOut(!poppedOut, panelRef.current?.getBoundingClientRect())}
+									onSelect={() => onTogglePopOut(!poppedOut)}
 								>
 									{poppedOut ? (
 										<Minimize2 aria-hidden="true" className="size-icon-base shrink-0" />
@@ -1425,7 +1374,11 @@ function browserActionVerb(action: string): string {
 function getDisplayUrl(url: string): string {
 	if (!url) return url;
 	try {
-		return new URL(url).hostname.replace(/^www\./, "");
+		const parsed = new URL(url);
+		if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+			return parsed.hostname.replace(/^www\./, "");
+		}
+		return url;
 	} catch {
 		return url;
 	}
