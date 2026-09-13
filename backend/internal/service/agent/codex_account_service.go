@@ -121,15 +121,13 @@ func (s *Service) EnsureCodexAccounts(ctx context.Context, ids []string, include
 	if err := s.WaitCodexAccountStoreReady(ctx); err != nil {
 		return CodexAccounts{}, err
 	}
-	// Settings refreshes prompt device discovery only when the cached result is
-	// absent or stale. A temporary native failure must not turn this local
-	// account read into a 503. An explicit retry waits for one fresh attempt but
-	// still returns the saved catalog if device discovery fails.
-	if forceDeviceReconciliation {
-		_ = s.codexAccounts.reconcileGlobalWithPolicy(ctx, true)
-	} else {
-		s.codexAccounts.requestGlobalReconciliationIfNeeded()
-	}
+	// Reconciliation is local-only, so every Settings refresh can cheaply wait
+	// for the current device credential to be associated before any Codex client
+	// is opened. This prevents a recently removed or externally changed global
+	// auth.json from being checked through the last-known active account slot.
+	// A local reconciliation failure must not hide the saved catalog; the
+	// response carries its safe, retryable reconciliation state instead.
+	_ = s.codexAccounts.reconcileGlobalWithPolicy(ctx, forceDeviceReconciliation)
 	installation, err := s.readiness.EnsureInstallation(ctx, []string{string(domain.HarnessCodex)}, domain.AgentReadinessPurposeDisplay)
 	if err != nil {
 		return CodexAccounts{}, err
@@ -389,8 +387,8 @@ func (s *Service) ObserveActiveCodexAccountCapacity(observation ports.CodexCapac
 	}
 }
 
-// WarmCodexAccounts starts asynchronous local-store initialization, device
-// reconciliation, and saved-account observation warming.
+// WarmCodexAccounts starts asynchronous local-store initialization, local
+// device reconciliation, and then saved-account observation warming.
 func (s *Service) WarmCodexAccounts() {
 	if s.codexAccounts == nil {
 		return
@@ -399,9 +397,11 @@ func (s *Service) WarmCodexAccounts() {
 		if err := s.codexAccounts.waitAccountStore(s.codexAccounts.ctx); err != nil {
 			return
 		}
-		// Native device discovery is independent of saved-account authentication
-		// and capacity checks. A slow or failed global read must not delay them.
-		go func() { _ = s.codexAccounts.reconcileGlobal(s.codexAccounts.ctx) }()
+		// Reconciliation is local-only and establishes the safe home for the device
+		// account before any Codex process is opened for authentication or capacity.
+		// A local reconciliation failure still leaves inactive saved accounts
+		// eligible for their isolated checks below.
+		_ = s.codexAccounts.reconcileGlobal(s.codexAccounts.ctx)
 		capabilities := s.codexAccounts.detectCapabilities(s.codexAccounts.ctx)
 		records, err := s.codexAccounts.catalog.recordsFor(nil)
 		if err != nil {

@@ -835,6 +835,7 @@
 	"settings.codexAccounts.switch.unknown": "The account-switch status is unavailable.",
 	"settings.codexAccounts.retryRecovery": "Continue recovery",
 	"settings.codexAccounts.switchConfirm": "Switch account",
+	"settings.codexAccounts.switchAction": "Switch",
 	"settings.codexAccounts.switchDescription": "New sessions will use this account.",
 	"settings.codexAccounts.switchFailed": "Could not start the Codex account switch.",
 	"settings.codexAccounts.switchRecoveryFailed": "Couldn't continue the account switch. Try again.",

@@ -849,6 +849,7 @@
 	"settings.codexAccounts.switch.unknown": "アカウント切り替えの状態を取得できません。",
 	"settings.codexAccounts.retryRecovery": "復旧を続ける",
 	"settings.codexAccounts.switchConfirm": "アカウントを切り替える",
+	"settings.codexAccounts.switchAction": "切り替え",
 	"settings.codexAccounts.switchDescription": "新しいセッションはこのアカウントを使用します。",
 	"settings.codexAccounts.switchFailed": "Codex アカウントの切り替えを開始できませんでした。",
 	"settings.codexAccounts.switchRecoveryFailed": "アカウントの切り替えを続行できませんでした。もう一度お試しください。",

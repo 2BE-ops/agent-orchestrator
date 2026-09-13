@@ -849,6 +849,7 @@
 	"settings.codexAccounts.switch.unknown": "Der Status des Kontowechsels ist nicht verfügbar.",
 	"settings.codexAccounts.retryRecovery": "Wiederherstellung fortsetzen",
 	"settings.codexAccounts.switchConfirm": "Konto wechseln",
+	"settings.codexAccounts.switchAction": "Wechseln",
 	"settings.codexAccounts.switchDescription": "Neue Sitzungen verwenden dieses Konto.",
 	"settings.codexAccounts.switchFailed": "Der Codex-Kontowechsel konnte nicht gestartet werden.",
 	"settings.codexAccounts.switchRecoveryFailed": "Der Kontowechsel konnte nicht fortgesetzt werden. Versuchen Sie es erneut.",

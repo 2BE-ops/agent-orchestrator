@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -167,6 +168,82 @@ func TestCodexAccountSwitchCoordinatorCompletesCredentialOnlySwitch(t *testing.T
 		if !slices.Contains(calls, want) {
 			t.Fatalf("calls = %v, missing %q", calls, want)
 		}
+	}
+}
+
+func TestCodexAccountSwitchCoordinatorActivatesSavedAccountWhenDeviceCredentialIsMissing(t *testing.T) {
+	root := t.TempDir()
+	globalHome := filepath.Join(root, "global-codex")
+	if err := ensurePrivateDirectory(globalHome); err != nil {
+		t.Fatal(err)
+	}
+	credential := testAPIKeyCredential("saved-target-key")
+	factory := &fakeCodexAccountFactory{
+		capabilities: supportedCodexAccountCapabilities(),
+		open: func(ports.CodexAccountContext) (ports.CodexAccountClient, error) {
+			return &fakeCodexAccountClient{read: ports.CodexAccountObservation{
+				Authentication: domain.AgentAuthenticationAuthorized,
+				Method:         domain.CodexAuthMethodAPIKey,
+			}}, nil
+		},
+	}
+	manager := newCodexAccountManager(
+		context.Background(),
+		filepath.Join(root, "accounts"),
+		filepath.Join(root, "pending"),
+		filepath.Join(root, "staging"),
+		globalHome,
+		factory,
+		nil,
+		nil,
+	)
+	manager.catalog.newID = func() string { return testAccountID }
+	target := commitTestAccountWithCredential(
+		t,
+		manager.catalog,
+		manager.pendingRoot,
+		"b60a377d-da68-4a61-86f2-f31f04c571f2",
+		credential,
+		ports.CodexAccountObservation{
+			Authentication: domain.AgentAuthenticationAuthorized,
+			Method:         domain.CodexAuthMethodAPIKey,
+		},
+	)
+	manager.mu.Lock()
+	manager.accountStoreReady = true
+	manager.mu.Unlock()
+
+	service := &Service{codexAccounts: manager, readiness: newReadinessCoordinator(readinessCoordinatorConfig{})}
+	store := &coordinatorSwitchStoreFake{}
+	coordinator := newCodexAccountSwitchCoordinator(context.Background(), service, store, codexops.NewGate(), time.Now, nil)
+
+	if _, err := coordinator.StartCodexAccountSwitch(context.Background(), ports.CodexAccountSwitchConfig{
+		TargetAccountID: target.Snapshot.ID, ExpectedAccountRevision: 0, IdempotencyKey: "use-saved-account",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	waitCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := coordinator.Wait(waitCtx); err != nil {
+		t.Fatal(err)
+	}
+
+	store.mu.Lock()
+	completed := store.record
+	store.mu.Unlock()
+	if completed.Phase != domain.CodexAccountSwitchCompleted || completed.SourceKind != domain.CodexAccountSwitchSourceNone {
+		t.Fatalf("switch = %#v, want completed switch from no device account", completed)
+	}
+	active := service.CurrentCodexActiveAccount()
+	if active.AccountID != target.Snapshot.ID || active.Revision != 1 {
+		t.Fatalf("active account = %#v", active)
+	}
+	installed, err := readOpaqueCredential(manager.globalCredentialPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(installed, credential) {
+		t.Fatal("saved credential was not installed as the device credential")
 	}
 }
 

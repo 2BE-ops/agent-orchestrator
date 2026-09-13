@@ -867,6 +867,7 @@
 	"settings.codexAccounts.switch.unknown": "L’état du changement de compte est indisponible.",
 	"settings.codexAccounts.retryRecovery": "Continuer la récupération",
 	"settings.codexAccounts.switchConfirm": "Changer de compte",
+	"settings.codexAccounts.switchAction": "Changer",
 	"settings.codexAccounts.switchDescription": "Les nouvelles sessions utiliseront ce compte.",
 	"settings.codexAccounts.switchFailed": "Impossible de démarrer le changement de compte Codex.",
 	"settings.codexAccounts.switchRecoveryFailed": "Impossible de continuer le changement de compte. Réessayez.",

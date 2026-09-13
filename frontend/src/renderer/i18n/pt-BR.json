@@ -867,6 +867,7 @@
 	"settings.codexAccounts.switch.unknown": "O estado da troca de conta não está disponível.",
 	"settings.codexAccounts.retryRecovery": "Continuar recuperação",
 	"settings.codexAccounts.switchConfirm": "Mudar conta",
+	"settings.codexAccounts.switchAction": "Mudar",
 	"settings.codexAccounts.switchDescription": "Novas sessões usarão esta conta.",
 	"settings.codexAccounts.switchFailed": "Não foi possível iniciar a mudança de conta do Codex.",
 	"settings.codexAccounts.switchRecoveryFailed": "Não foi possível continuar a troca de conta. Tente novamente.",

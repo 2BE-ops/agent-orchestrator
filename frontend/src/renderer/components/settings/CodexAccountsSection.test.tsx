@@ -153,6 +153,7 @@ it("allows switching away from an unidentified device account", async () => {
 	expect(await screen.findByText("device@example.com")).toBeInTheDocument();
 	const switchButton = screen.getByRole("button", { name: "Switch account" });
 	expect(switchButton).toBeEnabled();
+	expect(switchButton).toHaveTextContent("Switch");
 	await user.click(switchButton);
 	expect(await screen.findByRole("menuitem", { name: /other@example.com/i })).toBeInTheDocument();
 });
@@ -169,6 +170,7 @@ it("shows a simple empty state when Codex is signed out on the device", async ()
 
 	const { container } = renderSection();
 	expect(await screen.findByText("No Codex account is currently in use.")).toBeInTheDocument();
+	expect(screen.queryByRole("button", { name: "Switch account" })).not.toBeInTheDocument();
 	const firstRow = container.querySelector(`[data-account-id="${activeAccount.id}"]`) as HTMLElement;
 	fireEvent.click(within(firstRow).getByRole("button", { name: /active@example.com/i }));
 	expect(within(firstRow).getByRole("button", { name: "Use this account" })).toBeEnabled();
@@ -212,7 +214,8 @@ it("keeps saved accounts and local actions available while device reconciliation
 		: Promise.resolve({ data: {} }));
 	const { container } = renderSection();
 
-	expect((await screen.findAllByText("Refreshing Codex account…", {}, { timeout: 2_500 })).length).toBeGreaterThan(0);
+	expect((await screen.findAllByText("Couldn’t refresh the Codex account.")).length).toBeGreaterThan(0);
+	expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
 	expect(screen.getByText("active@example.com")).toBeInTheDocument();
 	expect(screen.getByText("other@example.com")).toBeInTheDocument();
 	expect(screen.queryByText("In use")).not.toBeInTheDocument();
@@ -261,7 +264,7 @@ it("retries an inconclusive sign-in check without opening the login terminal", a
 	expect((await screen.findAllByText("Signed in")).length).toBeGreaterThan(0);
 });
 
-it("removes the refresh state silently when device reconciliation recovers", async () => {
+it("removes the local reconciliation error silently when it recovers", async () => {
 	const degraded = {
 		...accountResponse,
 		deviceReconciliation: {
@@ -274,11 +277,11 @@ it("removes the refresh state silently when device reconciliation recovers", asy
 	getMock.mockResolvedValue({ data: degraded });
 	postMock.mockResolvedValue({ data: degraded });
 	const { queryClient } = renderSection();
-	await screen.findAllByText("Refreshing Codex account…", {}, { timeout: 2_500 });
+	await screen.findAllByText("Couldn’t refresh the Codex account.");
 
 	act(() => writeCodexAccounts(queryClient, accountResponse as unknown as CodexAccountsResponse));
 
-	await waitFor(() => expect(screen.queryByText("Refreshing Codex account…")).not.toBeInTheDocument());
+	await waitFor(() => expect(screen.queryByText("Couldn’t refresh the Codex account.")).not.toBeInTheDocument());
 	expect(screen.queryByText("Codex account refreshed.")).not.toBeInTheDocument();
 	expect(screen.getByText("In use")).toBeInTheDocument();
 });
@@ -598,7 +601,9 @@ it("collapses the provider while rotating only its chevron", async () => {
 it("starts account login immediately with no name prompt and auto-scrolls the inline terminal", async () => {
 	renderSection();
 	await screen.findByText("active@example.com");
-	fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+	const addButton = screen.getByRole("button", { name: "Add account" });
+	expect(addButton.textContent).toBe("");
+	fireEvent.click(addButton);
 	await waitFor(() => expect(postMock).toHaveBeenCalledWith("/api/v1/agents/codex/accounts/login-terminal"));
 	expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
 	expect(await screen.findByTestId("inline-terminal-body")).toBeInTheDocument();
@@ -709,9 +714,14 @@ it("signs in again inline and replaces the existing account card", async () => {
 	});
 	const { container } = renderSection();
 	await screen.findByText("other@example.com");
-	fireEvent.click(container.querySelector(`[data-account-id="${signedOutAccount.id}"] button`) as HTMLButtonElement);
-	expect(await screen.findByRole("button", { name: "Sign in again" })).toBeEnabled();
-	fireEvent.click(screen.getByRole("button", { name: "Sign in again" }));
+	const signedOutRow = container.querySelector(`[data-account-id="${signedOutAccount.id}"]`) as HTMLElement;
+	expect(within(signedOutRow).queryByRole("button", { name: /other@example.com/i })).not.toBeInTheDocument();
+	expect(within(signedOutRow).queryByText("ChatGPT")).not.toBeInTheDocument();
+	const signInButton = within(signedOutRow).getByRole("button", { name: "Sign in again" });
+	const deleteButton = within(signedOutRow).getByRole("button", { name: "Delete account" });
+	expect(signInButton).toBeEnabled();
+	expect(deleteButton.textContent).toBe("");
+	fireEvent.click(signInButton);
 	await waitFor(() => expect(postMock).toHaveBeenCalledWith(
 		"/api/v1/agents/codex/accounts/{accountId}/login-terminal",
 		{ params: { path: { accountId: signedOutAccount.id } } },
@@ -775,11 +785,14 @@ it("deletes a signed-out account after confirmation", async () => {
 
 	const { container } = renderSection();
 	await screen.findByText("other@example.com");
-	fireEvent.click(container.querySelector(`[data-account-id="${signedOutAccount.id}"] button`) as HTMLButtonElement);
+	const signedOutRow = container.querySelector(`[data-account-id="${signedOutAccount.id}"]`) as HTMLElement;
 	expect(screen.queryByText("Login expired.")).not.toBeInTheDocument();
 	expect(screen.queryByText("Usage details are not available for this account.")).not.toBeInTheDocument();
-	expect(await screen.findByRole("button", { name: "Delete account" })).toBeEnabled();
-	fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
+	expect(within(signedOutRow).queryByText("ChatGPT")).not.toBeInTheDocument();
+	const deleteButton = within(signedOutRow).getByRole("button", { name: "Delete account" });
+	expect(deleteButton).toBeEnabled();
+	expect(deleteButton.textContent).toBe("");
+	fireEvent.click(deleteButton);
 	const dialog = await screen.findByRole("dialog");
 	expect(dialog).toHaveTextContent("Delete this Codex account?");
 	fireEvent.click(within(dialog).getByRole("button", { name: "Delete account" }));
@@ -819,10 +832,12 @@ it("explains an invalid sign-in and deletes it after local logout", async () => 
 
 	const { container } = renderSection();
 	await screen.findByText("active@example.com");
-	fireEvent.click(container.querySelector(`[data-account-id="${invalidAccount.id}"] button`) as HTMLButtonElement);
+	const invalidRow = container.querySelector(`[data-account-id="${invalidAccount.id}"]`) as HTMLElement;
 	expect((await screen.findAllByText("Login expired.")).length).toBeGreaterThan(0);
 	expect(screen.queryByText("Codex reports this account as signed out.")).not.toBeInTheDocument();
-	fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
+	expect(within(invalidRow).queryByText("ChatGPT")).not.toBeInTheDocument();
+	expect(within(invalidRow).queryByRole("button", { name: /active@example.com/i })).not.toBeInTheDocument();
+	fireEvent.click(within(invalidRow).getByRole("button", { name: "Delete account" }));
 	const dialog = await screen.findByRole("dialog");
 	fireEvent.click(within(dialog).getByRole("button", { name: "Delete account" }));
 
@@ -931,12 +946,14 @@ it("restores the signed-in state after a successful reauthentication", async () 
 	postMock.mockImplementation((path: string) => path === "/api/v1/agents/codex/accounts/ensure" ? Promise.resolve({ data: launchFailureResponse }) : Promise.resolve({ data: {} }));
 	const { container, queryClient } = renderSection();
 	expect(await screen.findByText("active@example.com · Login expired.")).toBeInTheDocument();
-	fireEvent.click(container.querySelector(`[data-account-id="${activeAccount.id}"] button`) as HTMLButtonElement);
 	expect(await screen.findByRole("button", { name: "Sign in again" })).toBeInTheDocument();
 
 	act(() => { writeCodexAccounts(queryClient, accountResponse as never, "replace"); });
 
-	expect(await screen.findByRole("button", { name: "Log out" })).toBeInTheDocument();
+	const activeRow = container.querySelector(`[data-account-id="${activeAccount.id}"]`) as HTMLElement;
+	const accountToggle = await within(activeRow).findByRole("button", { name: /active@example.com/i });
+	fireEvent.click(accountToggle);
+	expect(await within(activeRow).findByRole("button", { name: "Log out" })).toBeInTheDocument();
 	expect(screen.queryByRole("button", { name: "Sign in again" })).not.toBeInTheDocument();
 	expect(screen.getByText("active@example.com · Pro · 96% remaining")).toBeInTheDocument();
 });

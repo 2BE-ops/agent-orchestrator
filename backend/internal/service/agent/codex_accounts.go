@@ -80,7 +80,9 @@ type CodexAccountStateStore interface {
 }
 
 type accountAuthCall struct {
-	done chan struct{}
+	done     chan struct{}
+	previous domain.AgentAuthenticationObservation
+	retry    bool
 }
 type accountAuthState struct {
 	invalidated bool
@@ -459,19 +461,25 @@ func (m *codexAccountManager) ensureAuthentication(ctx context.Context, record c
 			m.mu.Unlock()
 			select {
 			case <-call.done:
+				if call.retry {
+					continue
+				}
 				latest, _ := m.catalog.record(record.Snapshot.ID)
 				return latest.Snapshot.Authentication, nil
 			case <-ctx.Done():
 				return domain.AgentAuthenticationObservation{}, ctx.Err()
 			}
 		}
-		call := &accountAuthCall{done: make(chan struct{})}
+		call := &accountAuthCall{done: make(chan struct{}), previous: current.Snapshot.Authentication}
 		state.call = call
 		m.catalog.updateSnapshot(record.Snapshot.ID, func(s *domain.CodexAccountSnapshot) { s.Authentication.Freshness = domain.AgentReadinessChecking })
 		m.mu.Unlock()
 		go m.runAuthentication(record, call)
 		select {
 		case <-call.done:
+			if call.retry {
+				continue
+			}
 			latest, _ := m.catalog.record(record.Snapshot.ID)
 			return latest.Snapshot.Authentication, nil
 		case <-ctx.Done():
@@ -497,16 +505,49 @@ func (m *codexAccountManager) runAuthentication(record codexAccountRecord, call 
 		m.finishAuthentication(record.Snapshot.ID, failedAuthentication(attempted, domain.AgentReadinessReasonAuthCheckFailed, "Authentication check stopped."), domain.CodexAuthMethodUnknown, nil, true, call)
 		return
 	}
-	defer releaseGlobal()
+	releasedGlobal := false
+	releaseGlobalOnce := func() {
+		if !releasedGlobal {
+			releaseGlobal()
+			releasedGlobal = true
+		}
+	}
+	defer releaseGlobalOnce()
+	if m.globalCredentialMissingFor(account) {
+		releaseGlobalOnce()
+		_ = m.reconcileGlobalWithPolicy(m.ctx, true)
+		m.retryAuthenticationAfterDeviceChange(record.Snapshot.ID, call)
+		return
+	}
 	client, err := m.factory.Open(ctx, account)
 	if err != nil {
+		if m.globalCredentialMissingFor(account) {
+			releaseGlobalOnce()
+			_ = m.reconcileGlobalWithPolicy(m.ctx, true)
+			m.retryAuthenticationAfterDeviceChange(record.Snapshot.ID, call)
+			return
+		}
 		m.finishAuthentication(record.Snapshot.ID, failedAuthentication(attempted, domain.AgentReadinessReasonAuthCheckFailed, "Authentication check failed."), domain.CodexAuthMethodUnknown, nil, true, call)
 		return
 	}
-	defer func() { _ = client.Close() }()
+	clientClosed := false
+	closeClientOnce := func() {
+		if !clientClosed {
+			_ = client.Close()
+			clientClosed = true
+		}
+	}
+	defer closeClientOnce()
 	// account/read is metadata discovery only. Remote authentication is proved
 	// separately by a protected account call.
 	observation, err := client.Read(ctx, false)
+	if m.globalCredentialMissingFor(account) {
+		closeClientOnce()
+		releaseGlobalOnce()
+		_ = m.reconcileGlobalWithPolicy(m.ctx, true)
+		m.retryAuthenticationAfterDeviceChange(record.Snapshot.ID, call)
+		return
+	}
 	if err != nil {
 		code, reason := domain.AgentReadinessReasonAuthCheckFailed, "Authentication check failed."
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -519,38 +560,29 @@ func (m *codexAccountManager) runAuthentication(record codexAccountRecord, call 
 	m.finishAuthentication(record.Snapshot.ID, result, observation.Method, observation.Email, observation.Authentication == domain.AgentAuthenticationUnknown, call)
 }
 
-// applyDiscoveryAuthentication records an observation from a non-refresh read.
-// Discovery proves that local account material is present, never that the
-// provider accepts it, so it neither claims nor replaces a protected-call
-// verification made against the same credential.
-//
-// credentialChanged reports whether discovery found account material that
-// differs from the saved copy the stored observation was made against. A
-// launch-verified observation answers a strictly stronger question than
-// discovery, so while the material is the same it stands untouched -- including
-// its checkedAt, because reconciliation runs on every ensure and must not
-// restart the freshness window that keeps Settings from re-reading the account
-// on every focus. Replaced material is different evidence: a launch failure
-// recorded against the old credentials no longer describes the account, so it is
-// marked for re-verification instead of being left to expire.
-func (m *codexAccountManager) applyDiscoveryAuthentication(id string, observation domain.AgentAuthenticationObservation, credentialChanged bool) {
+func (m *codexAccountManager) globalCredentialMissingFor(account ports.CodexAccountContext) bool {
+	if canonicalPath(account.Home) != m.globalHome {
+		return false
+	}
+	_, state, err := readCodexFileState(m.globalCredentialPath(), true)
+	return err == nil && !state.exists
+}
+
+func (m *codexAccountManager) retryAuthenticationAfterDeviceChange(id string, call *accountAuthCall) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	state := m.auth[id]
-	if state == nil {
-		state = &accountAuthState{invalidated: true}
-		m.auth[id] = state
+	if state != nil && state.call == call {
+		m.catalog.updateSnapshot(id, func(snapshot *domain.CodexAccountSnapshot) {
+			snapshot.Authentication = call.previous
+		})
+		state.invalidated = true
+		state.nextRetryAt = time.Time{}
+		state.call = nil
+		call.retry = true
+		close(call.done)
 	}
-	if state.launchVerified {
-		if credentialChanged {
-			state.launchVerified = false
-			state.reauthenticationRequired = false
-			state.invalidated = true
-		} else {
-			return
-		}
-	}
-	m.catalog.updateSnapshot(id, func(snapshot *domain.CodexAccountSnapshot) { snapshot.Authentication = observation })
+	m.mu.Unlock()
+	m.publish()
 }
 
 func accountAuthenticationObservation(at time.Time, state domain.AgentAuthenticationState) domain.AgentAuthenticationObservation {
@@ -676,6 +708,32 @@ func (m *codexAccountManager) invalidate(id string) {
 	state.nextRetryAt = time.Time{}
 	m.mu.Unlock()
 	m.catalog.updateSnapshot(id, func(s *domain.CodexAccountSnapshot) { s.Authentication.Freshness = domain.AgentReadinessStale })
+	m.capacity.invalidate(id, true)
+	m.publish()
+}
+
+// invalidateCredentialEvidence clears conclusions made about credentials that
+// reconciliation has just replaced. In particular, an expired-token result for
+// the previous auth.json must not suppress verification of a newly rotated or
+// externally refreshed credential for the same account.
+func (m *codexAccountManager) invalidateCredentialEvidence(id string) {
+	m.mu.Lock()
+	state := m.auth[id]
+	if state == nil {
+		state = &accountAuthState{}
+		m.auth[id] = state
+	}
+	state.reauthenticationRequired = false
+	state.launchVerified = false
+	state.invalidated = true
+	state.failures = 0
+	state.nextRetryAt = time.Time{}
+	delete(m.usage, id)
+	m.mu.Unlock()
+	m.catalog.updateSnapshot(id, func(snapshot *domain.CodexAccountSnapshot) {
+		snapshot.Authentication = uncheckedAuthentication()
+		snapshot.UsageSummary = nil
+	})
 	m.capacity.invalidate(id, true)
 	m.publish()
 }

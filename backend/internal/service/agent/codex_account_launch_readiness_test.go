@@ -345,26 +345,27 @@ func TestExternallyReplacedCredentialsDoNotGetAttributedToOldActiveSlot(t *testi
 	if active := fixture.account(view, fixture.active.Snapshot.ID); active.Authentication.State != domain.AgentAuthenticationUnauthorized {
 		t.Fatalf("active account authentication = %#v", active.Authentication)
 	}
-	reads := fixture.protectedReads()
+	original, err := readOpaqueCredential(filepath.Join(fixture.active.Home, codexCredentialFilename))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// The user signs in again outside AO. The device-global account material is
 	// replaced, so the recorded failure no longer describes this account and must
 	// not survive the rest of the display window.
-	fixture.signIn()
-	fixture.rejectActiveCapacity()
-	if err := writeGlobalCredentialAtomic(fixture.manager.globalCredentialPath(), []byte("replacement-opaque-credential")); err != nil {
+	if err := writeGlobalCredentialAtomic(fixture.manager.globalCredentialPath(), testOAuthCredential("external-account", "replacement-access")); err != nil {
 		t.Fatal(err)
 	}
 	if err := fixture.manager.reconcileGlobal(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
-	view = fixture.ensureSettings()
-
-	if got := fixture.protectedReads(); got != 0 {
-		t.Fatalf("external credential was verified through the old account slot: before %d after reset %d", reads, got)
+	view = fixture.manager.cached()
+	if view.ActiveAccountID == fixture.active.Snapshot.ID || len(view.Accounts) != 3 || view.UnmanagedGlobalAccount != nil {
+		t.Fatalf("external account was not imported separately = %#v", view)
 	}
-	if view.ActiveAccountID != "" || view.UnmanagedGlobalAccount == nil {
-		t.Fatalf("external credential was not isolated as a device-only account = %#v", view)
+	saved, err := readOpaqueCredential(filepath.Join(fixture.active.Home, codexCredentialFilename))
+	if err != nil || string(saved) != string(original) {
+		t.Fatalf("external credential was attributed to old account: %v", err)
 	}
 }

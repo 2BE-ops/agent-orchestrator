@@ -315,10 +315,14 @@ func (m *codexAccountManager) globalCredentialPath() string {
 }
 
 func (m *codexAccountManager) validateGlobalCredentialStore() error {
-	if err := validateCodexDirectory(m.globalHome, false); err != nil {
+	if m.globalHome == "" {
 		return ports.ErrCodexGlobalCredentialStoreUnsupported
 	}
-	_, err := readOpaqueCredential(m.globalCredentialPath())
+	// A missing auth.json means that no device account is active; it does not
+	// mean that Codex is using a non-file-backed credential store. Validate the
+	// path and any credential that is present, while allowing activation to
+	// create the file (and, when needed, its private parent directory).
+	_, _, err := readCodexFileState(m.globalCredentialPath(), true)
 	if err != nil {
 		return ports.ErrCodexGlobalCredentialStoreUnsupported
 	}
