@@ -712,10 +712,16 @@ export function useBrowserView({
 				setNavState(ensured);
 			}
 			let tabs = tabsStateRef.current.tabs;
-			if (tabs.length === 0) {
+			// The native tab host is authoritative. The renderer cache can lag after
+			// navigation/title updates, so refresh it before deciding whether this URL
+			// already has a tab and should be selected instead of duplicated.
+			try {
 				const next = await window.ao!.browser.getTabs(id);
 				tabs = next.tabs;
 				if (viewIdRef.current === id) setTabsState(next);
+			} catch {
+				// Keep the last known tabs as a fallback if the native host is briefly
+				// unavailable; opening the link remains better than dropping the click.
 			}
 			const existingTab = tabs.find((tab) => !isBlankTabUrl(tab.url) && sameBrowserURL(tab.url, url));
 			if (existingTab) {

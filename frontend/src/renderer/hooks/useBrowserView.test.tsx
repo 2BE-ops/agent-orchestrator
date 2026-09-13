@@ -279,6 +279,14 @@ describe("useBrowserView", () => {
 			],
 			change: { kind: "popup", tabId: "t2" },
 		}));
+		bridge.getTabs.mockResolvedValue({
+			viewId: "42:sess-1",
+			activeTabId: "t2",
+			tabs: [
+				{ id: "t1", url: "https://instagram.com/", title: "Instagram", active: false },
+				{ id: "t2", url: "https://example.com/", title: "Example", active: true },
+			],
+		});
 
 		await act(() => result.current.openLink("https://instagram.com"));
 		expect(bridge.selectTab).toHaveBeenCalledWith({ viewId: "42:sess-1", tabId: "t1" });
