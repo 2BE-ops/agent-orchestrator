@@ -8,6 +8,7 @@ import {
 	createBrowserViewHost,
 	isAllowedBrowserURL,
 	normalizeBrowserURL,
+	requiresSystemBrowserURL,
 	sanitizeBrowserTitle,
 	sanitizeBrowserURL,
 	scaleBoundsForZoom,
@@ -22,6 +23,24 @@ import {
 } from "../shared/shortcuts";
 import type { BrowserAnnotationDraft } from "../shared/browser-annotations";
 import { parseAgentBrowserJSON } from "./agent-browser-runtime";
+
+describe("Cloudflare browser routing", () => {
+	it.each([
+		"https://dash.cloudflare.com/login",
+		"https://dash.cloudflare.com/1234567890/home",
+		"https://workers.dash.cloudflare.com/",
+	])("requires the system browser for %s", (url) => {
+		expect(requiresSystemBrowserURL(url)).toBe(true);
+	});
+
+	it.each([
+		"https://www.cloudflare.com/",
+		"https://example.dash.cloudflare.com.evil.test/",
+		"not a URL",
+	])("keeps non-dashboard URL %s eligible for AO", (url) => {
+		expect(requiresSystemBrowserURL(url)).toBe(false);
+	});
+});
 
 vi.mock("electron", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("electron")>();
@@ -105,6 +124,7 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 	let currentURL = "";
 	let browserZoomFactor = 1;
 	const webContentsListeners = new Map<string, (...args: never[]) => void>();
+	let windowOpenHandler: ((details: { url: string }) => { action: string }) | undefined;
 	const shellWebContentsListeners = new Map<string, (...args: never[]) => void>();
 	const addListener = (
 		listeners: Map<string, (...args: never[]) => void>,
@@ -179,7 +199,9 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 		focus: vi.fn(),
 		reload: vi.fn(),
 		send: vi.fn(),
-		setWindowOpenHandler: () => undefined,
+		setWindowOpenHandler: (handler: (details: { url: string }) => { action: string }) => {
+			windowOpenHandler = handler;
+		},
 		stop: () => undefined,
 		close: vi.fn(),
 		openDevTools,
@@ -235,6 +257,7 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 	const shellFocus = vi.fn();
 	const shellSend = vi.fn((channel: string, payload?: unknown) => sent.push({ channel, payload }));
 	const mainContentView = { addChildView: vi.fn(), removeChildView: vi.fn() };
+	const openExternal = vi.fn(async () => undefined);
 	const host = createBrowserViewHost({
 		mainWindow: {
 			contentView: mainContentView,
@@ -254,7 +277,7 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 			removeHandler: () => undefined,
 			off: () => undefined,
 		} as never,
-		shell: { openExternal: async () => undefined },
+		shell: { openExternal },
 		WebContentsView: function () {
 			return view;
 		} as never,
@@ -331,6 +354,8 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 		shellFocus,
 		shellSend,
 		openDevTools,
+		openExternal,
+		getWindowOpenHandler: () => windowOpenHandler,
 		closeDevTools,
 		insertCSS,
 		removeInsertedCSS,
@@ -369,6 +394,19 @@ describe("browser screenshots", () => {
 			"Browser tab is unavailable",
 		);
 		expect(writeImage).not.toHaveBeenCalled();
+	});
+});
+
+describe("embedded Cloudflare navigation", () => {
+	it("hands same-tab login navigation to the system browser", async () => {
+		const { invoke, webContentsListeners, openExternal } = setupHost();
+		await invoke("browser:ensure", "sess-1");
+		const event = { preventDefault: vi.fn() };
+
+		webContentsListeners.get("will-navigate")?.(event as never, "https://dash.cloudflare.com/login" as never);
+
+		expect(event.preventDefault).toHaveBeenCalledOnce();
+		expect(openExternal).toHaveBeenCalledWith("https://dash.cloudflare.com/login");
 	});
 });
 

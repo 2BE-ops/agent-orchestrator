@@ -2594,6 +2594,10 @@ function hardenWebContents(
 		if (!isCurrent() || !isAllowedBrowserURL(url, options.rendererOrigin)) {
 			return { action: "deny" };
 		}
+		if (requiresSystemBrowserURL(url)) {
+			void options.shell.openExternal(url);
+			return { action: "deny" };
+		}
 		// Always deny — never return createWindow. See the call site's comment for
 		// why: Electron's own guest-window linkage check crashes the process
 		// otherwise. Open our own tab instead, outside Electron's guest-window flow.
@@ -2601,6 +2605,11 @@ function hardenWebContents(
 		return { action: "deny" };
 	});
 	const blockUnsafeNavigation = (event: Electron.Event, url: string) => {
+		if (requiresSystemBrowserURL(url)) {
+			event.preventDefault();
+			if (isCurrent()) void options.shell.openExternal(url);
+			return;
+		}
 		if (!isAllowedBrowserURL(url, options.rendererOrigin)) {
 			event.preventDefault();
 			if (!isCurrent()) return;
@@ -2614,6 +2623,17 @@ function hardenWebContents(
 	};
 	contents.on("will-navigate", blockUnsafeNavigation);
 	contents.on("will-redirect", blockUnsafeNavigation);
+}
+
+/** Cloudflare's bot challenge is not reliable in an embedded Electron profile. */
+export function requiresSystemBrowserURL(url: string): boolean {
+	try {
+		const parsed = new URL(url);
+		const host = parsed.hostname.toLowerCase();
+		return host === "dash.cloudflare.com" || host.endsWith(".dash.cloudflare.com");
+	} catch {
+		return false;
+	}
 }
 
 function wireNavEvents(
