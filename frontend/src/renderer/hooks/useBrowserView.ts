@@ -31,6 +31,14 @@ function isBlankTabUrl(url: string): boolean {
 	return !url || url === "about:blank";
 }
 
+function sameBrowserURL(left: string, right: string): boolean {
+	try {
+		return new URL(left).href === new URL(right).href;
+	} catch {
+		return left === right;
+	}
+}
+
 type UseBrowserViewOptions = {
 	sessionId: string;
 	active: boolean;
@@ -709,6 +717,11 @@ export function useBrowserView({
 				tabs = next.tabs;
 				if (viewIdRef.current === id) setTabsState(next);
 			}
+			const existingTab = tabs.find((tab) => !isBlankTabUrl(tab.url) && sameBrowserURL(tab.url, url));
+			if (existingTab) {
+				await selectTab(existingTab.id);
+				return;
+			}
 			const activeTab = tabs.find((tab) => tab.active);
 			if (activeTab && isBlankTabUrl(activeTab.url)) {
 				const state = await window.ao!.browser.navigate({ viewId: id, url });
@@ -717,7 +730,7 @@ export function useBrowserView({
 			}
 			await openTab(url);
 		},
-		[hasNativeBrowser, openTab, sessionId],
+		[hasNativeBrowser, openTab, selectTab, sessionId],
 	);
 
 	const reopenClosedTab = useCallback(
