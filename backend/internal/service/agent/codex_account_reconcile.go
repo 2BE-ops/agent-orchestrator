@@ -144,8 +144,8 @@ func (m *codexAccountManager) initializeAccountStore() error {
 }
 
 // codexDeviceReconciliationFailure contains only a safe category. The wrapped
-// provider error is intentionally not retained because it can contain tokens
-// or credential paths.
+// filesystem or state error is intentionally not retained because it can
+// contain credential paths.
 type codexDeviceReconciliationFailure struct {
 	reason    string
 	retryable bool
@@ -208,7 +208,6 @@ func (m *codexAccountManager) reconcileGlobalWithPolicy(ctx context.Context, for
 		// does not make the active row disappear and reappear in Settings.
 		m.deferredAccountID = m.active.AccountID
 		m.deviceCredentialPresent = false
-		m.unmanaged = nil
 		started = true
 		go m.runGlobalReconciliation(call)
 	}
@@ -263,16 +262,10 @@ func (m *codexAccountManager) runGlobalReconciliation(call *accountReconcileCall
 		m.reconcileFailures = 0
 		m.reconciliation.Retryable = false
 		m.reconciliation.NextRetryAt = nil
-		if m.unmanaged != nil {
-			m.reconciliation.Status = domain.CodexDeviceReconciliationBlocked
-			m.reconciliation.ActiveAccountVerified = false
-			m.reconciliation.ReasonCode = m.unmanaged.ReasonCode
-		} else {
-			m.reconciliation.Status = domain.CodexDeviceReconciliationVerified
-			m.reconciliation.ActiveAccountVerified = m.active.AccountID != ""
-			m.reconciliation.ReasonCode = "verified"
-			m.reconciliation.VerifiedAt = timePointer(now)
-		}
+		m.reconciliation.Status = domain.CodexDeviceReconciliationVerified
+		m.reconciliation.ActiveAccountVerified = m.active.AccountID != ""
+		m.reconciliation.ReasonCode = "verified"
+		m.reconciliation.VerifiedAt = timePointer(now)
 	} else if !errors.Is(call.err, context.Canceled) || m.ctx.Err() == nil {
 		failure := classifyDeviceReconciliationFailure(call.err)
 		// The retained deviceAccountID is presentation-only while the local check
@@ -382,12 +375,10 @@ func (m *codexAccountManager) reconcileGlobalInner(ctx context.Context) error {
 		return deviceReconciliationStorageFailure(credentialErr)
 	}
 	if !admitted.exists {
-		m.setGlobalAuthentication(accountAuthenticationObservation(m.now(), domain.AgentAuthenticationUnauthorized))
 		m.mu.Lock()
 		m.deviceAccountID = ""
 		m.deferredAccountID = ""
 		m.deviceCredentialPresent = false
-		m.unmanaged = nil
 		m.mu.Unlock()
 		if err := m.setActivePointer(ctx, ""); err != nil {
 			return deviceReconciliationStateFailure(err)
@@ -559,62 +550,9 @@ func (m *codexAccountManager) importGlobalCredential(credential []byte, identity
 	return record, nil
 }
 
-func (m *codexAccountManager) matchGlobalAccount(observation ports.CodexAccountObservation, globalCredential []byte) (codexAccountRecord, bool) {
-	records, err := m.catalog.recordsFor(nil)
-	if err != nil {
-		return codexAccountRecord{}, false
-	}
-	m.mu.Lock()
-	activeID := m.active.AccountID
-	m.mu.Unlock()
-	if active, ok := m.catalog.record(activeID); ok && (active.Snapshot.Status == domain.CodexAccountStatusValid || active.Snapshot.Status == domain.CodexAccountStatusSignedOut) {
-		if sameCodexStructuredIdentity(active.Snapshot, observation) {
-			return active, true
-		}
-	}
-	if distinguishableCodexIdentity(observation) {
-		var matched *codexAccountRecord
-		for i := range records {
-			record := records[i]
-			if (record.Snapshot.Status == domain.CodexAccountStatusValid || record.Snapshot.Status == domain.CodexAccountStatusSignedOut) && sameCodexStructuredIdentity(record.Snapshot, observation) && (matched == nil || record.VerifiedAt.After(matched.VerifiedAt)) {
-				candidate := record
-				matched = &candidate
-			}
-		}
-		if matched != nil {
-			return *matched, true
-		}
-		return codexAccountRecord{}, false
-	}
-	var opaqueMatch *codexAccountRecord
-	for i := range records {
-		record := records[i]
-		if record.Snapshot.Status != domain.CodexAccountStatusValid || !credentialMatchesRecord(record, globalCredential) {
-			continue
-		}
-		if opaqueMatch != nil {
-			return codexAccountRecord{}, false
-		}
-		candidate := record
-		opaqueMatch = &candidate
-	}
-	if opaqueMatch != nil {
-		return *opaqueMatch, true
-	}
-	return codexAccountRecord{}, false
-}
-
 func credentialMatchesRecord(record codexAccountRecord, credential []byte) bool {
 	stored, err := readOpaqueCredential(filepath.Join(record.Home, codexCredentialFilename))
 	return err == nil && bytes.Equal(stored, credential)
-}
-
-func (m *codexAccountManager) observationAndCredentialIdentifyRecord(record codexAccountRecord, observation ports.CodexAccountObservation, credential []byte) bool {
-	if distinguishableCodexIdentity(observation) {
-		return sameCodexStructuredIdentity(record.Snapshot, observation)
-	}
-	matched, ok := m.matchGlobalAccount(observation, credential)
-	return ok && matched.Snapshot.ID == record.Snapshot.ID
 }
 
 func distinguishableCodexIdentity(observation ports.CodexAccountObservation) bool {
@@ -628,44 +566,12 @@ func sameCodexStructuredIdentity(snapshot domain.CodexAccountSnapshot, observati
 	return strings.EqualFold(strings.TrimSpace(*snapshot.AccountEmail), strings.TrimSpace(*observation.Email))
 }
 
-func codexObservationMatchesAccount(snapshot domain.CodexAccountSnapshot, observation ports.CodexAccountObservation) bool {
-	if sameCodexStructuredIdentity(snapshot, observation) {
-		return true
-	}
-	return snapshot.AuthMethod == domain.CodexAuthMethodAPIKey && observation.Method == domain.CodexAuthMethodAPIKey
-}
-
-func codexObservationsMatch(left, right ports.CodexAccountObservation) bool {
-	if left.Method != right.Method {
-		return false
-	}
-	if left.Email != nil && right.Email != nil && safeAccountEmail(*left.Email) && safeAccountEmail(*right.Email) {
-		return strings.EqualFold(strings.TrimSpace(*left.Email), strings.TrimSpace(*right.Email))
-	}
-	return left.Method == domain.CodexAuthMethodAPIKey
-}
-
-func (m *codexAccountManager) setUnmanagedGlobal(label string, method domain.CodexAuthMethod, email *string, code, reason string) {
-	m.mu.Lock()
-	m.deviceAccountID = ""
-	m.deviceCredentialPresent = true
-	m.unmanaged = &domain.CodexUnmanagedGlobalAccount{Label: label, AuthMethod: method, AccountEmail: email, ReasonCode: code, Reason: reason}
-	m.mu.Unlock()
-}
-
 func (m *codexAccountManager) setManagedGlobal(accountID string) {
 	m.mu.Lock()
 	m.deviceAccountID = accountID
 	m.deferredAccountID = ""
 	m.deviceCredentialPresent = true
-	m.unmanaged = nil
 	m.reconciliation.ActiveAccountVerified = accountID != ""
-	m.mu.Unlock()
-}
-
-func (m *codexAccountManager) setGlobalAuthentication(observation domain.AgentAuthenticationObservation) {
-	m.mu.Lock()
-	m.globalAuth = observation
 	m.mu.Unlock()
 }
 

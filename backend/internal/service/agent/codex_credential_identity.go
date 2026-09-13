@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"path/filepath"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -54,6 +55,28 @@ func parseCodexCredentialIdentity(data []byte) (codexCredentialIdentity, error) 
 func inspectCodexCredentialIdentity(data []byte) (codexCredentialIdentity, bool) {
 	identity, err := parseCodexCredentialIdentity(data)
 	return identity, err == nil
+}
+
+// localCredentialIdentifiesRecord validates the non-secret identity that can be
+// derived from one AO-owned credential. Legacy OAuth credentials without an
+// account id remain distinguishable by their private account slot and exact
+// bytes at the reconciliation/switch boundaries.
+func localCredentialIdentifiesRecord(record codexAccountRecord, data []byte) bool {
+	identity, err := parseCodexCredentialIdentity(data)
+	if err != nil {
+		return false
+	}
+	if record.ProviderAccountID != "" {
+		return identity.Method == domain.CodexAuthMethodChatGPT && identity.ProviderAccountID == record.ProviderAccountID
+	}
+	if record.Snapshot.AuthMethod != domain.CodexAuthMethodUnknown && record.Snapshot.AuthMethod != identity.Method {
+		return false
+	}
+	// API keys and legacy OAuth credentials have no non-secret stable account
+	// identifier. They belong to a saved slot only when their private bytes still
+	// match exactly. Keep that comparison in memory and never expose either value.
+	saved, savedErr := readOpaqueCredential(filepath.Join(record.Home, codexCredentialFilename))
+	return savedErr == nil && bytes.Equal(saved, data)
 }
 
 func safeProviderAccountID(value string) bool {

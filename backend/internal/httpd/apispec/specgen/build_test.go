@@ -40,13 +40,13 @@ func TestBuild_CodexSwitchContractIsRedactedAndOnlyMountedRoutesAreDocumented(t 
 
 	phase := doc.Components.Schemas["CodexAccountSwitchResponse"].Properties["phase"]
 	want := []string{
-		"requested", "checkpointing_source", "activating_target", "verifying_target",
-		"rollback_required", "recovery_required", "completed", "failed",
+		"requested", "checkpointing_source", "activating_target",
+		"recovery_required", "completed", "failed",
 	}
 	if !slices.Equal(phase.Enum, want) {
 		t.Fatalf("CodexAccountSwitchResponse.phase enum = %v, want %v", phase.Enum, want)
 	}
-	for _, obsolete := range []string{"restartRunningSessions", "sessions"} {
+	for _, obsolete := range []string{"sessions"} {
 		if _, ok := doc.Components.Schemas["CodexAccountSwitchResponse"].Properties[obsolete]; ok {
 			t.Fatalf("obsolete %q remains in CodexAccountSwitchResponse", obsolete)
 		}

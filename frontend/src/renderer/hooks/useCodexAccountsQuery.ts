@@ -46,12 +46,6 @@ export async function openCodexAccountLoginTerminal(): Promise<CodexAccountLogin
 	return data as CodexAccountLoginTerminalStart;
 }
 
-export async function openCodexDeviceAccountLoginTerminal(): Promise<CodexAccountLoginTerminalStart> {
-	const { data, error } = await apiClient.POST("/api/v1/agents/codex/accounts/device/login-terminal");
-	if (error) throw new Error(apiErrorMessage(error));
-	return data as CodexAccountLoginTerminalStart;
-}
-
 export async function openCodexAccountReauthenticationTerminal(accountId: string): Promise<CodexAccountLoginTerminalStart> {
 	const { data, error } = await apiClient.POST("/api/v1/agents/codex/accounts/{accountId}/login-terminal", {
 		params: { path: { accountId } },
@@ -111,7 +105,7 @@ export const codexAccountsQueryOptions = {
 };
 export function useCodexAccountsQuery(enabled = true) { return useQuery({ ...codexAccountsQueryOptions, enabled }); }
 
-export function useEnsureCodexAccounts(enabled = true): void {
+export function useEnsureCodexAccounts(enabled = true, ensureOnMount = true): void {
 	const queryClient = useQueryClient();
 	useEffect(() => {
 		if (!enabled) return;
@@ -121,10 +115,10 @@ export function useEnsureCodexAccounts(enabled = true): void {
 			const ready = cached ? Promise.resolve() : queryClient.fetchQuery(codexAccountsQueryOptions).then(() => undefined).catch(() => undefined);
 			void ready.then(() => ensureCodexAccounts()).then((next) => { if (active) writeCodexAccounts(queryClient, next, "replace"); }).catch(() => undefined);
 		};
-		ensure();
+		if (ensureOnMount) ensure();
 		const onFocus = () => ensure();
 		const onVisibility = () => { if (document.visibilityState === "visible") ensure(); };
 		window.addEventListener("focus", onFocus); document.addEventListener("visibilitychange", onVisibility);
 		return () => { active = false; window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVisibility); };
-	}, [enabled, queryClient]);
+	}, [enabled, ensureOnMount, queryClient]);
 }

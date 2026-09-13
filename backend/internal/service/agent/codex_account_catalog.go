@@ -121,17 +121,6 @@ func safeAccountEmail(value string) bool {
 	return true
 }
 
-func (c *codexAccountCatalog) snapshots() []domain.CodexAccountSnapshot {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	records := c.sortedRecordsLocked()
-	out := make([]domain.CodexAccountSnapshot, 0, len(records))
-	for _, record := range records {
-		out = append(out, record.Snapshot)
-	}
-	return out
-}
-
 func (c *codexAccountCatalog) recordsFor(ids []string) ([]codexAccountRecord, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -184,8 +173,12 @@ func (c *codexAccountCatalog) updateVerifiedDescriptor(id string, observation po
 	if err != nil {
 		return err
 	}
-	descriptor.AuthMethod = observation.Method
-	descriptor.AccountEmail = observation.Email
+	if observation.Method != domain.CodexAuthMethodUnknown {
+		descriptor.AuthMethod = observation.Method
+	}
+	if observation.Email != nil {
+		descriptor.AccountEmail = observation.Email
+	}
 	if credential, credentialErr := readOpaqueCredential(filepath.Join(record.Home, codexCredentialFilename)); credentialErr == nil {
 		if identity, identityErr := parseCodexCredentialIdentity(credential); identityErr == nil && identity.ProviderAccountID != "" {
 			descriptor.ProviderAccountID = identity.ProviderAccountID
@@ -201,9 +194,13 @@ func (c *codexAccountCatalog) updateVerifiedDescriptor(id string, observation po
 		return err
 	}
 	c.updateSnapshot(id, func(snapshot *domain.CodexAccountSnapshot) {
-		snapshot.AuthMethod = observation.Method
-		snapshot.AccountEmail = observation.Email
-		snapshot.Label = accountLabel(id, observation.Method, observation.Email)
+		if observation.Method != domain.CodexAuthMethodUnknown {
+			snapshot.AuthMethod = observation.Method
+		}
+		if observation.Email != nil {
+			snapshot.AccountEmail = observation.Email
+		}
+		snapshot.Label = accountLabel(id, snapshot.AuthMethod, snapshot.AccountEmail)
 	})
 	return nil
 }

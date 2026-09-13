@@ -20,18 +20,6 @@ func newCodexAccountsResponse(input agentsvc.CodexAccounts) CodexAccountsRespons
 			NextRetryAt: input.DeviceReconciliation.NextRetryAt,
 		},
 	}
-	if input.UnmanagedGlobalAccount != nil {
-		response.UnmanagedGlobalAccount = &CodexUnmanagedGlobalAccountResponse{
-			Label: input.UnmanagedGlobalAccount.Label, AuthMethod: string(input.UnmanagedGlobalAccount.AuthMethod),
-			AccountEmail: input.UnmanagedGlobalAccount.AccountEmail,
-			Authentication: CodexAuthenticationResponse{
-				State: string(input.UnmanagedGlobalAccount.Authentication.State), Freshness: string(input.UnmanagedGlobalAccount.Authentication.Freshness),
-				CheckedAt: input.UnmanagedGlobalAccount.Authentication.CheckedAt, AttemptedAt: input.UnmanagedGlobalAccount.Authentication.AttemptedAt,
-				ReasonCode: input.UnmanagedGlobalAccount.Authentication.ReasonCode, Reason: input.UnmanagedGlobalAccount.Authentication.Reason,
-			},
-			ReasonCode: input.UnmanagedGlobalAccount.ReasonCode, Reason: input.UnmanagedGlobalAccount.Reason,
-		}
-	}
 	if input.ActiveLogin != nil {
 		response.ActiveLogin = &CodexActiveLoginResponse{
 			OperationID: input.ActiveLogin.OperationID, AccountID: input.ActiveLogin.AccountID,

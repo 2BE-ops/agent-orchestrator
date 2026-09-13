@@ -26,10 +26,11 @@ func TestMigrateRepairsRenumberedCodexAccountSwitchHistory(t *testing.T) {
 			t.Cleanup(func() { _ = db.Close() })
 			upTo(t, db, 128)
 
-			restartMigration, err := migrationsFS.ReadFile("migrations/0140_codex_account_switch_restart_policy.sql")
-			if err != nil {
-				t.Fatal(err)
-			}
+			restartMigration := []byte(`-- +goose Up
+ALTER TABLE codex_account_switches ADD COLUMN restart_running_sessions BOOLEAN NOT NULL DEFAULT TRUE;
+-- +goose Down
+ALTER TABLE codex_account_switches DROP COLUMN restart_running_sessions;
+`)
 			legacy := fstest.MapFS{
 				"migrations/0129_codex_account_switch_restart_policy.sql": &fstest.MapFile{Data: restartMigration},
 			}
@@ -78,7 +79,7 @@ func TestMigrateRepairsRenumberedCodexAccountSwitchHistory(t *testing.T) {
 			if removedRestartColumn != 0 {
 				t.Fatalf("restart_running_sessions count = %d, want 0", removedRestartColumn)
 			}
-			for _, version := range []int64{129, 130, 140, 141, 142} {
+			for _, version := range []int64{129, 130, 141, 142} {
 				var applied int
 				if err := db.QueryRow(`
 SELECT COALESCE((

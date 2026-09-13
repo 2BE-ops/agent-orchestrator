@@ -198,8 +198,8 @@ func (m *codexAccountSwitchCoordinator) StartCodexAccountSwitch(ctx context.Cont
 	}
 	// Device-global mutation remains fail-closed. Reconcile immediately before
 	// taking the durable switch admission fences, then revalidate again inside
-	// the activation transaction. A temporary provider failure may leave a
-	// safely observed device-only source, which is still a valid switch source.
+	// the activation transaction. This inspection is local and does not depend
+	// on provider availability.
 	_ = credentials.EnsureCodexDeviceAccountReconciled(ctx)
 	if err := m.acquireCodexAccountSwitchGate(ctx); err != nil {
 		return domain.CodexAccountSwitch{}, err
@@ -230,13 +230,9 @@ func (m *codexAccountSwitchCoordinator) StartCodexAccountSwitch(ctx context.Cont
 	if source.Revision != cfg.ExpectedAccountRevision {
 		return domain.CodexAccountSwitch{}, ports.ErrCodexAccountRevisionConflict
 	}
-	if err := credentials.VerifyCodexAccountForSwitch(ctx, cfg.TargetAccountID); err != nil {
+	if err := credentials.PrepareCodexAccountForSwitch(ctx, cfg.TargetAccountID); err != nil {
 		return domain.CodexAccountSwitch{}, err
 	}
-	if credentials.CodexAccountLoginInProgress() {
-		return domain.CodexAccountSwitch{}, ports.ErrCodexAccountLoginInProgress
-	}
-
 	now := m.clock()
 	sw := domain.CodexAccountSwitch{
 		ID: uuid.NewString(), SourceKind: source.Kind, SourceAccountID: source.AccountID,
@@ -291,68 +287,59 @@ func (m *codexAccountSwitchCoordinator) dispatchCodexAccountSwitch(ctx context.C
 			if active.AccountID != sw.TargetAccountID {
 				if active.Revision != sw.ExpectedAccountRevision ||
 					(sw.SourceKind == domain.CodexAccountSwitchSourceManaged && active.AccountID != sw.SourceAccountID) {
-					_ = m.advanceCodexAccountSwitch(ctx, store, sw, domain.CodexAccountSwitchRecoveryRequired, "activation_unconfirmed")
+					// The credential mutation has not started. A changed source is a
+					// safe terminal failure, not a recovery situation.
+					sw.FailureCode = "device_account_changed"
+					m.failAndCleanupCodexAccountSwitch(ctx, credentials, store, sw)
 					return
 				}
 				if _, err := credentials.CheckpointAndActivateCodexAccount(
 					ctx, sw.SourceKind, sw.ID, sw.TargetAccountID, sw.ExpectedAccountRevision,
 				); err != nil {
-					if m.advanceCodexAccountSwitch(ctx, store, sw, domain.CodexAccountSwitchRollbackRequired, "activation_unconfirmed") != nil {
+					if errors.Is(err, ports.ErrCodexAccountSwitchNotCommitted) {
+						sw.FailureCode = "activation_failed"
+						m.failAndCleanupCodexAccountSwitch(ctx, credentials, store, sw)
 						return
 					}
-					continue
+					m.settleCodexAccountSwitch(ctx, credentials, store, sw, "activation_failed")
+					return
 				}
 			}
 			committedAt := m.clock()
 			sw.CredentialsCommittedAt = &committedAt
-			if m.advanceCodexAccountSwitch(ctx, store, sw, domain.CodexAccountSwitchVerifyingAccount, "") != nil {
-				return
-			}
-		case domain.CodexAccountSwitchVerifyingAccount:
-			if err := credentials.VerifyCurrentCodexAccount(ctx, sw.TargetAccountID); err != nil {
-				_ = m.advanceCodexAccountSwitch(ctx, store, sw, domain.CodexAccountSwitchRecoveryRequired, "target_verification_unconfirmed")
-				return
-			}
-			if sw.CredentialsCommittedAt == nil {
-				committedAt := m.clock()
-				sw.CredentialsCommittedAt = &committedAt
-			}
 			m.completeCodexAccountSwitch(ctx, credentials, store, sw)
 			return
-		case domain.CodexAccountSwitchRollbackRequired:
-			if err := credentials.RestoreCodexAccountCredential(
-				ctx, sw.ID, sw.SourceKind, sw.SourceAccountID, sw.TargetAccountID,
-			); err != nil {
-				_ = m.advanceCodexAccountSwitch(ctx, store, sw, domain.CodexAccountSwitchRecoveryRequired, "rollback_unconfirmed")
-				return
-			}
-			if sw.SourceKind == domain.CodexAccountSwitchSourceManaged {
-				if err := credentials.VerifyCurrentCodexAccount(ctx, sw.SourceAccountID); err != nil {
-					_ = m.advanceCodexAccountSwitch(ctx, store, sw, domain.CodexAccountSwitchRecoveryRequired, "rollback_unconfirmed")
-					return
-				}
-			}
-			m.failAndCleanupCodexAccountSwitch(ctx, credentials, store, sw)
-			return
 		case domain.CodexAccountSwitchRecoveryRequired:
-			// Device credential truth decides ambiguous activation recovery.
-			if err := credentials.VerifyCurrentCodexAccount(ctx, sw.TargetAccountID); err == nil {
-				if sw.CredentialsCommittedAt == nil {
-					committedAt := m.clock()
-					sw.CredentialsCommittedAt = &committedAt
-				}
-				m.completeCodexAccountSwitch(ctx, credentials, store, sw)
-				return
-			}
-			if m.advanceCodexAccountSwitch(ctx, store, sw, domain.CodexAccountSwitchRollbackRequired, sw.FailureCode) != nil {
-				return
-			}
+			m.settleCodexAccountSwitch(ctx, credentials, store, sw, "recovery_required")
+			return
 		case domain.CodexAccountSwitchCompleted, domain.CodexAccountSwitchFailed:
 			return
 		default:
 			_ = m.advanceCodexAccountSwitch(ctx, store, sw, domain.CodexAccountSwitchRecoveryRequired, "switch_state_unavailable")
 			return
 		}
+	}
+}
+
+// settleCodexAccountSwitch resolves an interrupted or uncertain operation using
+// only the bytes recorded in its private staging directory. Provider outages
+// therefore cannot manufacture a recovery-required switch.
+func (m *codexAccountSwitchCoordinator) settleCodexAccountSwitch(ctx context.Context, credentials ports.CodexAccountCredentialManager, store ports.CodexAccountSwitchStore, sw *domain.CodexAccountSwitch, failureCode string) {
+	if err := credentials.ConfirmCodexAccountSwitchTarget(ctx, sw.ID, sw.TargetAccountID); err == nil {
+		if sw.CredentialsCommittedAt == nil {
+			committedAt := m.clock()
+			sw.CredentialsCommittedAt = &committedAt
+		}
+		m.completeCodexAccountSwitch(ctx, credentials, store, sw)
+		return
+	}
+	if err := credentials.RestoreCodexAccountCredential(ctx, sw.ID, sw.SourceKind, sw.SourceAccountID, sw.TargetAccountID); err == nil {
+		sw.FailureCode = failureCode
+		m.failAndCleanupCodexAccountSwitch(ctx, credentials, store, sw)
+		return
+	}
+	if sw.Phase != domain.CodexAccountSwitchRecoveryRequired {
+		_ = m.advanceCodexAccountSwitch(ctx, store, sw, domain.CodexAccountSwitchRecoveryRequired, "recovery_required")
 	}
 }
 

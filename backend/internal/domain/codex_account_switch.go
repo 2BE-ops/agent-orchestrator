@@ -33,10 +33,6 @@ const (
 	CodexAccountSwitchCheckpointCredential CodexAccountSwitchPhase = "checkpointing_source"
 	// CodexAccountSwitchActivatingAccount stages the selected target credential.
 	CodexAccountSwitchActivatingAccount CodexAccountSwitchPhase = "activating_target"
-	// CodexAccountSwitchVerifyingAccount verifies the device-global identity.
-	CodexAccountSwitchVerifyingAccount CodexAccountSwitchPhase = "verifying_target"
-	// CodexAccountSwitchRollbackRequired requires restoring the source credential.
-	CodexAccountSwitchRollbackRequired CodexAccountSwitchPhase = "rollback_required"
 	// CodexAccountSwitchRecoveryRequired requires exact recorded recovery work.
 	CodexAccountSwitchRecoveryRequired CodexAccountSwitchPhase = "recovery_required"
 	// CodexAccountSwitchCompleted means target activation succeeded.

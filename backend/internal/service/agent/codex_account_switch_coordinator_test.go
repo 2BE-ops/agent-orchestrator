@@ -54,12 +54,12 @@ func (f *coordinatorCredentialFake) CurrentCodexAccountSwitchSource() domain.Cod
 	}
 }
 func (*coordinatorCredentialFake) CodexAccountLoginInProgress() bool { return false }
-func (f *coordinatorCredentialFake) VerifyCodexAccountForSwitch(_ context.Context, id string) error {
-	f.call("verify-target:" + id)
+func (f *coordinatorCredentialFake) PrepareCodexAccountForSwitch(_ context.Context, id string) error {
+	f.call("prepare-target:" + id)
 	return nil
 }
-func (f *coordinatorCredentialFake) VerifyCurrentCodexAccount(_ context.Context, id string) error {
-	f.call("verify-current:" + id)
+func (f *coordinatorCredentialFake) ConfirmCodexAccountSwitchTarget(_ context.Context, _ string, id string) error {
+	f.call("confirm-target:" + id)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.active.AccountID != id {
@@ -164,7 +164,7 @@ func TestCodexAccountSwitchCoordinatorCompletesCredentialOnlySwitch(t *testing.T
 	credentials.mu.Lock()
 	calls := append([]string(nil), credentials.calls...)
 	credentials.mu.Unlock()
-	for _, want := range []string{"store", "reconcile", "begin", "verify-target:target", "activate:target", "verify-current:target", "cleanup", "end"} {
+	for _, want := range []string{"store", "reconcile", "begin", "prepare-target:target", "activate:target", "cleanup", "end"} {
 		if !slices.Contains(calls, want) {
 			t.Fatalf("calls = %v, missing %q", calls, want)
 		}
@@ -260,13 +260,13 @@ func TestCodexAccountSwitchCoordinatorRollsBackActivationFailure(t *testing.T) {
 	sw := store.record
 	coordinator.dispatchCodexAccountSwitch(context.Background(), credentials, store, &sw)
 
-	if sw.Phase != domain.CodexAccountSwitchFailed || sw.FailureCode != "activation_unconfirmed" {
-		t.Fatalf("switch = (%q,%q), want failed activation_unconfirmed", sw.Phase, sw.FailureCode)
+	if sw.Phase != domain.CodexAccountSwitchFailed || sw.FailureCode != "activation_failed" {
+		t.Fatalf("switch = (%q,%q), want failed activation_failed", sw.Phase, sw.FailureCode)
 	}
 	credentials.mu.Lock()
 	calls := append([]string(nil), credentials.calls...)
 	credentials.mu.Unlock()
-	if !slices.Contains(calls, "restore:source") || !slices.Contains(calls, "verify-current:source") {
+	if !slices.Contains(calls, "confirm-target:target") || !slices.Contains(calls, "restore:source") {
 		t.Fatalf("rollback calls = %v", calls)
 	}
 }

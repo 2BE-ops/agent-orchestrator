@@ -12,9 +12,6 @@ var (
 	ErrCodexAccountSwitchInProgress = errors.New("codex account switch already in progress")
 	// ErrCodexAccountAlreadyActive rejects selecting the current account.
 	ErrCodexAccountAlreadyActive = errors.New("codex account is already active")
-	// ErrCodexActiveAccountUnavailable means the device account has not been
-	// reconciled to one safe AO-managed source credential.
-	ErrCodexActiveAccountUnavailable = errors.New("active codex account is unavailable")
 	// ErrCodexAccountSwitchNotFound means the durable operation does not exist.
 	ErrCodexAccountSwitchNotFound = errors.New("codex account switch not found")
 	// ErrCodexAccountRevisionConflict reports a stale active-account revision.
@@ -27,6 +24,9 @@ var (
 	ErrCodexGlobalAccountChanged = errors.New("global codex account changed")
 	// ErrCodexGlobalCredentialStoreUnsupported rejects non-file-backed switching.
 	ErrCodexGlobalCredentialStoreUnsupported = errors.New("global codex credential store is not safely file-backed")
+	// ErrCodexAccountSwitchNotCommitted marks a failure that happened before the
+	// device-global credential was mutated, so recovery is unnecessary.
+	ErrCodexAccountSwitchNotCommitted = errors.New("codex account switch did not mutate the device credential")
 )
 
 // CodexOperationLease is one idempotently releasable ownership token for the
@@ -55,9 +55,8 @@ type CodexAccountCredentialManager interface {
 	EndCodexAccountMutation()
 	CurrentCodexActiveAccount() domain.CodexActiveAccount
 	CurrentCodexAccountSwitchSource() domain.CodexAccountSwitchSource
-	CodexAccountLoginInProgress() bool
-	VerifyCodexAccountForSwitch(context.Context, string) error
-	VerifyCurrentCodexAccount(context.Context, string) error
+	PrepareCodexAccountForSwitch(context.Context, string) error
+	ConfirmCodexAccountSwitchTarget(context.Context, string, string) error
 	CheckpointAndActivateCodexAccount(context.Context, domain.CodexAccountSwitchSourceKind, string, string, int64) (domain.CodexActiveAccount, error)
 	RestoreCodexAccountCredential(context.Context, string, domain.CodexAccountSwitchSourceKind, string, string) error
 	CleanupCodexAccountSwitch(context.Context, string) error

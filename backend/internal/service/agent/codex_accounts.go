@@ -31,14 +31,13 @@ const (
 // CodexAccounts is the display-safe account-management view. Credentials and
 // filesystem locations remain daemon-private.
 type CodexAccounts struct {
-	ActiveAccountID        string                              `json:"activeAccountId,omitempty"`
-	AccountRevision        int64                               `json:"accountRevision"`
-	Accounts               []domain.CodexAccountSnapshot       `json:"accounts"`
-	Capabilities           domain.CodexAccountCapabilities     `json:"capabilities"`
-	DeviceReconciliation   domain.CodexDeviceReconciliation    `json:"deviceReconciliation"`
-	UnmanagedGlobalAccount *domain.CodexUnmanagedGlobalAccount `json:"unmanagedGlobalAccount,omitempty"`
-	ActiveLogin            *CodexActiveLogin                   `json:"activeLogin,omitempty"`
-	CurrentSwitch          *domain.CodexAccountSwitch          `json:"currentSwitch,omitempty"`
+	ActiveAccountID      string                           `json:"activeAccountId,omitempty"`
+	AccountRevision      int64                            `json:"accountRevision"`
+	Accounts             []domain.CodexAccountSnapshot    `json:"accounts"`
+	Capabilities         domain.CodexAccountCapabilities  `json:"capabilities"`
+	DeviceReconciliation domain.CodexDeviceReconciliation `json:"deviceReconciliation"`
+	ActiveLogin          *CodexActiveLogin                `json:"activeLogin,omitempty"`
+	CurrentSwitch        *domain.CodexAccountSwitch       `json:"currentSwitch,omitempty"`
 }
 
 // CodexActiveLogin is the safe in-memory login state needed to reattach the
@@ -104,19 +103,17 @@ type accountReconcileCall struct {
 	err  error
 }
 type accountLoginOperation struct {
-	snapshot         domain.CodexAccountLoginOperation
-	targetAccountID  string
-	replaceDevice    bool
-	deviceCredential []byte
-	deviceState      codexFileState
-	pendingDir       string
-	home             string
-	terminalHandle   string
-	terminalTitle    string
-	terminalCreated  time.Time
-	closing          bool
-	committing       bool
-	commitDone       chan struct{}
+	snapshot        domain.CodexAccountLoginOperation
+	targetAccountID string
+	deviceState     codexFileState
+	pendingDir      string
+	home            string
+	terminalHandle  string
+	terminalTitle   string
+	terminalCreated time.Time
+	closing         bool
+	committing      bool
+	commitDone      chan struct{}
 }
 
 type codexAccountManager struct {
@@ -149,8 +146,6 @@ type codexAccountManager struct {
 	deviceAccountID         string
 	deferredAccountID       string
 	deviceCredentialPresent bool
-	globalAuth              domain.AgentAuthenticationObservation
-	unmanaged               *domain.CodexUnmanagedGlobalAccount
 	login                   *accountLoginOperation
 	reconcile               *accountReconcileCall
 	reconcileRequested      bool
@@ -182,7 +177,6 @@ func newCodexAccountManager(ctx context.Context, accountRoot, pendingRoot, switc
 		globalHome: canonicalPath(globalHome), pendingRoot: canonicalPath(pendingRoot), switchStagingRoot: canonicalPath(switchStagingRoot),
 		auth: map[string]*accountAuthState{}, usage: map[string]*accountUsageState{},
 		capabilities: unavailableCodexCapabilities(), subscribers: map[chan CodexAccounts]struct{}{},
-		globalAuth: uncheckedAuthentication(),
 		reconciliation: domain.CodexDeviceReconciliation{
 			Status: domain.CodexDeviceReconciliationNotChecked, ReasonCode: "not_checked",
 		},
@@ -222,7 +216,7 @@ func (m *codexAccountManager) acquireGlobalMutation(ctx context.Context) (ports.
 
 func unavailableCodexCapabilities() domain.CodexAccountCapabilities {
 	unknown := domain.CodexCapabilityObservation{State: domain.CodexCapabilityUnknown, ReasonCode: domain.CodexCapabilityReasonUnknown, Reason: "Codex capability detection has not completed."}
-	return domain.CodexAccountCapabilities{AccountRead: unknown, NativeLogin: unknown, CapacityRead: unknown, UsageRead: unknown, ResetCreditConsume: unknown, ThreadResume: unknown, AccountManagement: unknown, GlobalSwitch: unknown}
+	return domain.CodexAccountCapabilities{AccountRead: unknown, NativeLogin: unknown, CapacityRead: unknown, UsageRead: unknown, ResetCreditConsume: unknown, GlobalSwitch: unknown}
 }
 
 func (m *codexAccountManager) detectCapabilities(ctx context.Context) domain.CodexAccountCapabilities {
@@ -230,12 +224,15 @@ func (m *codexAccountManager) detectCapabilities(ctx context.Context) domain.Cod
 		return unavailableCodexCapabilities()
 	}
 	capabilities := m.factory.Capabilities(ctx)
-	if capabilities.AccountRead.State == domain.CodexCapabilitySupported {
-		if err := m.validateGlobalCredentialStore(); err != nil {
-			capabilities.GlobalSwitch = domain.CodexCapabilityObservation{
-				State: domain.CodexCapabilityUnsupported, ReasonCode: "global_credential_store_unsupported",
-				Reason: "Device-global account switching requires a file-backed Codex sign-in.",
-			}
+	if err := m.validateGlobalCredentialStore(); err != nil {
+		capabilities.GlobalSwitch = domain.CodexCapabilityObservation{
+			State: domain.CodexCapabilityUnsupported, ReasonCode: "global_credential_store_unsupported",
+			Reason: "Device-global account switching requires a file-backed Codex sign-in.",
+		}
+	} else {
+		capabilities.GlobalSwitch = domain.CodexCapabilityObservation{
+			State: domain.CodexCapabilitySupported, ReasonCode: domain.CodexCapabilityReasonSupported,
+			Reason: "AO can switch file-backed Codex credentials on this device.",
 		}
 	}
 	m.mu.Lock()
@@ -250,12 +247,7 @@ func (m *codexAccountManager) view(ids []string) (CodexAccounts, error) {
 		return CodexAccounts{}, mapUnknownCodexAccount(err)
 	}
 	m.mu.Lock()
-	active, capabilities, unmanaged, reconciliation := m.active, m.capabilities, m.unmanaged, m.reconciliation
-	if unmanaged != nil {
-		unmanagedCopy := *unmanaged
-		unmanagedCopy.Authentication = m.globalAuth
-		unmanaged = &unmanagedCopy
-	}
+	active, capabilities, reconciliation := m.active, m.capabilities, m.reconciliation
 	deviceAccountID := ""
 	if reconciliation.ActiveAccountVerified {
 		deviceAccountID = active.AccountID
@@ -302,7 +294,7 @@ func (m *codexAccountManager) view(ids []string) (CodexAccounts, error) {
 			}
 		}
 	}
-	return CodexAccounts{ActiveAccountID: deviceAccountID, AccountRevision: active.Revision, Accounts: accounts, Capabilities: capabilities, DeviceReconciliation: reconciliation, UnmanagedGlobalAccount: unmanaged, ActiveLogin: activeLogin}, nil
+	return CodexAccounts{ActiveAccountID: deviceAccountID, AccountRevision: active.Revision, Accounts: accounts, Capabilities: capabilities, DeviceReconciliation: reconciliation, ActiveLogin: activeLogin}, nil
 }
 
 func (m *codexAccountManager) cached() CodexAccounts { result, _ := m.view(nil); return result }
@@ -630,6 +622,15 @@ func (m *codexAccountManager) finishAuthentication(id string, observation domain
 					s.Label = accountLabel(id, method, email)
 				}
 			})
+			if identified {
+				// Reconciliation may create the account from local auth.json before
+				// Codex supplies display metadata. Persist the first successful
+				// account/read result so a later catalog refresh or daemon restart
+				// cannot regress the label to the internal account-id fallback.
+				if err := m.catalog.updateVerifiedDescriptor(id, ports.CodexAccountObservation{Method: method, Email: email}); err != nil {
+					m.logger.Warn("Codex account display metadata could not be persisted", "accountID", id)
+				}
+			}
 			state.invalidated = false
 			state.launchVerified = false
 			state.failures = 0

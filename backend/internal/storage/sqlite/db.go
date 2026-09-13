@@ -1443,8 +1443,9 @@ SELECT COALESCE((
 // databases opened while the account-switch branches owned versions 0129 and
 // 0130. Main later assigned those versions to change-log retention and PR
 // review certainty. Physical column presence identifies the old branch
-// migrations: remap their effects to 0140/0141 and release any collided main
-// version whose physical effect is still absent so Goose can apply it.
+// migrations: retire the old restart-policy effect, remap source_kind to 0141,
+// and release any collided main version whose physical effect is still absent
+// so Goose can apply it.
 func repairRenumberedCodexAccountSwitchMigrationHistory(db *sql.DB) error {
 	var gooseTable int
 	if err := db.QueryRow(
@@ -1517,9 +1518,6 @@ SELECT COALESCE((
 			if _, err := tx.Exec(`DELETE FROM goose_db_version WHERE version_id = 129`); err != nil {
 				return err
 			}
-		}
-		if err := markApplied(140); err != nil {
-			return err
 		}
 	}
 

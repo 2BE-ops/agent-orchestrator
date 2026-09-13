@@ -6,9 +6,8 @@ PRAGMA foreign_keys=OFF;
 
 -- Builds before the credential-only switch moved through session shutdown
 -- phases. A source credential was never changed in the first two phases, so
--- they can be settled as failed. A switch that reached restarting_sessions
--- had already installed the target credential and must enter normal durable
--- recovery instead.
+-- they can be settled as failed. Later legacy phases may have already changed
+-- the credential and therefore enter the single local recovery path.
 UPDATE codex_account_switches
 SET phase = 'failed',
     failure_code = 'legacy_session_switch_retired',
@@ -22,7 +21,7 @@ SET phase = 'recovery_required',
     failure_code = 'legacy_switch_recovery',
     updated_at = CURRENT_TIMESTAMP,
     completed_at = NULL
-WHERE phase = 'restarting_sessions';
+WHERE phase IN ('restarting_sessions', 'verifying_target', 'rollback_required');
 
 DROP TRIGGER IF EXISTS codex_account_switch_sessions_cdc_insert;
 DROP TRIGGER IF EXISTS codex_account_switch_sessions_cdc;
@@ -40,8 +39,7 @@ CREATE TABLE codex_account_switches_next (
     expected_account_revision INTEGER NOT NULL,
     phase TEXT NOT NULL CHECK (phase IN (
         'requested', 'checkpointing_source', 'activating_target',
-        'verifying_target', 'rollback_required', 'recovery_required',
-        'completed', 'failed'
+        'recovery_required', 'completed', 'failed'
     )),
     failure_code TEXT NOT NULL DEFAULT '',
     credentials_committed_at TIMESTAMP,

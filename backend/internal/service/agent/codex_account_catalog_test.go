@@ -13,6 +13,19 @@ import (
 
 const testAccountID = "72d4db6e-da2c-414c-a6a9-fdbd09a006b6"
 
+// snapshots is test-only inspection. Production callers use the catalog's
+// scoped read methods instead of materializing every account snapshot.
+func (c *codexAccountCatalog) snapshots() []domain.CodexAccountSnapshot {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	records := c.sortedRecordsLocked()
+	out := make([]domain.CodexAccountSnapshot, 0, len(records))
+	for _, record := range records {
+		out = append(out, record.Snapshot)
+	}
+	return out
+}
+
 func commitTestAccount(t *testing.T, catalog *codexAccountCatalog, pendingRoot, operationID string, observed ports.CodexAccountObservation) codexAccountRecord {
 	t.Helper()
 	return commitTestAccountWithCredential(t, catalog, pendingRoot, operationID, []byte("opaque-codex-credential\x00\xff"), observed)

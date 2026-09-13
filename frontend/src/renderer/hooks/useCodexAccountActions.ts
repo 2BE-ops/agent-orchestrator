@@ -9,7 +9,6 @@ import {
 	ensureCodexAccounts,
 	logoutCodexAccount,
 	openCodexAccountLoginTerminal,
-	openCodexDeviceAccountLoginTerminal,
 	openCodexAccountReauthenticationTerminal,
 	recoverCodexAccountSwitch,
 	startCodexAccountSwitch,
@@ -68,31 +67,6 @@ export function useCodexAccountActions(queryClient: QueryClient) {
 		}
 	}, [queryClient, t, writeCurrent]);
 
-	const beginDeviceLogin = useCallback(async () => {
-		setError(null);
-		setLoginPending(true);
-		try {
-			const started = await openCodexDeviceAccountLoginTerminal();
-			writeCurrent((snapshot) => ({
-				...snapshot,
-				activeLogin: {
-					operationId: started.operation.operationId,
-					status: started.operation.status,
-					reasonCode: started.operation.reasonCode,
-					reason: started.operation.reason,
-					expiresAt: started.operation.expiresAt,
-					shellTerminal: started.shellTerminal,
-				},
-			}));
-			void queryClient.invalidateQueries({ queryKey: shellTerminalsQueryKey });
-		} catch (cause) {
-			setError(errorMessage(cause, t("settings.codexAccounts.loginFailed")));
-			throw cause;
-		} finally {
-			setLoginPending(false);
-		}
-	}, [queryClient, t, writeCurrent]);
-
 	const verifyLogin = useCallback(async (login: CodexActiveLogin) => {
 		const key = `${login.operationId}:${login.shellTerminal.handleId}`;
 		if (verifyingRef.current === key) return;
@@ -124,7 +98,7 @@ export function useCodexAccountActions(queryClient: QueryClient) {
 		} catch (cause) {
 			setError(errorMessage(cause, t("settings.codexAccounts.loginVerificationFailed")));
 			writeCurrent((snapshot) => snapshot.activeLogin?.operationId === login.operationId
-				? { ...snapshot, activeLogin: { ...snapshot.activeLogin, status: "unverified", reasonCode: "login_unverified" } }
+					? { ...snapshot, activeLogin: { ...snapshot.activeLogin, status: "retryable", reasonCode: "login_failed" } }
 				: snapshot);
 			throw cause;
 		} finally {
@@ -251,7 +225,6 @@ export function useCodexAccountActions(queryClient: QueryClient) {
 		authenticationRetryAccountId,
 		deviceRefreshPending,
 		beginLogin,
-		beginDeviceLogin,
 		verifyLogin,
 		closeLogin,
 		retryLogin,

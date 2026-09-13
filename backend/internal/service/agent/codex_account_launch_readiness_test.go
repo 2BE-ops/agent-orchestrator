@@ -361,7 +361,7 @@ func TestExternallyReplacedCredentialsDoNotGetAttributedToOldActiveSlot(t *testi
 	}
 
 	view = fixture.manager.cached()
-	if view.ActiveAccountID == fixture.active.Snapshot.ID || len(view.Accounts) != 3 || view.UnmanagedGlobalAccount != nil {
+	if view.ActiveAccountID == fixture.active.Snapshot.ID || len(view.Accounts) != 3 {
 		t.Fatalf("external account was not imported separately = %#v", view)
 	}
 	saved, err := readOpaqueCredential(filepath.Join(fixture.active.Home, codexCredentialFilename))

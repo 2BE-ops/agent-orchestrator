@@ -40,8 +40,7 @@ const accountResponse = {
 	accountRevision: 3,
 	accounts: [activeAccount, inactiveAccount],
 	capabilities: {
-		accountRead: capability(), nativeLogin: capability(), capacityRead: capability(), usageRead: capability("unsupported"),
-		resetCreditConsume: capability(), threadResume: capability(), accountManagement: capability(), globalSwitch: capability(),
+		nativeLogin: capability(), resetCreditConsume: capability(), globalSwitch: capability(),
 	},
 	deviceReconciliation: { status: "verified", activeAccountVerified: true, reasonCode: "verified", retryable: false },
 };
@@ -114,48 +113,14 @@ it("does not offer switching when the device account has no reconciled source", 
 		...accountResponse,
 		activeAccountId: undefined,
 		accounts: [unreconciledAccount],
-		unmanagedGlobalAccount: {
-			label: activeAccount.label,
-			authMethod: activeAccount.authMethod,
-			accountEmail: activeAccount.accountEmail,
-			reasonCode: "global_credential_store_unsupported",
-			reason: "This Codex account is active on the device, but its credential store cannot be switched safely.",
-		},
+		deviceReconciliation: { status: "blocked", activeAccountVerified: false, reasonCode: "global_credential_store_unsupported", retryable: false },
 	};
 	getMock.mockResolvedValue({ data: unreconciledResponse });
 	postMock.mockResolvedValue({ data: unreconciledResponse });
 
 	renderSection();
-	expect(await screen.findByText("This Codex account can’t be managed by AO.")).toBeInTheDocument();
+	expect(await screen.findByText("Couldn’t refresh the Codex account.")).toBeInTheDocument();
 	expect(screen.queryByRole("button", { name: "Switch to this account" })).not.toBeInTheDocument();
-});
-
-it("allows switching away from an unidentified device account", async () => {
-	const user = userEvent.setup();
-	const deviceOnly = {
-		...accountResponse,
-		activeAccountId: undefined,
-		accounts: accountResponse.accounts.map((account) => ({ ...account, active: false })),
-		deviceReconciliation: { status: "blocked", activeAccountVerified: false, reasonCode: "global_account_unverified", retryable: false },
-		unmanagedGlobalAccount: {
-			label: "Device Codex account",
-			authMethod: "unknown",
-			accountEmail: "device@example.com",
-			reasonCode: "global_account_unverified",
-			reason: "Unidentified device account.",
-			authentication: { state: "authorized", freshness: "fresh", reasonCode: "authorized", reason: "Signed in." },
-		},
-	};
-	getMock.mockResolvedValue({ data: deviceOnly });
-	postMock.mockResolvedValue({ data: deviceOnly });
-
-	renderSection();
-	expect(await screen.findByText("device@example.com")).toBeInTheDocument();
-	const switchButton = screen.getByRole("button", { name: "Switch account" });
-	expect(switchButton).toBeEnabled();
-	expect(switchButton).toHaveTextContent("Switch");
-	await user.click(switchButton);
-	expect(await screen.findByRole("menuitem", { name: /other@example.com/i })).toBeInTheDocument();
 });
 
 it("shows a simple empty state when Codex is signed out on the device", async () => {
@@ -176,26 +141,6 @@ it("shows a simple empty state when Codex is signed out on the device", async ()
 	expect(within(firstRow).getByRole("button", { name: "Use this account" })).toBeEnabled();
 });
 
-it("uses the dedicated device login route for an unidentified account", async () => {
-	const deviceOnly = {
-		...accountResponse,
-		activeAccountId: undefined,
-		accounts: accountResponse.accounts.map((account) => ({ ...account, active: false })),
-		deviceReconciliation: { status: "blocked", activeAccountVerified: false, reasonCode: "global_account_unverified", retryable: false },
-		unmanagedGlobalAccount: {
-			label: "Device Codex account", authMethod: "unknown", accountEmail: "device@example.com",
-			reasonCode: "global_account_unverified", reason: "Unidentified device account.",
-			authentication: { state: "unknown", freshness: "stale", reasonCode: "auth_check_inconclusive", reason: "Couldn’t check." },
-		},
-	};
-	getMock.mockResolvedValue({ data: deviceOnly });
-	postMock.mockImplementation((path: string) => path === "/api/v1/agents/codex/accounts/device/login-terminal"
-		? Promise.resolve({ data: pendingLogin })
-		: Promise.resolve({ data: deviceOnly }));
-	renderSection();
-	fireEvent.click(await screen.findByRole("button", { name: "Sign in again" }));
-	await waitFor(() => expect(postMock).toHaveBeenCalledWith("/api/v1/agents/codex/accounts/device/login-terminal"));
-});
 
 it("keeps saved accounts and local actions available while device reconciliation retries", async () => {
 	const degraded = {
@@ -317,7 +262,7 @@ it("shows recovery as an action instead of indefinite switch progress", async ()
 		currentSwitch: {
 			id: "33333333-3333-4333-8333-333333333333",
 			phase: "recovery_required",
-			failureCode: "activation_unconfirmed",
+			failureCode: "recovery_required",
 			canRecover: true,
 		},
 	};
@@ -329,7 +274,6 @@ it("shows recovery as an action instead of indefinite switch progress", async ()
 	expect(screen.getByRole("button", { name: "Add account" })).toBeDisabled();
 	expect(screen.getByRole("button", { name: "Switch account" })).toBeDisabled();
 	expect(screen.getAllByText("Couldn't finish switching accounts.").length).toBeGreaterThan(0);
-	expect(screen.queryByText("activation_unconfirmed")).not.toBeInTheDocument();
 });
 
 it("keeps a visible live success outcome when an observed switch disappears on its target", async () => {
@@ -337,7 +281,7 @@ it("keeps a visible live success outcome when an observed switch disappears on i
 		...accountResponse,
 		currentSwitch: {
 			id: "33333333-3333-4333-8333-333333333333",
-			phase: "verifying_target",
+			phase: "activating_target",
 			failureCode: undefined,
 			canRecover: false,
 			sourceAccountId: activeAccount.id,
@@ -353,18 +297,15 @@ it("keeps a visible live success outcome when an observed switch disappears on i
 		activeAccountId: inactiveAccount.id,
 		accounts: [{ ...inactiveAccount, active: true }, { ...activeAccount, active: false }],
 	};
-	let ensureCalls = 0;
 	getMock.mockResolvedValue({ data: switchingResponse });
 	postMock.mockImplementation((path: string) => {
 		if (path === "/api/v1/agents/codex/accounts/ensure") {
-			ensureCalls += 1;
-			return Promise.resolve({ data: ensureCalls === 1 ? switchingResponse : settledResponse });
+			return Promise.resolve({ data: settledResponse });
 		}
 		return Promise.resolve({ data: switchingResponse });
 	});
 	const { queryClient } = renderSection();
 	await screen.findByLabelText("Switching to other@example.com…");
-	await waitFor(() => expect(ensureCalls).toBe(1));
 
 	act(() => queryClient.setQueryData(["codex-accounts"], settledResponse));
 
@@ -384,7 +325,7 @@ it("reports when a failed switch safely restores the previous account", async ()
 		currentSwitch: {
 			id: "33333333-3333-4333-8333-333333333333",
 			phase: "activating_target",
-			failureCode: "activation_unconfirmed",
+			failureCode: "activation_failed",
 			canRecover: false,
 			sourceAccountId: activeAccount.id,
 			sourceKind: "managed",
@@ -408,7 +349,6 @@ it("reports when a failed switch safely restores the previous account", async ()
 	expect(outcome).toHaveTextContent("Couldn't switch accounts. You're still using active@example.com.");
 	expect(outcome).toHaveAttribute("aria-live", "polite");
 	expect(outcome).toBeVisible();
-	expect(screen.queryByText("activation_unconfirmed")).not.toBeInTheDocument();
 });
 
 it("presents plan, general and model usage limits with remaining-capacity meters", async () => {
@@ -922,6 +862,29 @@ it("starts a global switch with the displayed account revision", async () => {
 		body: { targetAccountId: inactiveAccount.id, expectedAccountRevision: 3, idempotencyKey: "idempotency-1" },
 	}));
 	vi.unstubAllGlobals();
+});
+
+it("keeps a locally valid target switchable during a temporary sign-in check failure", async () => {
+	const temporarilyUnverified = {
+		...inactiveAccount,
+		authentication: {
+			...authentication,
+			state: "unknown",
+			freshness: "stale",
+			reasonCode: "auth_check_failed",
+			reason: "Could not reach Codex.",
+		},
+	};
+	const response = { ...accountResponse, accounts: [activeAccount, temporarilyUnverified] };
+	getMock.mockResolvedValue({ data: response });
+	postMock.mockImplementation((path: string) => path === "/api/v1/agents/codex/accounts/ensure"
+		? Promise.resolve({ data: response })
+		: Promise.resolve({ data: {} }));
+
+	renderSection();
+	await screen.findByText("other@example.com");
+	await userEvent.click(screen.getByRole("button", { name: "Switch account" }));
+	expect(await screen.findByRole("menuitem", { name: /other@example.com/ })).toBeEnabled();
 });
 
 it("locks the switch confirmation while the request is submitted", async () => {

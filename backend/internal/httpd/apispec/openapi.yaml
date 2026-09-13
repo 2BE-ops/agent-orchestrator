@@ -657,38 +657,6 @@ paths:
       summary: Consume one provider-reported Codex usage-limit reset credit
       tags:
       - agents
-  /api/v1/agents/codex/accounts/device/login-terminal:
-    post:
-      operationId: openCodexDeviceAccountLoginTerminal
-      responses:
-        "202":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OpenCodexAccountLoginTerminalResponse'
-          description: Accepted
-        "409":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APIError'
-          description: Conflict
-        "501":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APIError'
-          description: Not Implemented
-        "503":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APIError'
-          description: Service Unavailable
-      summary: Open an isolated native login that replaces the device Codex account
-        after verification
-      tags:
-      - agents
   /api/v1/agents/codex/accounts/ensure:
     post:
       operationId: ensureCodexAccounts
@@ -7814,7 +7782,7 @@ components:
           - pending
           - verifying
           - unauthorized
-          - unverified
+          - retryable
           - completed
           - cancelled
           - failed
@@ -7917,8 +7885,6 @@ components:
           - requested
           - checkpointing_source
           - activating_target
-          - verifying_target
-          - rollback_required
           - recovery_required
           - completed
           - failed
@@ -8000,8 +7966,6 @@ components:
           $ref: '#/components/schemas/CodexAccountSwitchResponse'
         deviceReconciliation:
           $ref: '#/components/schemas/CodexDeviceReconciliationResponse'
-        unmanagedGlobalAccount:
-          $ref: '#/components/schemas/CodexUnmanagedGlobalAccountResponse'
       required:
       - accountRevision
       - accounts
@@ -8028,7 +7992,7 @@ components:
           - pending
           - verifying
           - unauthorized
-          - unverified
+          - retryable
           - completed
           - cancelled
           - failed
@@ -8184,34 +8148,6 @@ components:
           - string
       required:
       - availableCount
-      type: object
-    CodexUnmanagedGlobalAccountResponse:
-      properties:
-        accountEmail:
-          type:
-          - "null"
-          - string
-        authMethod:
-          enum:
-          - chatgpt
-          - api_key
-          - other
-          - unknown
-          type: string
-        authentication:
-          $ref: '#/components/schemas/CodexAuthenticationResponse'
-        label:
-          type: string
-        reason:
-          type: string
-        reasonCode:
-          type: string
-      required:
-      - label
-      - authMethod
-      - authentication
-      - reasonCode
-      - reason
       type: object
     CompactConversationResponse:
       properties:

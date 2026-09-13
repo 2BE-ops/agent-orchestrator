@@ -53,7 +53,7 @@ func TestCodexAccountStoreAndDeviceReconciliationNeverOpenProvider(t *testing.T)
 		t.Fatalf("local reconciliation opened %d provider clients", attempts.Load())
 	}
 	view := manager.cached()
-	if view.ActiveAccountID != testAccountID || len(view.Accounts) != 1 || !view.Accounts[0].Active || view.UnmanagedGlobalAccount != nil {
+	if view.ActiveAccountID != testAccountID || len(view.Accounts) != 1 || !view.Accounts[0].Active {
 		t.Fatalf("imported device account = %#v", view)
 	}
 }
@@ -289,7 +289,6 @@ func TestCodexDeviceReconciliationFailureKeepsSavedAccountsReadable(t *testing.T
 	commitTestAccount(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", ports.CodexAccountObservation{
 		Authentication: domain.AgentAuthenticationAuthorized, Method: domain.CodexAuthMethodChatGPT, Email: &email,
 	})
-	manager.unmanaged = &domain.CodexUnmanagedGlobalAccount{Label: "stale device account", ReasonCode: "global_account_unverified"}
 	manager.after = func(time.Duration) <-chan time.Time { return make(chan time.Time) }
 	service := &Service{codexAccounts: manager}
 	if err := service.WaitCodexAccountStoreReady(context.Background()); err != nil {
@@ -310,8 +309,5 @@ func TestCodexDeviceReconciliationFailureKeepsSavedAccountsReadable(t *testing.T
 	}
 	if view.DeviceReconciliation.Status != domain.CodexDeviceReconciliationBlocked || view.DeviceReconciliation.ReasonCode != "global_credential_invalid" {
 		t.Fatalf("device reconciliation = %#v", view.DeviceReconciliation)
-	}
-	if view.UnmanagedGlobalAccount != nil {
-		t.Fatal("stale device projection survived a failed local inspection")
 	}
 }

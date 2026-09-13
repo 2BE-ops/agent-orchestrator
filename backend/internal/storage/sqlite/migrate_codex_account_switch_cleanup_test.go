@@ -12,6 +12,8 @@ func TestMigration0142RemovesRetiredCodexAccountSwitchState(t *testing.T) {
 	}{
 		{id: "pre-credential", phase: "stopping_sessions", wantPhase: "failed", wantCode: "legacy_session_switch_retired", terminal: true},
 		{id: "post-credential", phase: "restarting_sessions", wantPhase: "recovery_required", wantCode: "legacy_switch_recovery"},
+		{id: "verifying-target", phase: "verifying_target", wantPhase: "recovery_required", wantCode: "legacy_switch_recovery"},
+		{id: "rollback-required", phase: "rollback_required", wantPhase: "recovery_required", wantCode: "legacy_switch_recovery"},
 		{id: "stop-unconfirmed", phase: "recovery_required", failureCode: "stop_unconfirmed", wantPhase: "failed", wantCode: "legacy_session_switch_retired", terminal: true},
 	} {
 		t.Run(row.id, func(t *testing.T) {

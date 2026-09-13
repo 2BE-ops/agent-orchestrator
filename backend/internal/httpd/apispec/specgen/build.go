@@ -280,7 +280,6 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"ControllersCodexAccountUsageSummaryResponse":         "CodexAccountUsageSummaryResponse",
 	"ControllersCodexCapabilityObservationResponse":       "CodexCapabilityObservationResponse",
 	"ControllersCodexAccountCapabilitiesResponse":         "CodexAccountCapabilitiesResponse",
-	"ControllersCodexUnmanagedGlobalAccountResponse":      "CodexUnmanagedGlobalAccountResponse",
 	"ControllersCodexAccountLoginResponse":                "CodexAccountLoginResponse",
 	"ControllersCodexActiveLoginResponse":                 "CodexActiveLoginResponse",
 	"ControllersCodexAccountSwitchResponse":               "CodexAccountSwitchResponse",
@@ -1179,11 +1178,6 @@ func agentOperations() []operation {
 		{
 			method: http.MethodPost, path: "/api/v1/agents/codex/accounts/login-terminal", id: "openCodexAccountLoginTerminal", tag: "agents",
 			summary: "Open an inline native login terminal for a new AO Codex account",
-			resps:   []respUnit{{http.StatusAccepted, controllers.OpenCodexAccountLoginTerminalResponse{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusServiceUnavailable, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}},
-		},
-		{
-			method: http.MethodPost, path: "/api/v1/agents/codex/accounts/device/login-terminal", id: "openCodexDeviceAccountLoginTerminal", tag: "agents",
-			summary: "Open an isolated native login that replaces the device Codex account after verification",
 			resps:   []respUnit{{http.StatusAccepted, controllers.OpenCodexAccountLoginTerminalResponse{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusServiceUnavailable, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}},
 		},
 		{

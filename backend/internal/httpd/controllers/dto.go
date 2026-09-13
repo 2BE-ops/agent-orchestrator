@@ -1211,14 +1211,13 @@ type EnsureAgentReadinessRequest struct {
 
 // CodexAccountsResponse is the controller-owned, redacted cached account view.
 type CodexAccountsResponse struct {
-	ActiveAccountID        string                               `json:"activeAccountId,omitempty"`
-	AccountRevision        int64                                `json:"accountRevision"`
-	Accounts               []CodexAccountResponse               `json:"accounts"`
-	Capabilities           CodexAccountCapabilitiesResponse     `json:"capabilities"`
-	DeviceReconciliation   CodexDeviceReconciliationResponse    `json:"deviceReconciliation"`
-	UnmanagedGlobalAccount *CodexUnmanagedGlobalAccountResponse `json:"unmanagedGlobalAccount,omitempty"`
-	ActiveLogin            *CodexActiveLoginResponse            `json:"activeLogin,omitempty"`
-	CurrentSwitch          *CodexAccountSwitchResponse          `json:"currentSwitch,omitempty"`
+	ActiveAccountID      string                            `json:"activeAccountId,omitempty"`
+	AccountRevision      int64                             `json:"accountRevision"`
+	Accounts             []CodexAccountResponse            `json:"accounts"`
+	Capabilities         CodexAccountCapabilitiesResponse  `json:"capabilities"`
+	DeviceReconciliation CodexDeviceReconciliationResponse `json:"deviceReconciliation"`
+	ActiveLogin          *CodexActiveLoginResponse         `json:"activeLogin,omitempty"`
+	CurrentSwitch        *CodexAccountSwitchResponse       `json:"currentSwitch,omitempty"`
 }
 
 // CodexDeviceReconciliationResponse reports whether the durable active pointer
@@ -1324,16 +1323,6 @@ type CodexAccountCapabilitiesResponse struct {
 	GlobalSwitch       CodexCapabilityObservationResponse `json:"globalSwitch"`
 }
 
-// CodexUnmanagedGlobalAccountResponse explains a device identity AO cannot manage.
-type CodexUnmanagedGlobalAccountResponse struct {
-	Label          string                      `json:"label"`
-	AuthMethod     string                      `json:"authMethod" enum:"chatgpt,api_key,other,unknown"`
-	AccountEmail   *string                     `json:"accountEmail,omitempty"`
-	Authentication CodexAuthenticationResponse `json:"authentication"`
-	ReasonCode     string                      `json:"reasonCode"`
-	Reason         string                      `json:"reason"`
-}
-
 // EnsureCodexAccountsRequest selects accounts for display reads.
 type EnsureCodexAccountsRequest struct {
 	AccountIDs                []string `json:"accountIds,omitempty"`
@@ -1359,7 +1348,7 @@ type OpenCodexAccountLoginTerminalResponse struct {
 type CodexAccountLoginResponse struct {
 	OperationID string                `json:"operationId"`
 	AccountID   string                `json:"accountId,omitempty"`
-	Status      string                `json:"status" enum:"pending,verifying,unauthorized,unverified,completed,cancelled,failed,expired"`
+	Status      string                `json:"status" enum:"pending,verifying,unauthorized,retryable,completed,cancelled,failed,expired"`
 	ReasonCode  string                `json:"reasonCode"`
 	Reason      string                `json:"reason"`
 	Account     *CodexAccountResponse `json:"account,omitempty"`
@@ -1370,7 +1359,7 @@ type CodexAccountLoginResponse struct {
 type CodexActiveLoginResponse struct {
 	OperationID   string                            `json:"operationId"`
 	AccountID     string                            `json:"accountId,omitempty"`
-	Status        string                            `json:"status" enum:"pending,verifying,unauthorized,unverified,completed,cancelled,failed,expired"`
+	Status        string                            `json:"status" enum:"pending,verifying,unauthorized,retryable,completed,cancelled,failed,expired"`
 	ReasonCode    string                            `json:"reasonCode"`
 	Reason        string                            `json:"reason"`
 	ExpiresAt     time.Time                         `json:"expiresAt"`
@@ -1407,7 +1396,7 @@ type CodexAccountSwitchResponse struct {
 	SourceKind             string                  `json:"sourceKind" enum:"managed,device,none"`
 	SourceAccountID        string                  `json:"sourceAccountId,omitempty"`
 	TargetAccountID        string                  `json:"targetAccountId"`
-	Phase                  CodexAccountSwitchPhase `json:"phase" enum:"requested,checkpointing_source,activating_target,verifying_target,rollback_required,recovery_required,completed,failed"`
+	Phase                  CodexAccountSwitchPhase `json:"phase" enum:"requested,checkpointing_source,activating_target,recovery_required,completed,failed"`
 	FailureCode            string                  `json:"failureCode,omitempty"`
 	CanRecover             bool                    `json:"canRecover"`
 	CredentialsCommittedAt *time.Time              `json:"credentialsCommittedAt,omitempty"`

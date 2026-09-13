@@ -156,6 +156,7 @@ type stubCodexAccountClient struct{}
 func (stubCodexAccountClient) Read(context.Context, bool) (ports.CodexAccountObservation, error) {
 	return ports.CodexAccountObservation{Authentication: domain.AgentAuthenticationUnauthorized}, nil
 }
+func (stubCodexAccountClient) Logout(context.Context) error { return nil }
 func (stubCodexAccountClient) ReadCapacity(context.Context) (ports.CodexCapacityObservation, error) {
 	return ports.CodexCapacityObservation{}, nil
 }
@@ -308,7 +309,7 @@ func TestDelegateEndpointDoesNotDependOnCodexDeviceReconciliation(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if accounts.UnmanagedGlobalAccount == nil || accounts.ActiveAccountID != "" {
+	if accounts.ActiveAccountID != "" {
 		t.Fatalf("device-only recovery state = %#v", accounts)
 	}
 	if runtime.created != 1 {
