@@ -54,4 +54,13 @@ describe("AppLink", () => {
 		expect(handled).toHaveBeenCalledOnce();
 		expect(open).not.toHaveBeenCalled();
 	});
+
+	it("routes Cloudflare links to the system browser", () => {
+		const open = vi.fn();
+		const external = vi.spyOn(aoBridge.app, "openExternal").mockResolvedValue(undefined);
+		render(<AppBrowserLinkContext.Provider value={open}><AppLink href="https://dash.cloudflare.com/login">Cloudflare</AppLink></AppBrowserLinkContext.Provider>);
+		fireEvent.click(screen.getByRole("link"));
+		expect(open).not.toHaveBeenCalled();
+		expect(external).toHaveBeenCalledExactlyOnceWith("https://dash.cloudflare.com/login");
+	});
 });

@@ -33,7 +33,13 @@ function isBlankTabUrl(url: string): boolean {
 
 function sameBrowserURL(left: string, right: string): boolean {
 	try {
-		return new URL(left).href === new URL(right).href;
+		const normalize = (value: string) => {
+			const parsed = new URL(value);
+			parsed.hostname = parsed.hostname.replace(/^www\./i, "");
+			parsed.hash = "";
+			return parsed.href;
+		};
+		return normalize(left) === normalize(right);
 	} catch {
 		return left === right;
 	}
