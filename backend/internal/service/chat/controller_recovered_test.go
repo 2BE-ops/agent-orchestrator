@@ -78,7 +78,7 @@ func TestReconcileNativeHistoryPrefersReplayErrorOverStoredMessage(t *testing.T)
 	}}
 
 	got := reconcileNativeHistory(events, turns, nil, nil)
-	if len(got) != 1 || got[0].Err != replayErr {
+	if len(got) != 1 || !errors.Is(got[0].Err, replayErr) {
 		t.Fatalf("reconciled error = %#v, want the replay's own error", got[0].Err)
 	}
 }
