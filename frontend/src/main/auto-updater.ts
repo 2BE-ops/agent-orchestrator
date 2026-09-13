@@ -2288,9 +2288,14 @@ export async function quitAndInstallUpdate(confirmedVersion?: string): Promise<U
     // shows "Updating / Restarting" copy. macOS gets this via the same marker on
     // its own path below; here it is the only such signal (no native helper).
     if (escalationStateDir && stagedVersion) {
-      await markUpdateRelaunch({ stateDir: escalationStateDir, version: stagedVersion }).catch((err) => {
-        console.warn("failed to write post-update relaunch marker:", err);
-      });
+      // Best-effort and time-bounded: a hung state-dir write must never delay the
+      // install. The marker only drives startup-loader copy.
+      await Promise.race([
+        markUpdateRelaunch({ stateDir: escalationStateDir, version: stagedVersion }).catch((err) => {
+          console.warn("failed to write post-update relaunch marker:", err);
+        }),
+        new Promise<void>((resolve) => setTimeout(resolve, 750)),
+      ]);
     }
     autoUpdater.quitAndInstall(false, true);
     return;
@@ -2330,9 +2335,14 @@ export async function quitAndInstallUpdate(confirmedVersion?: string): Promise<U
       // Same cross-platform post-update signal the renderer reads at boot. This
       // is separate from the helper's active.json handshake above and only drives
       // the startup loader copy; failing to write it must not abort the install.
-      await markUpdateRelaunch({ stateDir: escalationStateDir, version }).catch((err) => {
-        console.warn("failed to write post-update relaunch marker:", err);
-      });
+      // Best-effort and time-bounded: a hung state-dir write must never delay the
+      // install. The marker only drives startup-loader copy.
+      await Promise.race([
+        markUpdateRelaunch({ stateDir: escalationStateDir, version }).catch((err) => {
+          console.warn("failed to write post-update relaunch marker:", err);
+        }),
+        new Promise<void>((resolve) => setTimeout(resolve, 750)),
+      ]);
       autoUpdater.quitAndInstall(false, true);
       if (!macRestartRequested) throw nativePreparationError ?? new Error("The installer could not restart AO.");
     } catch (err) {

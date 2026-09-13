@@ -69,27 +69,33 @@ export async function consumeUpdateRelaunchFlag(options: {
 	now?: number;
 }): Promise<boolean> {
 	const file = path.join(flagDir(options.stateDir), RELAUNCH_FLAG_FILE);
-	let flag: RelaunchFlag;
+	let parsed: unknown;
 	try {
-		flag = JSON.parse(await readFile(file, "utf8"));
+		parsed = JSON.parse(await readFile(file, "utf8"));
 	} catch {
 		// No marker is the normal case; a corrupt one must never block startup.
 		return false;
 	}
 	// Consume unconditionally: a valid or invalid marker is one-shot either way.
 	await rm(file, { force: true }).catch(() => undefined);
-	const pid = options.pid ?? process.pid;
+	// A marker that is not a JSON object (null, a bare number, a truncated write)
+	// must read as "not an update", never throw and block startup.
+	if (typeof parsed !== "object" || parsed === null) {
+		return false;
+	}
+	const flag = parsed as Partial<RelaunchFlag>;
+	if (typeof flag.startedAt !== "number") {
+		return false;
+	}
 	const age = (options.now ?? Date.now()) - flag.startedAt;
 	if (
 		typeof flag.version !== "string" ||
+		typeof flag.fromPID !== "number" ||
 		!Number.isInteger(flag.fromPID) ||
 		flag.fromPID <= 0 ||
-		!Number.isInteger(pid) ||
-		pid <= 0 ||
 		!Number.isFinite(age) ||
 		age < 0 ||
 		age > FLAG_LIFETIME_MS ||
-		flag.fromPID === pid ||
 		flag.version !== options.version
 	) {
 		return false;

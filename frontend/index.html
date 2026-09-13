@@ -10,14 +10,17 @@
 			 * JS bundle mounts React. React's createRoot(...).render() replaces the
 			 * contents of #root (see src/renderer/main.tsx), so this markup lives
 			 * inside #root and is cleanly discarded once the app mounts. Inline only:
-			 * no build-time asset imports. Matches DaemonStartupLoader as closely as
-			 * static HTML allows. #0f1014 is NATIVE_WINDOW_BACKGROUND_DARK.
+			 * no build-time asset imports. Matches the native window background,
+			 * which switches on theme (NATIVE_WINDOW_BACKGROUND_* in main.ts): light
+			 * #fbfbfb by default, dark #0f1014 under a dark color scheme. The splash
+			 * follows prefers-color-scheme so it does not flash the wrong theme
+			 * before React resolves the app theme.
 			 */
 			html,
 			body {
 				margin: 0;
 				height: 100%;
-				background: #0f1014;
+				background: #fbfbfb;
 			}
 			#ao-boot-splash {
 				position: absolute;
@@ -25,8 +28,8 @@
 				display: flex;
 				align-items: center;
 				justify-content: center;
-				background: #0f1014;
-				color: #f3f4f6;
+				background: #fbfbfb;
+				color: #111827;
 				font-family:
 					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
 					sans-serif;
@@ -49,12 +52,15 @@
 				height: 5.5rem;
 				width: 5.5rem;
 			}
+			#ao-boot-splash .ao-boot-mark svg path {
+				fill: #111827;
+			}
 			#ao-boot-splash .ao-boot-title {
 				margin-top: 1.25rem;
 				font-size: 1rem;
 				font-weight: 600;
 				letter-spacing: -0.01em;
-				color: #f3f4f6;
+				color: #111827;
 			}
 			#ao-boot-splash .ao-boot-status {
 				margin-top: 0.5rem;
@@ -98,6 +104,22 @@
 					opacity: 0.6;
 				}
 			}
+			@media (prefers-color-scheme: dark) {
+				html,
+				body {
+					background: #0f1014;
+				}
+				#ao-boot-splash {
+					background: #0f1014;
+					color: #f3f4f6;
+				}
+				#ao-boot-splash .ao-boot-mark svg path {
+					fill: #f3f4f6;
+				}
+				#ao-boot-splash .ao-boot-title {
+					color: #f3f4f6;
+				}
+			}
 		</style>
 	</head>
 	<body>
@@ -107,10 +129,7 @@
 					<div class="ao-boot-mark" aria-hidden="true">
 						<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
 							<circle cx="50" cy="50" r="46" stroke="#3b82f6" stroke-width="4" opacity="0.35" />
-							<path
-								d="M50 24 L72 74 H61.5 L50 46.5 L38.5 74 H28 Z"
-								fill="#f3f4f6"
-							/>
+							<path d="M50 24 L72 74 H61.5 L50 46.5 L38.5 74 H28 Z" />
 						</svg>
 					</div>
 					<p class="ao-boot-title">Agent Orchestrator</p>
