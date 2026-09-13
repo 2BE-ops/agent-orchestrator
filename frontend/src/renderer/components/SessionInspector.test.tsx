@@ -277,7 +277,7 @@ beforeEach(() => {
   navigateMock.mockReset();
   patchMock.mockReset();
   postMock.mockReset();
-  useUiStore.setState({ developerMode: false, inspectorSessions: {} });
+  useUiStore.setState({ developerMode: false, virtualDevicesEnabled: false, inspectorSessions: {} });
   putMock.mockReset();
   mockCommonGets();
   patchMock.mockResolvedValue({
@@ -1728,11 +1728,23 @@ describe("SessionInspector Activity section", () => {
 });
 
 describe("SessionInspector tabs", () => {
+	it("shows virtual devices only after both developer-mode opt-ins", async () => {
+		mockCommonGets([], "", [reviewState(1, "needs_review")]);
+		renderWithQuery(<SessionInspector session={session([pr(1, "open")])} />);
+		expect(screen.queryByRole("tab", { name: "Devices" })).not.toBeInTheDocument();
+
+		act(() => useUiStore.getState().setDeveloperMode(true));
+		expect(screen.queryByRole("tab", { name: "Devices" })).not.toBeInTheDocument();
+
+		act(() => useUiStore.getState().setVirtualDevicesEnabled(true));
+		expect(await screen.findByRole("tab", { name: "Devices" })).toBeInTheDocument();
+	});
+
   it("exposes Reviews after Summary and keeps review content out of Summary", async () => {
     mockCommonGets([], "", [reviewState(1, "needs_review")]);
     renderWithQuery(<SessionInspector session={session([pr(1, "open")])} />);
     const tabs = screen.getAllByRole("tab").map((el) => el.textContent?.trim());
-    expect(tabs).toEqual(["Summary", "Reviews", "Browser", "Devices", "Files"]);
+    expect(tabs).toEqual(["Summary", "Reviews", "Browser", "Files"]);
     expect(screen.queryByText("Review controls")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("tab", { name: "Reviews" }));
@@ -3702,7 +3714,6 @@ describe("SessionInspector summary reviews", () => {
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent?.trim())).toEqual([
       "Summary",
       "Browser",
-      "Devices",
       "Files",
     ]);
     expect(
