@@ -3547,13 +3547,15 @@ html.sidebar-reordering * {
 /* In browser mode, use equal side tracks so the address field is centered in
    the inspector itself. Flex centering only centers it in the leftover space,
    which shifts it right because the tab controls are wider than the actions. */
-.session-inspector__topbar:has(> .browser-panel__topbar-host) {
+.session-inspector__topbar--browser {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 240px) minmax(0, 1fr);
+	padding-left: 0;
 }
 
-.session-inspector__topbar:has(> .browser-panel__topbar-host) > .session-inspector__tablist {
+.session-inspector__topbar--browser > .session-inspector__tablist {
 	grid-column: 1;
+	padding-left: var(--space-1);
 }
 
 .session-inspector__topbar > .browser-panel__topbar-host {
@@ -3561,7 +3563,7 @@ html.sidebar-reordering * {
 	width: 100%;
 }
 
-.session-inspector__topbar:has(> .browser-panel__topbar-host) > .session-inspector-actions-spacer {
+.session-inspector__topbar--browser > .session-inspector-actions-spacer {
 	grid-column: 3;
 	justify-self: end;
 }

@@ -120,9 +120,7 @@ describe("native-composition transparency cascade", () => {
 	});
 
 	it("centers the compact browser address bar between equal side tracks", () => {
-		const topbarRule = rules().find((rule) =>
-			rule.selector.includes(".session-inspector__topbar:has(> .browser-panel__topbar-host)"),
-		);
+		const topbarRule = rules().find((rule) => rule.selector.endsWith(".session-inspector__topbar--browser"));
 		expect(topbarRule?.body).toMatch(
 			/grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 240px\) minmax\(0, 1fr\)/,
 		);

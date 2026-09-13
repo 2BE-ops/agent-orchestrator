@@ -107,7 +107,12 @@ export function SessionInspectorShellView({
 
 	return (
 		<aside className={inspectorShellClass} aria-label={ariaLabel}>
-			<div className="session-inspector__topbar flex h-inspector-tabs shrink-0 items-center border-b border-border-strong pl-1">
+			<div
+				className={cn(
+					"session-inspector__topbar flex h-inspector-tabs shrink-0 items-center border-b border-border-strong pl-1",
+					activeView === "browser" && "session-inspector__topbar--browser",
+				)}
+			>
 				{isVisible ? (
 					<div
 						className={cn(
