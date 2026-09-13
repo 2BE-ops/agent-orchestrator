@@ -347,22 +347,35 @@ it("keeps a visible live success outcome when an observed switch disappears on i
 			updatedAt: "2026-08-31T10:01:00Z",
 		},
 	};
-	getMock.mockResolvedValue({ data: switchingResponse });
-	postMock.mockResolvedValue({ data: switchingResponse });
-	const { queryClient } = renderSection();
-	await screen.findByLabelText("Switching to other@example.com…");
-
-	act(() => queryClient.setQueryData(["codex-accounts"], {
+	const settledResponse = {
 		...accountResponse,
 		accountRevision: 4,
 		activeAccountId: inactiveAccount.id,
 		accounts: [{ ...inactiveAccount, active: true }, { ...activeAccount, active: false }],
-	}));
+	};
+	let ensureCalls = 0;
+	getMock.mockResolvedValue({ data: switchingResponse });
+	postMock.mockImplementation((path: string) => {
+		if (path === "/api/v1/agents/codex/accounts/ensure") {
+			ensureCalls += 1;
+			return Promise.resolve({ data: ensureCalls === 1 ? switchingResponse : settledResponse });
+		}
+		return Promise.resolve({ data: switchingResponse });
+	});
+	const { queryClient } = renderSection();
+	await screen.findByLabelText("Switching to other@example.com…");
+	await waitFor(() => expect(ensureCalls).toBe(1));
+
+	act(() => queryClient.setQueryData(["codex-accounts"], settledResponse));
 
 	const outcome = await screen.findByRole("status");
 	expect(outcome).toHaveTextContent("Switched to other@example.com.");
 	expect(outcome).toHaveAttribute("aria-live", "polite");
 	expect(outcome).toBeVisible();
+	await waitFor(() => expect(postMock).toHaveBeenCalledWith(
+		"/api/v1/agents/codex/accounts/ensure",
+		{ body: { accountIds: [inactiveAccount.id], includeUsage: true } },
+	));
 });
 
 it("reports when a failed switch safely restores the previous account", async () => {
@@ -582,6 +595,41 @@ it("shows a safe provider-unavailable reason when no previous usage limits exist
 
 	expect(await screen.findByRole("status")).toHaveTextContent("Codex usage limits are temporarily unavailable.");
 	expect(screen.getByRole("status")).not.toHaveTextContent("raw transport error");
+});
+
+it("quietly refreshes invalidated capacity without showing an internal warning", async () => {
+	const invalidatedAccount = {
+		...activeAccount,
+		capacity: {
+			...capacity,
+			state: "unknown",
+			freshness: "stale",
+			plan: null,
+			remainingPercent: null,
+			reasonCode: "capacity_invalidated",
+			reason: "internal invalidation detail",
+			overall: null,
+			additionalBuckets: [],
+		},
+		usageSummary: {
+			lifetimeTokens: 62700000000,
+			peakDailyTokens: 2000000000,
+			longestRunningTurnSeconds: 26340,
+			currentStreakDays: 2,
+			longestStreakDays: 99,
+			observedAt: "2026-08-31T10:00:00Z",
+		},
+	};
+	const invalidatedResponse = { ...accountResponse, accounts: [invalidatedAccount] };
+	getMock.mockResolvedValue({ data: invalidatedResponse });
+	postMock.mockResolvedValue({ data: invalidatedResponse });
+	const { container } = renderSection();
+	await screen.findAllByText("active@example.com");
+	fireEvent.click(container.querySelector(`[data-account-id="${activeAccount.id}"] button`) as HTMLButtonElement);
+
+	expect(await screen.findByRole("region", { name: "Activity" })).toBeInTheDocument();
+	expect(screen.queryByText("Usage capacity changed and must be checked again.")).not.toBeInTheDocument();
+	expect(screen.queryByText("internal invalidation detail")).not.toBeInTheDocument();
 });
 
 it("collapses the provider while rotating only its chevron", async () => {

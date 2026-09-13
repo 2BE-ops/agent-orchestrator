@@ -94,7 +94,11 @@ export function CodexAccountsSection({ titleHidden }: { titleHidden?: boolean })
 				? data.accounts.find((account) => account.id === observed.sourceAccountId)?.label
 				: undefined;
 		setSwitchOutcome({ switchId: observed.id, result, label });
-	}, [currentSwitch, data?.activeAccountId, data?.accounts]);
+		// Activation deliberately invalidates the target's cached capacity. Refresh
+		// it as soon as the durable switch settles so an already-open account row
+		// does not wait for another click or window-focus event.
+		if (result === "completed") void actions.ensureAccount(observed.targetAccountId).catch(() => undefined);
+	}, [actions.ensureAccount, currentSwitch, data?.activeAccountId, data?.accounts]);
 
 	const beginLogin = useCallback(async (accountId?: string) => {
 		if (activeLogin || switchPresentation?.mutationBlocked) return;

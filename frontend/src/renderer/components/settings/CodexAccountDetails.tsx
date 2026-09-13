@@ -83,6 +83,10 @@ function CapacityNotice({ reason, tone, checking }: { reason: string; tone: "war
 function capacityNoticeFor(account: CodexAccount, t: TFunction, locale: string): { reason: string; tone: "warning" | "error" | "muted"; checking?: boolean } | null {
 	if (account.status === "broken") return { reason: t(codexAccountReasonKey(account.reasonCode)), tone: "error" };
 	if (account.capacity.freshness === "checking") return { reason: t(codexAccountReasonKey(account.capacity.reasonCode)), tone: "muted", checking: true };
+	// Credential changes intentionally invalidate the old capacity snapshot. It
+	// is an internal transition, not a user-actionable failure; the section
+	// refreshes it quietly after login/switch completion.
+	if (account.capacity.reasonCode === "capacity_invalidated") return null;
 	if (account.capacity.freshness === "stale") {
 		const checked = account.capacity.checkedAt ? formatObservedTime(account.capacity.checkedAt, locale) : null;
 		const reason = t(codexAccountReasonKey(account.capacity.reasonCode));
