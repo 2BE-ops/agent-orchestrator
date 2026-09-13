@@ -4,6 +4,7 @@ import {
 	app,
 	BaseWindow,
 	clipboard,
+	ClipboardItem,
 	dialog,
 	ipcMain,
 	Menu,
@@ -459,7 +460,7 @@ function applyRuntimeAppIcon(): void {
 	if (!iconPath) return;
 	const icon = nativeImage.createFromPath(iconPath);
 	if (!icon.isEmpty()) {
-		app.dock.setIcon(icon);
+		app.dock?.setIcon(icon);
 	}
 }
 
@@ -728,7 +729,12 @@ async function createWindowInternal(): Promise<void> {
 			notify: (state) => shellWebContents.send("browser:downloadsChanged", state),
 		}),
 		clearBrowserProfileData: clearElectronBrowserProfileData,
-		clipboard,
+		writeImageToClipboard: async (image) => {
+			const png = image.toPNG();
+			const bytes = new Uint8Array(png.byteLength);
+			bytes.set(png);
+			await clipboard.write([new ClipboardItem({ "image/png": new Blob([bytes], { type: "image/png" }) })]);
+		},
 	});
 	browserProfileImporter = profileImporter;
 	browserProfileIpc = registerBrowserProfileIpc({
@@ -2233,10 +2239,10 @@ ipcMain.handle("app:checkGitHubRepositoryAvailability", async (_event, input: { 
 		return { available: false, message: "Could not check this repository name. Confirm GitHub CLI is signed in." };
 	}
 });
-ipcMain.handle("clipboard:writeText", (_event, text: string) => {
-	clipboard.writeText(text, "clipboard");
+ipcMain.handle("clipboard:writeText", async (_event, text: string) => {
+	await clipboard.writeText(text);
 	if (process.platform === "linux") {
-		clipboard.writeText(text, "selection");
+		await clipboard.selection.writeText(text);
 	}
 });
 ipcMain.handle("clipboard:readText", () => clipboard.readText());

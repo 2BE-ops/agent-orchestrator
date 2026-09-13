@@ -41,7 +41,7 @@
 		"@electron-forge/plugin-auto-unpack-natives": "^7.8.0",
 		"@electron-forge/plugin-vite": "^7.8.0",
 		"@electron-forge/publisher-github": "^7.8.0",
-		"@electron/rebuild": "^4.0.4",
+		"@electron/rebuild": "4.2.0",
 		"@playwright/test": "^1.60.0",
 		"@tailwindcss/vite": "^4.3.0",
 		"@tanstack/router-plugin": "^1.168.18",
@@ -54,7 +54,7 @@
 		"@types/ws": "^8.18.1",
 		"@vitejs/plugin-react": "^6.0.2",
 		"app-builder-lib": "^26.15.3",
-		"electron": "^33.0.0",
+		"electron": "^44.3.0",
 		"jsdom": "^29.1.1",
 		"openapi-typescript": "^7.13.0",
 		"playwright": "^1.60.0",
@@ -127,7 +127,11 @@
 		"electron-installer-debian": "^3.2.0",
 		"electron-installer-redhat": "^3.4.0"
 	},
+	"overrides": {
+		"@electron/rebuild": "4.2.0",
+		"node-abi": "4.35.0"
+	},
 	"allowScripts": {
-		"electron@33.4.11": true
+		"electron@44.3.0": true
 	}
 }

@@ -3,12 +3,12 @@ import { net } from "electron";
 import {
 	type BrowserNavState,
 	type BrowserTabsState,
+	browserPageUserAgent,
 	browserShortcutAction,
 	clampBoundsToWindow,
 	createBrowserViewHost,
 	isAllowedBrowserURL,
 	normalizeBrowserURL,
-	requiresSystemBrowserURL,
 	sanitizeBrowserTitle,
 	sanitizeBrowserURL,
 	scaleBoundsForZoom,
@@ -24,21 +24,20 @@ import {
 import type { BrowserAnnotationDraft } from "../shared/browser-annotations";
 import { parseAgentBrowserJSON } from "./agent-browser-runtime";
 
-describe("Cloudflare browser routing", () => {
-	it.each([
-		"https://dash.cloudflare.com/login",
-		"https://dash.cloudflare.com/1234567890/home",
-		"https://workers.dash.cloudflare.com/",
-	])("requires the system browser for %s", (url) => {
-		expect(requiresSystemBrowserURL(url)).toBe(true);
+describe("browser page user agent", () => {
+	it("identifies the real Chromium engine without Electron application tokens", () => {
+		const userAgent = browserPageUserAgent("darwin", "130.0.6723.191");
+		expect(userAgent).toBe(
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.191 Safari/537.36",
+		);
+		expect(userAgent).not.toMatch(/Electron|AgentOrchestrator/);
 	});
 
 	it.each([
-		"https://www.cloudflare.com/",
-		"https://example.dash.cloudflare.com.evil.test/",
-		"not a URL",
-	])("keeps non-dashboard URL %s eligible for AO", (url) => {
-		expect(requiresSystemBrowserURL(url)).toBe(false);
+		["win32", "Windows NT 10.0; Win64; x64"],
+		["linux", "X11; Linux x86_64"],
+	] as const)("uses the reduced %s platform identity", (platform, expected) => {
+		expect(browserPageUserAgent(platform, "130.0.0.0")).toContain(`(${expected})`);
 	});
 });
 
@@ -157,6 +156,8 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 	});
 	const setPermissionCheckHandler = vi.fn();
 	const setPermissionRequestHandler = vi.fn();
+	const setUserAgent = vi.fn();
+	const setSessionUserAgent = vi.fn();
 	const webContents = {
 		id: 99,
 		mainFrame: { frameToken: "preview-frame" },
@@ -199,6 +200,7 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 		focus: vi.fn(),
 		reload: vi.fn(),
 		send: vi.fn(),
+		setUserAgent,
 		setWindowOpenHandler: (handler: (details: { url: string }) => { action: string }) => {
 			windowOpenHandler = handler;
 		},
@@ -209,6 +211,7 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 		session: {
 			setPermissionCheckHandler,
 			setPermissionRequestHandler,
+			setUserAgent: setSessionUserAgent,
 		},
 	};
 	const view = {
@@ -284,7 +287,7 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 		annotatePreloadPath: "/preload.js",
 		rendererOrigin: "http://localhost:5173",
 		agentBrowserRuntime: runtime,
-		clipboard: { writeImage },
+		writeImageToClipboard: writeImage,
 	});
 	const rendererFrame = { processId: 5, routingId: 7 };
 	const invoke = (channel: string, ...args: unknown[]) =>
@@ -351,6 +354,8 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 		sent,
 		setPermissionCheckHandler,
 		setPermissionRequestHandler,
+		setUserAgent,
+		setSessionUserAgent,
 		shellFocus,
 		shellSend,
 		openDevTools,
@@ -397,28 +402,14 @@ describe("browser screenshots", () => {
 	});
 });
 
-describe("embedded Cloudflare navigation", () => {
-	it("does not create an embedded tab for agent or user opens", async () => {
-		const { invoke, openExternal } = setupHost();
+describe("browser page identity", () => {
+	it("sets the Chromium identity on the session and tab before navigation", async () => {
+		const { invoke, setUserAgent, setSessionUserAgent } = setupHost();
+
 		await invoke("browser:ensure", "sess-1");
 
-		await invoke("browser:navigate", { viewId: "1:sess-1", url: "https://dash.cloudflare.com/login" });
-		await invoke("browser:openTab", { viewId: "1:sess-1", url: "https://dash.cloudflare.com/login" });
-
-		expect(openExternal).toHaveBeenCalledTimes(2);
-		expect(openExternal).toHaveBeenNthCalledWith(1, "https://dash.cloudflare.com/login");
-		expect(openExternal).toHaveBeenNthCalledWith(2, "https://dash.cloudflare.com/login");
-	});
-
-	it("hands same-tab login navigation to the system browser", async () => {
-		const { invoke, webContentsListeners, openExternal } = setupHost();
-		await invoke("browser:ensure", "sess-1");
-		const event = { preventDefault: vi.fn() };
-
-		webContentsListeners.get("will-navigate")?.(event as never, "https://dash.cloudflare.com/login" as never);
-
-		expect(event.preventDefault).toHaveBeenCalledOnce();
-		expect(openExternal).toHaveBeenCalledWith("https://dash.cloudflare.com/login");
+		expect(setSessionUserAgent).toHaveBeenCalledWith(browserPageUserAgent());
+		expect(setUserAgent).toHaveBeenCalledWith(browserPageUserAgent());
 	});
 });
 
@@ -859,7 +850,7 @@ describe("browser:closeTab automation-runtime fallback", () => {
 		expect(result.tabs.map((tab) => tab.id)).toEqual(["t1"]);
 	});
 
-	it("still surfaces an unrelated automation-runtime failure instead of silently closing the tab", async () => {
+	it("does not involve a failed automation runtime when a user closes a tab", async () => {
 		const { invoke, runtime } = setupTabHost();
 		const ensure = (await invoke("browser:ensure", "sess-1")) as { viewId: string };
 		const viewId = ensure.viewId;
@@ -876,10 +867,10 @@ describe("browser:closeTab automation-runtime fallback", () => {
 			return originalRunAction(sessionId, action, args, provider);
 		});
 
-		await expect(invoke("browser:closeTab", { viewId, tabId: "t2" })).rejects.toThrow("agent-browser exited with code 1");
+		const result = (await invoke("browser:closeTab", { viewId, tabId: "t2" })) as { tabs: { id: string }[] };
 
-		const after = (await invoke("browser:getTabs", viewId)) as { tabs: { id: string }[] };
-		expect(after.tabs.map((tab) => tab.id)).toEqual(["t1", "t2"]);
+		expect(result.tabs.map((tab) => tab.id)).toEqual(["t1"]);
+		expect(runAction).not.toHaveBeenCalled();
 	});
 });
 
@@ -1093,7 +1084,7 @@ describe("ensureNativeActiveTab automation-runtime resync", () => {
 	// own try/catch never even ran, because the throw came from its unguarded
 	// ensureNativeActiveTab call sitting *before* that try block.
 	it("recovers browser:selectTab when the runtime rejects tab-select for the newly active tab", async () => {
-		const { invoke, runtime } = setupTabHost();
+		const { host, invoke, runtime } = setupTabHost();
 		const ensure = (await invoke("browser:ensure", "sess-1")) as { viewId: string };
 		const viewId = ensure.viewId;
 		await invoke("browser:openTab", { viewId }); // t1, t2 — t2 active, natively synced
@@ -1115,13 +1106,14 @@ describe("ensureNativeActiveTab automation-runtime resync", () => {
 
 		const result = (await invoke("browser:selectTab", { viewId, tabId: "t1" })) as { activeTabId: string };
 		expect(result.activeTabId).toBe("t1");
+		await host.execute("sess-1", "snapshot");
 		// Asked the runtime to refresh its own view (exactly what its error
 		// message suggests) before retrying, rather than giving up immediately.
 		expect(seenActions).toContain("tabs");
 	});
 
 	it("does not wedge the session after a transient tab-select failure — later operations still work", async () => {
-		const { invoke, runtime } = setupTabHost();
+		const { host, invoke, runtime } = setupTabHost();
 		const ensure = (await invoke("browser:ensure", "sess-1")) as { viewId: string };
 		const viewId = ensure.viewId;
 		await invoke("browser:openTab", { viewId }); // t1, t2 — t2 active, natively synced
@@ -1140,6 +1132,7 @@ describe("ensureNativeActiveTab automation-runtime resync", () => {
 		});
 
 		await invoke("browser:selectTab", { viewId, tabId: "t1" });
+		await host.execute("sess-1", "snapshot");
 		// If the loop were still wedged, this would hang/reject instead of
 		// closing — the bug's whole symptom was "works for a while, then every
 		// later close/select fails identically forever."
@@ -1151,7 +1144,7 @@ describe("ensureNativeActiveTab automation-runtime resync", () => {
 	// later "the agent clicked the wrong tab" report would have nothing to go
 	// on. A resync attempt that also fails should leave a breadcrumb.
 	it("warns when the runtime is still desynced after a resync attempt, instead of failing silently", async () => {
-		const { invoke, runtime } = setupTabHost();
+		const { host, invoke, runtime } = setupTabHost();
 		const ensure = (await invoke("browser:ensure", "sess-1")) as { viewId: string };
 		const viewId = ensure.viewId;
 		await invoke("browser:openTab", { viewId }); // t1, t2 — t2 active, natively synced
@@ -1168,6 +1161,9 @@ describe("ensureNativeActiveTab automation-runtime resync", () => {
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
 		await invoke("browser:selectTab", { viewId, tabId: "t1" });
+		await expect(host.execute("sess-1", "snapshot")).rejects.toMatchObject({
+			code: "BROWSER_AUTOMATION_INVALID_OUTPUT",
+		});
 
 		expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("t1"));
 		expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("sess-1"));
@@ -1929,24 +1925,27 @@ describe("agent browser runtime", () => {
 		expect(debuggerSendCommand).toHaveBeenCalledWith("Page.navigate", { url: "http://localhost:4173/" });
 	});
 
-	it("keeps UI-created tabs in the native registry after the daemon has connected", async () => {
+	it("keeps UI tab actions out of automation until an agent command needs the active tab", async () => {
 		const { host, invoke, runtime, views } = setupTabHost();
 		await host.execute("sess-1", "snapshot");
 		const state = (await invoke("browser:ensure", "sess-1")) as { viewId: string };
+		vi.mocked(runtime.runAction).mockClear();
 
 		for (let index = 0; index < 6; index += 1) {
 			await invoke("browser:openTab", { viewId: state.viewId });
 		}
 
-		const nativeNewTabCalls = vi
-			.mocked(runtime.runAction)
-			.mock.calls.filter(([, action]) => action === "tab-new");
-		expect(nativeNewTabCalls).toHaveLength(6);
+		expect(runtime.runAction).not.toHaveBeenCalled();
 		expect(views).toHaveLength(7);
 
+		await invoke("browser:selectTab", { viewId: state.viewId, tabId: "t5" });
+		expect(runtime.runAction).not.toHaveBeenCalled();
 		await invoke("browser:closeTab", { viewId: state.viewId, tabId: "t7" });
-
+		expect(runtime.runAction).not.toHaveBeenCalled();
 		expect(views[6].webContents.close).toHaveBeenCalledTimes(1);
+
+		await host.execute("sess-1", "snapshot");
+		expect(vi.mocked(runtime.runAction).mock.calls.map(([, action]) => action)).toEqual(["tab-select", "snapshot"]);
 	});
 
 	it("keeps stable logical tab IDs, separate targets, and the selected tab active", async () => {
@@ -2079,7 +2078,7 @@ describe("agent browser runtime", () => {
 		expect(result.tabs.map((tab) => tab.id)).toEqual(["t1"]);
 	});
 
-	it("still surfaces an unrelated automation-runtime failure instead of silently closing the tab", async () => {
+	it("does not involve a failed automation runtime when a user closes a tab", async () => {
 		const { invoke, runtime } = setupTabHost();
 		const ensured = (await invoke("browser:ensure", "sess-1")) as { viewId: string };
 		const viewId = ensured.viewId;
@@ -2096,10 +2095,10 @@ describe("agent browser runtime", () => {
 			return originalRunAction(sessionId, action, args, provider);
 		});
 
-		await expect(invoke("browser:closeTab", { viewId, tabId: "t2" })).rejects.toThrow("agent-browser exited with code 1");
+		const result = (await invoke("browser:closeTab", { viewId, tabId: "t2" })) as { tabs: { id: string }[] };
 
-		const after = (await invoke("browser:getTabs", viewId)) as { tabs: { id: string }[] };
-		expect(after.tabs.map((tab) => tab.id)).toEqual(["t1", "t2"]);
+		expect(result.tabs.map((tab) => tab.id)).toEqual(["t1"]);
+		expect(runAction).not.toHaveBeenCalled();
 	});
 
 	it("registers a session-scoped webRequest watcher for failed requests exactly once, not per tab", async () => {
@@ -2242,29 +2241,18 @@ describe("agent browser runtime", () => {
 			tabId: "t1",
 		})) as { activeTabId: string };
 		expect(selected.activeTabId).toBe("t1");
-		expect(activeTargets.get("sess-1")).toBe("t1");
-		expect(runtime.runAction).toHaveBeenCalledWith(
-			"sess-1",
-			"tab-select",
-			{ tabId: "t1" },
-			expect.anything(),
-			undefined,
-		);
+		expect(activeTargets.get("sess-1")).toBe("t2");
 		expect(await host.execute("sess-1", "get", { property: "url" })).toMatchObject({
 			value: "about:blank",
 		});
+		expect(activeTargets.get("sess-1")).toBe("t1");
 
 		const closed = (await invoke("browser:closeTab", {
 			viewId: ensured.viewId,
 			tabId: "t2",
 		})) as { tabs: Array<{ id: string }> };
 		expect(closed.tabs.map((tab) => tab.id)).toEqual(["t1"]);
-		expect(runtime.runAction).toHaveBeenCalledWith(
-			"sess-1",
-			"tab-close",
-			{ tabId: "t2" },
-			expect.anything(),
-		);
+		expect(vi.mocked(runtime.runAction).mock.calls.some(([, action]) => action === "tab-close")).toBe(false);
 		expect(views[1].webContents.close).toHaveBeenCalled();
 	});
 });

@@ -1,5 +1,4 @@
 import type {
-	Clipboard,
 	IpcMain,
 	IpcMainEvent,
 	IpcMainInvokeEvent,
@@ -241,7 +240,8 @@ type BrowserWebContents = Pick<
 	openDevTools?: (options?: Pick<OpenDevToolsOptions, "mode" | "activate">) => void;
 	closeDevTools?: () => void;
 	close?: () => void;
-	session?: Pick<Session, "on" | "removeListener" | "setPermissionCheckHandler" | "setPermissionRequestHandler" | "webRequest">;
+	setUserAgent?: (userAgent: string) => void;
+	session?: Pick<Session, "on" | "removeListener" | "setPermissionCheckHandler" | "setPermissionRequestHandler" | "setUserAgent" | "webRequest">;
 };
 
 type BrowserElectronSession = NonNullable<BrowserWebContents["session"]>;
@@ -317,8 +317,27 @@ export type BrowserViewHostOptions = {
 	browserHistoryStore?: BrowserHistoryStore;
 	browserDownloadManager?: BrowserDownloadManager;
 	clearBrowserProfileData?: (partition: string) => Promise<void>;
-	clipboard?: Pick<Clipboard, "writeImage">;
+	writeImageToClipboard?: (image: Electron.NativeImage) => Promise<void> | void;
 };
+
+/**
+ * Browser pages should identify as the Chromium engine they actually run on.
+ * Electron's default UA adds both the product name and an Electron token;
+ * anti-bot systems treat that application-shell identity as automation even
+ * when a human is operating the page. Chromium's reduced desktop UA uses a
+ * stable platform token, so it remains consistent with UA client hints.
+ */
+export function browserPageUserAgent(
+	platform: NodeJS.Platform = process.platform,
+	chromeVersion: string = process.versions.chrome ?? "0.0.0.0",
+): string {
+	const platformToken = platform === "darwin"
+		? "Macintosh; Intel Mac OS X 10_15_7"
+		: platform === "win32"
+			? "Windows NT 10.0; Win64; x64"
+			: "X11; Linux x86_64";
+	return `Mozilla/5.0 (${platformToken}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+}
 
 export type BrowserViewHost = {
 	dispose: () => Promise<void>;
@@ -548,6 +567,7 @@ export function scaleBoundsForZoom(rect: BrowserRect, zoomFactor: number): Brows
 }
 
 export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserViewHost {
+	const pageUserAgent = browserPageUserAgent();
 	const entries = new Map<string, BrowserSessionEntry>();
 	const signalWatchers = new Map<
 		BrowserElectronSession,
@@ -646,6 +666,11 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 				sandbox: true,
 			},
 		});
+		// Set both scopes before the first about:blank load. The WebContents value
+		// covers this tab immediately; the Session value also covers workers,
+		// service workers, and requests shared by tabs in the same AO profile.
+		view.webContents.session?.setUserAgent?.(pageUserAgent);
+		view.webContents.setUserAgent?.(pageUserAgent);
 		applyBrowserViewBounds(view, OFFSCREEN_BOUNDS, false);
 		options.mainWindow.contentView.addChildView(view);
 		view.setBorderRadius?.(BROWSER_VIEW_BORDER_RADIUS);
@@ -1128,48 +1153,23 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 	}
 
 	const openUserTab = async (session: BrowserSessionEntry, url?: string): Promise<BrowserTabsState> => {
-		if (url && requiresSystemBrowserURL(url)) {
-			await options.shell.openExternal(url);
-			return listTabs(session);
-		}
-		if (!options.agentBrowserRuntime) {
-			await openTab(session, url, true);
-			return listTabs(session);
-		}
-		return queueNativeOperation(session, async () => {
-			await options.agentBrowserRuntime!.runAction(
-				session.sessionId,
-				"tab-new",
-				{ url },
-				agentBrowserTargets(session),
-			);
-			session.nativeActiveTabId = session.activeTabId;
-			return listTabs(session);
-		});
+		// Human and renderer-driven tabs must remain ordinary Chromium pages until
+		// an agent actually performs browser automation. Creating them through the
+		// agent runtime attaches CDP immediately, which makes security-sensitive
+		// pages treat a human-operated tab as automated. The first later agent
+		// command already resynchronizes the native registry in
+		// ensureNativeActiveTab, including its stale-tab retry path.
+		await openTab(session, url, true);
+		session.nativeActiveTabId = undefined;
+		return listTabs(session);
 	};
 
 	const closeUserTab = async (session: BrowserSessionEntry, tabId: string): Promise<BrowserTabsState> => {
 		if (session.tabs.size === 1) return listTabs(session);
 		if (!session.tabs.has(tabId)) return listTabs(session);
-		if (!options.agentBrowserRuntime) return closeTab(session, tabId);
-		return queueNativeOperation(session, async () => {
-			await ensureNativeActiveTab(session);
-			try {
-				await options.agentBrowserRuntime!.runAction(
-					session.sessionId,
-					"tab-close",
-					{ tabId },
-					agentBrowserTargets(session),
-				);
-			} catch (error) {
-				if (!isAgentBrowserCommandFailure(error)) throw error;
-				if (!session.tabs.has(tabId)) return listTabs(session);
-				return closeTab(session, tabId);
-			}
-			session.nativeActiveTabId = undefined;
-			await ensureNativeActiveTab(session);
-			return listTabs(session);
-		});
+		const state = closeTab(session, tabId);
+		session.nativeActiveTabId = undefined;
+		return state;
 	};
 
 	const focusLocation = (session: BrowserSessionEntry): void => {
@@ -1459,10 +1459,6 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 		const normalized = normalizeBrowserURL(url);
 		if (!isAllowedBrowserURL(normalized.href, options.rendererOrigin)) {
 			throw new Error("Unsupported browser URL");
-		}
-		if (requiresSystemBrowserURL(normalized.href)) {
-			await options.shell.openExternal(normalized.href);
-			return pushNavState(options, entry);
 		}
 		if (!entry.annotationDraft || !isSameAnnotationPage(annotationDraftURL(entry.annotationDraft), normalized.href)) {
 			cancelAnnotation(options, entry, "navigation");
@@ -1946,7 +1942,7 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 		if (!session || !isRendererOwned(event, viewId)) {
 			throw browserError("BROWSER_TARGET_UNAVAILABLE", "Browser tab is unavailable");
 		}
-		if (!options.clipboard) {
+		if (!options.writeImageToClipboard) {
 			throw browserError("SCREENSHOT_UNAVAILABLE", "Screenshot clipboard access is unavailable");
 		}
 		assertProfileStable(session);
@@ -1959,7 +1955,7 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 		if (image.isEmpty()) {
 			throw browserError("SCREENSHOT_UNAVAILABLE", "The browser page could not be captured");
 		}
-		options.clipboard.writeImage(image);
+		await options.writeImageToClipboard(image);
 	});
 	handle("browser:downloads:list", (event) => {
 		if (event.sender.id !== shellWebContents.id) return { downloads: [] };
@@ -1985,11 +1981,12 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 		const session = entries.get(input.viewId);
 		if (!session || !isRendererOwned(event, input.viewId)) return emptyTabsState(input.viewId);
 		assertProfileStable(session);
-		return queueNativeOperation(session, async () => {
-			activateTab(session, input.tabId);
-			await ensureNativeActiveTab(session);
-			return listTabs(session);
-		});
+		activateTab(session, input.tabId, false);
+		// Renderer tab selection is a human browser action. Keep it independent
+		// from the automation runtime until an agent command actually needs the
+		// selected target; runNative performs that synchronization on demand.
+		session.nativeActiveTabId = undefined;
+		return listTabs(session);
 	});
 	handle("browser:closeTab", (event, input: BrowserTabInput) => {
 		const session = entries.get(input.viewId);
@@ -2001,42 +1998,12 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 		if (!session.tabs.has(input.tabId)) {
 			throw browserError("TAB_NOT_FOUND", `Browser tab ${input.tabId} does not exist`);
 		}
-		if (!options.agentBrowserRuntime) return closeTab(session, input.tabId);
-		return queueNativeOperation(session, async () => {
-			await ensureNativeActiveTab(session);
-			try {
-				await options.agentBrowserRuntime!.runAction(
-					session.sessionId,
-					"tab-close",
-					{ tabId: input.tabId },
-					agentBrowserTargets(session),
-				);
-			} catch (error) {
-				// The automation runtime's own internal tab registry can drift from
-				// session.tabs over a long-running session (observed in practice as
-				// "Tab t5 not found; run `agent-browser tab` to list open tabs" even
-				// though session.tabs.has(input.tabId) above just confirmed AO still
-				// tracks it) — the runtime is a separate process AO doesn't fully
-				// control the internal bookkeeping of. Letting that failure bubble up
-				// left the tab stuck open with no way for the user to close it at all.
-				// The user's intent is unambiguous either way: close this tab. Fall
-				// back to AO's own close path, which only depends on session.tabs and
-				// the real WebContentsView, not the runtime's registry.
-				if (!isAgentBrowserCommandFailure(error)) throw error;
-				// runAction("tab-close") can partially succeed: the CDP bridge's own
-				// Target.closeTarget handling calls this same internal closeTab
-				// before the runtime reports the overall command as failed (observed
-				// live — the tab was already gone by the time this catch ran). Calling
-				// closeTab again here would throw TAB_NOT_FOUND for a tab that's
-				// already closed, exactly the outcome the user wanted — so treat
-				// "already gone" as success instead of retrying the close.
-				if (!session.tabs.has(input.tabId)) return listTabs(session);
-				return closeTab(session, input.tabId);
-			}
-			session.nativeActiveTabId = undefined;
-			await ensureNativeActiveTab(session);
-			return listTabs(session);
-		});
+		const state = closeTab(session, input.tabId);
+		// Like renderer open/select, closing a user-facing tab must not attach
+		// automation to the remaining page. The next agent command resynchronizes
+		// against AO's authoritative tab registry.
+		session.nativeActiveTabId = undefined;
+		return state;
 	});
 	on("browser:panelUsed", (event, viewId: string) => {
 		if (isRendererOwned(event, viewId) && entries.has(viewId)) lastUsedViewId = viewId;
@@ -2602,10 +2569,6 @@ function hardenWebContents(
 		if (!isCurrent() || !isAllowedBrowserURL(url, options.rendererOrigin)) {
 			return { action: "deny" };
 		}
-		if (requiresSystemBrowserURL(url)) {
-			void options.shell.openExternal(url);
-			return { action: "deny" };
-		}
 		// Always deny — never return createWindow. See the call site's comment for
 		// why: Electron's own guest-window linkage check crashes the process
 		// otherwise. Open our own tab instead, outside Electron's guest-window flow.
@@ -2613,11 +2576,6 @@ function hardenWebContents(
 		return { action: "deny" };
 	});
 	const blockUnsafeNavigation = (event: Electron.Event, url: string) => {
-		if (requiresSystemBrowserURL(url)) {
-			event.preventDefault();
-			if (isCurrent()) void options.shell.openExternal(url);
-			return;
-		}
 		if (!isAllowedBrowserURL(url, options.rendererOrigin)) {
 			event.preventDefault();
 			if (!isCurrent()) return;
@@ -2631,17 +2589,6 @@ function hardenWebContents(
 	};
 	contents.on("will-navigate", blockUnsafeNavigation);
 	contents.on("will-redirect", blockUnsafeNavigation);
-}
-
-/** Cloudflare's bot challenge is not reliable in an embedded Electron profile. */
-export function requiresSystemBrowserURL(url: string): boolean {
-	try {
-		const parsed = new URL(url);
-		const host = parsed.hostname.toLowerCase();
-		return host === "dash.cloudflare.com" || host.endsWith(".dash.cloudflare.com");
-	} catch {
-		return false;
-	}
 }
 
 function wireNavEvents(

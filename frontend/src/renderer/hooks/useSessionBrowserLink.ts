@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { apiClient, getApiBaseUrl } from "../lib/api-client";
 import { attachmentURL } from "../components/chat/messageAttachments";
-import { isWorkspaceFileLink, openLinkInSystemBrowser, requiresSystemBrowser } from "../lib/external-link-policy";
+import { isWorkspaceFileLink } from "../lib/external-link-policy";
 import { useUiStore } from "../stores/ui-store";
 import { sessionIsActive, type WorkspaceSession } from "../types/workspace";
 import { workspaceQueryKey } from "./useWorkspaceQuery";
@@ -36,11 +36,6 @@ export function useSessionBrowserLink(
 			} catch {
 				if (!isLocalWorkspaceFile) return;
 			}
-			if (requiresSystemBrowser(uri)) {
-				void openLinkInSystemBrowser(uri);
-				return;
-			}
-
 			const sessionId = session.id;
 			setInspectorView(sessionId, "browser");
 			setInspectorOpen(sessionId, true);

@@ -2,7 +2,7 @@ import { createContext, useContext, type ComponentProps } from "react";
 import { Copy, ExternalLink, Globe } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { aoBridge } from "../lib/bridge";
-import { isWebLink, openLinkInSystemBrowser, requiresSystemBrowser } from "../lib/external-link-policy";
+import { isWebLink, openLinkInSystemBrowser } from "../lib/external-link-policy";
 import {
 	ContextMenu,
 	ContextMenuTrigger,
@@ -22,8 +22,7 @@ export function AppLink({ href, onClick, onBrowserOpen, inAppLink, ...props }: C
 	const sessionBrowserOpen = useContext(AppBrowserLinkContext);
 	const openBrowser = onBrowserOpen ?? sessionBrowserOpen;
 	const webLink = !!href && isWebLink(href);
-	const systemOnlyLink = webLink && requiresSystemBrowser(href);
-	const browserLink = !!href && !systemOnlyLink && (inAppLink?.(href) ?? webLink);
+	const browserLink = !!href && (inAppLink?.(href) ?? webLink);
 	const anchor = (
 		<a
 			{...props}
@@ -31,11 +30,6 @@ export function AppLink({ href, onClick, onBrowserOpen, inAppLink, ...props }: C
 				onClick={(event) => {
 					onClick?.(event);
 					if (event.defaultPrevented || !href) return;
-					if (systemOnlyLink) {
-						event.preventDefault();
-						void openLinkInSystemBrowser(href);
-						return;
-					}
 					if (!browserLink) return;
 				event.preventDefault();
 				if (openBrowser && !event.ctrlKey && !event.metaKey && !event.altKey) openBrowser(href);
@@ -48,7 +42,7 @@ export function AppLink({ href, onClick, onBrowserOpen, inAppLink, ...props }: C
 		<ContextMenu>
 			<ContextMenuTrigger asChild>{anchor}</ContextMenuTrigger>
 			<ContextMenuContent className="min-w-52">
-				{webLink && !systemOnlyLink && (
+				{webLink && (
 					<>
 						<ContextMenuItem disabled={!openBrowser} onSelect={() => openBrowser?.(href)}>
 							<Globe aria-hidden="true" />
