@@ -79,6 +79,7 @@ const visibilityMocks = vi.hoisted(() => ({
 
 vi.mock("../../lib/api-client", () => ({
 	apiClient: { GET: getMock, POST: postMock },
+	getApiBaseUrl: () => "",
 	apiErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
 
@@ -475,10 +476,10 @@ describe("SessionChatSurface link routing", () => {
 			items: [{ kind: "message", id: "assistant-html", sequence: 1, revision: 1, role: "assistant", origin: "provider", text: "Done: [`test-ui.html`](/tmp/worktree/test-ui.html)", streaming: false, createdAt: "2026-08-08T00:00:01Z" }],
 		};
 		view.rerender(<Wrapper client={queryClient}><SessionChatSurface session={localSession} onOpenLinkInBrowser={openInBrowser} /></Wrapper>);
-		await waitFor(() => expect(postMock).toHaveBeenCalledWith(
-			"/api/v1/sessions/{sessionId}/preview",
-			expect.objectContaining({ body: { url: "/tmp/worktree/test-ui.html" } }),
+		await waitFor(() => expect(openInBrowser).toHaveBeenCalledWith(
+			expect.stringContaining("/api/v1/sessions/session-local-html/preview/files/test-ui.html"),
 		));
+		expect(postMock).not.toHaveBeenCalled();
 	});
 
 	it("opens each plain Chat link in a new AO Browser tab", async () => {

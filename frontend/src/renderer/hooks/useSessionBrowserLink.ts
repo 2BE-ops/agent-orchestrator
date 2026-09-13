@@ -1,10 +1,19 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { apiClient } from "../lib/api-client";
+import { apiClient, getApiBaseUrl } from "../lib/api-client";
+import { attachmentURL } from "../components/chat/messageAttachments";
 import { isWorkspaceFileLink, openLinkInSystemBrowser, requiresSystemBrowser } from "../lib/external-link-policy";
 import { useUiStore } from "../stores/ui-store";
 import { sessionIsActive, type WorkspaceSession } from "../types/workspace";
 import { workspaceQueryKey } from "./useWorkspaceQuery";
+
+function workspaceFilePreviewURL(uri: string, sessionId: string, workspacePaths: string[]): string | undefined {
+	const path = uri.trim().split(/[?#]/, 1)[0].replace(/^\.\//, "");
+	const workspacePath = workspacePaths.find((candidate) =>
+		path === candidate || (path.startsWith("/") && path.endsWith(`/${candidate}`)),
+	);
+	return workspacePath ? attachmentURL(getApiBaseUrl(), sessionId, workspacePath) : undefined;
+}
 
 /** Open an HTTP(S) link in the active worker session's AO Browser panel. */
 export function useSessionBrowserLink(
@@ -43,6 +52,15 @@ export function useSessionBrowserLink(
 					console.warn("Unable to open link in Browser tab", error);
 				});
 				return;
+			}
+			if (openInBrowser && isLocalWorkspaceFile) {
+				const previewURL = workspaceFilePreviewURL(uri, sessionId, workspacePaths);
+				if (previewURL) {
+					void openInBrowser(previewURL).catch((error) => {
+						console.warn("Unable to open workspace file in Browser tab", error);
+					});
+					return;
+				}
 			}
 			void (async () => {
 				try {
