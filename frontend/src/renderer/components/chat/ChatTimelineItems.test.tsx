@@ -64,12 +64,11 @@ describe("TurnOutcome", () => {
 		expect(screen.queryByText("Done")).not.toBeInTheDocument();
 	});
 
-	it("shows the message above a full-width rule", () => {
-		const { container } = render(<TurnOutcome state="failed" error="Provider error" />);
+	it("shows the failed outcome and the provider's explanation", () => {
+		render(<TurnOutcome state="failed" error="Provider error" />);
 
 		expect(screen.getByText("The agent ran into a problem")).toBeInTheDocument();
 		expect(screen.getByText("Provider error")).toBeInTheDocument();
-		expect(container.querySelector(".h-px.w-full.bg-border")).toBeInTheDocument();
 	});
 
 	it("preserves multiline provider text and links without interpreting its structure", () => {

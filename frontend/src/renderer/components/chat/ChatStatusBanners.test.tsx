@@ -16,12 +16,13 @@ describe("ReauthBanner", () => {
 					reauthReason: "The stored session expired.",
 				}}
 				harness="codex"
+				reasonInTimeline
 			/>,
 		);
 		expect(screen.getByRole("alert")).toBeInTheDocument();
 		expect(screen.getByText("codex login")).toBeInTheDocument();
 		expect(screen.queryByText(/The stored session expired/)).not.toBeInTheDocument();
-		expect(screen.getByText(/needs you to sign in again/)).toBeInTheDocument();
+		expect(screen.getByText(/do not run in AO chat/)).toBeInTheDocument();
 	});
 
 	it("does not claim that a mid-turn auth failure left the worktree untouched", () => {
@@ -52,6 +53,20 @@ describe("ReauthBanner", () => {
 			<ReauthBanner account={{ authMode: "chatgpt", planLabel: "Pro" }} harness="codex" />,
 		);
 		expect(container).toBeEmptyDOMElement();
+	});
+
+	it("keeps subscription access guidance without prescribing login", () => {
+		const reason = "Your organization has disabled Claude subscription access for Claude Code · Use an Anthropic API key instead, or ask your admin to enable access";
+		render(<ReauthBanner account={{ reauthRequiredAt: "2026-09-14T00:00:00Z", reauthReason: reason }} harness="claude-code" />);
+		expect(screen.getByText(reason)).toBeInTheDocument();
+		expect(screen.getByText("Provider access needs attention")).toBeInTheDocument();
+		expect(screen.queryByText("claude auth login")).not.toBeInTheDocument();
+	});
+
+	it("explains where a provider's slash login command must be run", () => {
+		render(<ReauthBanner account={{ reauthRequiredAt: "2026-09-14T00:00:00Z", reauthReason: "Please run /login." }} harness="claude-code" />);
+		expect(screen.getByText("claude auth login")).toBeInTheDocument();
+		expect(screen.getByText(/do not run in AO chat/)).toBeInTheDocument();
 	});
 });
 

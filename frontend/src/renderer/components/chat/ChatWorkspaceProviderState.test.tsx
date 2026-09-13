@@ -140,7 +140,7 @@ describe("plan", () => {
 });
 
 describe("provider state chrome", () => {
-	it("keeps a terminal provider failure on its turn and recovery in the banner", () => {
+	it("keeps a terminal provider failure once and access recovery beside the composer", () => {
 		const reason = "Provider access denied.\n\nContact your administrator.";
 		const snapshot: ConversationSnapshot = {
 			...chatFixtureReauth,
@@ -180,13 +180,13 @@ describe("provider state chrome", () => {
 			latestSequence: chatFixtureReauth.latestSequence + 2,
 		};
 		const { rerender } = render(<ChatWorkspace snapshot={snapshot} />);
-		expect(screen.getByText(/Sign in again to keep going/)).toBeInTheDocument();
+		expect(screen.getByText("Provider access needs attention")).toBeInTheDocument();
 		expect(screen.getAllByText(/Provider access denied/)).toHaveLength(1);
 		expect(screen.getByText(/Contact your administrator/)).toBeInTheDocument();
 		expect(screen.getByText("Earlier recovered warning")).toBeInTheDocument();
 
 		rerender(<ChatWorkspace snapshot={structuredClone(snapshot)} />);
-		expect(screen.getByText(/Sign in again to keep going/)).toBeInTheDocument();
+		expect(screen.getByText("Provider access needs attention")).toBeInTheDocument();
 		expect(screen.getAllByText(/Provider access denied/)).toHaveLength(1);
 
 		rerender(
@@ -195,12 +195,12 @@ describe("provider state chrome", () => {
 			/>,
 		);
 		expect(screen.getAllByText(/Provider access denied/)).toHaveLength(1);
-		expect(screen.queryByText("Session expired.")).not.toBeInTheDocument();
+		expect(screen.getByText("Session expired.")).toBeInTheDocument();
 	});
 
-	it("puts the credential demand above everything else that is wrong", () => {
+	it("keeps credential recovery available when the failure is not in loaded history", () => {
 		render(<ChatWorkspace snapshot={chatFixtureReauth} />);
-		expect(screen.getByRole("alert")).toHaveTextContent(/Sign in again to keep going/);
+		expect(screen.getByRole("alert")).toHaveTextContent(/Sign in to continue/);
 	});
 
 	it("reports a provider-side thread fault while the controller is healthy", () => {

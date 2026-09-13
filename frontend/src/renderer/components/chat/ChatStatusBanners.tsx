@@ -7,57 +7,58 @@
  * later turn failing for a reason that looks generic. A thread the provider has put
  * into `system_error` looks, from AO's side, like an agent that has gone quiet.
  *
- * They live above the scroller rather than in it because they are current state:
+ * They live outside the scroller because they are current state:
  * scrolling away from them must not scroll away from the reason the session is
  * stuck.
  */
 
 import { memo } from "react";
-import { KeyRound, Plug, RefreshCw, TriangleAlert } from "lucide-react";
+import { Plug, RefreshCw, TriangleAlert } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import type { ConversationAccount, ConversationThreadState, McpServer } from "../../types/conversation";
 
 /**
- * The provider will not do any more work until someone signs in.
- *
- * The loudest thing on the surface, on purpose: nothing else the user does will
- * help, and every turn they send until they fix it will fail. It names the command
- * because "re-authenticate" is not an action anyone can take — the credentials live
- * with the agent's own CLI, not with AO, which is exactly why the daemon could not
- * fix this itself.
+ * Compact recovery guidance beside the composer. Auth-required may mean an access
+ * restriction rather than expired credentials; preserve the provider's reason and
+ * only offer a terminal sign-in command when it asks for authentication.
  */
 export const ReauthBanner = memo(function ReauthBanner({
 	account,
 	harness,
+	reasonInTimeline = false,
 }: {
 	account: ConversationAccount;
 	harness: string;
+	reasonInTimeline?: boolean;
 }) {
 	if (!account.reauthRequiredAt) return null;
 	const command = signInCommand(harness);
+	const reason = account.reauthReason?.trim();
+	// Access denials can share the provider's auth-required code. Do not turn
+	// those into a sign-in instruction unless the provider actually requests it.
+	const signInRequested = !reason || /\/(?:login|logout)\b|\b(?:sign[ -]?in|log[ -]?in)\b|(?:token|credential|session).{0,30}(?:expired|invalid)/i.test(reason);
 
 	return (
 		<div
 			role="alert"
-			className="flex shrink-0 items-start gap-2.5 border-b border-destructive/40 bg-destructive/10 px-4 py-3"
+			className="py-2 text-xs leading-relaxed text-muted-foreground"
 		>
-			<KeyRound aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-destructive" />
 			<div className="flex min-w-0 flex-col gap-1">
-				<strong className="text-xs font-semibold text-destructive">
-					Sign in again to keep going
+				<strong className="font-medium text-foreground">
+					{signInRequested ? "Sign in to continue" : "Provider access needs attention"}
 				</strong>
-				<p className="text-[11px] leading-relaxed text-foreground">
-					The provider needs you to sign in again before continuing.
-				</p>
-				<p className="text-[11px] leading-relaxed text-muted-foreground">
-					{command ? (
+				{reason && !reasonInTimeline ? <p className="whitespace-pre-wrap break-words">{reason}</p> : null}
+				<p>
+					{!signInRequested ? (
+						<>Follow the provider&rsquo;s access guidance{reasonInTimeline ? " above" : ""}, then retry your message.</>
+					) : command ? (
 						<>
 							Run{" "}
 							<code className="rounded bg-background px-1 py-0.5 font-mono text-[10.5px] text-foreground">
 								{command}
 							</code>{" "}
-							in a terminal, then send your message again.
+							in a terminal, then retry your message. Commands such as /login and /logout do not run in AO chat.
 						</>
 					) : (
 						<>

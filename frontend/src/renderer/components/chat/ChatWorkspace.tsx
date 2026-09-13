@@ -1339,12 +1339,8 @@ function ChatWorkspaceContent({
 					}
 					role="tabpanel"
 				>
-					{/* Ordered by what blocks what. A session that needs credentials cannot make
-				    progress at all, so it is stated first; the controller's own health next;
-				    then the two that degrade a session rather than stopping it. */}
-					{snapshot.account ? (
-						<ReauthBanner account={snapshot.account} harness={snapshot.harness} />
-					) : null}
+					{/* Connection and tool health stay above the timeline. Provider recovery
+					    guidance lives beside the composer, with the failure on its turn. */}
 					<ControllerBanner
 						controller={snapshot.controller}
 						transitioning={controllerTransitioning}
@@ -1401,6 +1397,16 @@ function ChatWorkspaceContent({
 								className="mx-auto flex w-full max-w-3xl flex-col gap-2 transition-[max-width] duration-500 ease-out data-[empty]:max-w-2xl"
 							>
 								{discarded > 0 ? <RolledBackNotice count={discarded} /> : null}
+								{snapshot.account ? (
+									<ReauthBanner
+										account={snapshot.account}
+										harness={snapshot.harness}
+										reasonInTimeline={snapshot.turns.some((entry) =>
+											entry.state === "failed" && Boolean(entry.errorMessage?.trim()) &&
+											entry.errorMessage?.trim() === snapshot.account?.reauthReason?.trim(),
+										)}
+									/>
+								) : null}
 								<ChatComposer
 									key={`${draftScopeKey}:${queueEdit ? `${queueEdit.turnId}:${queueEdit.ownerId ?? queueEdit.expectedRevision ?? "legacy"}` : "composer"}`}
 									queuedDock={composerQueuedDock}

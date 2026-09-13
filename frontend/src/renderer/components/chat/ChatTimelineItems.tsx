@@ -285,16 +285,27 @@ function TwoRowTimelineMarker({
 	detailTone?: string;
 	action?: ReactNode;
 }) {
+	if (fullDetail) {
+		return (
+			<div className="flex min-w-0 flex-col gap-2 py-3">
+				<div className={cn("flex items-baseline justify-between gap-3 text-sm font-medium", tone)}>
+					<span>{message}</span>
+					{action}
+				</div>
+				{detail ? <div className="whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed text-foreground">{linkifiedProviderErrorText(detail)}</div> : null}
+			</div>
+		);
+	}
 	return (
 		<div className="flex min-w-0 flex-col gap-1 py-1">
 			<div className={cn("flex min-w-0 items-baseline gap-2 text-[11px]", tone)}>
 				<span className="shrink-0">{message}</span>
 				{detail ? (
 					<span
-						className={cn("min-w-0", fullDetail ? "wrap-anywhere whitespace-pre-wrap" : "truncate", detailTone)}
+						className={cn("min-w-0 truncate", detailTone)}
 						title={detail}
 					>
-						{fullDetail ? linkifiedProviderErrorText(detail) : detail}
+						{detail}
 					</span>
 				) : null}
 				{action}
