@@ -124,5 +124,8 @@ describe("native-composition transparency cascade", () => {
 		expect(topbarRule?.body).toMatch(
 			/grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 240px\) minmax\(0, 1fr\)/,
 		);
+		expect(css).toMatch(
+			/@container inspector \(max-width: 360px\)[\s\S]*?\.session-inspector__topbar--browser\s*{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 180px\) minmax\(0, 1fr\)/,
+		);
 	});
 });

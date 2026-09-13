@@ -3568,6 +3568,14 @@ html.sidebar-reordering * {
 	justify-self: end;
 }
 
+/* Compact inspector chrome needs a smaller center track, not application zoom.
+   Keep the field centered while giving the tab controls room on both sides. */
+@container inspector (max-width: 360px) {
+	.session-inspector__topbar--browser {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 180px) minmax(0, 1fr);
+	}
+}
+
 .session-inspector__tab-button {
 	flex: none;
 	gap: 0;

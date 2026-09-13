@@ -11,12 +11,20 @@ async function expectAddressCentered(page: Page) {
 		.toBeLessThanOrEqual(1);
 }
 
-test("@P0 browser address remains centered at normal and enlarged renderer scales", async ({ page }) => {
+async function expectAddressWidth(page: Page, width: number) {
+	await expect
+		.poll(async () => (await page.getByTestId("browser-address-bar").boundingBox())?.width)
+		.toBe(width);
+}
+
+test("@P0 browser address remains centered and narrows with the compact inspector", async ({ page }) => {
 	await page.goto("/#/projects/ao-demo/sessions/demo-working");
 	await page.locator("#inspector").getByRole("tab", { name: "Browser" }).click();
 	await expect(page.getByTestId("browser-address-bar")).toBeVisible();
 
 	await expectAddressCentered(page);
+	await expectAddressWidth(page, 240);
 	await page.setViewportSize({ width: 960, height: 720 });
 	await expectAddressCentered(page);
+	await expectAddressWidth(page, 180);
 });
