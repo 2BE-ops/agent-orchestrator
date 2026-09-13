@@ -651,6 +651,17 @@ func (s *Service) Start(ctx context.Context, cfg StartConfig) (*Controller, erro
 				cleanupUnpublishedConversation(conv, false)
 				return nil, err
 			}
+			// Older builds carried the predecessor's hook checkpoint across edits.
+			// The edit's timestamp proves those facts predate this continuation;
+			// newer or undated hooks still gate replay, as does its AO high-water mark.
+			if activeBranch.ReplacedTurnID != "" {
+				if !replayCheckpoint.latestUserPromptAt.IsZero() && replayCheckpoint.latestUserPromptAt.Before(activeBranch.CreatedAt) {
+					replayCheckpoint.latestUserPrompt = ""
+				}
+				if !replayCheckpoint.latestAssistantUpdateAt.IsZero() && replayCheckpoint.latestAssistantUpdateAt.Before(activeBranch.CreatedAt) {
+					replayCheckpoint.latestAssistantUpdate = ""
+				}
+			}
 		}
 		if cfg.RequireNativeHistory {
 			replayCheckpoint.captureAOHighWater(

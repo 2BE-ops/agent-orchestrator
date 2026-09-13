@@ -78,9 +78,21 @@ SET controller_generation = ?, updated_at = ?
 WHERE id = ? AND session_mode = 'chat';
 
 -- name: ActivateConversationBranchSession :execrows
+-- The branch and its native-history checkpoint have the same owner. A fork or
+-- branch activation cannot retain the previous native conversation's hook facts.
 UPDATE sessions
-SET provider_conversation_id = ?, controller_generation = ?, updated_at = ?
-WHERE id = ? AND session_mode = 'chat' AND is_terminated = 0;
+SET updated_at = sqlc.arg(updated_at),
+    latest_user_prompt = CASE WHEN provider_conversation_id = sqlc.arg(provider_conversation_id) THEN latest_user_prompt ELSE '' END,
+    latest_user_prompt_at = CASE WHEN provider_conversation_id = sqlc.arg(provider_conversation_id) THEN latest_user_prompt_at ELSE NULL END,
+    latest_assistant_update = CASE WHEN provider_conversation_id = sqlc.arg(provider_conversation_id) THEN latest_assistant_update ELSE '' END,
+    latest_assistant_update_at = CASE WHEN provider_conversation_id = sqlc.arg(provider_conversation_id) THEN latest_assistant_update_at ELSE NULL END,
+    native_transcript_path = CASE WHEN provider_conversation_id = sqlc.arg(provider_conversation_id) THEN native_transcript_path ELSE '' END,
+    agent_session_id = sqlc.arg(provider_conversation_id),
+    agent_session_id_launch_id = '',
+    native_identity_observed_at = sqlc.arg(updated_at),
+    provider_conversation_id = sqlc.arg(provider_conversation_id),
+    controller_generation = sqlc.arg(controller_generation)
+WHERE id = sqlc.arg(id) AND session_mode = 'chat' AND is_terminated = 0;
 
 -- name: CommitSessionControllerEpoch :execrows
 -- Lifecycle Manager owns this controller-epoch fact. The source-mode CAS keeps

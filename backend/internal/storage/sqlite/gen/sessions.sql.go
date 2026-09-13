@@ -15,22 +15,34 @@ import (
 
 const activateConversationBranchSession = `-- name: ActivateConversationBranchSession :execrows
 UPDATE sessions
-SET provider_conversation_id = ?, controller_generation = ?, updated_at = ?
-WHERE id = ? AND session_mode = 'chat' AND is_terminated = 0
+SET updated_at = ?1,
+    latest_user_prompt = CASE WHEN provider_conversation_id = ?2 THEN latest_user_prompt ELSE '' END,
+    latest_user_prompt_at = CASE WHEN provider_conversation_id = ?2 THEN latest_user_prompt_at ELSE NULL END,
+    latest_assistant_update = CASE WHEN provider_conversation_id = ?2 THEN latest_assistant_update ELSE '' END,
+    latest_assistant_update_at = CASE WHEN provider_conversation_id = ?2 THEN latest_assistant_update_at ELSE NULL END,
+    native_transcript_path = CASE WHEN provider_conversation_id = ?2 THEN native_transcript_path ELSE '' END,
+    agent_session_id = ?2,
+    agent_session_id_launch_id = '',
+    native_identity_observed_at = ?1,
+    provider_conversation_id = ?2,
+    controller_generation = ?3
+WHERE id = ?4 AND session_mode = 'chat' AND is_terminated = 0
 `
 
 type ActivateConversationBranchSessionParams struct {
+	UpdatedAt              time.Time
 	ProviderConversationID string
 	ControllerGeneration   string
-	UpdatedAt              time.Time
 	ID                     domain.SessionID
 }
 
+// The branch and its native-history checkpoint have the same owner. A fork or
+// branch activation cannot retain the previous native conversation's hook facts.
 func (q *Queries) ActivateConversationBranchSession(ctx context.Context, arg ActivateConversationBranchSessionParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, activateConversationBranchSession,
+		arg.UpdatedAt,
 		arg.ProviderConversationID,
 		arg.ControllerGeneration,
-		arg.UpdatedAt,
 		arg.ID,
 	)
 	if err != nil {
