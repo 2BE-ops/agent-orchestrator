@@ -36,7 +36,14 @@ export function DaemonStartupLoader() {
 
 	useEffect(() => {
 		let active = true;
-		void aoBridge.updates.isPostUpdateRelaunch().then((value) => {
+		// Defensive: the loader must render even when the updates bridge is absent
+		// (web fallback, or a test/preload stub without this namespace). A missing
+		// signal simply means "not a post-update relaunch".
+		const isPostUpdateRelaunch = aoBridge.updates?.isPostUpdateRelaunch;
+		if (typeof isPostUpdateRelaunch !== "function") {
+			return;
+		}
+		void isPostUpdateRelaunch().then((value) => {
 			if (active) setPostUpdate(value);
 		});
 		return () => {
