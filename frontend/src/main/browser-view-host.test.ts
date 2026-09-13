@@ -3,10 +3,10 @@ import { net } from "electron";
 import {
 	type BrowserNavState,
 	type BrowserTabsState,
-	browserPageUserAgent,
 	browserShortcutAction,
 	clampBoundsToWindow,
 	createBrowserViewHost,
+	isBrowserPermissionAllowed,
 	isAllowedBrowserURL,
 	normalizeBrowserURL,
 	sanitizeBrowserTitle,
@@ -24,26 +24,33 @@ import {
 import type { BrowserAnnotationDraft } from "../shared/browser-annotations";
 import { parseAgentBrowserJSON } from "./agent-browser-runtime";
 
-describe("browser page user agent", () => {
-	it("identifies the real Chromium engine without Electron application tokens", () => {
-		const userAgent = browserPageUserAgent("darwin", "130.0.6723.191");
-		expect(userAgent).toBe(
-			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.191 Safari/537.36",
-		);
-		expect(userAgent).not.toMatch(/Electron|AgentOrchestrator/);
-	});
-
-	it.each([
-		["win32", "Windows NT 10.0; Win64; x64"],
-		["linux", "X11; Linux x86_64"],
-	] as const)("uses the reduced %s platform identity", (platform, expected) => {
-		expect(browserPageUserAgent(platform, "130.0.0.0")).toContain(`(${expected})`);
-	});
-});
-
 vi.mock("electron", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("electron")>();
 	return { ...actual, net: { fetch: vi.fn() } };
+});
+
+describe("browser permission policy", () => {
+	it.each([
+		"local-network",
+		"local-network-access",
+		"loopback-network",
+		"storage-access",
+		"top-level-storage-access",
+		"persistent-storage",
+	])("allows the ordinary browser capability %s", (permission) => {
+		expect(isBrowserPermissionAllowed(permission)).toBe(true);
+	});
+
+	it.each(["camera", "media", "geolocation", "notifications", "hid", "serial", "usb"])(
+		"denies sensitive device capability %s",
+		(permission) => {
+			expect(isBrowserPermissionAllowed(permission)).toBe(false);
+		},
+	);
+
+	it("fails closed when Chromium introduces an unclassified permission", () => {
+		expect(isBrowserPermissionAllowed("future-browser-capability")).toBe(false);
+	});
 });
 
 describe("browser URL sanitization", () => {
@@ -156,8 +163,6 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 	});
 	const setPermissionCheckHandler = vi.fn();
 	const setPermissionRequestHandler = vi.fn();
-	const setUserAgent = vi.fn();
-	const setSessionUserAgent = vi.fn();
 	const webContents = {
 		id: 99,
 		mainFrame: { frameToken: "preview-frame" },
@@ -200,7 +205,6 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 		focus: vi.fn(),
 		reload: vi.fn(),
 		send: vi.fn(),
-		setUserAgent,
 		setWindowOpenHandler: (handler: (details: { url: string }) => { action: string }) => {
 			windowOpenHandler = handler;
 		},
@@ -211,7 +215,6 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 		session: {
 			setPermissionCheckHandler,
 			setPermissionRequestHandler,
-			setUserAgent: setSessionUserAgent,
 		},
 	};
 	const view = {
@@ -354,8 +357,6 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 		sent,
 		setPermissionCheckHandler,
 		setPermissionRequestHandler,
-		setUserAgent,
-		setSessionUserAgent,
 		shellFocus,
 		shellSend,
 		openDevTools,
@@ -399,17 +400,6 @@ describe("browser screenshots", () => {
 			"Browser tab is unavailable",
 		);
 		expect(writeImage).not.toHaveBeenCalled();
-	});
-});
-
-describe("browser page identity", () => {
-	it("sets the Chromium identity on the session and tab before navigation", async () => {
-		const { invoke, setUserAgent, setSessionUserAgent } = setupHost();
-
-		await invoke("browser:ensure", "sess-1");
-
-		expect(setSessionUserAgent).toHaveBeenCalledWith(browserPageUserAgent());
-		expect(setUserAgent).toHaveBeenCalledWith(browserPageUserAgent());
 	});
 });
 
@@ -1817,15 +1807,23 @@ describe("agent browser runtime", () => {
 		expect(result).toMatchObject({ text: "t1" });
 	});
 
-	it("denies browser-partition permissions by default", async () => {
+	it("allows ordinary browser permissions while denying sensitive device access", async () => {
 		const { host, setPermissionCheckHandler, setPermissionRequestHandler } = setupHost();
 		await host.execute("sess-1", "tabs");
 
 		expect(setPermissionCheckHandler).toHaveBeenCalledWith(expect.any(Function));
-		expect(setPermissionCheckHandler.mock.calls[0][0]()).toBe(false);
-		const callback = vi.fn();
-		setPermissionRequestHandler.mock.calls[0][0]({}, "camera", callback);
-		expect(callback).toHaveBeenCalledWith(false);
+		const check = setPermissionCheckHandler.mock.calls[0][0];
+		expect(check({}, "local-network-access")).toBe(true);
+		expect(check({}, "storage-access")).toBe(true);
+		expect(check({}, "camera")).toBe(false);
+
+		const request = setPermissionRequestHandler.mock.calls[0][0];
+		const allowed = vi.fn();
+		request({}, "loopback-network", allowed);
+		expect(allowed).toHaveBeenCalledWith(true);
+		const denied = vi.fn();
+		request({}, "geolocation", denied);
+		expect(denied).toHaveBeenCalledWith(false);
 	});
 
 	it("rounds every native browser tab view to match the renderer shell", async () => {

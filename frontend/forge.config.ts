@@ -124,6 +124,11 @@ const config: ForgeConfig = {
 		appBundleId: "dev.agent-orchestrator.desktop",
 		name: "Agent Orchestrator",
 		executableName: EXECUTABLE_NAME,
+		extendInfo: {
+			NSLocalNetworkUsageDescription:
+				"Agent Orchestrator needs local network access to open and test development servers in its browser.",
+			NSBonjourServices: ["_http._tcp", "_https._tcp"],
+		},
 		protocols: [AUTH_PROTOCOL],
 		appCategoryType: "public.app-category.developer-tools",
 		// App icon. electron-packager appends the per-platform extension

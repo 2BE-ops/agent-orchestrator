@@ -240,8 +240,7 @@ type BrowserWebContents = Pick<
 	openDevTools?: (options?: Pick<OpenDevToolsOptions, "mode" | "activate">) => void;
 	closeDevTools?: () => void;
 	close?: () => void;
-	setUserAgent?: (userAgent: string) => void;
-	session?: Pick<Session, "on" | "removeListener" | "setPermissionCheckHandler" | "setPermissionRequestHandler" | "setUserAgent" | "webRequest">;
+	session?: Pick<Session, "on" | "removeListener" | "setPermissionCheckHandler" | "setPermissionRequestHandler" | "webRequest">;
 };
 
 type BrowserElectronSession = NonNullable<BrowserWebContents["session"]>;
@@ -320,23 +319,33 @@ export type BrowserViewHostOptions = {
 	writeImageToClipboard?: (image: Electron.NativeImage) => Promise<void> | void;
 };
 
-/**
- * Browser pages should identify as the Chromium engine they actually run on.
- * Electron's default UA adds both the product name and an Electron token;
- * anti-bot systems treat that application-shell identity as automation even
- * when a human is operating the page. Chromium's reduced desktop UA uses a
- * stable platform token, so it remains consistent with UA client hints.
- */
-export function browserPageUserAgent(
-	platform: NodeJS.Platform = process.platform,
-	chromeVersion: string = process.versions.chrome ?? "0.0.0.0",
-): string {
-	const platformToken = platform === "darwin"
-		? "Macintosh; Intel Mac OS X 10_15_7"
-		: platform === "win32"
-			? "Windows NT 10.0; Win64; x64"
-			: "X11; Linux x86_64";
-	return `Mozilla/5.0 (${platformToken}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+type BrowserPermission = Parameters<
+	NonNullable<Parameters<Session["setPermissionCheckHandler"]>[0]>
+>[1];
+
+// Electron approves every permission by default, while AO previously denied
+// every permission. Both extremes are wrong for a user-facing browser: the
+// former exposes devices and location, while the latter breaks ordinary web
+// platform behavior (including Chromium's local-network and storage checks).
+// Explicitly permit the capabilities expected from AO's development browser;
+// macOS still applies its app-level local-network consent. Fail closed for
+// sensitive device access and newly introduced Chromium permission types.
+const ALLOWED_BROWSER_PERMISSIONS = new Set<BrowserPermission>([
+	"background-fetch",
+	"background-sync",
+	"clipboard-sanitized-write",
+	"fullscreen",
+	"local-network",
+	"local-network-access",
+	"loopback-network",
+	"periodic-background-sync",
+	"persistent-storage",
+	"storage-access",
+	"top-level-storage-access",
+]);
+
+export function isBrowserPermissionAllowed(permission: string): boolean {
+	return ALLOWED_BROWSER_PERMISSIONS.has(permission);
 }
 
 export type BrowserViewHost = {
@@ -567,7 +576,6 @@ export function scaleBoundsForZoom(rect: BrowserRect, zoomFactor: number): Brows
 }
 
 export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserViewHost {
-	const pageUserAgent = browserPageUserAgent();
 	const entries = new Map<string, BrowserSessionEntry>();
 	const signalWatchers = new Map<
 		BrowserElectronSession,
@@ -666,16 +674,15 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 				sandbox: true,
 			},
 		});
-		// Set both scopes before the first about:blank load. The WebContents value
-		// covers this tab immediately; the Session value also covers workers,
-		// service workers, and requests shared by tabs in the same AO profile.
-		view.webContents.session?.setUserAgent?.(pageUserAgent);
-		view.webContents.setUserAgent?.(pageUserAgent);
 		applyBrowserViewBounds(view, OFFSCREEN_BOUNDS, false);
 		options.mainWindow.contentView.addChildView(view);
 		view.setBorderRadius?.(BROWSER_VIEW_BORDER_RADIUS);
-		view.webContents.session?.setPermissionCheckHandler?.(() => false);
-		view.webContents.session?.setPermissionRequestHandler?.((_contents, _permission, callback) => callback(false));
+		view.webContents.session?.setPermissionCheckHandler?.((_contents, permission) =>
+			isBrowserPermissionAllowed(permission),
+		);
+		view.webContents.session?.setPermissionRequestHandler?.((_contents, permission, callback) =>
+			callback(isBrowserPermissionAllowed(permission)),
+		);
 		options.browserDownloadManager?.attach(view.webContents.session);
 		let scrollbarStyleKey: string | undefined;
 		let scrollbarStyleUpdate = Promise.resolve();
