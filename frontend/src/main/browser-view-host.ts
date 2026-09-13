@@ -1128,6 +1128,10 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 	}
 
 	const openUserTab = async (session: BrowserSessionEntry, url?: string): Promise<BrowserTabsState> => {
+		if (url && requiresSystemBrowserURL(url)) {
+			await options.shell.openExternal(url);
+			return listTabs(session);
+		}
 		if (!options.agentBrowserRuntime) {
 			await openTab(session, url, true);
 			return listTabs(session);
@@ -1455,6 +1459,10 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 		const normalized = normalizeBrowserURL(url);
 		if (!isAllowedBrowserURL(normalized.href, options.rendererOrigin)) {
 			throw new Error("Unsupported browser URL");
+		}
+		if (requiresSystemBrowserURL(normalized.href)) {
+			await options.shell.openExternal(normalized.href);
+			return pushNavState(options, entry);
 		}
 		if (!entry.annotationDraft || !isSameAnnotationPage(annotationDraftURL(entry.annotationDraft), normalized.href)) {
 			cancelAnnotation(options, entry, "navigation");

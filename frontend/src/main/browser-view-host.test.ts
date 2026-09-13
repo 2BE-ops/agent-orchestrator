@@ -398,6 +398,18 @@ describe("browser screenshots", () => {
 });
 
 describe("embedded Cloudflare navigation", () => {
+	it("does not create an embedded tab for agent or user opens", async () => {
+		const { invoke, openExternal } = setupHost();
+		await invoke("browser:ensure", "sess-1");
+
+		await invoke("browser:navigate", { viewId: "1:sess-1", url: "https://dash.cloudflare.com/login" });
+		await invoke("browser:openTab", { viewId: "1:sess-1", url: "https://dash.cloudflare.com/login" });
+
+		expect(openExternal).toHaveBeenCalledTimes(2);
+		expect(openExternal).toHaveBeenNthCalledWith(1, "https://dash.cloudflare.com/login");
+		expect(openExternal).toHaveBeenNthCalledWith(2, "https://dash.cloudflare.com/login");
+	});
+
 	it("hands same-tab login navigation to the system browser", async () => {
 		const { invoke, webContentsListeners, openExternal } = setupHost();
 		await invoke("browser:ensure", "sess-1");
