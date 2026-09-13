@@ -138,6 +138,13 @@ type SessionIDParam struct {
 	SessionID string `path:"sessionId" description:"Session identifier, e.g. project-1."`
 }
 
+// DeviceStreamParam identifies one short-lived embedded-device media route.
+// The opaque ticket is issued only after an authorized device attachment.
+type DeviceStreamParam struct {
+	Ticket  string `path:"ticket" description:"Opaque device stream capability."`
+	Channel string `path:"channel" enum:"mjpeg,avcc,config,health,input" description:"Allowlisted media or input channel."`
+}
+
 // AgentSwitchIDParam is the {switchId} path parameter for one durable switch saga.
 type AgentSwitchIDParam struct {
 	SwitchID string `path:"switchId" description:"Durable agent-switch identifier."`
