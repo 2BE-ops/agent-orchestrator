@@ -867,6 +867,9 @@ const (
 // bumps its revision; it never allocates a new timeline position per token.
 type ChatEvent struct {
 	Kind ChatEventKind
+	// NativeUserMessageID is an adapter-proven native user record identity.
+	// Unlike ProviderItemID, it is never synthesized or namespaced by AO.
+	NativeUserMessageID string
 	// ProviderEventID is an identity for this exact native event, when the
 	// provider supplies one. It is deliberately distinct from ProviderItemID:
 	// start, delta and completion events commonly share one item id.

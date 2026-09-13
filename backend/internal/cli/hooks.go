@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/activitydispatch"
@@ -55,6 +56,7 @@ type setActivityAPIRequest struct {
 	LatestAssistantUpdate        string                              `json:"latestAssistantUpdate,omitempty"`
 	ConversationCheckpointOrigin domain.ConversationCheckpointOrigin `json:"conversationCheckpointOrigin,omitempty"`
 	ProviderTurnID               string                              `json:"providerTurnId,omitempty"`
+	SubmissionID                 string                              `json:"submissionId,omitempty"`
 	TranscriptPath               string                              `json:"transcriptPath,omitempty"`
 	LaunchID                     string                              `json:"launchId,omitempty"`
 	Usage                        *usageHookMetadata                  `json:"usage,omitempty"`
@@ -253,6 +255,7 @@ func hookConversationFacts(agent domain.AgentHarness, event string, payload []by
 	var p struct {
 		Prompt               string `json:"prompt"`
 		TurnID               string `json:"turn_id"`
+		PromptID             string `json:"prompt_id"`
 		UserPrompt           string `json:"user_prompt"`
 		UserPromptCamel      string `json:"userPrompt"`
 		LastAssistantMessage string `json:"last_assistant_message"`
@@ -270,8 +273,15 @@ func hookConversationFacts(agent domain.AgentHarness, event string, payload []by
 	// Treating those copies as current main-thread facts can permanently make an
 	// otherwise healthy provider replay look incomplete.
 	if strings.TrimSpace(p.SubagentID) == "" {
-		if agent == domain.HarnessCodex && (event == "user-prompt-submit" || event == "stop") {
-			turnID = strings.TrimSpace(p.TurnID)
+		if event == "user-prompt-submit" || event == "stop" {
+			switch agent {
+			case domain.HarnessCodex:
+				turnID = strings.TrimSpace(p.TurnID)
+			case domain.HarnessClaudeCode:
+				// Queued submissions reuse the executing prompt's ID. Preserve it as
+				// native evidence; only the adapter can resolve its actual ancestry.
+				turnID = strings.TrimSpace(p.PromptID)
+			}
 			if len(turnID) > maxActivityMetaLen || domain.SanitizeControlChars(turnID) != turnID {
 				turnID = ""
 			}
@@ -452,6 +462,16 @@ func (c *commandContext) runHook(ctx context.Context, agent, event string) error
 	}
 	if hasActivity {
 		req.State = string(state)
+	}
+	if domain.AgentHarness(agent) == domain.HarnessClaudeCode && event == "user-prompt-submit" &&
+		launchID != "" && agentSessionID != "" && conversation.CheckpointOrigin != domain.ConversationCheckpointOriginUnknown {
+		req.SubmissionID = uuid.NewString()
+		output := sessionStartHookOutput{}
+		output.HookSpecificOutput.HookEventName = "UserPromptSubmit"
+		output.HookSpecificOutput.AdditionalContext = domain.NativeSubmissionContext(req.SubmissionID)
+		if err := json.NewEncoder(c.deps.Out).Encode(output); err != nil {
+			return fmt.Errorf("emit native submission correlation: %w", err)
+		}
 	}
 	if err := c.postActivityHook(ctx, path, req); err != nil {
 		// Surface the failure for diagnosis, but exit 0: a failed activity

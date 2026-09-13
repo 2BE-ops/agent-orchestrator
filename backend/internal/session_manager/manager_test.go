@@ -8726,13 +8726,16 @@ func TestSend_PaneFallbackCannotPairLostPromptHookWithPriorTrustedAssistant(t *t
 		t.Fatalf("read promoted checkpoint: ok=%v err=%v", ok, err)
 	}
 	promoted := afterHooks.Metadata
+	// Hooks without native identities cannot repair the missing witness, even
+	// after another prompt. Only transcript-backed admission can prove a pair.
 	if promoted.LatestUserPrompt != "later canonical prompt" ||
-		promoted.LatestAssistantUpdate != "new trusted answer" ||
-		promoted.ConversationCheckpointState != domain.ConversationCheckpointComplete ||
+		promoted.LatestAssistantUpdate != "" ||
+		promoted.ConversationCheckpointState != domain.ConversationCheckpointPrompt ||
 		promoted.ConversationCheckpointGeneration != "terminal-generation" ||
 		promoted.ConversationCheckpointNativeID != "native-1" ||
-		promoted.ConversationCheckpointUnsettled {
-		t.Fatalf("canonical hook promotion = %+v", promoted)
+		!promoted.ConversationCheckpointUnsettled ||
+		!strings.Contains(promoted.NativeCheckpointEvidence, `"invalid":true`) {
+		t.Fatalf("unproven canonical hooks certified completion: %+v", promoted)
 	}
 }
 
@@ -8984,12 +8987,13 @@ func TestSend_PaneFallbackWinsAgainstStaleLifecycleProjection(t *testing.T) {
 		t.Fatalf("read later canonical checkpoint: ok=%v err=%v", ok, err)
 	}
 	if promoted.Metadata.LatestUserPrompt != "later canonical prompt" ||
-		promoted.Metadata.LatestAssistantUpdate != "later canonical answer" ||
-		promoted.Metadata.ConversationCheckpointState != domain.ConversationCheckpointComplete ||
+		promoted.Metadata.LatestAssistantUpdate != "" ||
+		promoted.Metadata.ConversationCheckpointState != domain.ConversationCheckpointPrompt ||
 		promoted.Metadata.ConversationCheckpointGeneration != "terminal-generation" ||
 		promoted.Metadata.ConversationCheckpointNativeID != "native-1" ||
-		promoted.Metadata.ConversationCheckpointUnsettled {
-		t.Fatalf("later canonical hook promotion = %+v", promoted.Metadata)
+		!promoted.Metadata.ConversationCheckpointUnsettled ||
+		!strings.Contains(promoted.Metadata.NativeCheckpointEvidence, `"invalid":true`) {
+		t.Fatalf("unproven later canonical hooks certified completion: %+v", promoted.Metadata)
 	}
 }
 

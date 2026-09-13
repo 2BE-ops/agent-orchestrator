@@ -389,6 +389,7 @@ type nativeHistoryHighWater struct {
 // completed while Chat was not attached; the AO high-water mark covers an
 // immediate round trip before a resumed TUI has emitted another hook.
 type nativeHistoryCheckpoint struct {
+	nativeBoundary        *ports.NativeCheckpointBoundary
 	latestUserPrompt      string
 	latestAssistantUpdate string
 	completedUserPrompt   bool
@@ -628,6 +629,21 @@ func (p nativeHistoryCheckpoint) mismatches(
 				(p.providerTurnID == "" || p.providerTurnID == latestCompletedTurnID)
 	}
 	mismatches := append([]ports.ChatHistoryMismatchDimension(nil), p.hardMismatches...)
+	if boundary := p.nativeBoundary; boundary != nil {
+		matched := false
+		for turnID, text := range turnText {
+			if completedTurns[turnID] && boundary.UserMessageID != "" &&
+				text.user.NativeUserMessageID == boundary.UserMessageID &&
+				nativeHistoryTextMatches(boundary.UserText, text.user.Text) &&
+				nativeHistoryTextMatches(boundary.AssistantText, text.assistant.Text) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			mismatches = append(mismatches, ports.ChatHistoryMismatchTrustedTurn)
+		}
+	}
 	if !checkpointMatched {
 		if p.providerTurnID != "" {
 			mismatches = append(mismatches, ports.ChatHistoryMismatchTrustedTurn)
@@ -697,16 +713,7 @@ func nativeHistoryCoordinationMessage(text string) bool {
 }
 
 func nativeHistoryTextMatches(checkpoint, replayed string) bool {
-	checkpoint = strings.TrimSpace(checkpoint)
-	replayed = strings.TrimSpace(replayed)
-	if checkpoint == replayed {
-		return true
-	}
-	// Hook payloads are bounded before persistence. Preserve their head+tail
-	// evidence without requiring a provider replay to reproduce AO's marker.
-	const marker = "\n[... truncated by AO ...]\n"
-	parts := strings.Split(checkpoint, marker)
-	return len(parts) == 2 && strings.HasPrefix(replayed, parts[0]) && strings.HasSuffix(replayed, parts[1])
+	return domain.NativeCheckpointTextMatches(checkpoint, replayed)
 }
 
 // readNativeHistory loads and reconciles the settled provider thread without

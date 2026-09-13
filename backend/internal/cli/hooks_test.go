@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/pricing"
 )
@@ -24,7 +26,78 @@ type activityCapture struct {
 	hits int
 }
 
-func TestHookConversationFactsCodexTurnIdentity(t *testing.T) {
+func TestClaudeSubmissionContextMatchesDurableNonce(t *testing.T) {
+	t.Setenv("AO_SESSION_ID", "qa-1")
+	t.Setenv("AO_RUNTIME_LAUNCH_ID", "launch-1")
+	cfg := setConfigEnv(t)
+	srv, capture := activityServer(t, http.StatusOK, `{"ok":true}`)
+	writeRunFileFor(t, cfg, srv)
+	previous := ""
+	for i := 0; i < 2; i++ {
+		stdout, _, err := executeCLI(t, Deps{
+			In:           strings.NewReader(`{"session_id":"native","prompt_id":"same-running-prompt","prompt":"continue"}`),
+			ProcessAlive: func(int) bool { return true },
+		}, "hooks", "claude-code", "user-prompt-submit")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var request setActivityAPIRequest
+		var output sessionStartHookOutput
+		if err := json.Unmarshal([]byte(capture.body), &request); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal([]byte(stdout), &output); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := uuid.Parse(request.SubmissionID); err != nil {
+			t.Fatal(err)
+		}
+		if request.SubmissionID == previous || output.HookSpecificOutput.HookEventName != "UserPromptSubmit" ||
+			output.HookSpecificOutput.AdditionalContext != domain.NativeSubmissionContext(request.SubmissionID) {
+			t.Fatalf("submission identity mismatch: request=%+v output=%+v", request, output)
+		}
+		previous = request.SubmissionID
+	}
+}
+
+func TestClaudeSubmissionRetryReusesContextNonce(t *testing.T) {
+	t.Setenv("AO_SESSION_ID", "qa-1")
+	t.Setenv("AO_RUNTIME_LAUNCH_ID", "launch-1")
+	cfg := setConfigEnv(t)
+	var requests []setActivityAPIRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request setActivityAPIRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+		}
+		requests = append(requests, request)
+		w.Header().Set("Content-Type", "application/json")
+		if len(requests) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, `{"code":"ACTIVITY_PROJECTION_BUSY","message":"retry","requestId":"nonce-retry"}`)
+		} else {
+			_, _ = io.WriteString(w, `{"ok":true}`)
+		}
+	}))
+	defer srv.Close()
+	writeRunFileFor(t, cfg, srv)
+	stdout, _, err := executeCLI(t, Deps{
+		In: strings.NewReader(`{"session_id":"native","prompt":"continue"}`), ProcessAlive: func(int) bool { return true },
+	}, "hooks", "claude-code", "user-prompt-submit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output sessionStartHookOutput
+	if err := json.Unmarshal([]byte(stdout), &output); err != nil {
+		t.Fatal(err)
+	}
+	if len(requests) != 2 || requests[0].SubmissionID == "" || requests[0].SubmissionID != requests[1].SubmissionID ||
+		output.HookSpecificOutput.AdditionalContext != domain.NativeSubmissionContext(requests[0].SubmissionID) {
+		t.Fatalf("retry changed submission identity: %+v", requests)
+	}
+}
+
+func TestHookConversationFactsNativeTurnIdentity(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
 		harness domain.AgentHarness
@@ -37,6 +110,13 @@ func TestHookConversationFactsCodexTurnIdentity(t *testing.T) {
 		{"subagent", domain.HarnessCodex, "stop", `{"turn_id":"turn-1","agent_id":"child"}`, ""},
 		{"unrelated event", domain.HarnessCodex, "post-tool-use", `{"turn_id":"turn-1"}`, ""},
 		{"other provider", domain.HarnessClaudeCode, "stop", `{"turn_id":"turn-1"}`, ""},
+		{"Claude prompt", domain.HarnessClaudeCode, "user-prompt-submit", `{"prompt":"continue","prompt_id":"prompt-1"}`, "prompt-1"},
+		{"Claude stop", domain.HarnessClaudeCode, "stop", `{"prompt_id":"prompt-1","turn_id":"unrelated"}`, "prompt-1"},
+		{"Claude subagent", domain.HarnessClaudeCode, "stop", `{"prompt_id":"prompt-1","agent_id":"child"}`, ""},
+		{"Claude unrelated event", domain.HarnessClaudeCode, "post-tool-use", `{"prompt_id":"prompt-1"}`, ""},
+		{"Claude missing ID", domain.HarnessClaudeCode, "stop", `{}`, ""},
+		{"Claude invalid ID", domain.HarnessClaudeCode, "stop", `{"prompt_id":"bad\u001b[0mid"}`, ""},
+		{"Claude oversized ID", domain.HarnessClaudeCode, "stop", `{"prompt_id":"` + strings.Repeat("a", 257) + `"}`, ""},
 		{"missing ID", domain.HarnessCodex, "stop", `{}`, ""},
 		{"oversized ID", domain.HarnessCodex, "stop", `{"turn_id":"` + strings.Repeat("a", 257) + `"}`, ""},
 	} {

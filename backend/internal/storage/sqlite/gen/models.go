@@ -597,6 +597,7 @@ type Session struct {
 	ConversationCheckpointUnsettled  bool
 	ConversationCheckpointTurnID     string
 	Revision                         int64
+	NativeCheckpointEvidence         string
 }
 
 type SessionCleanupFact struct {

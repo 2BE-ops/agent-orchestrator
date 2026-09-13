@@ -62,6 +62,8 @@ type ActivitySignal struct {
 	ConversationCheckpointOrigin domain.ConversationCheckpointOrigin
 	// ProviderTurnID identifies the main turn reported by a native hook.
 	ProviderTurnID string
+	// SubmissionID identifies AO's per-invocation prompt-hook context attachment.
+	SubmissionID string
 	// TranscriptPath is a read-only provider-native transcript reference when
 	// the hook exposes one. AO stores the path, never rewrites the transcript.
 	TranscriptPath string

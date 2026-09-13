@@ -64,6 +64,7 @@ UPDATE sessions SET
     conversation_checkpoint_generation = '',
     conversation_checkpoint_native_id = '',
     conversation_checkpoint_turn_id = '',
+    native_checkpoint_evidence = '',
     conversation_checkpoint_unsettled = 0,
     latest_user_prompt = '',
     latest_assistant_update = '',
@@ -120,6 +121,7 @@ UPDATE sessions SET
     conversation_checkpoint_generation = '',
     conversation_checkpoint_native_id = '',
     conversation_checkpoint_turn_id = '',
+    native_checkpoint_evidence = '',
     conversation_checkpoint_unsettled = 0,
     latest_user_prompt = '',
     latest_assistant_update = '',
@@ -1140,22 +1142,23 @@ UPDATE sessions SET
     conversation_checkpoint_native_id = ?11,
     conversation_checkpoint_unsettled = ?12,
     conversation_checkpoint_turn_id = ?13,
-    native_transcript_path = ?14,
-    updated_at = ?15
-WHERE sessions.id = ?16
-  AND sessions.revision = ?17
+    native_checkpoint_evidence = ?14,
+    native_transcript_path = ?15,
+    updated_at = ?16
+WHERE sessions.id = ?17
+  AND sessions.revision = ?18
   AND sessions.is_terminated = 0
-  AND sessions.harness = ?18
-  AND sessions.session_mode = ?19
+  AND sessions.harness = ?19
+  AND sessions.session_mode = ?20
   AND (
       (
-          ?19 <> 'chat'
-          AND sessions.runtime_launch_id = ?20
+          ?20 <> 'chat'
+          AND sessions.runtime_launch_id = ?21
       )
       OR
       (
-          ?19 = 'chat'
-          AND sessions.controller_generation = ?21
+          ?20 = 'chat'
+          AND sessions.controller_generation = ?22
       )
   )
   AND NOT EXISTS (
@@ -1183,6 +1186,7 @@ type UpdateSessionFromActivitySignalParams struct {
 	ConversationCheckpointNativeID   string
 	ConversationCheckpointUnsettled  bool
 	ConversationCheckpointTurnID     string
+	NativeCheckpointEvidence         string
 	NativeTranscriptPath             string
 	UpdatedAt                        time.Time
 	ID                               domain.SessionID
@@ -1213,6 +1217,7 @@ func (q *Queries) UpdateSessionFromActivitySignal(ctx context.Context, arg Updat
 		arg.ConversationCheckpointNativeID,
 		arg.ConversationCheckpointUnsettled,
 		arg.ConversationCheckpointTurnID,
+		arg.NativeCheckpointEvidence,
 		arg.NativeTranscriptPath,
 		arg.UpdatedAt,
 		arg.ID,

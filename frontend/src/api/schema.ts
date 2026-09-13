@@ -4042,6 +4042,8 @@ export interface components {
              * @enum {string}
              */
             state?: "active" | "idle" | "waiting_input" | "blocked" | "exited";
+            /** @description AO prompt-hook context correlation UUID, when supported. */
+            submissionId?: string;
             /** @description Native tool name, for tool-use hook events. */
             toolName?: string;
             /** @description Native tool-use id, for tool-use hook events. */

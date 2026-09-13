@@ -24,6 +24,7 @@ func TestSessionInterfaceTransitionClaimModeCASAndOutbox(t *testing.T) {
 	rec.Metadata.LatestAssistantUpdate = "poisoned assistant checkpoint"
 	rec.Metadata.ConversationCheckpointState = domain.ConversationCheckpointLegacy
 	rec.Metadata.ConversationCheckpointUnsettled = true
+	rec.Metadata.NativeCheckpointEvidence = "owned-native-observations"
 	createdSession, err := st.CreateSession(ctx, rec)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
@@ -263,6 +264,7 @@ func TestCommitSessionControllerEpochRetiresCheckpointWithoutErasingLastHumanTim
 		after.Metadata.ConversationCheckpointGeneration != "" ||
 		after.Metadata.ConversationCheckpointNativeID != "" ||
 		after.Metadata.ConversationCheckpointTurnID != "" ||
+		after.Metadata.NativeCheckpointEvidence != "" ||
 		after.Metadata.ConversationCheckpointUnsettled {
 		t.Fatalf("Terminal epoch retained source replay checkpoint: %+v", after.Metadata)
 	}

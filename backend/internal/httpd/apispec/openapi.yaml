@@ -11374,6 +11374,10 @@ components:
           - blocked
           - exited
           type: string
+        submissionId:
+          description: AO prompt-hook context correlation UUID, when supported.
+          maxLength: 36
+          type: string
         toolName:
           description: Native tool name, for tool-use hook events.
           type: string

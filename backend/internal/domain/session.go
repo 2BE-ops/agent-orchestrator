@@ -105,6 +105,7 @@ type SessionMetadata struct {
 	ConversationCheckpointGeneration string                      `json:"-"`
 	ConversationCheckpointNativeID   string                      `json:"-"`
 	ConversationCheckpointTurnID     string                      `json:"-"`
+	NativeCheckpointEvidence         string                      `json:"-"`
 	// ConversationCheckpointUnsettled records a scoped Stop that could not be
 	// correlated with a prompt boundary. Without a provider turn identity there
 	// is no collision-safe way to prove native replay crossed that boundary, so a

@@ -525,6 +525,7 @@ func (m *Manager) ApplyActivitySignal(ctx context.Context, id domain.SessionID, 
 	s.LaunchID = strings.TrimSpace(s.LaunchID)
 	s.ControllerGeneration = strings.TrimSpace(s.ControllerGeneration)
 	s.ProviderTurnID = strings.TrimSpace(s.ProviderTurnID)
+	s.SubmissionID = strings.TrimSpace(s.SubmissionID)
 	if !s.ConversationCheckpointOrigin.Valid() {
 		s.ConversationCheckpointOrigin = domain.ConversationCheckpointOriginUnknown
 	}
@@ -678,6 +679,7 @@ retryProjection:
 		checkpoint.ConversationCheckpointTurnID = ""
 		if nativeIdentityChanged {
 			checkpoint.ConversationCheckpointUnsettled = false
+			checkpoint.NativeCheckpointEvidence = ""
 		}
 	}
 	ownerGeneration := ""
@@ -695,6 +697,25 @@ retryProjection:
 	if checkpointNativeID == "" && ownerGeneration != "" &&
 		rec.Metadata.AgentSessionIDLaunchID == ownerGeneration {
 		checkpointNativeID = rec.Metadata.AgentSessionID
+	}
+	claudeNativeBoundary := rec.Harness == domain.HarnessClaudeCode && mode == domain.SessionModeTUI &&
+		ownerGeneration != "" && checkpointNativeID != "" && (s.Event == "user-prompt-submit" || s.Event == "stop")
+	if claudeNativeBoundary {
+		if checkpoint.NativeCheckpointEvidence == "" && !nativeIdentityChanged &&
+			(rec.Metadata.ConversationCheckpointState.Trusted() || rec.Metadata.ConversationCheckpointUnsettled) {
+			// A pre-upgrade pending/ambiguous boundary has no retained native witness.
+			// Starting a new evidence journal must not silently discharge that debt.
+			checkpoint.NativeCheckpointEvidence = `{"invalid":true}`
+		}
+		text := s.LatestAssistantUpdate
+		if s.Event == "user-prompt-submit" {
+			text = s.LatestUserPrompt
+		}
+		checkpoint.NativeCheckpointEvidence = domain.AppendNativeCheckpoint(
+			checkpoint.NativeCheckpointEvidence, checkpointNativeID, domain.NativeCheckpointObservation{
+				Generation: ownerGeneration, PromptID: s.ProviderTurnID, Submission: s.Event == "user-prompt-submit", SubmissionID: s.SubmissionID,
+				Text: text, Coordination: s.ConversationCheckpointOrigin == domain.ConversationCheckpointOriginCoordination,
+			})
 	}
 	switch s.Event {
 	case "user-prompt-submit":
@@ -749,6 +770,14 @@ retryProjection:
 			}
 		}
 	case "stop":
+		if claudeNativeBoundary {
+			// A queued UserPromptSubmit reuses the executing prompt_id. Never certify
+			// its text with this Stop's answer; native ancestry resolves the pair at
+			// handoff, once the source is conclusively stopped.
+			checkpoint.ConversationCheckpointUnsettled = true
+			s.LatestAssistantUpdate = ""
+			break
+		}
 		coordinationStop := s.ConversationCheckpointOrigin == domain.ConversationCheckpointOriginCoordination ||
 			(checkpoint.ConversationCheckpointState == domain.ConversationCheckpointCoordination &&
 				ownerGeneration != "" && checkpointNativeID != "" &&
@@ -812,6 +841,7 @@ retryProjection:
 		checkpoint.ConversationCheckpointGeneration != rec.Metadata.ConversationCheckpointGeneration ||
 		checkpoint.ConversationCheckpointNativeID != rec.Metadata.ConversationCheckpointNativeID ||
 		checkpoint.ConversationCheckpointTurnID != rec.Metadata.ConversationCheckpointTurnID ||
+		checkpoint.NativeCheckpointEvidence != rec.Metadata.NativeCheckpointEvidence ||
 		checkpoint.ConversationCheckpointUnsettled != rec.Metadata.ConversationCheckpointUnsettled
 	metadataChanged := (s.AgentSessionID != "" && rec.Metadata.AgentSessionID != s.AgentSessionID) ||
 		(s.AgentSessionID != "" && rec.Metadata.AgentSessionIDLaunchID != s.LaunchID) ||

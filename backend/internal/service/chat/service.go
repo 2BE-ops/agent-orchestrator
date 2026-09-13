@@ -284,6 +284,7 @@ func (s *Service) Start(ctx context.Context, cfg StartConfig) (*Controller, erro
 	defer gate.unlock()
 
 	replayCheckpoint := nativeHistoryCheckpoint{}
+	nativeEvidence := ""
 	if cfg.RequireNativeHistory {
 		if s.sessions == nil {
 			return nil, errors.New("native history replay requires a session reader")
@@ -295,6 +296,7 @@ func (s *Service) Start(ctx context.Context, cfg StartConfig) (*Controller, erro
 		if !found {
 			return nil, ports.ErrSessionNotFound
 		}
+		nativeEvidence = rec.Metadata.NativeCheckpointEvidence
 		checkpointState := rec.Metadata.ConversationCheckpointState
 		if checkpointState == "" {
 			checkpointState = domain.ConversationCheckpointLegacy
@@ -304,6 +306,9 @@ func (s *Service) Start(ctx context.Context, cfg StartConfig) (*Controller, erro
 			rec.Metadata.ConversationCheckpointNativeID != ""
 		trusted := trustedProvenance &&
 			rec.Metadata.ConversationCheckpointNativeID == cfg.ProviderConversationID
+		if rec.Harness == domain.HarnessClaudeCode && trustedProvenance && nativeEvidence == "" {
+			replayCheckpoint.hardMismatches = append(replayCheckpoint.hardMismatches, ports.ChatHistoryMismatchUnsettledBoundary)
+		}
 		if rec.Metadata.ConversationCheckpointUnsettled ||
 			(checkpointState == domain.ConversationCheckpointComplete &&
 				strings.TrimSpace(rec.Metadata.LatestUserPrompt) == "" &&
@@ -367,6 +372,37 @@ func (s *Service) Start(ctx context.Context, cfg StartConfig) (*Controller, erro
 	driver, err := s.drivers.Driver(cfg.Harness)
 	if err != nil {
 		return nil, fmt.Errorf("chat driver for %s: %w", cfg.Harness, err)
+	}
+	if nativeEvidence != "" {
+		for _, mismatch := range replayCheckpoint.hardMismatches {
+			if mismatch == ports.ChatHistoryMismatchNativeIdentity {
+				return nil, &ports.ChatHistoryUnsettledError{Dimensions: replayCheckpoint.hardMismatches}
+			}
+		}
+		verifier, ok := driver.(ports.NativeCheckpointVerifier)
+		if !ok {
+			return nil, &ports.ChatHistoryUnsettledError{Dimensions: []ports.ChatHistoryMismatchDimension{ports.ChatHistoryMismatchUnsettledBoundary}}
+		}
+		boundary, verifyErr := verifyNativeCheckpoint(ctx, verifier, ports.NativeCheckpointRequest{
+			ProviderConversationID: cfg.ProviderConversationID, Env: cfg.Env, Evidence: nativeEvidence,
+		})
+		if verifyErr != nil {
+			return nil, verifyErr
+		}
+		// The provider proved every retained observation against exact native
+		// ancestry. Replace the hook-inferred text pair, not AO's high-water gate
+		// (which is populated later from the durable conversation).
+		verified := nativeHistoryCheckpoint{nativeBoundary: &boundary}
+		// Native Stop evidence does not waive a legacy/coordination prompt that
+		// strict policy still requires. Only explicit provider-history consent
+		// may drop those untrusted text dimensions.
+		if replayCheckpoint.userMismatch == ports.ChatHistoryMismatchUntrustedUserText {
+			verified.latestUserPrompt = replayCheckpoint.latestUserPrompt
+			verified.latestAssistantUpdate = replayCheckpoint.latestAssistantUpdate
+			verified.userMismatch = replayCheckpoint.userMismatch
+			verified.assistantMismatch = replayCheckpoint.assistantMismatch
+		}
+		replayCheckpoint = verified
 	}
 
 	var caps ports.ChatCapabilities
