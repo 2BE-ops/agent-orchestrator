@@ -231,6 +231,7 @@ type lifecycleRecorder interface {
 	CancelLaunch(id domain.SessionID, launchID string)
 	ReleaseLaunch(id domain.SessionID, launchID string)
 	MarkSpawned(ctx context.Context, id domain.SessionID, metadata domain.SessionMetadata) error
+	MarkChatReconnected(ctx context.Context, id domain.SessionID, metadata domain.SessionMetadata) error
 	MarkChatSpawned(ctx context.Context, id domain.SessionID, metadata domain.SessionMetadata, boundary domain.ConversationBranch) error
 	CommitControllerEpoch(ctx context.Context, id domain.SessionID, source, target domain.SessionMode, nativeConversationID string, startFresh bool) (bool, error)
 	ConfirmAgentSwitchSourceStopped(ctx context.Context, confirmation domain.AgentSwitchSourceStopConfirmation) (bool, error)
@@ -417,6 +418,11 @@ type Manager struct {
 	codexAccountSwitchObserver      func()
 	startupBackgroundReconcileDone  chan struct{}
 	startupBackgroundReconcileOnce  sync.Once
+	statusRecoveryMu                sync.RWMutex
+	statusRecoveryStartedAt         time.Time
+	statusRecoveryFailed            bool
+	statusRecoveryRevision          uint64
+	statusRecoveries                map[domain.SessionID]statusRecovery
 	agentOpMu                       sync.Mutex
 	agentOperations                 map[domain.SessionID]agentOperationKind
 	// switchDecisionInput opens a narrow human-only terminal lane while the
@@ -798,6 +804,8 @@ func New(d Deps) *Manager {
 		// default produced mixed-timezone timestamps in `ao session get`.
 		m.clock = func() time.Time { return time.Now().UTC() }
 	}
+	m.statusRecoveryStartedAt = m.clock()
+	m.statusRecoveries = make(map[domain.SessionID]statusRecovery)
 	if m.reconcileWorkers < 1 {
 		m.reconcileWorkers = 1
 	}
@@ -2163,6 +2171,18 @@ func (m *Manager) ResumeAgentWithMode(ctx context.Context, id domain.SessionID) 
 	if rec.IsTerminated {
 		return RestoreResult{}, fmt.Errorf("resume agent %s: %w", id, ErrTerminated)
 	}
+	if m.SessionStatusReadiness(rec) == "unavailable" {
+		m.beginStatusRecovery(id)
+		recoveryCtx, cancel := context.WithTimeout(ctx, statusVerificationLimit)
+		defer cancel()
+		err := m.reconcileLive(recoveryCtx, rec)
+		m.finishStatusRecovery(ctx, rec, err)
+		if err != nil {
+			return RestoreResult{}, err
+		}
+		current, err := m.getRecord(ctx, id)
+		return RestoreResult{Session: current, Mode: RestoreModeNative}, err
+	}
 	mode := domain.NormalizeSessionMode(rec.Mode)
 	if mode == domain.SessionModeChat && m.chat != nil && m.chat.HasLiveChatController(id) {
 		return RestoreResult{}, fmt.Errorf("resume agent %s: %w", id, ErrAgentNotExited)
@@ -2767,8 +2787,14 @@ func (m *Manager) ReconcileStartupSafety(ctx context.Context) error {
 // saved-session restoration passes. It is deliberately separate from the
 // startup safety pass so the daemon can serve durable SQLite-backed project
 // and session metadata while this best-effort work continues.
-func (m *Manager) ReconcileBackground(ctx context.Context) error {
-	defer m.startupBackgroundReconcileOnce.Do(func() { close(m.startupBackgroundReconcileDone) })
+func (m *Manager) ReconcileBackground(ctx context.Context) (resultErr error) {
+	defer func() {
+		m.statusRecoveryMu.Lock()
+		m.statusRecoveryFailed = resultErr != nil
+		m.statusRecoveryRevision++
+		m.statusRecoveryMu.Unlock()
+		m.startupBackgroundReconcileOnce.Do(func() { close(m.startupBackgroundReconcileDone) })
+	}()
 	recs, err := m.store.ListAllSessions(ctx)
 	if err != nil {
 		return fmt.Errorf("reconcile: list sessions: %w", err)
@@ -2810,6 +2836,9 @@ func (m *Manager) reconcileLivePass(ctx context.Context, recs []domain.SessionRe
 	// reaper until a worker dequeues them.
 	acquired, err := m.beginAgentOperations(ctx, ids, agentOperationReconcile)
 	if err != nil {
+		for _, rec := range candidates {
+			m.finishStatusRecovery(ctx, rec, err)
+		}
 		m.logger.Warn("reconcile: could not fence live sessions", "error", err)
 		return
 	}
@@ -2820,6 +2849,7 @@ func (m *Manager) reconcileLivePass(ctx context.Context, recs []domain.SessionRe
 	live := make([]domain.SessionRecord, 0, len(acquired))
 	for _, rec := range candidates {
 		if _, ok := acquiredSet[rec.ID]; !ok {
+			m.finishStatusRecovery(ctx, rec, ErrResumeInProgress)
 			m.logger.Warn("reconcile: session remains input-gated pending unambiguous agent-switch recovery", "sessionID", rec.ID)
 			continue
 		}
@@ -2839,10 +2869,14 @@ func (m *Manager) reconcileLivePass(ctx context.Context, recs []domain.SessionRe
 		go func() {
 			defer wg.Done()
 			for rec := range jobs {
+				m.beginStatusRecovery(rec.ID)
 				err := func() error {
 					defer m.endAgentOperation(rec.ID, agentOperationReconcile)
-					return m.reconcileLive(ctx, rec)
+					recoveryCtx, cancel := context.WithTimeout(ctx, statusVerificationLimit)
+					defer cancel()
+					return m.reconcileLive(recoveryCtx, rec)
 				}()
+				m.finishStatusRecovery(ctx, rec, err)
 				if err != nil {
 					m.logger.Error("reconcile: live pass failed, skipping", "sessionID", rec.ID, "error", err)
 				}

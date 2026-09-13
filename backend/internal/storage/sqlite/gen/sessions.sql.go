@@ -41,21 +41,21 @@ func (q *Queries) ActivateConversationBranchSession(ctx context.Context, arg Act
 
 const claimChatControllerGeneration = `-- name: ClaimChatControllerGeneration :execrows
 UPDATE sessions
-SET controller_generation = ?, updated_at = ?
+SET controller_generation = ?
 WHERE id = ? AND session_mode = 'chat'
 `
 
 type ClaimChatControllerGenerationParams struct {
 	ControllerGeneration string
-	UpdatedAt            time.Time
 	ID                   domain.SessionID
 }
 
 // A Chat controller claims ownership before its event goroutine starts. Provider
 // projections compare against this value in the same transaction as their write,
 // so an older controller cannot mutate a session after a replacement takes over.
+// Ownership changes are not activity and must not advance the board's recency.
 func (q *Queries) ClaimChatControllerGeneration(ctx context.Context, arg ClaimChatControllerGenerationParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, claimChatControllerGeneration, arg.ControllerGeneration, arg.UpdatedAt, arg.ID)
+	result, err := q.db.ExecContext(ctx, claimChatControllerGeneration, arg.ControllerGeneration, arg.ID)
 	if err != nil {
 		return 0, err
 	}

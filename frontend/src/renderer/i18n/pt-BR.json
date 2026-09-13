@@ -1,4 +1,7 @@
 {
+	"session.statusChecking": "Verificando…",
+	"session.statusUnavailable": "Não foi possível verificar",
+	"session.retryStatus": "Verificar status novamente",
 	"activity.active": "Em andamento",
 	"activity.blocked": "Aguardando decisão",
 	"activity.exited": "Encerrado",

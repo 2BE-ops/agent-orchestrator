@@ -214,6 +214,13 @@ func (l *fakeLCM) MarkSpawned(_ context.Context, id domain.SessionID, metadata d
 	return nil
 }
 
+func (l *fakeLCM) MarkChatReconnected(_ context.Context, id domain.SessionID, metadata domain.SessionMetadata) error {
+	rec := l.store.sessions[id]
+	rec.Metadata = metadata
+	l.store.sessions[id] = rec
+	return nil
+}
+
 func (l *fakeLCM) MarkChatSpawned(
 	ctx context.Context,
 	id domain.SessionID,

@@ -1098,6 +1098,26 @@ func (m *Manager) resolveNotifications(ctx context.Context, resolutions ...ports
 	}
 }
 
+// MarkChatReconnected adopts the same live provider after daemon replacement.
+// Generation has already been claimed by Chat Service. Reconnection is not
+// activity: preserve the activity, signal receipt, and user-visible update time.
+func (m *Manager) MarkChatReconnected(ctx context.Context, id domain.SessionID, metadata domain.SessionMetadata) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rec, ok, err := m.store.GetSession(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !ok || rec.IsTerminated || rec.Mode != domain.SessionModeChat ||
+		metadata.ProviderConversationID == "" || metadata.ProviderConversationID != rec.Metadata.ProviderConversationID ||
+		metadata.ControllerGeneration == "" || metadata.ControllerGeneration != rec.Metadata.ControllerGeneration {
+		return fmt.Errorf("lifecycle: live Chat reconnect for %q no longer owns the session", id)
+	}
+	// There are no new lifecycle facts to persist. In particular, avoid a full
+	// record write that could overwrite activity arriving during reconnection.
+	return nil
+}
+
 // MarkSpawned marks a newly spawned or restored session live and stores runtime/workspace handles.
 func (m *Manager) MarkSpawned(ctx context.Context, id domain.SessionID, metadata domain.SessionMetadata) error {
 	return m.markSpawned(ctx, id, metadata, nil, nil)

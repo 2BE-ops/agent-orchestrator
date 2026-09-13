@@ -73,8 +73,9 @@ WHERE id = sqlc.arg(id)
 -- A Chat controller claims ownership before its event goroutine starts. Provider
 -- projections compare against this value in the same transaction as their write,
 -- so an older controller cannot mutate a session after a replacement takes over.
+-- Ownership changes are not activity and must not advance the board's recency.
 UPDATE sessions
-SET controller_generation = ?, updated_at = ?
+SET controller_generation = ?
 WHERE id = ? AND session_mode = 'chat';
 
 -- name: ActivateConversationBranchSession :execrows

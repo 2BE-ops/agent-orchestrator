@@ -68,6 +68,7 @@ type recordingLauncher struct {
 	beforeStart      func(ChatStart)
 	afterReady       func()
 	providerBoundary *domain.ConversationBranch
+	liveReconnect    bool
 
 	preflighted          []domain.AgentHarness
 	preflightPermissions []ports.PermissionMode
@@ -153,6 +154,7 @@ func (l *recordingLauncher) StartChat(ctx context.Context, cfg ChatStart) (ChatS
 		return ChatStarted{}, l.startErr
 	}
 	started := ChatStarted{
+		LiveReconnect:          l.liveReconnect,
 		ProviderConversationID: "thread-1",
 		ControllerGeneration:   "gen-1",
 		ProviderBoundary:       l.providerBoundary,
@@ -233,6 +235,25 @@ func (l *generationClaimFailureLauncher) StartChat(ctx context.Context, cfg Chat
 	rec.UpdatedAt = rec.UpdatedAt.Add(time.Second)
 	l.store.sessions[cfg.SessionID] = rec
 	return ChatStarted{}, l.err
+}
+
+func TestReconcileLive_ChatReconnectPreservesActivity(t *testing.T) {
+	launcher := &recordingLauncher{liveReconnect: true}
+	m, st, _ := newChatManager(launcher)
+	rec := domain.SessionRecord{ID: "mer-1", ProjectID: chatTestProject, Kind: domain.KindWorker,
+		Harness: domain.HarnessCodex, Mode: domain.SessionModeChat,
+		Activity: domain.Activity{State: domain.ActivityBlocked, LastActivityAt: time.Unix(100, 0)},
+		Metadata: domain.SessionMetadata{Branch: "ao/mer-1/root", WorkspacePath: "/ws/mer-1", ProviderConversationID: "thread-1"}}
+	st.sessions[rec.ID] = rec
+	if err := m.reconcileLive(context.Background(), rec); err != nil {
+		t.Fatal(err)
+	}
+	if st.sessions[rec.ID].Activity != rec.Activity {
+		t.Fatal("live reconnect reset activity")
+	}
+	if m.lcm.(*fakeLCM).completed != 0 {
+		t.Fatal("live reconnect used the spawn lifecycle")
+	}
 }
 
 func TestReconcileLive_ChatRelaunchesInExistingWorktree(t *testing.T) {

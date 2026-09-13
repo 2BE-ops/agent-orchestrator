@@ -168,6 +168,9 @@ func (r SessionRecord) ControllerOwner() SessionControllerOwner {
 // persisted.
 type Session struct {
 	SessionRecord
+	// StatusReadiness describes startup verification, never a persisted status.
+	// Clients must withhold activity labels until ready; unavailable permits retry.
+	StatusReadiness string `json:"statusReadiness" enum:"checking,ready,unavailable"`
 	// ChatProviderPreserved is a live-controller observation, never stored.
 	// False also covers recovery/unknown ownership; callers must not infer safety.
 	ChatProviderPreserved bool          `json:"chatProviderPreserved"`

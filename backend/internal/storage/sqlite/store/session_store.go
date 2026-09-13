@@ -124,13 +124,11 @@ func (s *Store) ClaimChatControllerGeneration(
 	ctx context.Context,
 	id domain.SessionID,
 	generation string,
-	updatedAt time.Time,
 ) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	rows, err := s.qw.ClaimChatControllerGeneration(ctx, gen.ClaimChatControllerGenerationParams{
 		ControllerGeneration: generation,
-		UpdatedAt:            updatedAt,
 		ID:                   id,
 	})
 	if err != nil {

@@ -311,7 +311,7 @@ func TestBrowserCapabilityRotationIsNarrowAndControllerOwnerFenced(t *testing.T)
 	}
 
 	if err := s.ClaimChatControllerGeneration(
-		ctx, created.ID, "generation-2", concurrent.UpdatedAt.Add(time.Second)); err != nil {
+		ctx, created.ID, "generation-2"); err != nil {
 		t.Fatalf("ClaimChatControllerGeneration: %v", err)
 	}
 	applied, err = s.UpdateBrowserCapabilityVerifier(
@@ -1704,5 +1704,27 @@ func TestRememberProjectPermissionsPinsExistingSessions(t *testing.T) {
 		if got.Metadata.Permissions != want.Metadata.Permissions {
 			t.Fatalf("repinned existing session: %q", got.Metadata.Permissions)
 		}
+	}
+}
+
+func TestClaimChatControllerGenerationPreservesRecency(t *testing.T) {
+	st := newTestStore(t)
+	seedProject(t, st, "restart")
+	rec := sampleRecord("restart")
+	rec.Mode = domain.SessionModeChat
+	rec.Metadata.ControllerGeneration = "before"
+	before, err := st.CreateSession(context.Background(), rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.ClaimChatControllerGeneration(context.Background(), before.ID, "after"); err != nil {
+		t.Fatal(err)
+	}
+	after, _, err := st.GetSession(context.Background(), before.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Metadata.ControllerGeneration != "after" || !after.UpdatedAt.Equal(before.UpdatedAt) || after.Activity != before.Activity {
+		t.Fatalf("claim changed user-visible facts: before=%+v after=%+v", before, after)
 	}
 }
