@@ -5,12 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/aoagents/agent-orchestrator/backend/internal/config"
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
+	"github.com/aoagents/agent-orchestrator/backend/internal/httpd"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	chatsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/chat"
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite/store"
@@ -530,11 +535,55 @@ type editDriverState struct {
 	startCalls   int
 	startConfigs []ports.ChatStartConfig
 	resumeCalls  []ports.ChatResumeConfig
+	startErr     error
+	resumeErr    error
+	beforeResume func(ports.ChatResumeConfig) error
 	fresh        *fakeConversation
 	resumed      map[string]*fakeConversation
 }
 
 func newEditHarness(t *testing.T, supportsPromptReplay bool) (*harness, *historyRecorder, *editDriverState) {
+	return newEditHarnessWithStore(
+		t, supportsPromptReplay, func(st *store.Store) chatsvc.Store { return st })
+}
+
+func newEditHarnessWithStore(
+	t *testing.T,
+	supportsPromptReplay bool,
+	wrapStore func(*store.Store) chatsvc.Store,
+) (*harness, *historyRecorder, *editDriverState) {
+	return newEditHarnessWithStoreAndReader(
+		t, supportsPromptReplay, wrapStore, func(reader chatsvc.SnapshotReader) chatsvc.SnapshotReader {
+			return reader
+		})
+}
+
+func newEditHarnessWithStoreAndReader(
+	t *testing.T,
+	supportsPromptReplay bool,
+	wrapStore func(*store.Store) chatsvc.Store,
+	wrapReader func(chatsvc.SnapshotReader) chatsvc.SnapshotReader,
+) (*harness, *historyRecorder, *editDriverState) {
+	return newEditHarnessWithOptions(t, supportsPromptReplay, wrapStore, wrapReader, nil)
+}
+
+func newEditHarnessWithControllerEnv(
+	t *testing.T,
+	supportsPromptReplay bool,
+	prepare func(context.Context, domain.SessionControllerOwner) (map[string]string, error),
+) (*harness, *historyRecorder, *editDriverState) {
+	return newEditHarnessWithOptions(t, supportsPromptReplay,
+		func(st *store.Store) chatsvc.Store { return st },
+		func(reader chatsvc.SnapshotReader) chatsvc.SnapshotReader { return reader }, prepare)
+}
+
+func newEditHarnessWithOptions(
+	t *testing.T,
+	supportsPromptReplay bool,
+	wrapStore func(*store.Store) chatsvc.Store,
+	wrapReader func(chatsvc.SnapshotReader) chatsvc.SnapshotReader,
+	prepare func(context.Context, domain.SessionControllerOwner) (map[string]string, error),
+) (*harness, *historyRecorder, *editDriverState) {
 	t.Helper()
 	st := openStore(t)
 	source := newHistoryRecorder()
@@ -578,6 +627,9 @@ func newEditHarness(t *testing.T, supportsPromptReplay bool) (*harness, *history
 		if state.startCalls == 1 {
 			return initial, nil
 		}
+		if state.startErr != nil {
+			return nil, state.startErr
+		}
 		if state.startCalls == 2 {
 			return state.fresh, nil
 		}
@@ -592,9 +644,19 @@ func newEditHarness(t *testing.T, supportsPromptReplay bool) (*harness, *history
 	}
 	driver.resume = func(cfg ports.ChatResumeConfig) (ports.ChatConversation, error) {
 		state.mu.Lock()
-		defer state.mu.Unlock()
 		state.resumeCalls = append(state.resumeCalls, cfg)
+		if state.resumeErr != nil {
+			state.mu.Unlock()
+			return nil, state.resumeErr
+		}
+		beforeResume := state.beforeResume
 		conv := state.resumed[cfg.ProviderConversationID]
+		state.mu.Unlock()
+		if beforeResume != nil {
+			if err := beforeResume(cfg); err != nil {
+				return nil, err
+			}
+		}
 		if conv == nil {
 			return nil, errors.New("unexpected provider conversation: " + cfg.ProviderConversationID)
 		}
@@ -602,24 +664,27 @@ func newEditHarness(t *testing.T, supportsPromptReplay bool) (*harness, *history
 	}
 
 	clock := time.Date(2026, 8, 9, 15, 0, 0, 0, time.UTC)
+	activity := &recordingActivity{}
 	var idMu sync.Mutex
 	nextID := 0
+	reader := chatsvc.SnapshotReaderFunc(func(ctx context.Context, conversationID string) (chatsvc.ConversationRows, error) {
+		snapshot, err := st.LoadConversationSnapshot(ctx, conversationID)
+		if err != nil {
+			return chatsvc.ConversationRows{}, err
+		}
+		return chatsvc.ConversationRows{
+			Conversation: snapshot.Conversation, ActiveBranch: snapshot.ActiveBranch,
+			Turns: snapshot.Turns, Messages: snapshot.Messages,
+			Activities: snapshot.Activities, BranchPoints: snapshot.BranchPoints,
+			BranchedFromEarlierMessage: snapshot.BranchedFromEarlierMessage,
+		}, nil
+	})
 	svc := chatsvc.New(chatsvc.Options{
-		Store: st, Sessions: st,
-		Reader: chatsvc.SnapshotReaderFunc(func(ctx context.Context, conversationID string) (chatsvc.ConversationRows, error) {
-			snapshot, err := st.LoadConversationSnapshot(ctx, conversationID)
-			if err != nil {
-				return chatsvc.ConversationRows{}, err
-			}
-			return chatsvc.ConversationRows{
-				Conversation: snapshot.Conversation, ActiveBranch: snapshot.ActiveBranch,
-				Turns: snapshot.Turns, Messages: snapshot.Messages,
-				Activities: snapshot.Activities, BranchPoints: snapshot.BranchPoints,
-				BranchedFromEarlierMessage: snapshot.BranchedFromEarlierMessage,
-			}, nil
-		}),
-		Drivers: fakeRegistry{driver: driver},
-		Log:     slog.New(slog.DiscardHandler),
+		Store: wrapStore(st), Sessions: st,
+		Reader:   wrapReader(reader),
+		Drivers:  fakeRegistry{driver: driver},
+		Log:      slog.New(slog.DiscardHandler),
+		Activity: activity,
 		NewID: func() string {
 			idMu.Lock()
 			defer idMu.Unlock()
@@ -632,7 +697,8 @@ func newEditHarness(t *testing.T, supportsPromptReplay bool) (*harness, *history
 	ctrl, err := svc.Start(context.Background(), chatsvc.StartConfig{
 		SessionID: testSession, ProjectID: testProject, Kind: domain.KindWorker,
 		Harness: domain.HarnessCodex, WorkspacePath: workspace,
-		Env: map[string]string{"AO_EDIT_TEST": "yes"}, SystemPrompt: "preserved prompt",
+		Env:          map[string]string{"AO_EDIT_TEST": "yes", "AO_BROWSER_CAPABILITY": "stale"},
+		SystemPrompt: "preserved prompt", PrepareControllerEnv: prepare,
 	})
 	if err != nil {
 		t.Fatalf("Start: %v", err)
@@ -647,7 +713,82 @@ func newEditHarness(t *testing.T, supportsPromptReplay bool) (*harness, *history
 		t.Fatalf("UpdateSession provider controller: %v", err)
 	}
 	t.Cleanup(func() { _ = svc.Stop(context.Background(), testSession) })
-	return &harness{svc: svc, st: st, conv: source.fakeConversation, ctrl: ctrl, clock: clock}, source, state
+	return &harness{
+		svc: svc, st: st, conv: source.fakeConversation, ctrl: ctrl,
+		activity: activity, clock: clock,
+	}, source, state
+}
+
+func TestEditAndBranchActivationRotateControllerCredentialsAfterStoppingSource(t *testing.T) {
+	var mu sync.Mutex
+	prepareCalls := 0
+	var expectedStopped *chatsvc.Controller
+	prepare := func(_ context.Context, _ domain.SessionControllerOwner) (map[string]string, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		prepareCalls++
+		if expectedStopped != nil && expectedStopped.State() != ports.ChatControllerStopped {
+			t.Fatalf("credential rotation %d ran while source state was %q", prepareCalls, expectedStopped.State())
+		}
+		return map[string]string{
+			"AO_EDIT_TEST":          "yes",
+			"AO_BROWSER_CAPABILITY": fmt.Sprintf("token-%d", prepareCalls),
+		}, nil
+	}
+	h, _, driver := newEditHarnessWithControllerEnv(t, true, prepare)
+	ctx := context.Background()
+	first := completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+
+	mu.Lock()
+	expectedStopped = h.ctrl
+	mu.Unlock()
+	edited, err := h.svc.EditMessage(ctx, testSession, first, ports.ChatUserMessage{
+		Text: "A edited", ClientMessageID: "credential-edit", Origin: domain.MessageOriginHuman,
+	})
+	if err != nil {
+		t.Fatalf("EditMessage: %v", err)
+	}
+	driver.mu.Lock()
+	if got := driver.startConfigs[len(driver.startConfigs)-1].Env["AO_BROWSER_CAPABILITY"]; got != "token-2" {
+		driver.mu.Unlock()
+		t.Fatalf("edited controller capability = %q, want token-2", got)
+	}
+	driver.mu.Unlock()
+	driver.fresh.emit(
+		ports.ChatEvent{Kind: ports.ChatEventTurnStarted, ProviderTurnID: "provider-turn-101"},
+		ports.ChatEvent{Kind: ports.ChatEventTurnCompleted, ProviderTurnID: "provider-turn-101", TurnState: domain.TurnStateCompleted},
+	)
+	h.awaitSnapshot(t, func(snapshot store.ConversationSnapshot) bool {
+		for _, turn := range snapshot.Turns {
+			if turn.ID == edited.Turn.ID {
+				return turn.State.Terminal()
+			}
+		}
+		return false
+	})
+	current, err := h.svc.Controller(testSession)
+	if err != nil {
+		t.Fatalf("Controller after edit: %v", err)
+	}
+	mu.Lock()
+	expectedStopped = current
+	mu.Unlock()
+	if _, err := h.svc.ActivateBranch(ctx, testSession, edited.SourceBranchID); err != nil {
+		t.Fatalf("ActivateBranch: %v", err)
+	}
+	driver.mu.Lock()
+	lastResume := driver.resumeCalls[len(driver.resumeCalls)-1]
+	driver.mu.Unlock()
+	if got := lastResume.Env["AO_BROWSER_CAPABILITY"]; got != "token-3" {
+		t.Fatalf("activated controller capability = %q, want token-3", got)
+	}
+	mu.Lock()
+	gotCalls := prepareCalls
+	mu.Unlock()
+	if gotCalls != 3 {
+		t.Fatalf("credential rotations = %d, want initial start + edit + activation", gotCalls)
+	}
 }
 
 func TestEditMessageReplaysDurableContextWhenNativeForkIsUnavailable(t *testing.T) {
@@ -712,11 +853,25 @@ func TestEditMessageRejectsReplayWhenFreshProviderNegotiatesFewerCapabilities(t 
 	delete(capabilities, ports.ChatCapabilityEmbeddedContext)
 	driver.fresh.setCapabilities(capabilities)
 
-	_, err = h.svc.EditMessage(ctx, testSession, second, ports.ChatUserMessage{
-		Text: "B edited", Origin: domain.MessageOriginHuman,
-	})
+	edit := ports.ChatUserMessage{
+		Text: "B edited", ClientMessageID: "fresh-capability-rejection", Origin: domain.MessageOriginHuman,
+	}
+	_, err = h.svc.EditMessage(ctx, testSession, second, edit)
 	if !errors.Is(err, chatsvc.ErrForkUnsupported) {
 		t.Fatalf("EditMessage error = %v, want ErrForkUnsupported", err)
+	}
+	driver.mu.Lock()
+	startsAfterRejection := driver.startCalls
+	driver.mu.Unlock()
+	_, retryErr := h.svc.EditMessage(ctx, testSession, second, edit)
+	if !errors.Is(retryErr, chatsvc.ErrForkUnsupported) {
+		t.Fatalf("same-controller replay error = %v, want ErrForkUnsupported", retryErr)
+	}
+	driver.mu.Lock()
+	startsAfterReplay := driver.startCalls
+	driver.mu.Unlock()
+	if startsAfterReplay != startsAfterRejection {
+		t.Fatalf("same-controller replay started provider: calls %d -> %d", startsAfterRejection, startsAfterReplay)
 	}
 	after, snapshotErr := h.st.LoadConversationSnapshot(ctx, h.ctrl.ConversationID())
 	if snapshotErr != nil {
@@ -734,6 +889,65 @@ func TestEditMessageRejectsReplayWhenFreshProviderNegotiatesFewerCapabilities(t 
 	}
 	if len(branches) != 1 {
 		t.Fatalf("branches = %d, want only source after capability refusal: %#v", len(branches), branches)
+	}
+
+	restarted, provider, driverCalls := restartEditServiceWithDriverCalls(t, h)
+	startsBefore, resumesBefore := driverCalls.counts()
+	_, restartErr := restarted.EditMessage(ctx, testSession, second, edit)
+	if !errors.Is(restartErr, chatsvc.ErrForkUnsupported) {
+		t.Fatalf("restart replay error = %v, want ErrForkUnsupported", restartErr)
+	}
+	startsAfter, resumesAfter := driverCalls.counts()
+	if startsAfter != startsBefore || resumesAfter != resumesBefore {
+		t.Fatalf("restart replay reached driver: starts %d->%d resumes %d->%d",
+			startsBefore, startsAfter, resumesBefore, resumesAfter)
+	}
+	if sends := provider.sendCallCount(); sends != 0 {
+		t.Fatalf("restart replay sent %d prompts, want none", sends)
+	}
+}
+
+func TestEditMessageReportsUndispatchedReplayPreparationFailureAsRejected(t *testing.T) {
+	var failReplay atomic.Bool
+	h, _, driver := newEditHarnessWithStoreAndReader(
+		t,
+		true,
+		func(st *store.Store) chatsvc.Store { return st },
+		func(reader chatsvc.SnapshotReader) chatsvc.SnapshotReader {
+			return chatsvc.SnapshotReaderFunc(func(ctx context.Context, conversationID string) (chatsvc.ConversationRows, error) {
+				if failReplay.Load() {
+					return chatsvc.ConversationRows{}, errors.New("read replay transcript")
+				}
+				return reader.LoadConversationSnapshot(ctx, conversationID)
+			})
+		},
+	)
+	ctx := context.Background()
+	completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(snapshot store.ConversationSnapshot) bool { return len(snapshot.Messages) == 2 })
+	second := completeTurn(t, h, "B", "provider-turn-2")
+	h.awaitSnapshot(t, func(snapshot store.ConversationSnapshot) bool { return len(snapshot.Messages) == 4 })
+	failReplay.Store(true)
+
+	edit := ports.ChatUserMessage{
+		Text: "B edited", ClientMessageID: "replay-preparation-rejection", Origin: domain.MessageOriginHuman,
+	}
+	_, err := h.svc.EditMessage(ctx, testSession, second, edit)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryRejected) {
+		t.Fatalf("first response error = %v, want ErrEditDeliveryRejected", err)
+	}
+	if errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("first response error = %v, must not claim delivery uncertainty", err)
+	}
+	_, retryErr := h.svc.EditMessage(ctx, testSession, second, edit)
+	if !errors.Is(retryErr, chatsvc.ErrEditDeliveryRejected) {
+		t.Fatalf("same-ID replay error = %v, want ErrEditDeliveryRejected", retryErr)
+	}
+	driver.mu.Lock()
+	startCalls := driver.startCalls
+	driver.mu.Unlock()
+	if startCalls != 1 {
+		t.Fatalf("provider Start calls = %d, want no replacement provider start", startCalls)
 	}
 }
 
@@ -1087,6 +1301,412 @@ func TestEditMessageAmbiguousApproximateFailureRemainsNavigableAcrossRestart(t *
 	requireBranchPoint(t, restartedSnapshot, failed.Turn.ID, failed.SourceBranchID, "")
 }
 
+type failEditCompletionStore struct{ chatsvc.Store }
+
+type loseEditReservationReplyStore struct{ chatsvc.Store }
+
+func (s *loseEditReservationReplyStore) ReserveEditDelivery(ctx context.Context, conversationID, clientID, request string, now time.Time) (domain.ConversationEditDelivery, bool, error) {
+	delivery, created, err := s.Store.ReserveEditDelivery(ctx, conversationID, clientID, request, now)
+	if err == nil && created {
+		return delivery, false, context.Canceled
+	}
+	return delivery, created, err
+}
+
+func TestReservedEditRecoversAfterControllerStopAndResume(t *testing.T) {
+	h, _, driver := newEditHarnessWithStore(t, false, func(st *store.Store) chatsvc.Store {
+		return &loseEditReservationReplyStore{Store: st}
+	})
+	first := completeTurn(t, h, "original", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	msg := ports.ChatUserMessage{Text: "replacement", ClientMessageID: "edit-stop-resume", Origin: domain.MessageOriginHuman}
+	_, err := h.svc.EditMessage(context.Background(), testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("interrupted reservation = %v, want uncertain", err)
+	}
+	if driver.fresh.sendCallCount() != 0 {
+		t.Fatal("replacement reached provider before interrupted reservation returned")
+	}
+	if err := h.svc.Stop(context.Background(), testSession); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.svc.Start(context.Background(), chatsvc.StartConfig{
+		SessionID: testSession, ProjectID: testProject, Harness: domain.HarnessCodex,
+		WorkspacePath: t.TempDir(), ProviderConversationID: "thread-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	result, err := h.svc.EditMessage(context.Background(), testSession, first, msg)
+	if err != nil || result.Turn.ID == "" {
+		t.Fatalf("retry after controller resume = %+v, %v; want one accepted replacement", result, err)
+	}
+	replay, err := h.svc.EditMessage(context.Background(), testSession, first, msg)
+	if err != nil || replay != result || driver.fresh.sendCallCount() != 1 {
+		t.Fatalf("receipt replay = %+v, %v; provider sends=%d", replay, err, driver.fresh.sendCallCount())
+	}
+}
+
+func (s *failEditCompletionStore) CompleteEditDelivery(
+	context.Context,
+	string,
+	string,
+	string,
+	string,
+	domain.ConversationTurn,
+	time.Time,
+) error {
+	return errors.New("injected edit completion failure")
+}
+
+type failEditOperationStore struct {
+	chatsvc.Store
+
+	mu                    sync.Mutex
+	bindErr               error
+	bindFailures          int
+	branchInstallErr      error
+	branchInstallFailures int
+}
+
+func (s *failEditOperationStore) BindTurnToProvider(
+	ctx context.Context,
+	turnID, providerTurnID string,
+	now time.Time,
+) error {
+	s.mu.Lock()
+	err := s.bindErr
+	if err != nil {
+		s.bindFailures++
+	}
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	return s.Store.BindTurnToProvider(ctx, turnID, providerTurnID, now)
+}
+
+func (s *failEditOperationStore) CreateAndActivateConversationBranch(
+	ctx context.Context,
+	sessionID domain.SessionID,
+	branch domain.ConversationBranch,
+	generation string,
+	now time.Time,
+) error {
+	s.mu.Lock()
+	err := s.branchInstallErr
+	if err != nil {
+		s.branchInstallFailures++
+	}
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	return s.Store.CreateAndActivateConversationBranch(ctx, sessionID, branch, generation, now)
+}
+
+type editRestartDriverCalls struct {
+	mu      sync.Mutex
+	starts  int
+	resumes int
+}
+
+func (c *editRestartDriverCalls) counts() (starts, resumes int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.starts, c.resumes
+}
+
+func restartEditService(
+	t *testing.T,
+	h *harness,
+) (*chatsvc.Service, *historyRecorder) {
+	t.Helper()
+	svc, provider, _ := restartEditServiceWithDriverCalls(t, h)
+	return svc, provider
+}
+
+func restartEditServiceWithDriverCalls(
+	t *testing.T,
+	h *harness,
+) (*chatsvc.Service, *historyRecorder, *editRestartDriverCalls) {
+	t.Helper()
+	controller, err := h.svc.Controller(testSession)
+	if err != nil {
+		t.Fatalf("Controller before restart: %v", err)
+	}
+	providerConversationID := controller.ProviderConversationID()
+	if err := h.svc.Stop(context.Background(), testSession); err != nil {
+		t.Fatalf("stop original edit service: %v", err)
+	}
+	provider := newHistoryRecorder()
+	provider.providerConversationID = providerConversationID
+	driverCalls := &editRestartDriverCalls{}
+	driver := fakeDriver{conv: provider}
+	driver.start = func(ports.ChatStartConfig) (ports.ChatConversation, error) {
+		driverCalls.mu.Lock()
+		driverCalls.starts++
+		driverCalls.mu.Unlock()
+		return provider, nil
+	}
+	driver.resume = func(ports.ChatResumeConfig) (ports.ChatConversation, error) {
+		driverCalls.mu.Lock()
+		driverCalls.resumes++
+		driverCalls.mu.Unlock()
+		return provider, nil
+	}
+	var (
+		idMu sync.Mutex
+		id   int
+	)
+	svc := chatsvc.New(chatsvc.Options{
+		Store: h.st, Sessions: h.st,
+		Drivers: fakeRegistry{driver: driver},
+		Log:     slog.New(slog.DiscardHandler),
+		NewID: func() string {
+			idMu.Lock()
+			defer idMu.Unlock()
+			id++
+			return fmt.Sprintf("restart-edit-%d", id)
+		},
+		Now: h.now,
+	})
+	if _, err := svc.Start(context.Background(), chatsvc.StartConfig{
+		SessionID: testSession, ProjectID: testProject, Harness: domain.HarnessCodex,
+		WorkspacePath: t.TempDir(), ProviderConversationID: providerConversationID,
+	}); err != nil {
+		t.Fatalf("restart edit service: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Stop(context.Background(), testSession) })
+	return svc, provider, driverCalls
+}
+
+func requireUncertainEditReplayAfterRestart(
+	t *testing.T,
+	h *harness,
+	turnID string,
+	msg ports.ChatUserMessage,
+) {
+	t.Helper()
+	restarted, provider, driverCalls := restartEditServiceWithDriverCalls(t, h)
+	startsBefore, resumesBefore := driverCalls.counts()
+	_, err := restarted.EditMessage(context.Background(), testSession, turnID, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("restart replay error = %v, want ErrEditDeliveryUncertain", err)
+	}
+	startsAfter, resumesAfter := driverCalls.counts()
+	if startsAfter != startsBefore || resumesAfter != resumesBefore {
+		t.Fatalf("restart replay reached driver: starts %d->%d resumes %d->%d",
+			startsBefore, startsAfter, resumesBefore, resumesAfter)
+	}
+	if calls := provider.sendCallCount(); calls != 0 {
+		t.Fatalf("restarted provider received %d sends for uncertain edit replay, want none", calls)
+	}
+}
+
+func TestEditMessageClosesSourceWriterBeforeResumingNativeFork(t *testing.T) {
+	h, source, driver := newEditHarness(t, false)
+	ctx := context.Background()
+	completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	second := completeTurn(t, h, "B", "provider-turn-2")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 4 })
+
+	driver.mu.Lock()
+	driver.beforeResume = func(ports.ChatResumeConfig) error {
+		select {
+		case _, open := <-source.events:
+			if !open {
+				return nil
+			}
+			return errors.New("source writer emitted an unexpected event during handoff")
+		default:
+			return fmt.Errorf("%w: forked thread already has an active writer", ports.ErrChatResumeFailed)
+		}
+	}
+	driver.mu.Unlock()
+
+	if _, err := h.svc.EditMessage(ctx, testSession, second, ports.ChatUserMessage{
+		Text: "B edited", Origin: domain.MessageOriginHuman,
+	}); err != nil {
+		t.Fatalf("EditMessage: %v", err)
+	}
+}
+
+func TestEditMessageNativeForkDoesNotPublishSourceExitBeforeReplacementTurn(t *testing.T) {
+	h, _, _ := newEditHarness(t, false)
+	ctx := context.Background()
+	completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	second := completeTurn(t, h, "B", "provider-turn-2")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 4 })
+
+	if _, err := h.svc.EditMessage(ctx, testSession, second, ports.ChatUserMessage{
+		Text: "B edited", Origin: domain.MessageOriginHuman,
+	}); err != nil {
+		t.Fatalf("EditMessage: %v", err)
+	}
+	for _, signal := range h.activity.snapshot() {
+		if signal.ControllerGeneration == h.ctrl.Generation() &&
+			signal.State == domain.ActivityExited && signal.Event == "chat.controller.stopped" {
+			t.Fatalf("successful native edit published source exit: %+v", signal)
+		}
+	}
+}
+
+func TestActivateBranchKeepsCapturedSourceIntakeFencedUntilClose(t *testing.T) {
+	h, _, driver := newEditHarness(t, false)
+	ctx := context.Background()
+	completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	second := completeTurn(t, h, "B", "provider-turn-2")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 4 })
+	result, err := h.svc.EditMessage(ctx, testSession, second, ports.ChatUserMessage{
+		Text: "B edited", Origin: domain.MessageOriginHuman,
+	})
+	if err != nil {
+		t.Fatalf("EditMessage: %v", err)
+	}
+
+	captured, err := h.svc.Controller(testSession)
+	if err != nil {
+		t.Fatalf("Controller before activation: %v", err)
+	}
+	driver.mu.Lock()
+	active := driver.resumed["thread-forked"]
+	driver.mu.Unlock()
+	active.emit(
+		ports.ChatEvent{Kind: ports.ChatEventTurnStarted, ProviderTurnID: "provider-turn-201"},
+		ports.ChatEvent{
+			Kind: ports.ChatEventMessageCompleted, ProviderTurnID: "provider-turn-201",
+			ProviderItemID: "edited-answer", Text: "edited answer",
+		},
+		ports.ChatEvent{
+			Kind: ports.ChatEventTurnCompleted, ProviderTurnID: "provider-turn-201",
+			TurnState: domain.TurnStateCompleted,
+		},
+	)
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool {
+		return turnStateByText(t, s)["B edited"] == domain.TurnStateCompleted
+	})
+	closeStarted := make(chan struct{})
+	closeRelease := make(chan struct{})
+	active.mu.Lock()
+	active.closeStarted = closeStarted
+	active.closeEventsRelease = closeRelease
+	active.mu.Unlock()
+
+	activateDone := make(chan error, 1)
+	go func() {
+		_, activateErr := h.svc.ActivateBranch(ctx, testSession, result.SourceBranchID)
+		activateDone <- activateErr
+	}()
+	select {
+	case <-closeStarted:
+	case err := <-activateDone:
+		close(closeRelease)
+		t.Fatalf("ActivateBranch returned before source close: %v", err)
+	case <-time.After(3 * time.Second):
+		close(closeRelease)
+		t.Fatal("source close did not start after branch registry swap")
+	}
+	_, sendErr := captured.Send(ctx, ports.ChatUserMessage{
+		Text: "stale captured send", ClientMessageID: "stale-captured-send",
+		Origin: domain.MessageOriginHuman,
+	})
+	close(closeRelease)
+	if !errors.Is(sendErr, chatsvc.ErrControllerHandoff) {
+		t.Fatalf("captured source send = %v, want ErrControllerHandoff", sendErr)
+	}
+	if err := <-activateDone; err != nil {
+		t.Fatalf("ActivateBranch: %v", err)
+	}
+}
+
+func TestEditMessageRestoresSourceAfterRequestCancellationDuringClose(t *testing.T) {
+	h, source, driver := newEditHarness(t, false)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	second := completeTurn(t, h, "B", "provider-turn-2")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 4 })
+
+	closeStarted := make(chan struct{})
+	closeRelease := make(chan struct{})
+	source.mu.Lock()
+	source.onClose = cancel
+	source.closeStarted = closeStarted
+	source.closeEventsRelease = closeRelease
+	source.mu.Unlock()
+	driver.mu.Lock()
+	driver.beforeResume = func(cfg ports.ChatResumeConfig) error {
+		if cfg.ProviderConversationID == "thread-forked" {
+			return errors.New("replacement resume unavailable")
+		}
+		return nil
+	}
+	driver.mu.Unlock()
+
+	editDone := make(chan error, 1)
+	go func() {
+		_, editErr := h.svc.EditMessage(ctx, testSession, second, ports.ChatUserMessage{
+			Text: "B edited", Origin: domain.MessageOriginHuman,
+		})
+		editDone <- editErr
+	}()
+	select {
+	case <-closeStarted:
+	case <-time.After(3 * time.Second):
+		close(closeRelease)
+		t.Fatal("source close did not start")
+	}
+	// Leave the provider stream open long enough for the canceled request to win
+	// on the buggy path. The corrected path is detached and remains in recovery.
+	time.Sleep(75 * time.Millisecond)
+	close(closeRelease)
+	editErr := <-editDone
+	if editErr == nil || !strings.Contains(editErr.Error(), "replacement resume unavailable") {
+		t.Fatalf("EditMessage error = %v, want replacement resume failure", editErr)
+	}
+	if errors.Is(editErr, context.Canceled) {
+		t.Fatalf("post-close recovery reused canceled request context: %v", editErr)
+	}
+	restored, err := h.svc.Controller(testSession)
+	if err != nil {
+		t.Fatalf("restored source controller: %v", err)
+	}
+	if got := restored.ProviderConversationID(); got != "thread-1" {
+		t.Fatalf("restored provider conversation = %q, want thread-1", got)
+	}
+}
+
+func TestEditMessageReportsExitWhenReplacementAndRecoveryBothFail(t *testing.T) {
+	h, _, driver := newEditHarness(t, false)
+	ctx := context.Background()
+	completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	second := completeTurn(t, h, "B", "provider-turn-2")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 4 })
+	driver.mu.Lock()
+	driver.beforeResume = func(cfg ports.ChatResumeConfig) error {
+		return fmt.Errorf("resume %s unavailable", cfg.ProviderConversationID)
+	}
+	driver.mu.Unlock()
+
+	if _, err := h.svc.EditMessage(ctx, testSession, second, ports.ChatUserMessage{
+		Text: "B edited", Origin: domain.MessageOriginHuman,
+	}); err == nil {
+		t.Fatal("EditMessage succeeded when replacement and recovery both failed")
+	}
+	for _, signal := range h.activity.snapshot() {
+		if signal.ControllerGeneration == h.ctrl.Generation() &&
+			signal.State == domain.ActivityExited && signal.Event == "chat.controller.stopped" {
+			return
+		}
+	}
+	t.Fatalf("unrecoverable native edit did not publish source exit: %+v", h.activity.snapshot())
+}
+
 func TestEditMessageForksBeforeMiddlePromptAndReusesStoredContent(t *testing.T) {
 	h, source, driver := newEditHarness(t, false)
 	ctx := context.Background()
@@ -1361,8 +1981,424 @@ func TestEditMessageUndispatchedAttemptRestoresSourceBranch(t *testing.T) {
 	}
 }
 
+func TestAcceptedEditReplaysBeforeAnchorLookupAndRejectsChangedPayload(t *testing.T) {
+	h, _, driver := newEditHarness(t, false)
+	ctx := context.Background()
+	first := completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	msg := ports.ChatUserMessage{
+		Text: "A edited", ClientMessageID: "edit-replay", Origin: domain.MessageOriginHuman,
+	}
+
+	original, err := h.svc.EditMessage(ctx, testSession, first, msg)
+	if err != nil {
+		t.Fatalf("first EditMessage: %v", err)
+	}
+	if err := h.svc.Stop(ctx, testSession); err != nil {
+		t.Fatalf("stop controller before replay: %v", err)
+	}
+	replayed, err := h.svc.EditMessage(ctx, testSession, first, msg)
+	if err != nil {
+		t.Fatalf("replayed EditMessage: %v", err)
+	}
+	if replayed != original {
+		t.Fatalf("replayed result = %+v, want original %+v", replayed, original)
+	}
+	if sent := driver.fresh.sentTexts(); len(sent) != 1 || sent[0] != "A edited" {
+		t.Fatalf("provider sends after replay = %v, want one", sent)
+	}
+
+	_, err = h.svc.EditMessage(ctx, testSession, first, ports.ChatUserMessage{
+		Text: "different edit", ClientMessageID: msg.ClientMessageID,
+		Origin: domain.MessageOriginHuman,
+	})
+	if !errors.Is(err, chatsvc.ErrEditIdempotencyConflict) {
+		t.Fatalf("changed edit error = %v, want ErrEditIdempotencyConflict", err)
+	}
+	if sent := driver.fresh.sentTexts(); len(sent) != 1 {
+		t.Fatalf("changed payload reached provider; sends=%v", sent)
+	}
+}
+
+func TestAmbiguousEditSendFailureStaysUncertainWithoutProviderRedispatch(t *testing.T) {
+	h, _, driver := newEditHarness(t, false)
+	ctx := context.Background()
+	first := completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	driver.fresh.mu.Lock()
+	driver.fresh.sendErr = errors.New("provider unavailable")
+	driver.fresh.mu.Unlock()
+	msg := ports.ChatUserMessage{
+		Text: "A edited", ClientMessageID: "edit-rejected", Origin: domain.MessageOriginHuman,
+	}
+
+	failed, err := h.svc.EditMessage(ctx, testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("first EditMessage error = %v, want ErrEditDeliveryUncertain", err)
+	}
+	if failed.ActiveBranchID == "" {
+		t.Fatalf("failed edit did not identify its selected branch: %+v", failed)
+	}
+	if calls := driver.fresh.sendCallCount(); calls != 1 {
+		t.Fatalf("provider send calls after ambiguous failure = %d, want one", calls)
+	}
+	driver.fresh.mu.Lock()
+	driver.fresh.sendErr = nil
+	driver.fresh.mu.Unlock()
+	_, retryErr := h.svc.EditMessage(ctx, testSession, first, msg)
+	if !errors.Is(retryErr, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("same-controller replay error = %v, want ErrEditDeliveryUncertain", retryErr)
+	}
+	if calls := driver.fresh.sendCallCount(); calls != 1 {
+		t.Fatalf("provider send calls after same-id replay = %d, want one", calls)
+	}
+	restarted, restartedProvider := restartEditService(t, h)
+	_, retryErr = restarted.EditMessage(ctx, testSession, first, msg)
+	if !errors.Is(retryErr, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("restart replay error = %v, want ErrEditDeliveryUncertain", retryErr)
+	}
+	if calls := restartedProvider.sendCallCount(); calls != 0 {
+		t.Fatalf("restarted provider received %d sends for uncertain edit replay, want none", calls)
+	}
+}
+
+func TestGenericEditBranchStartFailureStaysUncertainWithoutProviderRedispatch(t *testing.T) {
+	h, _, driver := newEditHarness(t, false)
+	first := completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	driver.mu.Lock()
+	driver.startErr = errors.New("branch start transport failed")
+	driver.mu.Unlock()
+	msg := ports.ChatUserMessage{
+		Text: "A edited", ClientMessageID: "edit-start-uncertain", Origin: domain.MessageOriginHuman,
+	}
+
+	_, err := h.svc.EditMessage(context.Background(), testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("first EditMessage error = %v, want ErrEditDeliveryUncertain", err)
+	}
+	driver.mu.Lock()
+	startCalls := driver.startCalls
+	resumeCalls := len(driver.resumeCalls)
+	if resumeCalls != 1 || driver.resumeCalls[0].ProviderConversationID != "thread-1" {
+		t.Fatalf("failed branch start must restore only the source controller: %+v", driver.resumeCalls)
+	}
+	driver.mu.Unlock()
+	if startCalls != 2 || resumeCalls != 1 || driver.fresh.sendCallCount() != 0 {
+		t.Fatalf("provider operations after branch start failure: starts=%d resumes=%d sends=%d",
+			startCalls, resumeCalls, driver.fresh.sendCallCount())
+	}
+	_, err = h.svc.EditMessage(context.Background(), testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("same-controller replay error = %v, want ErrEditDeliveryUncertain", err)
+	}
+	driver.mu.Lock()
+	startCalls = driver.startCalls
+	resumeCalls = len(driver.resumeCalls)
+	driver.mu.Unlock()
+	if startCalls != 2 || resumeCalls != 1 || driver.fresh.sendCallCount() != 0 {
+		t.Fatalf("same-id replay reached provider: starts=%d resumes=%d sends=%d",
+			startCalls, resumeCalls, driver.fresh.sendCallCount())
+	}
+	requireUncertainEditReplayAfterRestart(t, h, first, msg)
+}
+
+func TestGenericEditBranchResumeFailureStaysUncertainWithoutProviderRedispatch(t *testing.T) {
+	h, source, driver := newEditHarness(t, false)
+	completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	second := completeTurn(t, h, "B", "provider-turn-2")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 4 })
+	driver.mu.Lock()
+	driver.beforeResume = func(cfg ports.ChatResumeConfig) error {
+		if cfg.ProviderConversationID == "thread-forked" {
+			return errors.New("branch resume transport failed")
+		}
+		return nil
+	}
+	driver.mu.Unlock()
+	msg := ports.ChatUserMessage{
+		Text: "B edited", ClientMessageID: "edit-resume-uncertain", Origin: domain.MessageOriginHuman,
+	}
+
+	_, err := h.svc.EditMessage(context.Background(), testSession, second, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("first EditMessage error = %v, want ErrEditDeliveryUncertain", err)
+	}
+	source.mu.Lock()
+	forkCalls := len(source.forkAnchors)
+	source.mu.Unlock()
+	driver.mu.Lock()
+	resumeCalls := len(driver.resumeCalls)
+	if resumeCalls != 2 || driver.resumeCalls[0].ProviderConversationID != "thread-forked" || driver.resumeCalls[1].ProviderConversationID != "thread-1" {
+		t.Fatalf("failed branch resume must restore the source controller: %+v", driver.resumeCalls)
+	}
+	driver.mu.Unlock()
+	if forkCalls != 1 || resumeCalls != 2 {
+		t.Fatalf("provider operations after branch resume failure: forks=%d resumes=%d", forkCalls, resumeCalls)
+	}
+	_, err = h.svc.EditMessage(context.Background(), testSession, second, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("same-controller replay error = %v, want ErrEditDeliveryUncertain", err)
+	}
+	source.mu.Lock()
+	forkCalls = len(source.forkAnchors)
+	source.mu.Unlock()
+	driver.mu.Lock()
+	resumeCalls = len(driver.resumeCalls)
+	driver.mu.Unlock()
+	if forkCalls != 1 || resumeCalls != 2 {
+		t.Fatalf("same-id replay reached provider: forks=%d resumes=%d", forkCalls, resumeCalls)
+	}
+	requireUncertainEditReplayAfterRestart(t, h, second, msg)
+}
+
+func TestGenericEditBindFailureStaysUncertainWithoutProviderRedispatch(t *testing.T) {
+	var faults *failEditOperationStore
+	h, _, driver := newEditHarnessWithStore(t, false, func(st *store.Store) chatsvc.Store {
+		faults = &failEditOperationStore{Store: st}
+		return faults
+	})
+	first := completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	faults.mu.Lock()
+	faults.bindErr = errors.New("bind provider turn failed")
+	faults.mu.Unlock()
+	msg := ports.ChatUserMessage{
+		Text: "A edited", ClientMessageID: "edit-bind-uncertain", Origin: domain.MessageOriginHuman,
+	}
+
+	_, err := h.svc.EditMessage(context.Background(), testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("first EditMessage error = %v, want ErrEditDeliveryUncertain", err)
+	}
+	faults.mu.Lock()
+	bindFailures := faults.bindFailures
+	faults.mu.Unlock()
+	if bindFailures != 1 || driver.fresh.sendCallCount() != 1 {
+		t.Fatalf("provider operations after bind failure: binds=%d sends=%d",
+			bindFailures, driver.fresh.sendCallCount())
+	}
+	_, err = h.svc.EditMessage(context.Background(), testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("same-controller replay error = %v, want ErrEditDeliveryUncertain", err)
+	}
+	faults.mu.Lock()
+	bindFailures = faults.bindFailures
+	faults.mu.Unlock()
+	if bindFailures != 1 || driver.fresh.sendCallCount() != 1 {
+		t.Fatalf("same-id replay repeated ambiguous bind/send: binds=%d sends=%d",
+			bindFailures, driver.fresh.sendCallCount())
+	}
+	requireUncertainEditReplayAfterRestart(t, h, first, msg)
+}
+
+func TestGenericEditBranchInstallationFailureStaysUncertainWithoutProviderRedispatch(t *testing.T) {
+	var faults *failEditOperationStore
+	h, _, driver := newEditHarnessWithStore(t, false, func(st *store.Store) chatsvc.Store {
+		faults = &failEditOperationStore{Store: st}
+		return faults
+	})
+	first := completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	faults.mu.Lock()
+	faults.branchInstallErr = errors.New("install branch failed")
+	faults.mu.Unlock()
+	msg := ports.ChatUserMessage{
+		Text: "A edited", ClientMessageID: "edit-install-uncertain", Origin: domain.MessageOriginHuman,
+	}
+
+	_, err := h.svc.EditMessage(context.Background(), testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("first EditMessage error = %v, want ErrEditDeliveryUncertain", err)
+	}
+	faults.mu.Lock()
+	installFailures := faults.branchInstallFailures
+	faults.mu.Unlock()
+	driver.mu.Lock()
+	startCalls := driver.startCalls
+	driver.mu.Unlock()
+	if installFailures != 1 || startCalls != 2 || driver.fresh.sendCallCount() != 0 {
+		t.Fatalf("provider operations after branch installation failure: installs=%d starts=%d sends=%d",
+			installFailures, startCalls, driver.fresh.sendCallCount())
+	}
+	_, err = h.svc.EditMessage(context.Background(), testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("same-controller replay error = %v, want ErrEditDeliveryUncertain", err)
+	}
+	faults.mu.Lock()
+	installFailures = faults.branchInstallFailures
+	faults.mu.Unlock()
+	driver.mu.Lock()
+	startCalls = driver.startCalls
+	driver.mu.Unlock()
+	if installFailures != 1 || startCalls != 2 || driver.fresh.sendCallCount() != 0 {
+		t.Fatalf("same-id replay repeated branch installation: installs=%d starts=%d sends=%d",
+			installFailures, startCalls, driver.fresh.sendCallCount())
+	}
+	requireUncertainEditReplayAfterRestart(t, h, first, msg)
+}
+
+func TestTypedProviderEditRefusalDurablyReplaysWithoutProviderRedispatch(t *testing.T) {
+	h, _, driver := newEditHarness(t, false)
+	ctx := context.Background()
+	first := completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	driver.fresh.mu.Lock()
+	driver.fresh.sendErr = refusedError{msg: "provider declined the replacement"}
+	driver.fresh.mu.Unlock()
+	msg := ports.ChatUserMessage{
+		Text: "A edited", ClientMessageID: "edit-provider-refused", Origin: domain.MessageOriginHuman,
+	}
+
+	_, err := h.svc.EditMessage(ctx, testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrProviderRefused) {
+		t.Fatalf("first EditMessage error = %v, want ErrProviderRefused", err)
+	}
+	if calls := driver.fresh.sendCallCount(); calls != 1 {
+		t.Fatalf("provider send calls after refusal = %d, want one", calls)
+	}
+	driver.fresh.mu.Lock()
+	driver.fresh.sendErr = nil
+	driver.fresh.mu.Unlock()
+	_, err = h.svc.EditMessage(ctx, testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrProviderRefused) {
+		t.Fatalf("same-controller replay error = %v, want ErrProviderRefused", err)
+	}
+	if calls := driver.fresh.sendCallCount(); calls != 1 {
+		t.Fatalf("provider send calls after refusal replay = %d, want one", calls)
+	}
+
+	restarted, restartedProvider := restartEditService(t, h)
+	_, err = restarted.EditMessage(ctx, testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrProviderRefused) {
+		t.Fatalf("restart replay error = %v, want ErrProviderRefused", err)
+	}
+	if calls := restartedProvider.sendCallCount(); calls != 0 {
+		t.Fatalf("restarted provider received %d sends for refused edit replay, want none", calls)
+	}
+}
+
+func TestAcceptedEditReplaysAfterControllerRestartWithoutProviderRedispatch(t *testing.T) {
+	h, _, driver := newEditHarness(t, false)
+	first := completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	msg := ports.ChatUserMessage{
+		Text: "A edited", ClientMessageID: "edit-restart", Origin: domain.MessageOriginHuman,
+	}
+	original, err := h.svc.EditMessage(context.Background(), testSession, first, msg)
+	if err != nil {
+		t.Fatalf("first EditMessage: %v", err)
+	}
+	if sent := driver.fresh.sentTexts(); len(sent) != 1 {
+		t.Fatalf("original provider sends = %v, want one", sent)
+	}
+
+	restarted, restartedProvider := restartEditService(t, h)
+	replayed, err := restarted.EditMessage(context.Background(), testSession, first, msg)
+	if err != nil {
+		t.Fatalf("EditMessage after restart: %v", err)
+	}
+	if replayed != original {
+		t.Fatalf("restart replay = %+v, want %+v", replayed, original)
+	}
+	if sent := restartedProvider.sentTexts(); len(sent) != 0 {
+		t.Fatalf("restarted provider received edit replay: %v", sent)
+	}
+}
+
+func TestEditCompletionGapStaysUncertainAcrossRetryAndControllerRestart(t *testing.T) {
+	var flaky *failEditCompletionStore
+	h, _, driver := newEditHarnessWithStore(t, false, func(st *store.Store) chatsvc.Store {
+		flaky = &failEditCompletionStore{Store: st}
+		return flaky
+	})
+	first := completeTurn(t, h, "A", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	msg := ports.ChatUserMessage{
+		Text: "A edited", ClientMessageID: "edit-uncertain", Origin: domain.MessageOriginHuman,
+	}
+
+	_, err := h.svc.EditMessage(context.Background(), testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("completion gap error = %v, want ErrEditDeliveryUncertain", err)
+	}
+	_, err = h.svc.EditMessage(context.Background(), testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("same-controller retry error = %v, want ErrEditDeliveryUncertain", err)
+	}
+	if sent := driver.fresh.sentTexts(); len(sent) != 1 {
+		t.Fatalf("provider received %d sends after uncertain retry, want one", len(sent))
+	}
+
+	restarted, restartedProvider := restartEditService(t, h)
+	_, err = restarted.EditMessage(context.Background(), testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("restart retry error = %v, want ErrEditDeliveryUncertain", err)
+	}
+	if sent := restartedProvider.sentTexts(); len(sent) != 0 {
+		t.Fatalf("restarted provider received uncertain edit replay: %v", sent)
+	}
+}
+
+func TestCompletedEditRepairsReceiptAfterControllerRestart(t *testing.T) {
+	h, _, driver := newEditHarnessWithStore(t, false, func(st *store.Store) chatsvc.Store {
+		return &failEditCompletionStore{Store: st}
+	})
+	first := completeTurn(t, h, "original", "provider-turn-1")
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool { return len(s.Messages) == 2 })
+	msg := ports.ChatUserMessage{Text: "replacement", ClientMessageID: "edit-completion-recovery", Origin: domain.MessageOriginHuman}
+	result, err := h.svc.EditMessage(context.Background(), testSession, first, msg)
+	if !errors.Is(err, chatsvc.ErrEditDeliveryUncertain) {
+		t.Fatalf("lost completion = %v", err)
+	}
+	driver.fresh.emit(ports.ChatEvent{Kind: ports.ChatEventTurnCompleted,
+		ProviderTurnID: result.Turn.ProviderTurnID, TurnState: domain.TurnStateCompleted})
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool {
+		for _, turn := range s.Turns {
+			if turn.ID == result.Turn.ID {
+				return turn.State == domain.TurnStateCompleted
+			}
+		}
+		return false
+	})
+	restarted, provider := restartEditService(t, h)
+	recovered, err := restarted.EditMessage(context.Background(), testSession, first, msg)
+	if err != nil || recovered.Turn.ID != result.Turn.ID || recovered.ActiveBranchID != result.ActiveBranchID {
+		t.Fatalf("completed edit recovery = %+v, %v; want original turn %s", recovered, err, result.Turn.ID)
+	}
+	if driver.fresh.sendCallCount() != 1 || provider.sendCallCount() != 0 {
+		t.Fatal("receipt recovery dispatched a second replacement")
+	}
+}
+
+func TestMissingEditTurnReplaysOriginalHTTPStatusAfterRestart(t *testing.T) {
+	h, _, _ := newEditHarness(t, false)
+	check := func(svc *chatsvc.Service) {
+		t.Helper()
+		router := httpd.NewRouterWithControl(config.Config{}, slog.New(slog.DiscardHandler), nil,
+			httpd.APIDeps{Conversations: svc}, httpd.ControlDeps{})
+		request := httptest.NewRequest(http.MethodPost,
+			"/api/v1/sessions/"+string(testSession)+"/conversation/turns/missing/edit",
+			strings.NewReader(`{"text":"replacement","clientMessageId":"missing-turn-replay"}`))
+		request.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"CHAT_EDIT_TURN_INVALID"`) {
+			t.Errorf("missing edit response = %d %s, want 404 CHAT_EDIT_TURN_INVALID", response.Code, response.Body.String())
+		}
+	}
+	check(h.svc)
+	check(h.svc)
+	restarted, provider := restartEditService(t, h)
+	check(restarted)
+	if calls := provider.sendCallCount(); calls != 0 {
+		t.Fatalf("missing edit dispatched %d provider requests", calls)
+	}
+}
+
 func TestEditMessageRejectsMalformedStoredContentBeforeFork(t *testing.T) {
-	h, source, _ := newEditHarness(t, false)
+	h, source, driver := newEditHarness(t, false)
 	created, err := h.st.AppendUserMessage(context.Background(), h.ctrl.ConversationID(), testSession,
 		h.ctrl.Generation(), domain.ConversationMessage{
 			ID: "legacy-message", Text: "legacy", Origin: domain.MessageOriginHuman,
@@ -1371,12 +2407,36 @@ func TestEditMessageRejectsMalformedStoredContentBeforeFork(t *testing.T) {
 	if err != nil || !created {
 		t.Fatalf("AppendUserMessage legacy: created=%v err=%v", created, err)
 	}
-	_, err = h.svc.EditMessage(context.Background(), testSession, "legacy-turn", ports.ChatUserMessage{Text: "edited"})
+	msg := ports.ChatUserMessage{
+		Text: "edited", ClientMessageID: "edit-invalid-content", Origin: domain.MessageOriginHuman,
+	}
+	_, err = h.svc.EditMessage(context.Background(), testSession, "legacy-turn", msg)
 	if !errors.Is(err, chatsvc.ErrEditTurnInvalid) {
 		t.Fatalf("EditMessage malformed content error = %v, want ErrEditTurnInvalid", err)
 	}
-	if anchor := source.lastForkAnchor(); anchor != nil {
-		t.Fatalf("malformed content called Fork at %#v", anchor)
+	_, err = h.svc.EditMessage(context.Background(), testSession, "legacy-turn", msg)
+	if !errors.Is(err, chatsvc.ErrEditTurnInvalid) {
+		t.Fatalf("same-controller replay error = %v, want ErrEditTurnInvalid", err)
+	}
+	source.mu.Lock()
+	forkCalls := len(source.forkAnchors)
+	source.mu.Unlock()
+	driver.mu.Lock()
+	startCalls := driver.startCalls
+	resumeCalls := len(driver.resumeCalls)
+	driver.mu.Unlock()
+	if forkCalls != 0 || startCalls != 1 || resumeCalls != 0 || source.sendCallCount() != 0 {
+		t.Fatalf("provider calls after pre-provider rejection: forks=%d starts=%d resumes=%d sends=%d",
+			forkCalls, startCalls, resumeCalls, source.sendCallCount())
+	}
+
+	restarted, restartedProvider := restartEditService(t, h)
+	_, err = restarted.EditMessage(context.Background(), testSession, "legacy-turn", msg)
+	if !errors.Is(err, chatsvc.ErrEditTurnInvalid) {
+		t.Fatalf("restart replay error = %v, want ErrEditTurnInvalid", err)
+	}
+	if calls := restartedProvider.sendCallCount(); calls != 0 {
+		t.Fatalf("restarted provider received %d sends for validation rejection, want none", calls)
 	}
 }
 
@@ -1448,14 +2508,30 @@ func TestActivateBranchResumeFailureKeepsCurrentControllerActive(t *testing.T) {
 		t.Fatalf("Controller before activation: %v", err)
 	}
 	driver.mu.Lock()
-	delete(driver.resumed, "thread-1")
+	failedTargetResume := false
+	recovered := newFakeConversation()
+	recovered.providerConversationID = current.ProviderConversationID()
+	recovered.turnSeq = 400
+	driver.resumed[current.ProviderConversationID()] = recovered
+	driver.beforeResume = func(cfg ports.ChatResumeConfig) error {
+		if cfg.ProviderConversationID == "thread-1" && !failedTargetResume {
+			failedTargetResume = true
+			return errors.New("target resume failed")
+		}
+		return nil
+	}
 	driver.mu.Unlock()
 	if _, err := h.svc.ActivateBranch(ctx, testSession, edited.SourceBranchID); err == nil {
 		t.Fatal("ActivateBranch succeeded after target resume failure")
 	}
 	after, err := h.svc.Controller(testSession)
-	if err != nil || after != current {
-		t.Fatalf("controller after resume failure = %p, want current %p, err=%v", after, current, err)
+	afterProviderID := ""
+	if after != nil {
+		afterProviderID = after.ProviderConversationID()
+	}
+	if err != nil || after == current || afterProviderID != current.ProviderConversationID() {
+		t.Fatalf("controller after resume failure = %p (%q), want recovered replacement for %p (%q), err=%v",
+			after, afterProviderID, current, current.ProviderConversationID(), err)
 	}
 	conversation, err := h.st.ConversationForSession(ctx, testSession)
 	if err != nil || conversation.ActiveBranchID != edited.ActiveBranchID {
