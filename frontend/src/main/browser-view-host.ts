@@ -330,7 +330,7 @@ type BrowserPermission = Parameters<
 // Explicitly permit the capabilities expected from AO's development browser;
 // macOS still applies its app-level local-network consent. Fail closed for
 // sensitive device access and newly introduced Chromium permission types.
-const ALLOWED_BROWSER_PERMISSIONS = new Set<BrowserPermission>([
+const ALLOWED_BROWSER_PERMISSION_LIST = [
 	"background-fetch",
 	"background-sync",
 	"clipboard-sanitized-write",
@@ -342,7 +342,8 @@ const ALLOWED_BROWSER_PERMISSIONS = new Set<BrowserPermission>([
 	"persistent-storage",
 	"storage-access",
 	"top-level-storage-access",
-]);
+] as const satisfies readonly BrowserPermission[];
+const ALLOWED_BROWSER_PERMISSIONS: ReadonlySet<string> = new Set(ALLOWED_BROWSER_PERMISSION_LIST);
 
 export function isBrowserPermissionAllowed(permission: string): boolean {
 	return ALLOWED_BROWSER_PERMISSIONS.has(permission);
