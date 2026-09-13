@@ -4677,8 +4677,34 @@ func TestListPRSummariesSuppressesActiveDetailsForClosedOrMergedPRs(t *testing.T
 	if pr.State != domain.PRStateMerged {
 		t.Fatalf("state = %q", pr.State)
 	}
-	if len(pr.CI.FailingChecks) != 0 || len(pr.Review.UnresolvedBy) != 0 || pr.Mergeability.State != domain.MergeUnknown || len(pr.Mergeability.Reasons) != 0 {
+	if pr.CI.State != domain.CIUnknown || len(pr.CI.FailingChecks) != 0 || pr.Review.Decision != domain.ReviewNone || len(pr.Review.UnresolvedBy) != 0 || pr.Mergeability.State != domain.MergeUnknown || len(pr.Mergeability.Reasons) != 0 {
 		t.Fatalf("active details should be suppressed for merged PR: ci=%+v review=%+v merge=%+v", pr.CI, pr.Review, pr.Mergeability)
+	}
+}
+
+func TestSummariesSuppressLiveStatesForTerminalPRs(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		pr   domain.PullRequest
+	}{
+		{name: "closed", pr: domain.PullRequest{Closed: true, CI: domain.CIFailing, Review: domain.ReviewChangesRequest, Mergeability: domain.MergeConflicting}},
+		{name: "merged", pr: domain.PullRequest{Merged: true, CI: domain.CIFailing, Review: domain.ReviewChangesRequest, Mergeability: domain.MergeConflicting}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ci := summarizeCI(tt.pr, []domain.PullRequestCheck{{Name: "unit", Status: domain.PRCheckFailed}})
+			review := summarizeReview(tt.pr, []domain.PullRequestComment{{Author: "reviewer"}}, nil, nil, true)
+			mergeability := summarizeMergeability(tt.pr, nil)
+
+			if ci.State != domain.CIUnknown || len(ci.FailingChecks) != 0 {
+				t.Fatalf("ci = %+v, want unknown without live details", ci)
+			}
+			if review.Decision != domain.ReviewNone || review.UnresolvedThreadCount != nil || len(review.UnresolvedBy) != 0 {
+				t.Fatalf("review = %+v, want none without live details", review)
+			}
+			if mergeability.State != domain.MergeUnknown || len(mergeability.Reasons) != 0 {
+				t.Fatalf("mergeability = %+v, want unknown without live details", mergeability)
+			}
+		})
 	}
 }
 
