@@ -488,7 +488,7 @@ describe("SessionChatSurface link routing", () => {
 			sequence: 2,
 			revision: 1,
 			role: "user",
-			origin: "user",
+			origin: "human",
 			text: "Create a new result",
 			streaming: false,
 			createdAt: "2026-08-08T00:00:02Z",
