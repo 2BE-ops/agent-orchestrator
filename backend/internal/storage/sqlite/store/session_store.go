@@ -60,19 +60,17 @@ func (s *Store) UpdateSession(ctx context.Context, rec domain.SessionRecord) err
 
 // UpdateBrowserCapabilityVerifier rotates only the verifier when the caller's
 // controller-owner snapshot is still current. It deliberately leaves every
-// other mutable session field untouched.
+// other mutable session field, including user-visible recency, untouched.
 func (s *Store) UpdateBrowserCapabilityVerifier(
 	ctx context.Context,
 	id domain.SessionID,
 	expected domain.SessionControllerOwner,
 	verifier string,
-	updatedAt time.Time,
 ) (bool, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	rows, err := s.qw.UpdateBrowserCapabilityVerifier(ctx, gen.UpdateBrowserCapabilityVerifierParams{
 		BrowserCapabilityVerifier:      verifier,
-		UpdatedAt:                      updatedAt,
 		ID:                             id,
 		ExpectedHarness:                expected.Harness,
 		ExpectedSessionMode:            domain.NormalizeSessionMode(expected.Mode),
@@ -155,13 +153,11 @@ func (s *Store) ClaimChatControllerGeneration(
 	ctx context.Context,
 	id domain.SessionID,
 	generation string,
-	updatedAt time.Time,
 ) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	rows, err := s.qw.ClaimChatControllerGeneration(ctx, gen.ClaimChatControllerGenerationParams{
 		ControllerGeneration: generation,
-		UpdatedAt:            updatedAt,
 		ID:                   id,
 	})
 	if err != nil {

@@ -593,6 +593,13 @@ func (l *sqliteTransitionLifecycle) ApplyActivitySignal(
 ) error {
 	return lifecycle.New(l.store, nil).ApplyActivitySignal(ctx, id, signal)
 }
+func (l *sqliteTransitionLifecycle) MarkChatReconnected(
+	ctx context.Context,
+	id domain.SessionID,
+	metadata domain.SessionMetadata,
+) error {
+	return lifecycle.New(l.store, nil).MarkChatReconnected(ctx, id, metadata)
+}
 func (l *sqliteTransitionLifecycle) CommitControllerEpoch(
 	ctx context.Context,
 	id domain.SessionID,

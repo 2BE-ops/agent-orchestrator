@@ -1068,7 +1068,7 @@ func TestResumeImportsNativeHistoryBeforeTheChatControllerStarts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateConversation: %v", err)
 	}
-	if err := st.ClaimChatControllerGeneration(context.Background(), testSession, "old-generation", now); err != nil {
+	if err := st.ClaimChatControllerGeneration(context.Background(), testSession, "old-generation"); err != nil {
 		t.Fatalf("ClaimChatControllerGeneration: %v", err)
 	}
 	created, err := st.AppendUserMessage(context.Background(), existing.ID, testSession, "old-generation",
@@ -1977,7 +1977,7 @@ func TestInterfaceHandoffAOHighWaterFallbackMustStayInItsTurn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create conversation: %v", err)
 	}
-	if err := st.ClaimChatControllerGeneration(ctx, testSession, "chat-generation", now); err != nil {
+	if err := st.ClaimChatControllerGeneration(ctx, testSession, "chat-generation"); err != nil {
 		t.Fatalf("claim generation: %v", err)
 	}
 	created, err := st.AppendUserMessage(
@@ -2060,7 +2060,7 @@ func TestInterfaceHandoffAOHighWaterAcceptsMappedReassignedTurn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create conversation: %v", err)
 	}
-	if err := st.ClaimChatControllerGeneration(ctx, testSession, "chat-generation", now); err != nil {
+	if err := st.ClaimChatControllerGeneration(ctx, testSession, "chat-generation"); err != nil {
 		t.Fatalf("claim generation: %v", err)
 	}
 	created, err := st.AppendUserMessage(
@@ -2209,7 +2209,7 @@ func TestInterfaceHandoffRoundTripRetiresTrustedTerminalCheckpointAfterChatTurn(
 	if err != nil {
 		t.Fatalf("create Chat conversation: %v", err)
 	}
-	if err := st.ClaimChatControllerGeneration(ctx, testSession, "chat-generation-b", now); err != nil {
+	if err := st.ClaimChatControllerGeneration(ctx, testSession, "chat-generation-b"); err != nil {
 		t.Fatalf("claim Chat generation: %v", err)
 	}
 	created, err := st.AppendUserMessage(
@@ -2285,7 +2285,7 @@ func TestInterfaceHandoffDoesNotAnchorReplayCheckpointOnFailedTurn(t *testing.T)
 	if err != nil {
 		t.Fatalf("CreateConversation: %v", err)
 	}
-	if err := st.ClaimChatControllerGeneration(context.Background(), testSession, "old-generation", now); err != nil {
+	if err := st.ClaimChatControllerGeneration(context.Background(), testSession, "old-generation"); err != nil {
 		t.Fatalf("ClaimChatControllerGeneration: %v", err)
 	}
 	// An older completed Chat round trip that the provider will replay.
@@ -2437,7 +2437,7 @@ func TestInterfaceHandoffDoesNotAnchorReplayBeforeProviderCoordinationBoundary(t
 	if err != nil {
 		t.Fatalf("CreateConversation: %v", err)
 	}
-	if err := st.ClaimChatControllerGeneration(context.Background(), testSession, "old-generation", now); err != nil {
+	if err := st.ClaimChatControllerGeneration(context.Background(), testSession, "old-generation"); err != nil {
 		t.Fatalf("ClaimChatControllerGeneration: %v", err)
 	}
 
@@ -2945,7 +2945,7 @@ func (h *harness) awaitSnapshot(t *testing.T, pred func(store.ConversationSnapsh
 func TestStaleControllerEventsDoNotReachTheTimeline(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
-	if err := h.st.ClaimChatControllerGeneration(ctx, testSession, "replacement-generation", h.now()); err != nil {
+	if err := h.st.ClaimChatControllerGeneration(ctx, testSession, "replacement-generation"); err != nil {
 		t.Fatalf("replace controller generation: %v", err)
 	}
 
@@ -4496,6 +4496,16 @@ func TestServiceLiveReconnectKeepsDurableRunningTurnBusy(t *testing.T) {
 	})
 	first.StopAll(context.Background())
 
+	before, found, err := st.GetSession(context.Background(), testSession)
+	if err != nil || !found {
+		t.Fatalf("read before restart: found=%v err=%v", found, err)
+	}
+	before.Activity = domain.Activity{State: domain.ActivityActive, LastActivityAt: time.Unix(100, 0).UTC()}
+	before.Metadata.ProviderConversationID = firstProvider.ProviderConversationID()
+	if err := st.UpdateSession(context.Background(), before); err != nil {
+		t.Fatal(err)
+	}
+	lcm := lifecycle.New(st, nil)
 	secondProvider := &liveReconnectedConversation{nativeHistoryConversation: &nativeHistoryConversation{
 		fakeConversation: newFakeConversation(),
 	}}
@@ -4508,9 +4518,27 @@ func TestServiceLiveReconnectKeepsDurableRunningTurnBusy(t *testing.T) {
 	secondController, err := second.Start(context.Background(), chatsvc.StartConfig{
 		SessionID: testSession, ProjectID: testProject, Harness: domain.HarnessCodex,
 		WorkspacePath: t.TempDir(), ProviderConversationID: firstProvider.ProviderConversationID(),
+		ControllerReady: func(result chatsvc.StartResult) (chatsvc.ControllerCommit, error) {
+			if !result.LiveReconnect {
+				t.Fatal("same live provider was reported as a fresh spawn")
+			}
+			return chatsvc.ControllerCommit{}, lcm.MarkChatReconnected(context.Background(), testSession, domain.SessionMetadata{
+				ProviderConversationID: result.ProviderConversationID, ControllerGeneration: result.ControllerGeneration,
+			})
+		},
 	})
 	if err != nil {
 		t.Fatalf("reconnect Start: %v", err)
+	}
+	after, _, err := st.GetSession(context.Background(), testSession)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Activity != before.Activity || !after.UpdatedAt.Equal(before.UpdatedAt) {
+		t.Fatalf("reconnect changed activity/recency: before=%+v after=%+v", before, after)
+	}
+	if after.Metadata.ControllerGeneration == before.Metadata.ControllerGeneration {
+		t.Fatal("generation did not rotate")
 	}
 	queued, err := secondController.Send(context.Background(), ports.ChatUserMessage{Text: "after restart"})
 	if err != nil {

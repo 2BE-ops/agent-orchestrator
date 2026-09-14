@@ -432,7 +432,7 @@ func TestActivateChatAgentSwitchTargetRejectsMismatchedSourceControllerGeneratio
 	advanceAgentSwitchFixtureWithMutation(ctx, t, s, &sw, domain.AgentSwitchStartingTarget, now.Add(3*time.Second), func(next *domain.AgentSwitch) {
 		next.TargetNativeSessionRef = &target.ID
 	})
-	if err := s.ClaimChatControllerGeneration(ctx, session.ID, "unexpected-chat-generation", now.Add(4*time.Second)); err != nil {
+	if err := s.ClaimChatControllerGeneration(ctx, session.ID, "unexpected-chat-generation"); err != nil {
 		t.Fatalf("replace source Chat generation: %v", err)
 	}
 

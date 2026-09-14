@@ -86,7 +86,7 @@ func (f *fakeStore) UpdateSession(_ context.Context, rec domain.SessionRecord) e
 	f.sessions[rec.ID] = rec
 	return nil
 }
-func (f *fakeStore) UpdateBrowserCapabilityVerifier(_ context.Context, id domain.SessionID, expected domain.SessionControllerOwner, verifier string, updatedAt time.Time) (bool, error) {
+func (f *fakeStore) UpdateBrowserCapabilityVerifier(_ context.Context, id domain.SessionID, expected domain.SessionControllerOwner, verifier string) (bool, error) {
 	if f.updateSessionErr != nil {
 		return false, f.updateSessionErr
 	}
@@ -95,9 +95,6 @@ func (f *fakeStore) UpdateBrowserCapabilityVerifier(_ context.Context, id domain
 		return false, nil
 	}
 	rec.Metadata.BrowserCapabilityVerifier = verifier
-	if rec.UpdatedAt.Before(updatedAt) {
-		rec.UpdatedAt = updatedAt
-	}
 	f.sessions[id] = rec
 	return true, nil
 }
@@ -220,6 +217,13 @@ func (l *fakeLCM) MarkSpawned(_ context.Context, id domain.SessionID, metadata d
 	rec.Activity = domain.Activity{State: domain.ActivityIdle, LastActivityAt: time.Now()}
 	rec.FirstSignalAt = time.Now()
 	rec.Metadata = preserveCheckpointOnFakeMarkSpawned(rec.Metadata, metadata)
+	l.store.sessions[id] = rec
+	return nil
+}
+
+func (l *fakeLCM) MarkChatReconnected(_ context.Context, id domain.SessionID, metadata domain.SessionMetadata) error {
+	rec := l.store.sessions[id]
+	rec.Metadata = metadata
 	l.store.sessions[id] = rec
 	return nil
 }
@@ -7943,7 +7947,7 @@ func TestReconcileLive_RelaunchFailureLeavesSessionExitedAndRecoverable(t *testi
 	}
 }
 
-func TestReconcileLive_RuntimeFailureAfterLaunchMetadataUpdateLeavesSessionResumable(t *testing.T) {
+func TestReconcileLive_RuntimeFailureAfterCapabilityUpdateLeavesSessionResumable(t *testing.T) {
 	st := newFakeStore()
 	st.projects["p1"] = domain.ProjectRecord{ID: "p1", Config: testRoleAgents()}
 	rt := &fakeRuntime{
@@ -7983,15 +7987,15 @@ func TestReconcileLive_RuntimeFailureAfterLaunchMetadataUpdateLeavesSessionResum
 	if failed.Metadata.BrowserCapabilityVerifier != "verifier-1" {
 		t.Fatalf("browser capability verifier = %q, want launch metadata persisted", failed.Metadata.BrowserCapabilityVerifier)
 	}
-	if !failed.UpdatedAt.Equal(launchUpdatedAt) {
-		t.Fatalf("UpdatedAt = %v, want launch metadata timestamp %v", failed.UpdatedAt, launchUpdatedAt)
+	if !failed.UpdatedAt.Equal(bootUpdatedAt) {
+		t.Fatalf("UpdatedAt = %v, want preserved recency %v", failed.UpdatedAt, bootUpdatedAt)
 	}
 	if failed.Metadata.AgentSessionID != "native-conversation-1" || failed.Metadata.WorkspacePath != "/wt/s1" {
 		t.Fatalf("native identity/worktree changed after failed relaunch: %+v", failed.Metadata)
 	}
 
-	// The failed startup attempt must land in the ordinary Resume Agent state,
-	// even though launch preparation advanced UpdatedAt before runtime.Create.
+	// The failed startup attempt must land in the ordinary Resume Agent state
+	// without treating capability rotation as user-visible session activity.
 	rt.createErr = nil
 	if _, err := m.ResumeAgentWithMode(context.Background(), rec.ID); err != nil {
 		t.Fatalf("ResumeAgentWithMode after dependency recovery: %v", err)

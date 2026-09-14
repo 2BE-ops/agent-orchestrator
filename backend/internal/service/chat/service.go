@@ -196,12 +196,18 @@ type ControllerCommit struct {
 	ControllerOwner domain.SessionControllerOwner
 }
 
+func conversationReconnectedLive(conv ports.ChatConversation) bool {
+	reconnected, ok := conv.(ports.ChatLiveReconnector)
+	return ok && reconnected.ReconnectedLive()
+}
+
 func controllerStartResult(
 	controller *Controller,
 	providerBoundary *domain.ConversationBranch,
 	commitProviderHistory func(context.Context) error,
 ) StartResult {
 	return StartResult{
+		LiveReconnect:          conversationReconnectedLive(controller.conv),
 		ProviderConversationID: controller.ProviderConversationID(),
 		ControllerGeneration:   controller.Generation(),
 		Conversation:           controller.conversation,
@@ -641,7 +647,7 @@ func (s *Service) Start(ctx context.Context, cfg StartConfig) (*Controller, erro
 		generation = s.newID()
 	}
 	if providerBoundaryID == "" {
-		if err := s.store.ClaimChatControllerGeneration(ctx, cfg.SessionID, generation, s.now()); err != nil {
+		if err := s.store.ClaimChatControllerGeneration(ctx, cfg.SessionID, generation); err != nil {
 			_ = cleanupUnpublishedConversation(conv, cfg.ProviderConversationID == "")
 			return nil, fmt.Errorf("claim chat controller: %w", err)
 		}
@@ -1368,6 +1374,9 @@ type StartRequest struct {
 
 // StartResult is the durable outcome of a launch.
 type StartResult struct {
+	// LiveReconnect is true only when the driver attached to the same running
+	// provider process. A native-history resume in a new process is a spawn.
+	LiveReconnect          bool
 	ProviderConversationID string
 	ControllerGeneration   string
 	Conversation           domain.ConversationRecord

@@ -41,21 +41,21 @@ func (q *Queries) ActivateConversationBranchSession(ctx context.Context, arg Act
 
 const claimChatControllerGeneration = `-- name: ClaimChatControllerGeneration :execrows
 UPDATE sessions
-SET controller_generation = ?, updated_at = ?
+SET controller_generation = ?
 WHERE id = ? AND session_mode = 'chat'
 `
 
 type ClaimChatControllerGenerationParams struct {
 	ControllerGeneration string
-	UpdatedAt            time.Time
 	ID                   domain.SessionID
 }
 
 // A Chat controller claims ownership before its event goroutine starts. Provider
 // projections compare against this value in the same transaction as their write,
 // so an older controller cannot mutate a session after a replacement takes over.
+// Ownership changes are not activity and must not advance the board's recency.
 func (q *Queries) ClaimChatControllerGeneration(ctx context.Context, arg ClaimChatControllerGenerationParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, claimChatControllerGeneration, arg.ControllerGeneration, arg.UpdatedAt, arg.ID)
+	result, err := q.db.ExecContext(ctx, claimChatControllerGeneration, arg.ControllerGeneration, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -988,22 +988,20 @@ func (q *Queries) SetSessionTerminateOnPRMerge(ctx context.Context, arg SetSessi
 
 const updateBrowserCapabilityVerifier = `-- name: UpdateBrowserCapabilityVerifier :execrows
 UPDATE sessions SET
-    browser_capability_verifier = ?1,
-    updated_at = MAX(updated_at, ?2)
-WHERE id = ?3
-  AND harness = ?4
-  AND session_mode = ?5
-  AND is_terminated = ?6
-  AND runtime_launch_id = ?7
-  AND agent_session_id = ?8
-  AND agent_session_id_launch_id = ?9
-  AND provider_conversation_id = ?10
-  AND controller_generation = ?11
+    browser_capability_verifier = ?1
+WHERE id = ?2
+  AND harness = ?3
+  AND session_mode = ?4
+  AND is_terminated = ?5
+  AND runtime_launch_id = ?6
+  AND agent_session_id = ?7
+  AND agent_session_id_launch_id = ?8
+  AND provider_conversation_id = ?9
+  AND controller_generation = ?10
 `
 
 type UpdateBrowserCapabilityVerifierParams struct {
 	BrowserCapabilityVerifier      string
-	UpdatedAt                      interface{}
 	ID                             domain.SessionID
 	ExpectedHarness                domain.AgentHarness
 	ExpectedSessionMode            domain.SessionMode
@@ -1017,11 +1015,10 @@ type UpdateBrowserCapabilityVerifierParams struct {
 
 // Rotate only the browser credential for the exact controller owner observed by
 // the launcher. This must not replay a stale SessionRecord over newer lifecycle,
-// activity, termination, or provider ownership facts.
+// activity, termination, provider ownership, or user-visible recency facts.
 func (q *Queries) UpdateBrowserCapabilityVerifier(ctx context.Context, arg UpdateBrowserCapabilityVerifierParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, updateBrowserCapabilityVerifier,
 		arg.BrowserCapabilityVerifier,
-		arg.UpdatedAt,
 		arg.ID,
 		arg.ExpectedHarness,
 		arg.ExpectedSessionMode,

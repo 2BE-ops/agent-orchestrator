@@ -194,7 +194,7 @@ func seedRecoveryCheckpointHistory(t *testing.T, st *sqlite.Store, state domain.
 	if err != nil {
 		t.Fatalf("create conversation: %v", err)
 	}
-	if err := st.ClaimChatControllerGeneration(ctx, testSession, "chat-generation", now); err != nil {
+	if err := st.ClaimChatControllerGeneration(ctx, testSession, "chat-generation"); err != nil {
 		t.Fatalf("claim Chat generation: %v", err)
 	}
 	created, err := st.AppendUserMessage(ctx, conversation.ID, testSession, "chat-generation",
