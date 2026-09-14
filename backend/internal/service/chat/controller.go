@@ -1445,11 +1445,25 @@ func (c *Controller) Settings() domain.ConversationSettings {
 // The row is written first: if that fails, the in-memory copy must not move, or a
 // restart would silently revert a choice the user watched take effect.
 func (c *Controller) SetSettings(ctx context.Context, settings domain.ConversationSettings) error {
+	c.configMu.Lock()
+	defer c.configMu.Unlock()
+	return c.setSettingsLocked(ctx, settings)
+}
+
+// setSettingsLocked keeps a provider-owned config change and its durable AO
+// projection inside the same handoff fence. The caller holds configMu.
+func (c *Controller) setSettingsLocked(ctx context.Context, settings domain.ConversationSettings) error {
 	if c.permissionFloor == ports.PermissionModeReadOnly && settings.ApprovalMode != ports.PermissionModeReadOnly {
 		return fmt.Errorf("%w: a read-only session cannot grant write access", ports.ErrChatPermissionModeUnsupported)
 	}
 	if settings.ApprovalMode == ports.PermissionModeReadOnly && !c.Capabilities().Has(ports.ChatCapabilityPreventiveReadOnly) {
 		return fmt.Errorf("%w: %s cannot enforce read-only Chat", ports.ErrChatPermissionModeUnsupported, c.harness)
+	}
+	c.mu.Lock()
+	handoff := c.handoff != controllerHandoffNone
+	c.mu.Unlock()
+	if handoff {
+		return ErrControllerHandoff
 	}
 	if err := c.store.SetConversationSettings(ctx, c.conversation.ID, settings, c.now()); err != nil {
 		return fmt.Errorf("record conversation settings: %w", err)
@@ -1708,6 +1722,8 @@ func (c *Controller) ArmHandoff(
 	}
 	want := interfaceHandoff(policy)
 
+	c.configMu.Lock()
+	defer c.configMu.Unlock()
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -1818,6 +1834,8 @@ func (c *Controller) BeginHandoff(
 // or interrupts accepted work: branch changes are refused until the user stops
 // the active turn and the durable queue is empty.
 func (c *Controller) BeginIdleBranchHandoff(ctx context.Context) error {
+	c.configMu.Lock()
+	defer c.configMu.Unlock()
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()
 

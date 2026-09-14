@@ -424,8 +424,7 @@ func (s *Service) EditMessage(
 		branch.ReplayCutoffSequence = anchor.ForkAfterSequence
 		branch.ReplayTruncated = replayTruncated
 	}
-	conversation := source.conversation
-	conversation.ActiveBranchID = branchID
+	conversation := replacementConversation(source, branchID)
 	replacement := newController(id, conversation, generation, source.harness, source.permissionFloor, provider, s.store, s.activity, s.log, s.newID, s.now, s.onAccountChanged, s.onCodexCapacityChanged)
 	if err := s.store.CreateAndActivateConversationBranch(
 		operationCtx, id, branch, generation, s.now(),
@@ -913,8 +912,7 @@ func (s *Service) activateBranchLocked(ctx context.Context, id domain.SessionID,
 		return "", resumeErr
 	}
 	generation := s.newID()
-	conversation := source.conversation
-	conversation.ActiveBranchID = branch.ID
+	conversation := replacementConversation(source, branch.ID)
 	replacement := newController(id, conversation, generation, source.harness, source.permissionFloor, provider, s.store, s.activity, s.log, s.newID, s.now, s.onAccountChanged, s.onCodexCapacityChanged)
 	if err := s.store.ActivateConversationBranch(operationCtx, id, conversation.ID, branch.ID,
 		branch.ProviderConversationID, generation, s.now()); err != nil {
@@ -1004,8 +1002,7 @@ func (s *Service) restoreClosedSourceController(
 		return fmt.Errorf("resume source after failed native edit: %w", err)
 	}
 	generation := s.newID()
-	conversation := source.conversation
-	conversation.ActiveBranchID = branch.ID
+	conversation := replacementConversation(source, branch.ID)
 	replacement := newController(
 		id, conversation, generation, source.harness, source.permissionFloor, provider, s.store, s.activity, s.log, s.newID, s.now, s.onAccountChanged, s.onCodexCapacityChanged)
 	if err := s.store.ActivateConversationBranch(recoveryCtx, id, conversation.ID, branch.ID,
@@ -1017,6 +1014,16 @@ func (s *Service) restoreClosedSourceController(
 		return fmt.Errorf("install source after failed native edit: %w", err)
 	}
 	return nil
+}
+
+// replacementConversation snapshots the settings that were current when the
+// source intake fence closed. The controller's original conversation record is
+// intentionally immutable, so it may contain the settings from initial launch.
+func replacementConversation(source *Controller, activeBranchID string) domain.ConversationRecord {
+	conversation := source.conversation
+	conversation.ActiveBranchID = activeBranchID
+	conversation.Settings = source.Settings()
+	return conversation
 }
 
 func (s *Service) installBranchController(

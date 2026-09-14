@@ -1540,6 +1540,9 @@ func (s *Service) SetConfigOption(
 	}
 	controller.configMu.Lock()
 	defer controller.configMu.Unlock()
+	if controller.handoffActive() {
+		return nil, ErrControllerHandoff
+	}
 	options, err := configurer.SetConfigOption(ctx, configID, value)
 	if err != nil {
 		return nil, err
@@ -1555,7 +1558,7 @@ func (s *Service) SetConfigOption(
 		}
 	}
 	if settings != previous {
-		if err := controller.SetSettings(ctx, settings); err != nil {
+		if err := controller.setSettingsLocked(ctx, settings); err != nil {
 			return nil, err
 		}
 	}
@@ -1695,7 +1698,7 @@ func (s *Service) SetTurnSettings(
 	defer controller.configMu.Unlock()
 	// The turn-settings endpoint does not own provider session mode choices.
 	settings.OpenCodeMode = controller.Settings().OpenCodeMode
-	if err := controller.SetSettings(ctx, settings); err != nil {
+	if err := controller.setSettingsLocked(ctx, settings); err != nil {
 		return domain.ConversationSettings{}, err
 	}
 	return controller.Settings(), nil

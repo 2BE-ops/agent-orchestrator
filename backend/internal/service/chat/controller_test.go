@@ -4041,6 +4041,27 @@ func TestChatHandoffDrainFinishesAcceptedQueueAndClosesNewIntake(t *testing.T) {
 	}
 }
 
+func TestChatHandoffArmFreezesTurnSettingsUntilAbort(t *testing.T) {
+	h := newHarness(t)
+	caps := h.conv.Capabilities()
+	caps[ports.ChatCapabilityPreventiveReadOnly] = true
+	h.conv.setCapabilities(caps)
+	ctx := context.Background()
+
+	if err := h.svc.ArmChatHandoff(ctx, testSession, domain.SessionInterfaceTransitionInterrupt); err != nil {
+		t.Fatalf("ArmChatHandoff: %v", err)
+	}
+	settings := h.ctrl.Settings()
+	settings.ApprovalMode = ports.PermissionModeReadOnly
+	if _, err := h.svc.SetTurnSettings(ctx, testSession, settings); !errors.Is(err, chatsvc.ErrControllerHandoff) {
+		t.Fatalf("SetTurnSettings while armed = %v, want ErrControllerHandoff", err)
+	}
+	h.svc.AbortChatHandoff(testSession)
+	if _, err := h.svc.SetTurnSettings(ctx, testSession, settings); err != nil {
+		t.Fatalf("SetTurnSettings after abort: %v", err)
+	}
+}
+
 func TestChatHandoffInterruptArmBlocksCompletionFromPromotingQueue(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
