@@ -7,6 +7,8 @@ package conpty
 type oscTitleFilter struct {
 	prefix        []byte
 	inTitle       bool
+	inCommand     bool
+	commandValue  int
 	utf8Remaining int
 }
 
@@ -44,6 +46,31 @@ func (f *oscTitleFilter) filter(p []byte) []byte {
 			}
 			continue
 		}
+		if f.inCommand {
+			switch {
+			case b >= '0' && b <= '9':
+				out = append(out, b)
+				// Only 0, 1, and 2 are titles. Saturating all larger
+				// values avoids overflow while accepting any number of
+				// leading zeros without buffering the command.
+				if f.commandValue <= 2 {
+					f.commandValue = f.commandValue*10 + int(b-'0')
+					if f.commandValue > 2 {
+						f.commandValue = 3
+					}
+				}
+				continue
+			case b == ';':
+				out = append(out, b)
+				f.inCommand = false
+				f.inTitle = f.commandValue <= 2
+				f.commandValue = 0
+				continue
+			default:
+				f.inCommand = false
+				f.commandValue = 0
+			}
+		}
 
 		oscLen := 2 // ESC ]; C1 OSC is a single byte.
 		if len(f.prefix) > 0 && f.prefix[0] == 0x9d {
@@ -53,16 +80,18 @@ func (f *oscTitleFilter) filter(p []byte) []byte {
 		case len(f.prefix) == 1 && f.prefix[0] == 0x1b && b == ']':
 			f.prefix = append(f.prefix, b)
 			continue
-		case len(f.prefix) == oscLen && b >= '0' && b <= '2':
-			f.prefix = append(f.prefix, b)
-			continue
-		case len(f.prefix) == oscLen+1 && b == ';':
+		case len(f.prefix) == oscLen && b >= '0' && b <= '9':
 			// Retain the envelope: its introducer cancels any preceding partial
-			// escape in the emulator, and the terminator restores ground.
+			// escape in the emulator, and the terminator restores ground. Emit
+			// it while parsing so leading zeros cannot grow the buffer.
 			out = append(out, f.prefix...)
 			out = append(out, b)
 			f.prefix = f.prefix[:0]
-			f.inTitle = true
+			f.inCommand = true
+			f.commandValue = int(b - '0')
+			if f.commandValue > 2 {
+				f.commandValue = 3
+			}
 			continue
 		}
 		out = append(out, f.prefix...)
