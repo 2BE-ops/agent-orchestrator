@@ -225,6 +225,9 @@ func (s *ClaudeSource) ReadMetadata(ctx context.Context, path string) (Importabl
 		return ImportableSession{}, false, err
 	}
 	meta := parseClaudeHead(head)
+	if isClaudeHelperSession(meta.cwd) {
+		return ImportableSession{}, false, nil
+	}
 	last := meta.lastTimestamp
 	title := meta.aiTitle
 	for _, part := range [][]byte{head, tail} {

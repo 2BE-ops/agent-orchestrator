@@ -127,6 +127,20 @@ func TestDiscoverAcrossProviders(t *testing.T) {
 	}
 }
 
+func TestClaudeDiscoverSkipsTitleHelperTranscript(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "projects", "title-helper", "11111111-1111-4111-8111-111111111111.jsonl")
+	body := "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"Name this conversation\"},\"uuid\":\"u1\",\"timestamp\":\"2026-08-20T10:00:00.000Z\",\"cwd\":\"/tmp/t3code-claude-title-abc123\"}\n"
+	writeFile(t, path, body)
+	found, err := NewService(nil, NewClaudeSourceAt(root)).Discover(context.Background(), DiscoverOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("title helper was importable: %+v", found)
+	}
+}
+
 func TestDiscoverSinceFilter(t *testing.T) {
 	claudeDir, codexHome := buildFakeHome(t)
 	svc := NewService(nil, NewClaudeSourceAt(claudeDir), NewCodexSourceAt(codexHome, true))

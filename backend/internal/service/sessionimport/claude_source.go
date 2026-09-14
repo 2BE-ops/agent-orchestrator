@@ -169,6 +169,9 @@ func (s *ClaudeSource) readSessionUncached(ctx context.Context, configDir, path,
 	}
 
 	meta := parseClaudeHead(head)
+	if isClaudeHelperSession(meta.cwd) {
+		return ImportableSession{}, false, nil
+	}
 
 	last := meta.lastTimestamp
 	if size > opts.MaxScanBytes {
@@ -201,6 +204,14 @@ func (s *ClaudeSource) readSessionUncached(ctx context.Context, configDir, path,
 		SizeBytes:  size,
 		TokenCount: -1,
 	}, true, nil
+}
+
+// Desktop clients can invoke Claude in a temporary directory solely to name a
+// conversation. Those helper transcripts contain the naming prompt, not the
+// conversation they describe, so presenting them as resumable sessions loses
+// the real chat and can resume the wrong process.
+func isClaudeHelperSession(cwd string) bool {
+	return strings.HasPrefix(filepath.Base(filepath.Clean(cwd)), "t3code-claude-title-")
 }
 
 type claudeHeadMeta struct {

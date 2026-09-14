@@ -295,8 +295,8 @@ const SummaryView = memo(function SummaryView({
 		<SessionInspectorSummaryView
 			activity={
 				<>
-					<ActivityTimeline prs={prSummaries} session={session} />
 					<ResumeAgentControl session={session} />
+					<ActivityTimeline prs={prSummaries} session={session} />
 				</>
 			}
 			activityTitle={t("inspector.activity")}

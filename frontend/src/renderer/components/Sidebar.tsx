@@ -1948,6 +1948,7 @@ function SessionRow({
 					{/* The timestamp is stable at the right edge. Pin and kill use label
 					    space while idle, then reveal without changing the row footprint. */}
 					<SessionActions
+						active={active}
 						isDragging={Boolean(reorder?.isDragging)}
 						session={session}
 					/>
@@ -1983,15 +1984,30 @@ const SessionMessageAge = memo(function SessionMessageAge({ session }: { session
 
 const SessionActions = memo(function SessionActions({
 	session,
+	active,
 	isDragging,
 }: {
 	session: WorkspaceSession;
+	active: boolean;
 	isDragging: boolean;
 }) {
 	const { t } = useTranslation();
+	const navigate = useNavigate();
 	const { mutate: pinSession } = usePinSession();
 	const { mutate: unpinSession } = useUnpinSession();
-	const { mutate: terminateSession, isPending: isKilling } = useTerminateSession();
+	const { mutate: terminateSession, isPending: isKilling } = useTerminateSession({
+		onSuccess: (terminated) => {
+			if (!active) return;
+			if (terminated.workspaceId === STANDALONE_WORKSPACE_ID) {
+				void navigate({ to: "/" });
+				return;
+			}
+			void navigate({
+				to: "/projects/$projectId",
+				params: { projectId: terminated.workspaceId },
+			});
+		},
+	});
 
 	return (
 		<div

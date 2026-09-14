@@ -29,6 +29,21 @@ func TestMetadataClaudeTailTitleNoUsageCache(t *testing.T) {
 		t.Fatal("metadata warmed transcript cache")
 	}
 }
+
+func TestMetadataSkipsClaudeTitleHelperTranscript(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "projects", "title-helper", "11111111-1111-1111-1111-111111111111.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	body := "{\"type\":\"user\",\"cwd\":\"/tmp/t3code-claude-title-abc123\",\"message\":{\"role\":\"user\",\"content\":\"Name this conversation\"}}\n"
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if session, ok, err := NewClaudeSourceAt(root).ReadMetadata(context.Background(), path); err != nil || ok {
+		t.Fatalf("title helper was importable: session=%+v ok=%v err=%v", session, ok, err)
+	}
+}
 func TestMetadataReadFailureAndRootEscape(t *testing.T) {
 	root := t.TempDir()
 	src := NewClaudeSourceAt(root)

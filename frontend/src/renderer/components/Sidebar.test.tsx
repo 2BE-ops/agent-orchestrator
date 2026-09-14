@@ -716,6 +716,29 @@ describe("Sidebar", () => {
 		expect(screen.getByLabelText("Kill session")).toHaveProperty("tabIndex", 0);
 	});
 
+	it("leaves a session route after killing that session from the sidebar", async () => {
+		mockParams.sessionId = session.id;
+		renderSidebar({ workspaces: [{ ...workspace, sessions: [session] }] });
+
+		await userEvent.click(screen.getByLabelText("Kill session"));
+		await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({
+			to: "/projects/$projectId",
+			params: { projectId: workspace.id },
+		}));
+	});
+
+	it("keeps the current route when killing a different sidebar session", async () => {
+		mockParams.sessionId = "another-session";
+		renderSidebar({ workspaces: [{ ...workspace, sessions: [session] }] });
+
+		await userEvent.click(screen.getByLabelText("Kill session"));
+		await waitFor(() => expect(postMock).toHaveBeenCalledWith(
+			"/api/v1/sessions/{sessionId}/kill",
+			expect.anything(),
+		));
+		expect(navigateMock).not.toHaveBeenCalled();
+	});
+
 	it("fades the message age out in favor of the overlaid hover actions", () => {
 		const lastUserMessageAt = "2026-06-29T23:55:00Z";
 		renderSidebar({
