@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>T3 Code Provider Authentication — Architecture and Provider Checks</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --page: #f4f5f7;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --text: #18202b;
+      --muted: #5d6878;
+      --line: #dce1e8;
+      --brand: #6d4aff;
+      --brand-soft: #eeeaff;
+      --good: #087a55;
+      --good-soft: #e3f7ef;
+      --warn: #a45a00;
+      --warn-soft: #fff3d6;
+      --bad: #b4232d;
+      --bad-soft: #ffe8e8;
+      --unknown: #5e6472;
+      --unknown-soft: #eceef2;
+      --code: #f1f3f6;
+      --shadow: 0 14px 40px rgba(27, 31, 40, .08);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page: #0d1015;
+        --panel: #151a21;
+        --panel-soft: #11161c;
+        --text: #edf1f7;
+        --muted: #a4adba;
+        --line: #2b333f;
+        --brand: #a894ff;
+        --brand-soft: #282343;
+        --good: #66d5aa;
+        --good-soft: #12392e;
+        --warn: #f0ba63;
+        --warn-soft: #3a2c15;
+        --bad: #ff8e96;
+        --bad-soft: #3d2024;
+        --unknown: #c0c6d0;
+        --unknown-soft: #292e37;
+        --code: #202630;
+        --shadow: 0 18px 50px rgba(0, 0, 0, .28);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--text);
+      font: 15px/1.62 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    a { color: var(--brand); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    code { background: var(--code); border-radius: 5px; padding: .12rem .35rem; font-size: .9em; }
+    pre {
+      margin: 1rem 0;
+      overflow-x: auto;
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 1rem;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    h1, h2, h3 { line-height: 1.18; letter-spacing: -.025em; }
+    h1 { margin: .35rem 0 .75rem; font-size: clamp(2.15rem, 6vw, 4.5rem); max-width: 950px; }
+    h2 { margin: 0 0 1rem; font-size: clamp(1.55rem, 3vw, 2.25rem); }
+    h3 { margin: 0 0 .55rem; font-size: 1.12rem; }
+    p { margin: .55rem 0; }
+    ul, ol { padding-left: 1.35rem; }
+    li + li { margin-top: .35rem; }
+
+    .shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
+    .hero { padding: 72px 0 40px; }
+    .eyebrow { color: var(--brand); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; font-size: 12px; }
+    .lede { max-width: 850px; color: var(--muted); font-size: 1.08rem; }
+    .source-line { margin-top: 1rem; color: var(--muted); font-size: 13px; }
+    .top-rule { height: 4px; background: linear-gradient(90deg, var(--brand), var(--good), var(--warn)); }
+
+    .toc {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-block: 1px solid var(--line);
+      background: color-mix(in srgb, var(--page) 88%, transparent);
+      backdrop-filter: blur(14px);
+    }
+    .toc .shell { display: flex; gap: 6px; overflow-x: auto; padding-block: 9px; scrollbar-width: thin; }
+    .toc a { flex: none; color: var(--muted); text-decoration: none; border-radius: 7px; padding: 5px 9px; font-size: 13px; }
+    .toc a:hover, .toc a:focus-visible { color: var(--text); background: var(--panel); }
+
+    main { padding: 36px 0 80px; }
+    section { scroll-margin-top: 64px; margin: 0 0 56px; }
+    .grid { display: grid; gap: 14px; }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+    .card p:last-child { margin-bottom: 0; }
+    .muted { color: var(--muted); }
+    .metric { font-size: 2rem; line-height: 1; font-weight: 750; letter-spacing: -.04em; margin-bottom: .55rem; }
+    .metric-label { color: var(--muted); font-size: 13px; }
+    .callout { border-left: 4px solid var(--brand); padding: 12px 16px; background: var(--brand-soft); border-radius: 0 10px 10px 0; }
+    .callout.warning { border-left-color: var(--warn); background: var(--warn-soft); }
+
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .good { color: var(--good); background: var(--good-soft); }
+    .bad { color: var(--bad); background: var(--bad-soft); }
+    .warn { color: var(--warn); background: var(--warn-soft); }
+    .unknown { color: var(--unknown); background: var(--unknown-soft); }
+
+    .axes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    .axis { background: var(--panel); padding: 17px; }
+    .axis strong { display: block; margin-bottom: 5px; }
+    .axis span { color: var(--muted); font-size: 13px; }
+
+    .flow { display: grid; grid-template-columns: repeat(7, minmax(110px, 1fr)); align-items: stretch; gap: 8px; overflow-x: auto; padding: 4px 0 12px; }
+    .flow-step { position: relative; min-width: 120px; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 14px; }
+    .flow-step:not(:last-child)::after { content: "→"; position: absolute; right: -11px; top: calc(50% - 12px); z-index: 2; color: var(--brand); font-size: 20px; font-weight: 700; }
+    .flow-step b { display: block; font-size: 13px; margin-bottom: 5px; }
+    .flow-step span { color: var(--muted); font-size: 12px; line-height: 1.4; display: block; }
+
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+    table { width: 100%; border-collapse: collapse; min-width: 850px; }
+    th, td { text-align: left; vertical-align: top; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); background: var(--panel-soft); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+    tbody tr:last-child td { border-bottom: 0; }
+
+    .provider-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+    .provider-filter {
+      appearance: none;
+      border: 1px solid var(--line);
+      color: var(--text);
+      background: var(--panel);
+      border-radius: 999px;
+      padding: 8px 13px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .provider-filter[aria-pressed="true"] { background: var(--brand); color: white; border-color: var(--brand); }
+
+    details { border-top: 1px solid var(--line); }
+    details:last-child { border-bottom: 1px solid var(--line); }
+    summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 12px; padding: 16px 4px; font-weight: 700; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; margin-left: auto; color: var(--muted); font-size: 20px; }
+    details[open] summary::after { content: "−"; }
+    .detail-body { padding: 0 4px 20px; display: grid; grid-template-columns: 1.15fr .85fr; gap: 20px; }
+    .facts { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 7px 13px; align-content: start; }
+    .facts dt { font-weight: 700; }
+    .facts dd { margin: 0; color: var(--muted); }
+    .provider-detail[hidden] { display: none; }
+
+    .sequence { counter-reset: sequence; display: grid; gap: 10px; }
+    .sequence > div { position: relative; padding: 12px 12px 12px 50px; border-left: 2px solid var(--line); }
+    .sequence > div::before { counter-increment: sequence; content: counter(sequence); position: absolute; left: 10px; top: 11px; width: 25px; height: 25px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); border-radius: 50%; font-weight: 700; font-size: 12px; }
+    .sequence strong { display: block; }
+    .sequence small { color: var(--muted); }
+
+    .truth-table td:first-child { font-weight: 700; }
+    .source-list { columns: 2; column-gap: 34px; }
+    .source-list li { break-inside: avoid; margin-bottom: .55rem; }
+    footer { border-top: 1px solid var(--line); color: var(--muted); padding: 24px 0 42px; font-size: 13px; }
+
+    @media (max-width: 860px) {
+      .grid.three, .grid.four, .axes { grid-template-columns: 1fr 1fr; }
+      .detail-body { grid-template-columns: 1fr; }
+      .source-list { columns: 1; }
+    }
+    @media (max-width: 560px) {
+      .shell { width: min(100% - 22px, 1180px); }
+      .hero { padding-top: 42px; }
+      .grid.three, .grid.four, .axes { grid-template-columns: 1fr; }
+      .card { padding: 15px; }
+    }
+    @media print {
+      :root { color-scheme: light; --page: #fff; --panel: #fff; --text: #111; --muted: #444; --line: #bbb; --shadow: none; }
+      .toc, .provider-tools { display: none; }
+      .hero { padding-top: 20px; }
+      section { break-inside: avoid; margin-bottom: 32px; }
+      details { break-inside: avoid; }
+      details > .detail-body { display: grid !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-rule"></div>
+  <header class="hero shell">
+    <div class="eyebrow">Source-backed technical guide</div>
+    <h1>How authentication works in T3 Code</h1>
+    <p class="lede">
+      A detailed map of provider authentication: what T3 checks, when it checks it, how each
+      provider produces a verdict, how snapshots are cached and merged, where authentication
+      affects the UI and runtime, and how this design differs from Agent Orchestrator.
+    </p>
+    <p class="source-line">
+      Reviewed against <a href="https://github.com/pingdotgg/t3code/tree/b1e223e2b0d87124883b1410ab52dd6a1338e40d">pingdotgg/t3code at b1e223e</a>, 12 September 2026.
+    </p>
+  </header>
+
+  <nav class="toc" aria-label="Document sections">
+    <div class="shell">
+      <a href="#boundaries">Boundaries</a>
+      <a href="#model">State model</a>
+      <a href="#pipeline">Lifecycle</a>
+      <a href="#providers">Providers</a>
+      <a href="#antigravity">Interactive auth</a>
+      <a href="#enforcement">Enforcement</a>
+      <a href="#cache">Cache and refresh</a>
+      <a href="#comparison">T3 vs AO</a>
+      <a href="#findings">Key findings</a>
+      <a href="#sources">Sources</a>
+    </div>
+  </nav>
+
+  <main class="shell">
+    <section aria-label="At a glance">
+      <div class="grid four">
+        <div class="card"><div class="metric">6</div><div class="metric-label">built-in agent providers checked</div></div>
+        <div class="card"><div class="metric">3</div><div class="metric-label">provider auth verdicts</div></div>
+        <div class="card"><div class="metric">5 min</div><div class="metric-label">balanced refresh interval</div></div>
+        <div class="card"><div class="metric">1</div><div class="metric-label">provider with a T3-managed sign-in controller</div></div>
+      </div>
+    </section>
+
+    <section id="boundaries">
+      <h2>Start with the authentication boundaries</h2>
+      <div class="grid three">
+        <article class="card">
+          <h3>Environment authentication</h3>
+          <p>Determines whether a web, desktop, or mobile client may connect to a T3 environment and invoke HTTP/WebSocket methods.</p>
+          <p class="muted">Pairing credentials, bearer/DPoP sessions, scopes, WebSocket tickets.</p>
+        </article>
+        <article class="card">
+          <h3>Agent/provider authentication</h3>
+          <p>Determines whether a configured Codex, Claude, Cursor, Grok, OpenCode, or Antigravity instance appears able to run.</p>
+          <p class="muted">This is the system described by the rest of this document.</p>
+        </article>
+        <article class="card">
+          <h3>Source-control authentication</h3>
+          <p>Separately checks GitHub, GitLab, Azure DevOps, or Bitbucket credentials used for clone and pull-request operations.</p>
+          <p class="muted">A working Codex login does not imply that <code>gh</code> is authenticated.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="model">
+      <h2>The provider state model</h2>
+      <p>T3 does not reduce provider readiness to one boolean. Each instance exposes four independent axes:</p>
+      <div class="axes">
+        <div class="axis"><strong><code>enabled</code></strong><span>User configuration. Disabled instances cannot start sessions.</span></div>
+        <div class="axis"><strong><code>installed</code></strong><span>Whether T3 located and executed the CLI/runtime.</span></div>
+        <div class="axis"><strong><code>status</code></strong><span>Overall health: ready, warning, error, or disabled.</span></div>
+        <div class="axis"><strong><code>auth.status</code></strong><span>Evidence about credentials: authenticated, unauthenticated, or unknown.</span></div>
+      </div>
+
+      <div class="grid three" style="margin-top:14px">
+        <article class="card">
+          <span class="pill good">authenticated</span>
+          <p>T3 obtained affirmative evidence of an account, usable credential method, or connected upstream provider.</p>
+        </article>
+        <article class="card">
+          <span class="pill bad">unauthenticated</span>
+          <p>The provider produced a definitive logged-out or login-required signal. T3 can show a specific recovery action.</p>
+        </article>
+        <article class="card">
+          <span class="pill unknown">unknown</span>
+          <p>The probe was inconclusive, failed, timed out, has not run, or cannot validate account access without a real session.</p>
+        </article>
+      </div>
+
+      <div class="callout warning" style="margin-top:16px">
+        <strong><code>unknown</code> is not “logged out.”</strong> A provider may legitimately be
+        <code>status: "ready"</code> while its auth status is unknown. The real provider launch is
+        allowed to make the final determination.
+      </div>
+    </section>
+
+    <section id="pipeline">
+      <h2>End-to-end lifecycle</h2>
+      <div class="flow" role="img" aria-label="Provider authentication lifecycle from cached snapshot to runtime validation">
+        <div class="flow-step"><b>1. Configure</b><span>Resolve an instance, driver, binary, home, and environment.</span></div>
+        <div class="flow-step"><b>2. Hydrate</b><span>Load the last correlated snapshot from the per-instance cache.</span></div>
+        <div class="flow-step"><b>3. Probe</b><span>Run the provider-specific, bounded health/auth check.</span></div>
+        <div class="flow-step"><b>4. Normalize</b><span>Produce installed, version, status, auth, models, and message.</span></div>
+        <div class="flow-step"><b>5. Merge</b><span>Reconcile cached catalogs and Antigravity account evidence.</span></div>
+        <div class="flow-step"><b>6. Publish</b><span>Persist the machine snapshot and stream the provider list to clients.</span></div>
+        <div class="flow-step"><b>7. Run</b><span>The adapter starts the actual provider and remains the final authority.</span></div>
+      </div>
+      <p class="muted">Provider snapshots can also change because of usage updates, version enrichment, workspace skill discovery, or session callbacks. Those emissions do not necessarily re-run authentication.</p>
+    </section>
+
+    <section id="providers">
+      <h2>Provider-by-provider checks</h2>
+      <div class="provider-tools" role="group" aria-label="Filter provider details">
+        <button class="provider-filter" type="button" data-provider-filter="all" aria-pressed="true">All providers</button>
+        <button class="provider-filter" type="button" data-provider-filter="codex" aria-pressed="false">Codex</button>
+        <button class="provider-filter" type="button" data-provider-filter="claude" aria-pressed="false">Claude</button>
+        <button class="provider-filter" type="button" data-provider-filter="cursor" aria-pressed="false">Cursor</button>
+        <button class="provider-filter" type="button" data-provider-filter="grok" aria-pressed="false">Grok</button>
+        <button class="provider-filter" type="button" data-provider-filter="opencode" aria-pressed="false">OpenCode</button>
+        <button class="provider-filter" type="button" data-provider-filter="antigravity" aria-pressed="false">Antigravity</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Provider</th><th>Primary probe</th><th>Authenticated</th><th>Unauthenticated</th><th>Unknown</th><th>In-app sign-in</th></tr></thead>
+          <tbody>
+            <tr><td>Codex</td><td><code>codex app-server</code> + <code>account/read</code></td><td>Account object exists</td><td><code>requiresOpenaiAuth</code> is true</td><td>No account and no explicit auth requirement, or probe failure</td><td>No</td></tr>
+            <tr><td>Claude</td><td><code>claude --version</code> + no-prompt SDK initialization</td><td>Initialization returns capability data</td><td>No direct snapshot verdict in the current probe</td><td>Initialization unavailable, failed, or timed out</td><td>No</td></tr>
+            <tr><td>Cursor</td><td><code>agent about --format json</code>, then plain-text fallback</td><td>Non-empty user email</td><td>Null email or explicit login-required text</td><td>Successful but email-less output, unsupported command, or failure</td><td>No</td></tr>
+            <tr><td>Grok</td><td><code>XAI_API_KEY</code>, otherwise parse <code>grok models</code></td><td>API key or “You are logged in”</td><td>Explicit “not authenticated/logged in”</td><td>No recognizable login line or failed command</td><td>No</td></tr>
+            <tr><td>OpenCode</td><td>Load server inventory</td><td>At least one connected upstream provider</td><td>Never emitted by this check</td><td>No connected upstream providers or failed inventory</td><td>No</td></tr>
+            <tr><td>Antigravity</td><td>ACP <code>initialize</code> health check; sessions supply auth evidence</td><td>Successful authenticated session/setup</td><td>Native auth-required or sign-out callback</td><td>Health is good but account has not been validated</td><td>Yes</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:22px">
+        <details class="provider-detail" data-provider="codex" open>
+          <summary>Codex</summary>
+          <div class="detail-body">
+            <div>
+              <p>T3 starts a scoped <code>codex app-server</code>, completes its initialize handshake, and calls <code>account/read</code>. If the response says OpenAI auth is required, the snapshot becomes an error with the instruction to run <code>codex login</code>.</p>
+              <p>When the account response is not definitively logged out, the same process also retrieves models, skills, and account rate limits. Rate-limit failure is treated as optional enrichment and does not discard the account result.</p>
+            </div>
+            <dl class="facts">
+              <dt>Timeout</dt><dd>10 seconds for the overall provider probe; 3 seconds for the optional rate-limit read.</dd>
+              <dt>Metadata</dt><dd>Account type, plan label, email, models, skills, and usage limits.</dd>
+              <dt>Isolation</dt><dd>Per-instance process environment and <code>CODEX_HOME</code>/shadow-home layout.</dd>
+              <dt>Login</dt><dd><code>codex login</code> outside T3.</dd>
+            </dl>
+          </div>
+        </details>
+
+        <details class="provider-detail" data-provider="claude" open>
+          <summary>Claude</summary>
+          <div class="detail-body">
+            <div>
+              <p>T3 first checks the executable with <code>claude --version</code>. It then creates a Claude Agent SDK query whose asynchronous prompt never yields a user message. The child completes local initialization and returns account data, but no prompt reaches Anthropic.</p>
+              <p>The probe disables hooks, filesystem and Claude.ai MCP connections, tools, and IDE discovery. Successful initialization is treated as authenticated; failure to obtain the initialization result becomes unknown rather than definitively logged out.</p>
+            </div>
+            <dl class="facts">
+              <dt>Timeout</dt><dd>4 seconds for version; 25 seconds for SDK initialization.</dd>
+              <dt>Cache</dt><dd>Capabilities cached for five minutes per binary/home/workspace key.</dd>
+              <dt>Metadata</dt><dd>Email, subscription type, API-key source, Bedrock backend, slash commands, and usage.</dd>
+              <dt>Login</dt><dd><code>claude auth login</code> outside T3.</dd>
+            </dl>
+          </div>
+        </details>
+
+        <details class="provider-detail" data-provider="cursor" open>
+          <summary>Cursor</summary>
+          <div class="detail-body">
+            <div>
+              <p>The current implementation asks <code>agent about --format json</code> for version, email, and subscription tier in one call. If that CLI version does not support JSON formatting, T3 retries with plain <code>agent about</code> and parses labeled fields.</p>
+              <p>Only a definite missing/null email or login-required phrase becomes unauthenticated. A clean result with no email remains ready with unknown auth. ACP model discovery runs afterward unless logout was confirmed.</p>
+            </div>
+            <dl class="facts">
+              <dt>Timeout</dt><dd>8 seconds for <code>agent about</code>.</dd>
+              <dt>Metadata</dt><dd>Email, subscription tier, CLI version, ACP-discovered models.</dd>
+              <dt>Compatibility</dt><dd>Old CLIs without the required model-picker protocol become an actionable provider error.</dd>
+              <dt>Login</dt><dd><code>agent login</code> outside T3.</dd>
+            </dl>
+          </div>
+        </details>
+
+        <details class="provider-detail" data-provider="grok" open>
+          <summary>Grok</summary>
+          <div class="detail-body">
+            <div>
+              <p>T3 checks <code>grok --version</code>, then parses <code>grok models</code>. The command may exit zero while logged out, so stdout/stderr text—not the exit code alone—determines login state. The environment variable recognized by this implementation is <code>XAI_API_KEY</code>.</p>
+              <p>Model discovery also uses ACP <code>initialize</code>. This deliberately avoids <code>authenticate</code> and <code>session/new</code>, preventing a health check from opening a browser or starting workspace MCP servers.</p>
+            </div>
+            <dl class="facts">
+              <dt>Timeout</dt><dd>4 seconds for version, 10 seconds for auth listing, 8 seconds for ACP initialization.</dd>
+              <dt>Auth types</dt><dd><code>api_key</code> or <code>cached_token</code>.</dd>
+              <dt>Failure</dt><dd>Definitive logout is an error; failed ACP metadata discovery is only a warning.</dd>
+              <dt>Login</dt><dd><code>grok login</code> outside T3.</dd>
+            </dl>
+          </div>
+        </details>
+
+        <details class="provider-detail" data-provider="opencode" open>
+          <summary>OpenCode</summary>
+          <div class="detail-body">
+            <div>
+              <p>OpenCode is a meta-provider. T3 connects to a locally owned or external OpenCode server and loads its inventory. Authentication means that the inventory reports at least one connected upstream provider—not that OpenCode has one global account.</p>
+              <p>Zero connections produce a warning and unknown auth, never unauthenticated. Local OpenCode must be at least version 1.14.19. External server passwords authenticate T3 to that server and are separate from upstream model-provider credentials.</p>
+            </div>
+            <dl class="facts">
+              <dt>Periodic</dt><dd>Disabled. Use explicit provider/model refresh or instance reconstruction.</dd>
+              <dt>Metadata</dt><dd>Connected upstream count, models, skills, commands, and server version.</dd>
+              <dt>Failure</dt><dd>Connection, version, or inventory failures produce error + unknown auth.</dd>
+              <dt>Login</dt><dd>Managed using OpenCode's own provider configuration.</dd>
+            </dl>
+          </div>
+        </details>
+
+        <details class="provider-detail" data-provider="antigravity" open>
+          <summary>Antigravity</summary>
+          <div class="detail-body">
+            <div>
+              <p>The passive check performs ACP <code>initialize</code> only. It can prove installation and health, but not account access. Account authentication and model discovery happen through an explicit setup/catalog session or a real provider session.</p>
+              <p>Each instance receives a private credential profile. T3 forces file credential storage and removes ambient Google credential variables so one instance cannot silently adopt another account. Installed runtime releases may still be shared.</p>
+            </div>
+            <dl class="facts">
+              <dt>Health timeout</dt><dd>90 seconds.</dd>
+              <dt>Methods</dt><dd>Personal OAuth, Enterprise OAuth, Gemini API key, and Agent Platform/Vertex AI.</dd>
+              <dt>Positive proof</dt><dd>An authenticated session starts and returns account-specific models.</dd>
+              <dt>Negative proof</dt><dd>Native auth-required notification or explicit sign-out.</dd>
+            </dl>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section id="antigravity">
+      <h2>Interactive authentication: Antigravity</h2>
+      <p>Only a provider instance exposing a <code>ProviderAuthController</code> can use T3's centralized sign-in RPCs. In the current built-in set, that is Antigravity.</p>
+      <div class="sequence">
+        <div><strong>Start</strong><small>T3 creates a random flow ID, binds it to the initiating environment-auth session, and sets a five-minute expiry.</small></div>
+        <div><strong>Quiesce the instance</strong><small>Active sessions and owned helper processes for that provider instance are stopped before authentication proceeds.</small></div>
+        <div><strong>Obtain authorization</strong><small>The ACP runtime requests an authorization URL. Browser-based flows enter <code>waiting</code>; API-key methods check configured credentials directly.</small></div>
+        <div><strong>Return the callback</strong><small>For a remote browser, the initiating client pastes the complete loopback return URL. T3 validates it against the owned pending flow and forwards it.</small></div>
+        <div><strong>Verify</strong><small>The native process completes token exchange and starts a session. Callback delivery alone is not considered proof.</small></div>
+        <div><strong>Publish account state</strong><small>Successful session data marks the provider authenticated and publishes its account-specific models and commands.</small></div>
+      </div>
+      <div class="callout" style="margin-top:16px">
+        Other connected clients can learn that sign-in is in progress, but the controller hides the flow ID, authorization URL, and expiry from every client except the initiating T3 auth session.
+      </div>
+    </section>
+
+    <section id="enforcement">
+      <h2>What the verdict actually controls</h2>
+      <div class="table-wrap">
+        <table class="truth-table">
+          <thead><tr><th>Consumer</th><th>Behavior</th></tr></thead>
+          <tbody>
+            <tr><td>Provider settings</td><td>Shows Disabled, Not found, Not authenticated, Needs attention, Unavailable, Authenticated, or Available, using status/auth/message together.</td></tr>
+            <tr><td>Onboarding</td><td>A provider is fully ready only when overall status is <code>ready</code>. Confirmed unauthenticated becomes a sign-in step.</td></tr>
+            <tr><td>Web model picker</td><td>Normal readiness requires enabled + available + overall status ready. It does not separately require authenticated, so ready + unknown is usable.</td></tr>
+            <tr><td>Mobile model picker</td><td>Explicitly excludes providers whose auth is confirmed unauthenticated.</td></tr>
+            <tr><td>Load balancing</td><td>Requires enabled, installed, not error, not unauthenticated, and not an unavailable shadow.</td></tr>
+            <tr><td>Model retention</td><td>Codex and Antigravity drop stale model catalogs on confirmed logout. Unknown or failed probes may retain previous models. OpenCode also retains metadata across failed checks.</td></tr>
+            <tr><td>Session startup</td><td>The generic service requires a real, enabled instance but does not impose a universal authenticated-snapshot gate. Provider startup returns the authoritative failure.</td></tr>
+            <tr><td>Antigravity send path</td><td>Confirmed logout blocks sending. Unknown after restart is allowed so the real session can validate saved credentials.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="cache">
+      <h2>Cache, refresh, and stale-state handling</h2>
+      <div class="grid three">
+        <article class="card">
+          <h3>Per-instance cache</h3>
+          <p>Snapshots are stored as <code>&lt;instanceId&gt;.json</code>. Both instance ID and driver kind must match before cached data is accepted.</p>
+          <p class="muted">The cache stores status metadata, not provider access tokens.</p>
+        </article>
+        <article class="card">
+          <h3>Preservation rules</h3>
+          <p>A transient failure should not erase a previously useful catalog. Custom models, however, come from current settings and are never resurrected from stale cache entries.</p>
+        </article>
+        <article class="card">
+          <h3>Antigravity carry-forward</h3>
+          <p>A prior authenticated account can survive a new <code>unknown</code> health result when the sign-in method is unchanged and no authoritative sign-out occurred.</p>
+        </article>
+      </div>
+      <p>A manual <code>server.refreshProviders</code> RPC can refresh all instances, one instance, or workspace-specific metadata. An untargeted refresh also refreshes configured usage-limit sources. Settings and onboarding expose this operation; closing an onboarding login terminal triggers it so newly changed CLI credentials appear promptly.</p>
+    </section>
+
+    <section id="comparison">
+      <h2>How T3 differs from Agent Orchestrator</h2>
+      <p>
+        The systems share one important rule: a passive check is evidence, while the native provider
+        process remains the final authority. Their center of gravity is different. T3 builds a rich,
+        persistent provider catalog for six deeply integrated provider drivers. AO builds a normalized,
+        request-driven readiness service across a much broader set of heterogeneous harnesses, then
+        keeps login commands and provider credentials behind separate boundaries.
+      </p>
+      <p class="source-line">AO comparison reviewed at local commit <code>7b8ee8db080b</code>, 12 September 2026.</p>
+
+      <div class="grid three" style="margin-top:18px">
+        <article class="card">
+          <h3>T3’s unit: provider instance</h3>
+          <p>Each instance has its own driver settings, environment, snapshot, adapter, and optional auth controller. Multiple instances of one provider are a normal part of the model.</p>
+        </article>
+        <article class="card">
+          <h3>AO’s unit: harness readiness</h3>
+          <p>The generic coordinator keeps one installation/authentication observation per harness ID. Its concern is whether a requested launch can proceed safely now.</p>
+        </article>
+        <article class="card">
+          <h3>The exceptions are different</h3>
+          <p>T3’s deep interactive exception is Antigravity. AO’s deep account-management exception is Codex; other AO providers use reviewed native login/setup plans.</p>
+        </article>
+      </div>
+
+      <h3 style="margin-top:28px">Architecture comparison</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Dimension</th><th>T3 Code</th><th>Agent Orchestrator</th><th>Practical effect</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Primary abstraction</td>
+              <td><code>ProviderInstance</code> publishing a complete <code>ServerProvider</code> snapshot.</td>
+              <td>Daemon-owned <code>AgentReadinessSnapshot</code> composed from installation and authentication observations.</td>
+              <td>T3 couples auth to provider/catalog state; AO treats auth as one input to launch readiness.</td>
+            </tr>
+            <tr>
+              <td>Normalized states</td>
+              <td><code>authenticated</code>, <code>unauthenticated</code>, <code>unknown</code>, plus separate enabled/installed/overall status.</td>
+              <td><code>authorized</code>, <code>unauthorized</code>, <code>unknown</code>, <code>not_applicable</code>; installation and freshness have their own enums, and <code>effectiveReadiness</code> is derived.</td>
+              <td>AO can explicitly represent “this harness needs no auth check” and whether evidence is fresh, stale, or checking.</td>
+            </tr>
+            <tr>
+              <td>Diagnostic detail</td>
+              <td>Provider status/message plus optional auth type, label, and email.</td>
+              <td>Stable reason codes, human reasons, <code>checkedAt</code>, <code>attemptedAt</code>, and freshness. Generic readiness intentionally omits account identity.</td>
+              <td>T3 is richer for account display; AO is richer for operational diagnosis and safe API consumption.</td>
+            </tr>
+            <tr>
+              <td>Refresh policy</td>
+              <td>Managed provider streams run initial, settings-driven, manual, and normally five-minute power-aware refreshes. OpenCode opts out of periodic refresh.</td>
+              <td>Demand-driven <code>ensure</code>: five-minute display TTL and thirty-second launch TTL, with a bounded startup warm-up, four workers, single-flight sharing, and retry backoff.</td>
+              <td>AO asks “is this fresh enough for this purpose?”; T3 continuously maintains a provider-facing catalog.</td>
+            </tr>
+            <tr>
+              <td>Failed checks</td>
+              <td>Return unknown and often retain useful prior provider/model metadata through merge rules.</td>
+              <td>Keep the last successful state and <code>checkedAt</code>, record the failed attempt and reason, mark it stale, and retry after 15 seconds, 1 minute, then 5 minutes.</td>
+              <td>Neither converts uncertainty into a false logout. AO exposes the distinction between old evidence and a failed new attempt more explicitly.</td>
+            </tr>
+            <tr>
+              <td>Persistence</td>
+              <td>Correlated provider snapshots are persisted per instance and hydrated at boot for immediate UI state.</td>
+              <td>Generic readiness lives in daemon memory and starts unknown/stale after restart. Codex account descriptors, opaque credential homes, and the active-account pointer are a separate persistent subsystem.</td>
+              <td>T3 can render the last provider catalog immediately; AO prefers a new warm-up for generic readiness.</td>
+            </tr>
+            <tr>
+              <td>Interactive login</td>
+              <td>The centralized auth service works only when a provider supplies a controller; among built-ins, only Antigravity does. Other providers tell the user which native CLI command to run.</td>
+              <td>A code-reviewed allowlist currently exposes 27 native login/setup targets. The client chooses only an agent ID; the daemon resolves the binary and opens a trusted command terminal or documentation.</td>
+              <td>AO offers broader in-app entry into vendor-owned login flows without accepting arbitrary commands or credentials from clients.</td>
+            </tr>
+            <tr>
+              <td>Deep account ownership</td>
+              <td>Antigravity owns an OAuth/credential-method state machine, private per-instance profile, callback forwarding, verification, and logout.</td>
+              <td>Codex owns managed account slots, native-login terminals, structured verification, account switching, logout/reauthentication, capacity, and usage. It copies opaque credential material but does not parse or expose it.</td>
+              <td>Both have one provider-specific subsystem that is much deeper than their generic login path, but for different providers.</td>
+            </tr>
+            <tr>
+              <td>Multiple identities</td>
+              <td>Generic: multiple configured instances of any driver can use isolated homes/environments.</td>
+              <td>Generic readiness is keyed by harness. Multiple managed identities are currently a dedicated Codex feature rather than a universal provider-instance abstraction.</td>
+              <td>T3’s multi-account shape is more uniform; AO’s is deliberately provider-specific.</td>
+            </tr>
+            <tr>
+              <td>Launch enforcement</td>
+              <td>The generic session service requires an existing enabled instance but does not universally require a cached authenticated verdict; provider startup is authoritative.</td>
+              <td>Definitely missing installation blocks session creation. Generic auth warnings may continue to native launch; Chat driver probes and agent switching reject definitive unauthorized results. Fresh structured Codex logout is blocked before spawn.</td>
+              <td>AO has more explicit launch-purpose checks, but its policy is intentionally layered rather than one global “auth must be green” gate.</td>
+            </tr>
+            <tr>
+              <td>Catalog coupling</td>
+              <td>Auth affects provider health, model retention, pickers, load balancing, and advisories inside one snapshot pipeline.</td>
+              <td>Readiness is separate from model catalogs and from auth-launch plans; frontend state is a cached projection whose freshness remains daemon-owned.</td>
+              <td>AO has cleaner separation of concerns; T3 has a more unified provider presentation model.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin-top:28px">The same six providers, checked differently</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Provider</th><th>T3 check</th><th>AO check</th><th>Most important difference</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Codex</td>
+              <td>App-server <code>account/read</code>; returns account type, plan, email, models, skills, and limits.</td>
+              <td>The structured Codex account manager also uses app-server <code>account/read</code> when available and verifies the active managed account using display/launch freshness rules. The adapter-level fallback runs <code>codex login status</code>.</td>
+              <td>AO goes beyond probing: it can add, retain, reauthenticate, switch, sign out, and inspect capacity for multiple managed Codex accounts. T3’s generic Codex provider does not expose its centralized in-app auth controller.</td>
+            </tr>
+            <tr>
+              <td>Claude</td>
+              <td>Starts a deliberately promptless Agent SDK initialization and reads returned account/capability metadata.</td>
+              <td>First recognizes approved environment variables and safe fields in local Claude configuration, then falls back to <code>claude auth status</code> JSON.</td>
+              <td>T3 asks the SDK/runtime for richer live initialization evidence; AO prefers cheaper local evidence and the CLI’s explicit status command.</td>
+            </tr>
+            <tr>
+              <td>Cursor</td>
+              <td>Parses <code>agent about --format json</code> or text; email and subscription data drive the verdict.</td>
+              <td>Accepts <code>CURSOR_API_KEY</code>, otherwise runs <code>cursor-agent status</code> and classifies known status text.</td>
+              <td>T3 collects account metadata; AO asks only for a normalized readiness verdict.</td>
+            </tr>
+            <tr>
+              <td>Grok</td>
+              <td>Accepts <code>XAI_API_KEY</code> or parses <code>grok models</code>, including explicit logged-out text.</td>
+              <td>Checks <code>XAI_API_KEY</code>, documented secrets or environment references in <code>config.toml</code>, and tokens in <code>auth.json</code>.</td>
+              <td>T3 can derive a definitive negative from CLI output. AO’s local-file probe mostly proves presence; absent evidence remains unknown instead of unauthorized.</td>
+            </tr>
+            <tr>
+              <td>OpenCode</td>
+              <td>Uses the live server inventory and treats one or more connected upstream providers as authenticated.</td>
+              <td>Checks supported API-key variables, <code>auth.json</code>, recognized read-only database account state, then <code>opencode auth list</code>. No credential remains unknown because public free models may still work.</td>
+              <td>T3’s verdict is server/catalog-based; AO combines local configuration evidence and CLI fallback while preserving “no credential” as usable uncertainty.</td>
+            </tr>
+            <tr>
+              <td>Antigravity / Agy</td>
+              <td>Passive ACP initialization proves health only. T3 later gets auth evidence from sessions and owns the full provider auth controller.</td>
+              <td>Because Agy has no documented non-interactive status command, an installed binary is reported authorized and the real launch remains authoritative. The reviewed login plan starts <code>agy</code> for its native first-run browser flow.</td>
+              <td>T3 models and manages this authentication deeply; AO deliberately uses optimistic readiness plus native runtime validation.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid three" style="margin-top:20px">
+        <article class="card">
+          <h3>AO is stronger at orchestration readiness</h3>
+          <p>Purpose-specific freshness, single-flight checks, bounded concurrency, retry scheduling, stable reasons, and an explicit derived readiness state scale well across many harnesses.</p>
+        </article>
+        <article class="card">
+          <h3>T3 is stronger at generic provider identity</h3>
+          <p>Per-instance isolation, persisted snapshots, account labels, emails, subscription types, and model/catalog merging are consistently available across its smaller provider set.</p>
+        </article>
+        <article class="card">
+          <h3>The main AO caveat</h3>
+          <p>“Authorized” can mean different strengths of evidence. Codex may be freshly verified, while Agy currently means only “installed; let launch decide.” Consumers must keep the reason and freshness—not just the state.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="findings">
+      <h2>Important conclusions and corrections</h2>
+      <ol>
+        <li><strong>The snapshot is evidence, not a security boundary.</strong> Credentials can change between probes, and the runtime remains authoritative.</li>
+        <li><strong>Not every snapshot update checks auth.</strong> Usage, version enrichment, workspace metadata, and session callbacks also publish snapshots.</li>
+        <li><strong>Cursor auth currently comes from <code>agent about</code>.</strong> ACP is used afterward for model discovery.</li>
+        <li><strong>Grok's API-key environment variable is <code>XAI_API_KEY</code>.</strong></li>
+        <li><strong>Claude's current verdict comes from SDK initialization.</strong> It does not produce a normal definitive unauthenticated branch in the snapshot probe.</li>
+        <li><strong>OpenCode does not periodically poll.</strong> Its inventory is intentionally refreshed through explicit workflows.</li>
+        <li><strong>Antigravity is not only browser OAuth.</strong> The controller also handles non-browser credential methods, private per-instance profiles, process admission, and sign-out.</li>
+        <li><strong>Both Antigravity sign-in and sign-out stop active instance sessions.</strong> This prevents processes from retaining or racing old credentials.</li>
+        <li><strong>AO is not a direct clone of this design.</strong> It separates readiness, model discovery, and trusted login launch; only its Codex subsystem approaches T3’s deep provider-specific account ownership.</li>
+      </ol>
+    </section>
+
+    <section id="sources">
+      <h2>Primary source map</h2>
+      <ul class="source-list">
+        <li><code>packages/contracts/src/server.ts</code> — provider snapshot and auth schemas</li>
+        <li><code>packages/contracts/src/providerSetup.ts</code> — interactive auth state machine</li>
+        <li><code>apps/server/src/provider/ProviderDriver.ts</code> — driver and instance contracts</li>
+        <li><code>apps/server/src/provider/makeManagedServerProvider.ts</code> — startup, settings, interval, and manual refresh</li>
+        <li><code>apps/server/src/provider/Layers/ProviderRegistry.ts</code> — aggregation, merging, persistence, publication</li>
+        <li><code>apps/server/src/provider/providerStatusCache.ts</code> — cache validation and hydration</li>
+        <li><code>apps/server/src/provider/Layers/CodexProvider.ts</code></li>
+        <li><code>apps/server/src/provider/Layers/ClaudeProvider.ts</code></li>
+        <li><code>apps/server/src/provider/Layers/CursorProvider.ts</code></li>
+        <li><code>apps/server/src/provider/Layers/GrokProvider.ts</code></li>
+        <li><code>apps/server/src/provider/Layers/OpenCodeProvider.ts</code></li>
+        <li><code>apps/server/src/provider/Layers/AntigravityProvider.ts</code></li>
+        <li><code>apps/server/src/provider/AntigravityAuth.ts</code></li>
+        <li><code>apps/server/src/provider/Layers/ProviderAuthService.ts</code></li>
+        <li><code>apps/server/src/provider/Layers/ProviderService.ts</code> — authoritative session startup boundary</li>
+        <li><code>apps/web/src/providerInstances.ts</code> — web picker readiness</li>
+        <li><code>apps/web/src/components/settings/providerStatus.ts</code> — settings presentation</li>
+        <li><code>apps/mobile/src/lib/modelOptions.ts</code> — mobile provider/model filtering</li>
+        <li><code>docs/internals/providers.md</code> — provider isolation and health-check constraints</li>
+        <li><code>backend/internal/domain/agent_readiness.go</code> — AO normalized readiness states and derivation</li>
+        <li><code>backend/internal/service/agent/readiness_coordinator.go</code> — AO freshness, single-flight checks, retries, and warm-up</li>
+        <li><code>backend/internal/service/agentauth/service.go</code> and <code>plans.go</code> — AO trusted native login/setup registry</li>
+        <li><code>backend/internal/adapters/agent/*/auth.go</code> — AO adapter-specific probes</li>
+        <li><code>backend/internal/service/agent/codex_account_*.go</code> — AO managed Codex accounts and login lifecycle</li>
+        <li><code>backend/internal/adapters/chatdriver/codexappserver/account.go</code> — AO structured Codex account reads</li>
+        <li><code>frontend/src/renderer/hooks/useAgentReadinessQuery.ts</code> — AO frontend projection; daemon owns freshness</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell">T3 Code provider authentication reference · Source behavior may change after commit <code>b1e223e</code>.</div>
+  </footer>
+
+  <script>
+    const buttons = [...document.querySelectorAll('[data-provider-filter]')];
+    const details = [...document.querySelectorAll('[data-provider]')];
+
+    for (const button of buttons) {
+      button.addEventListener('click', () => {
+        const selected = button.dataset.providerFilter;
+        for (const candidate of buttons) {
+          candidate.setAttribute('aria-pressed', String(candidate === button));
+        }
+        for (const detail of details) {
+          const visible = selected === 'all' || detail.dataset.provider === selected;
+          detail.hidden = !visible;
+          if (visible && selected !== 'all') detail.open = true;
+        }
+      });
+    }
+  </script>
+</body>
+</html>

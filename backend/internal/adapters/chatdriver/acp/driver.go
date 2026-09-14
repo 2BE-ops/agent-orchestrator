@@ -629,7 +629,6 @@ var acpAuthRejectionPhrases = []string{
 	"oauth token has expired",
 	"authentication_error",
 	"invalid_api_key",
-	"unauthorized",
 	"credentials have expired",
 	"please run /login",
 	"please run `claude login`",

@@ -362,10 +362,11 @@ export function TaskComposer({
 				// or the resolved default, so spawning names it explicitly.
 				agent: selectedAgent ? (selectedAgent as CreateTaskInput["agent"]) : undefined,
 				model: requestedModel,
-				// Only send a level the requested model actually vouches for. The
-				// selection is cleared on model change, but a resolved project
-				// default can arrive without one.
-				effort: requestedModel ? effort : "",
+				// Send effort whenever the level is non-empty. The control's option list
+				// is read from the currently displayed model, so if effort is selectable,
+				// the model vouches for it. This is decoupled from whether requestedModel
+				// was set, so a default model still gets its selected effort level.
+				effort: effort,
 				mode: interfaceMode,
 				approvalMode,
 				attachments: attachmentPayloads.length > 0 ? attachmentPayloads : undefined,

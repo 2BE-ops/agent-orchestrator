@@ -236,7 +236,11 @@ func (v *Validator) Validate(ctx context.Context, cred Credential) Result {
 	}
 	spec, err := v.requestFor(ctx, provider, cred)
 	if err != nil {
-		result.State = StateUnknown
+		if errors.Is(err, ErrInvalidCredential) {
+			result.State = StateInvalid
+		} else {
+			result.State = StateUnknown
+		}
 		result.Err = err
 		result.Detail = err.Error()
 		return result

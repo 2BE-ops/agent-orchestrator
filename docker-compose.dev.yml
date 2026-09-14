@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ao-postgres
+    environment:
+      POSTGRES_USER: aoadmin
+      POSTGRES_PASSWORD: aopass
+      POSTGRES_DB: cloud
+    ports:
+      - "5432:5432"
+    volumes:
+      - ao-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aoadmin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Cloud backend (run manually for now)
+  # cloud:
+  #   build:
+  #     context: ./cloud
+  #     dockerfile: Dockerfile
+  #   container_name: ao-cloud
+  #   environment:
+  #     POSTGRES_URL: postgres://aoadmin:aopass@postgres:5432/cloud
+  #     BIND_ADDR: 0.0.0.0:9090
+  #   ports:
+  #     - "9090:9090"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+
+volumes:
+  ao-postgres-data:
+
+networks:
+  default:
+    name: ao-dev-network
