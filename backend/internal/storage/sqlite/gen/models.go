@@ -237,6 +237,7 @@ type Conversation struct {
 	OpencodeMode                  string
 	InterruptReservationID        sql.NullString
 	InterruptReservationSessionID sql.NullString
+	InterruptProviderTurnID       sql.NullString
 }
 
 type ConversationActivity struct {

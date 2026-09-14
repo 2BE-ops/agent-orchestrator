@@ -618,7 +618,7 @@ func (s *Service) Start(ctx context.Context, cfg StartConfig) (*Controller, erro
 		cfg.SessionID, conversation, generation, cfg.Harness, conv, s.store, s.activity, s.log, s.newID, s.now, s.onAccountChanged, s.onCodexCapacityChanged)
 	var commitProviderHistory func(context.Context) error
 	if liveReconnect {
-		reservationID, turnIDs, err := s.store.PendingInterrupt(ctx, conversation.ID, cfg.SessionID)
+		reservationID, interruptProviderTurnID, turnIDs, err := s.store.PendingInterrupt(ctx, conversation.ID, cfg.SessionID)
 		if err != nil {
 			cleanupUnpublishedConversation(conv, false)
 			return nil, fmt.Errorf("restore pending Stop scope: %w", err)
@@ -626,7 +626,7 @@ func (s *Service) Start(ctx context.Context, cfg StartConfig) (*Controller, erro
 		controller.interruptReservationID = reservationID
 		controller.interruptQueuedTurnIDs = turnIDs
 		controller.recoveringInterrupt = reservationID != ""
-		providerTurnID := controller.restoreLiveTurnOwnership(liveRows.Turns)
+		providerTurnID := controller.restoreLiveTurnOwnership(liveRows.Turns, interruptProviderTurnID)
 		if activator, ok := conv.(ports.ChatLiveReconnectActivator); ok {
 			if err := activator.ActivateLiveReconnect(ctx, providerTurnID); err != nil {
 				cleanupUnpublishedConversation(conv, false)

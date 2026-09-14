@@ -207,11 +207,11 @@ test("queued turns can be cancelled or promoted independently and Stop confirms 
 	}
 	await stopDialog.getByRole("button", { name: "Cancel" }).click();
 
-	await page
-		.getByRole("button", {
-			name: "Cancel queued message: First queued follow-up",
-		})
-		.click();
+	const queueToggle = page.getByTestId("queued-message-toggle");
+	if ((await queueToggle.getAttribute("aria-expanded")) === "false") await queueToggle.click();
+	const firstQueued = page.getByTestId("queued-message-turn-queued-one");
+	await firstQueued.hover();
+	await firstQueued.getByRole("button", { name: "Delete queued message", exact: true }).click();
 	await expect(page.getByTestId("queued-message-turn-queued-one")).toHaveCount(
 		0,
 	);
@@ -225,11 +225,9 @@ test("queued turns can be cancelled or promoted independently and Stop confirms 
 			.getByText("Second queued follow-up", { exact: true }),
 	).toBeVisible();
 
-	await page
-		.getByRole("button", {
-			name: "Use as next message: Second queued follow-up",
-		})
-		.click();
+	const secondQueued = page.getByTestId("queued-message-turn-queued-two");
+	await secondQueued.hover();
+	await secondQueued.getByRole("button", { name: "Steer this queued message into the running turn", exact: true }).click();
 	await expect(page.getByTestId("queued-message-dock")).toHaveCount(0);
 	await expect(page.getByText("Active work", { exact: true })).toBeVisible();
 	expect(fixture.requests).toEqual([

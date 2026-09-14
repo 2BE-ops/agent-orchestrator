@@ -512,8 +512,7 @@ func TestProjectConversationPageStartsAtCurrentContextReset(t *testing.T) {
 		t.Fatalf("replacement queue = %#v, want only fresh-turn", queued)
 	}
 	matched, err := s.ReserveQueuedTurnsForInterrupt(
-		ctx, conversation.ID, []string{"fresh-turn"}, "replacement-stop",
-	)
+		ctx, conversation.ID, []string{"fresh-turn"}, "replacement-stop", "")
 	if err != nil || !matched {
 		t.Fatalf("reserve replacement Stop scope: matched=%v err=%v", matched, err)
 	}
@@ -528,8 +527,7 @@ func TestProjectConversationPageStartsAtCurrentContextReset(t *testing.T) {
 		t.Fatalf("queue after replacement recovery = %#v, want empty", queued)
 	}
 	matched, err = s.ReserveQueuedTurnsForInterrupt(
-		ctx, conversation.ID, nil, "after-replacement-recovery",
-	)
+		ctx, conversation.ID, nil, "after-replacement-recovery", "")
 	if err != nil || !matched {
 		t.Fatalf("fresh Stop after replacement recovery: matched=%v err=%v", matched, err)
 	}
@@ -644,8 +642,7 @@ func TestProjectConversationQueueOperationsStayWithinCurrentOwner(t *testing.T) 
 	}
 
 	matched, err := s.ReserveQueuedTurnsForInterrupt(
-		ctx, conversation.ID, []string{"current-owner-turn"}, "current-owner-stop",
-	)
+		ctx, conversation.ID, []string{"current-owner-turn"}, "current-owner-stop", "")
 	if err != nil || !matched {
 		t.Fatalf("reserve current owner Stop: matched=%v err=%v", matched, err)
 	}
@@ -873,7 +870,7 @@ func TestInterruptQueueReservationIsAtomicExactAndAllowsAnEmptyScope(t *testing.
 	s, session, conversation := conversationFixture(t)
 	ctx := context.Background()
 
-	matched, err := s.ReserveQueuedTurnsForInterrupt(ctx, conversation, nil, "empty-stop")
+	matched, err := s.ReserveQueuedTurnsForInterrupt(ctx, conversation, nil, "empty-stop", "")
 	if err != nil || !matched {
 		t.Fatalf("reserve empty queue: matched=%v err=%v", matched, err)
 	}
@@ -920,8 +917,7 @@ func TestInterruptQueueReservationIsAtomicExactAndAllowsAnEmptyScope(t *testing.
 	}
 
 	matched, err = s.ReserveQueuedTurnsForInterrupt(
-		ctx, conversation, []string{"stop-2", "stop-1"}, "wrong-order",
-	)
+		ctx, conversation, []string{"stop-2", "stop-1"}, "wrong-order", "")
 	if err != nil || matched {
 		t.Fatalf("reserve reordered queue: matched=%v err=%v, want side-effect-free mismatch", matched, err)
 	}
@@ -934,8 +930,7 @@ func TestInterruptQueueReservationIsAtomicExactAndAllowsAnEmptyScope(t *testing.
 	}
 
 	matched, err = s.ReserveQueuedTurnsForInterrupt(
-		ctx, conversation, []string{"stop-1", "stop-2"}, "stop-token",
-	)
+		ctx, conversation, []string{"stop-1", "stop-2"}, "stop-token", "")
 	if err != nil || !matched {
 		t.Fatalf("reserve exact queue: matched=%v err=%v", matched, err)
 	}
@@ -988,7 +983,7 @@ func TestRestartHonorsAnEmptyConfirmedStopFence(t *testing.T) {
 	s, session, conversation := conversationFixture(t)
 	ctx := context.Background()
 
-	matched, err := s.ReserveQueuedTurnsForInterrupt(ctx, conversation, nil, "crashed-empty-stop")
+	matched, err := s.ReserveQueuedTurnsForInterrupt(ctx, conversation, nil, "crashed-empty-stop", "")
 	if err != nil || !matched {
 		t.Fatalf("reserve empty queue: matched=%v err=%v", matched, err)
 	}
@@ -1014,7 +1009,7 @@ func TestRestartHonorsAnEmptyConfirmedStopFence(t *testing.T) {
 		t.Fatalf("dead-generation post-Stop turn = %q, want failed", turn.State)
 	}
 
-	matched, err = s.ReserveQueuedTurnsForInterrupt(ctx, conversation, nil, "after-restart")
+	matched, err = s.ReserveQueuedTurnsForInterrupt(ctx, conversation, nil, "after-restart", "")
 	if err != nil || !matched {
 		t.Fatalf("restart did not clear orphaned Stop fence: matched=%v err=%v", matched, err)
 	}
@@ -1034,8 +1029,7 @@ func TestRestartHonorsAnOrphanedConfirmedStopQueue(t *testing.T) {
 		t.Fatalf("append queue: created=%v err=%v", created, err)
 	}
 	matched, err := s.ReserveQueuedTurnsForInterrupt(
-		ctx, conversation, []string{"stopping-turn"}, "crashed-stop",
-	)
+		ctx, conversation, []string{"stopping-turn"}, "crashed-stop", "")
 	if err != nil || !matched {
 		t.Fatalf("reserve queue: matched=%v err=%v", matched, err)
 	}
@@ -1088,8 +1082,7 @@ func TestProjectConversationReplacementSettlesCrashedStopOwner(t *testing.T) {
 		}
 	}
 	matched, err := s.ReserveQueuedTurnsForInterrupt(
-		ctx, conversation.ID, []string{"rebind-confirmed"}, "crashed-rebind-stop",
-	)
+		ctx, conversation.ID, []string{"rebind-confirmed"}, "crashed-rebind-stop", "")
 	if err != nil || !matched {
 		t.Fatalf("reserve replacement Stop scope: matched=%v err=%v", matched, err)
 	}
@@ -1124,8 +1117,7 @@ func TestProjectConversationReplacementSettlesCrashedStopOwner(t *testing.T) {
 		t.Fatalf("replacement post-Stop turn = %+v, %v; want failed", postStop, err)
 	}
 	matched, err = s.ReserveQueuedTurnsForInterrupt(
-		ctx, conversation.ID, nil, "replacement-stop",
-	)
+		ctx, conversation.ID, nil, "replacement-stop", "")
 	if err != nil || !matched {
 		t.Fatalf("replacement controller remained fenced: matched=%v err=%v", matched, err)
 	}
@@ -1171,8 +1163,7 @@ func TestDeletingInterruptReservationOwnerSettlesScopeBeforeForeignKeysClearIt(t
 		t.Fatalf("append owner turn: created=%v err=%v", created, err)
 	}
 	matched, err := s.ReserveQueuedTurnsForInterrupt(
-		ctx, conversation.ID, []string{"owner-delete-turn"}, "owner-delete-stop",
-	)
+		ctx, conversation.ID, []string{"owner-delete-turn"}, "owner-delete-stop", "")
 	if err != nil || !matched {
 		t.Fatalf("reserve owner Stop scope: matched=%v err=%v", matched, err)
 	}
@@ -1209,8 +1200,7 @@ func TestDeletingInterruptReservationOwnerSettlesScopeBeforeForeignKeysClearIt(t
 		t.Fatalf("rebind after owner deletion: %v", err)
 	}
 	matched, err = s.ReserveQueuedTurnsForInterrupt(
-		ctx, conversation.ID, nil, "after-owner-delete",
-	)
+		ctx, conversation.ID, nil, "after-owner-delete", "")
 	if err != nil || !matched {
 		t.Fatalf("owner deletion stranded Stop fence: matched=%v err=%v", matched, err)
 	}
@@ -1750,8 +1740,7 @@ func TestCleanupOwnedControllerWorkReleasesInterruptFence(t *testing.T) {
 		t.Fatalf("AppendUserMessage: created=%v err=%v", created, err)
 	}
 	matched, err := s.ReserveQueuedTurnsForInterrupt(
-		ctx, conversation, []string{"reserved-cleanup-turn"}, "cleanup-reservation",
-	)
+		ctx, conversation, []string{"reserved-cleanup-turn"}, "cleanup-reservation", "")
 	if err != nil || !matched {
 		t.Fatalf("ReserveQueuedTurnsForInterrupt: matched=%v err=%v", matched, err)
 	}
@@ -1766,7 +1755,7 @@ func TestCleanupOwnedControllerWorkReleasesInterruptFence(t *testing.T) {
 	if err != nil || turn.State != domain.TurnStateInterrupted {
 		t.Fatalf("reserved turn = %+v, %v; want interrupted", turn, err)
 	}
-	matched, err = s.ReserveQueuedTurnsForInterrupt(ctx, conversation, nil, "proof-reservation")
+	matched, err = s.ReserveQueuedTurnsForInterrupt(ctx, conversation, nil, "proof-reservation", "")
 	if err != nil || !matched {
 		t.Fatalf("cleanup left the global Stop fence behind: matched=%v err=%v", matched, err)
 	}

@@ -252,15 +252,20 @@ func TestLiveReconnectReconcilesConfirmedStopScopeWithoutRedispatch(t *testing.T
 				if err := firstController.Interrupt(context.Background(), []string{confirmed.ID}); err != nil {
 					t.Fatalf("accept Stop: %v", err)
 				}
-				reservation, members, err := st.PendingInterrupt(context.Background(), firstController.ConversationID(), testSession)
-				if err != nil || reservation == "" || len(members) != 0 {
+				reservation, target, members, err := st.PendingInterrupt(context.Background(), firstController.ConversationID(), testSession)
+				if err != nil || reservation == "" || target != running.ProviderTurnID || len(members) != 0 {
 					t.Fatalf("accepted Stop continuation: reservation=%q members=%v err=%v", reservation, members, err)
 				}
 			} else {
-				matched, err := st.ReserveQueuedTurnsForInterrupt(context.Background(), firstController.ConversationID(), []string{confirmed.ID}, "crashed-stop")
+				matched, err := st.ReserveQueuedTurnsForInterrupt(context.Background(), firstController.ConversationID(), []string{confirmed.ID}, "crashed-stop", running.ProviderTurnID)
 				if err != nil || !matched {
 					t.Fatalf("reserve Stop: %v %v", matched, err)
 				}
+			}
+			// A newer child must never replace the original primary Stop target.
+			if err := st.AdoptProviderTurn(context.Background(), firstController.ConversationID(), testSession,
+				firstController.Generation(), "nested-turn", "provider-nested", time.Now().Add(time.Hour)); err != nil {
+				t.Fatalf("adopt nested turn: %v", err)
 			}
 			first.StopAll(context.Background())
 
@@ -286,8 +291,21 @@ func TestLiveReconnectReconcilesConfirmedStopScopeWithoutRedispatch(t *testing.T
 			if got := secondProvider.sentTexts(); len(got) != 0 {
 				t.Fatalf("dispatched before original turn ended: %v", got)
 			}
-			secondProvider.emit(ports.ChatEvent{Kind: ports.ChatEventTurnCompleted, ProviderTurnID: running.ProviderTurnID, TurnState: domain.TurnStateInterrupted})
 			h := &harness{st: st, ctrl: controller}
+			secondProvider.emit(ports.ChatEvent{Kind: ports.ChatEventTurnCompleted,
+				ProviderTurnID: "provider-nested", ProviderConversationID: "nested-conversation", TurnState: domain.TurnStateInterrupted})
+			h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool {
+				for _, turn := range s.Turns {
+					if turn.ProviderTurnID == "provider-nested" {
+						return turn.State == domain.TurnStateInterrupted
+					}
+				}
+				return false
+			})
+			if got := secondProvider.sentTexts(); len(got) != 0 {
+				t.Fatalf("nested completion released primary Stop fence: %v", got)
+			}
+			secondProvider.emit(ports.ChatEvent{Kind: ports.ChatEventTurnCompleted, ProviderTurnID: running.ProviderTurnID, TurnState: domain.TurnStateInterrupted})
 			h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool {
 				states := map[string]domain.TurnState{}
 				for _, turn := range s.Turns {

@@ -1386,7 +1386,8 @@ func (q *Queries) RejectConversationSteerDelivery(ctx context.Context, arg Rejec
 const releaseConversationInterruptReservation = `-- name: ReleaseConversationInterruptReservation :execrows
 UPDATE conversations
 SET interrupt_reservation_id = NULL,
-    interrupt_reservation_session_id = NULL
+    interrupt_reservation_session_id = NULL,
+    interrupt_provider_turn_id = NULL
 WHERE id = ?1
   AND interrupt_reservation_id = ?2
 `
@@ -1407,7 +1408,8 @@ func (q *Queries) ReleaseConversationInterruptReservation(ctx context.Context, a
 const releaseOrphanedConversationInterruptReservations = `-- name: ReleaseOrphanedConversationInterruptReservations :exec
 UPDATE conversations
 SET interrupt_reservation_id = NULL,
-    interrupt_reservation_session_id = NULL
+    interrupt_reservation_session_id = NULL,
+    interrupt_provider_turn_id = NULL
 WHERE interrupt_reservation_session_id = ?1
 `
 
@@ -1508,22 +1510,24 @@ func (q *Queries) ReleaseUntouchedConversationProvider(ctx context.Context, arg 
 const reserveConversationForInterrupt = `-- name: ReserveConversationForInterrupt :execrows
 UPDATE conversations
 SET interrupt_reservation_id = ?1,
-    interrupt_reservation_session_id = current_session_id
-WHERE id = ?2
+    interrupt_reservation_session_id = current_session_id,
+    interrupt_provider_turn_id = ?2
+WHERE id = ?3
   AND current_session_id IS NOT NULL
   AND interrupt_reservation_id IS NULL
 `
 
 type ReserveConversationForInterruptParams struct {
-	InterruptReservationID sql.NullString
-	ConversationID         string
+	InterruptReservationID  sql.NullString
+	InterruptProviderTurnID sql.NullString
+	ConversationID          string
 }
 
 // Reserve the conversation before reserving the exact member rows. This global
 // marker is required even for an empty confirmed scope: later work must not be
 // dispatched while the provider outcome is unknown.
 func (q *Queries) ReserveConversationForInterrupt(ctx context.Context, arg ReserveConversationForInterruptParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, reserveConversationForInterrupt, arg.InterruptReservationID, arg.ConversationID)
+	result, err := q.db.ExecContext(ctx, reserveConversationForInterrupt, arg.InterruptReservationID, arg.InterruptProviderTurnID, arg.ConversationID)
 	if err != nil {
 		return 0, err
 	}
@@ -2084,7 +2088,7 @@ func (q *Queries) SelectConversationBranches(ctx context.Context, conversationID
 }
 
 const selectConversationByID = `-- name: SelectConversationByID :one
-SELECT id, scope, project_id, session_id, current_session_id, latest_sequence, created_at, updated_at, model, reasoning_effort, approval_mode, compacted_at, context_used, context_window, usage_input_tokens, usage_output_tokens, usage_cached_tokens, usage_total_tokens, rate_limit_primary_percent, rate_limit_secondary_percent, rate_limit_primary_resets_in, rate_limit_secondary_resets_in, rate_limit_plan, provider_title, applied_title, model_reroute_json, account_json, thread_state_json, mcp_servers_json, usage_cost, usage_currency, active_branch_id, opencode_mode, interrupt_reservation_id, interrupt_reservation_session_id FROM conversations WHERE id = ? LIMIT 1
+SELECT id, scope, project_id, session_id, current_session_id, latest_sequence, created_at, updated_at, model, reasoning_effort, approval_mode, compacted_at, context_used, context_window, usage_input_tokens, usage_output_tokens, usage_cached_tokens, usage_total_tokens, rate_limit_primary_percent, rate_limit_secondary_percent, rate_limit_primary_resets_in, rate_limit_secondary_resets_in, rate_limit_plan, provider_title, applied_title, model_reroute_json, account_json, thread_state_json, mcp_servers_json, usage_cost, usage_currency, active_branch_id, opencode_mode, interrupt_reservation_id, interrupt_reservation_session_id, interrupt_provider_turn_id FROM conversations WHERE id = ? LIMIT 1
 `
 
 func (q *Queries) SelectConversationByID(ctx context.Context, id string) (Conversation, error) {
@@ -2126,12 +2130,13 @@ func (q *Queries) SelectConversationByID(ctx context.Context, id string) (Conver
 		&i.OpencodeMode,
 		&i.InterruptReservationID,
 		&i.InterruptReservationSessionID,
+		&i.InterruptProviderTurnID,
 	)
 	return i, err
 }
 
 const selectConversationBySession = `-- name: SelectConversationBySession :one
-SELECT id, scope, project_id, session_id, current_session_id, latest_sequence, created_at, updated_at, model, reasoning_effort, approval_mode, compacted_at, context_used, context_window, usage_input_tokens, usage_output_tokens, usage_cached_tokens, usage_total_tokens, rate_limit_primary_percent, rate_limit_secondary_percent, rate_limit_primary_resets_in, rate_limit_secondary_resets_in, rate_limit_plan, provider_title, applied_title, model_reroute_json, account_json, thread_state_json, mcp_servers_json, usage_cost, usage_currency, active_branch_id, opencode_mode, interrupt_reservation_id, interrupt_reservation_session_id FROM conversations WHERE current_session_id = ? LIMIT 1
+SELECT id, scope, project_id, session_id, current_session_id, latest_sequence, created_at, updated_at, model, reasoning_effort, approval_mode, compacted_at, context_used, context_window, usage_input_tokens, usage_output_tokens, usage_cached_tokens, usage_total_tokens, rate_limit_primary_percent, rate_limit_secondary_percent, rate_limit_primary_resets_in, rate_limit_secondary_resets_in, rate_limit_plan, provider_title, applied_title, model_reroute_json, account_json, thread_state_json, mcp_servers_json, usage_cost, usage_currency, active_branch_id, opencode_mode, interrupt_reservation_id, interrupt_reservation_session_id, interrupt_provider_turn_id FROM conversations WHERE current_session_id = ? LIMIT 1
 `
 
 func (q *Queries) SelectConversationBySession(ctx context.Context, currentSessionID *domain.SessionID) (Conversation, error) {
@@ -2173,6 +2178,7 @@ func (q *Queries) SelectConversationBySession(ctx context.Context, currentSessio
 		&i.OpencodeMode,
 		&i.InterruptReservationID,
 		&i.InterruptReservationSessionID,
+		&i.InterruptProviderTurnID,
 	)
 	return i, err
 }
@@ -3258,7 +3264,7 @@ func (q *Queries) SelectNextQueuedConversationTurn(ctx context.Context, conversa
 }
 
 const selectProjectConversation = `-- name: SelectProjectConversation :one
-SELECT id, scope, project_id, session_id, current_session_id, latest_sequence, created_at, updated_at, model, reasoning_effort, approval_mode, compacted_at, context_used, context_window, usage_input_tokens, usage_output_tokens, usage_cached_tokens, usage_total_tokens, rate_limit_primary_percent, rate_limit_secondary_percent, rate_limit_primary_resets_in, rate_limit_secondary_resets_in, rate_limit_plan, provider_title, applied_title, model_reroute_json, account_json, thread_state_json, mcp_servers_json, usage_cost, usage_currency, active_branch_id, opencode_mode, interrupt_reservation_id, interrupt_reservation_session_id FROM conversations WHERE project_id = ? AND scope = 'project' LIMIT 1
+SELECT id, scope, project_id, session_id, current_session_id, latest_sequence, created_at, updated_at, model, reasoning_effort, approval_mode, compacted_at, context_used, context_window, usage_input_tokens, usage_output_tokens, usage_cached_tokens, usage_total_tokens, rate_limit_primary_percent, rate_limit_secondary_percent, rate_limit_primary_resets_in, rate_limit_secondary_resets_in, rate_limit_plan, provider_title, applied_title, model_reroute_json, account_json, thread_state_json, mcp_servers_json, usage_cost, usage_currency, active_branch_id, opencode_mode, interrupt_reservation_id, interrupt_reservation_session_id, interrupt_provider_turn_id FROM conversations WHERE project_id = ? AND scope = 'project' LIMIT 1
 `
 
 func (q *Queries) SelectProjectConversation(ctx context.Context, projectID domain.ProjectID) (Conversation, error) {
@@ -3300,6 +3306,7 @@ func (q *Queries) SelectProjectConversation(ctx context.Context, projectID domai
 		&i.OpencodeMode,
 		&i.InterruptReservationID,
 		&i.InterruptReservationSessionID,
+		&i.InterruptProviderTurnID,
 	)
 	return i, err
 }

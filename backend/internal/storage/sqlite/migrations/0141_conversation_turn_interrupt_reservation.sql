@@ -10,6 +10,8 @@ ALTER TABLE conversations
 -- confirmed scope before deleting the session, never erase the recovery key.
 ALTER TABLE conversations
     ADD COLUMN interrupt_reservation_session_id TEXT REFERENCES sessions(id);
+ALTER TABLE conversations
+    ADD COLUMN interrupt_provider_turn_id TEXT;
 ALTER TABLE conversation_turns
     ADD COLUMN interrupt_reservation_id TEXT;
 -- +goose StatementEnd
@@ -17,6 +19,7 @@ ALTER TABLE conversation_turns
 -- +goose Down
 -- +goose StatementBegin
 ALTER TABLE conversation_turns DROP COLUMN interrupt_reservation_id;
+ALTER TABLE conversations DROP COLUMN interrupt_provider_turn_id;
 ALTER TABLE conversations DROP COLUMN interrupt_reservation_session_id;
 ALTER TABLE conversations DROP COLUMN interrupt_reservation_id;
 -- +goose StatementEnd

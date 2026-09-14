@@ -568,7 +568,8 @@ WHERE handled_by_session_id = ? AND state IN ('queued', 'running');
 -- name: ReleaseOrphanedConversationInterruptReservations :exec
 UPDATE conversations
 SET interrupt_reservation_id = NULL,
-    interrupt_reservation_session_id = NULL
+    interrupt_reservation_session_id = NULL,
+    interrupt_provider_turn_id = NULL
 WHERE interrupt_reservation_session_id = sqlc.arg(handled_by_session_id);
 
 -- The running turns visible on the active branch, in the same order as the
@@ -977,7 +978,8 @@ WHERE conversation_turns.id = sqlc.arg(id)
 -- name: ReserveConversationForInterrupt :execrows
 UPDATE conversations
 SET interrupt_reservation_id = sqlc.arg(interrupt_reservation_id),
-    interrupt_reservation_session_id = current_session_id
+    interrupt_reservation_session_id = current_session_id,
+    interrupt_provider_turn_id = sqlc.arg(interrupt_provider_turn_id)
 WHERE id = sqlc.arg(conversation_id)
   AND current_session_id IS NOT NULL
   AND interrupt_reservation_id IS NULL;
@@ -985,7 +987,8 @@ WHERE id = sqlc.arg(conversation_id)
 -- name: ReleaseConversationInterruptReservation :execrows
 UPDATE conversations
 SET interrupt_reservation_id = NULL,
-    interrupt_reservation_session_id = NULL
+    interrupt_reservation_session_id = NULL,
+    interrupt_provider_turn_id = NULL
 WHERE id = sqlc.arg(conversation_id)
   AND interrupt_reservation_id = sqlc.arg(interrupt_reservation_id);
 

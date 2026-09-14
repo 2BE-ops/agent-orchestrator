@@ -1715,7 +1715,7 @@ func (s *Store) ReserveQueuedTurnsForInterrupt(
 	ctx context.Context,
 	conversationID string,
 	expectedTurnIDs []string,
-	reservationID string,
+	reservationID, providerTurnID string,
 ) (bool, error) {
 	if reservationID == "" {
 		return false, errors.New("interrupt reservation id is required")
@@ -1736,8 +1736,9 @@ func (s *Store) ReserveQueuedTurnsForInterrupt(
 		}
 		updated, err := q.ReserveConversationForInterrupt(ctx,
 			gen.ReserveConversationForInterruptParams{
-				InterruptReservationID: sql.NullString{String: reservationID, Valid: true},
-				ConversationID:         conversationID,
+				InterruptReservationID:  sql.NullString{String: reservationID, Valid: true},
+				InterruptProviderTurnID: sql.NullString{String: providerTurnID, Valid: providerTurnID != ""},
+				ConversationID:          conversationID,
 			})
 		if err != nil {
 			return err
@@ -3832,10 +3833,10 @@ func steerDeliveryToDomain(row gen.ConversationSteerDelivery) domain.Conversatio
 }
 
 // PendingInterrupt restores an existing Stop fence without retrying a provider action.
-func (s *Store) PendingInterrupt(ctx context.Context, conversationID string, sessionID domain.SessionID) (string, []string, error) {
+func (s *Store) PendingInterrupt(ctx context.Context, conversationID string, sessionID domain.SessionID) (string, string, []string, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	var reservationID string
+	var reservationID, providerTurnID string
 	var turnIDs []string
 	err := s.inTx(ctx, "read pending Stop reservation", func(q *gen.Queries) error {
 		conversation, err := q.SelectConversationByID(ctx, conversationID)
@@ -3849,10 +3850,11 @@ func (s *Store) PendingInterrupt(ctx context.Context, conversationID string, ses
 			return domain.ErrConversationOwnerChanged
 		}
 		reservationID = conversation.InterruptReservationID.String
+		providerTurnID = conversation.InterruptProviderTurnID.String
 		turnIDs, err = q.SelectInterruptedQueueReservationMembers(ctx, gen.SelectInterruptedQueueReservationMembersParams{
 			ConversationID: conversationID, SessionID: &sessionID,
 		})
 		return err
 	})
-	return reservationID, turnIDs, err
+	return reservationID, providerTurnID, turnIDs, err
 }

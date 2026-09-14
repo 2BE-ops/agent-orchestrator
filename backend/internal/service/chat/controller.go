@@ -64,10 +64,10 @@ type Store interface {
 	CleanupOwnedControllerWork(ctx context.Context, session domain.SessionID, conversationID, generation string, now time.Time) (bool, error)
 	ListVisibleRunningTurnProviderIDs(ctx context.Context, conversationID string) ([]string, error)
 	ListQueuedTurns(ctx context.Context, conversationID string) ([]domain.QueuedTurn, error)
-	ReserveQueuedTurnsForInterrupt(ctx context.Context, conversationID string, expectedTurnIDs []string, reservationID string) (bool, error)
+	ReserveQueuedTurnsForInterrupt(ctx context.Context, conversationID string, expectedTurnIDs []string, reservationID, providerTurnID string) (bool, error)
 	ReleaseQueuedTurnsForInterrupt(ctx context.Context, conversationID string, turnIDs []string, reservationID string) error
 	CancelQueuedTurnsForInterrupt(ctx context.Context, conversationID string, turnIDs []string, reservationID string, now time.Time, keepReservation bool) error
-	PendingInterrupt(ctx context.Context, conversationID string, sessionID domain.SessionID) (string, []string, error)
+	PendingInterrupt(ctx context.Context, conversationID string, sessionID domain.SessionID) (string, string, []string, error)
 
 	SetConversationSettings(ctx context.Context, conversationID string, settings domain.ConversationSettings, now time.Time) error
 
@@ -365,10 +365,13 @@ func newController(
 // before a replacement daemon publishes a reconnected controller. The provider
 // kept running while AO was detached, so forgetting this turn would let a new
 // Send start a second root turn on the same native conversation.
-func (c *Controller) restoreLiveTurnOwnership(turns []domain.ConversationTurn) string {
+func (c *Controller) restoreLiveTurnOwnership(turns []domain.ConversationTurn, interruptProviderTurnID string) string {
 	var latest *domain.ConversationTurn
 	for i := range turns {
 		turn := &turns[i]
+		if interruptProviderTurnID != "" && turn.ProviderTurnID != interruptProviderTurnID {
+			continue
+		}
 		if turn.State != domain.TurnStateRunning || turn.ProviderTurnID == "" || turn.RolledBackAt != nil {
 			continue
 		}
@@ -2065,9 +2068,24 @@ func (c *Controller) Interrupt(ctx context.Context, expectedQueuedTurnIDs []stri
 		return err
 	}
 	defer releaseOwnership()
+	c.mu.Lock()
+	turn := c.pendingTurnID
+	c.mu.Unlock()
+	interruptProviderTurnID := turn
+	var durableProviderTurnIDs []string
+	if turn == "" {
+		durableProviderTurnIDs, err = c.store.ListVisibleRunningTurnProviderIDs(ctx, c.conversation.ID)
+		if err != nil {
+			c.sendMu.Unlock()
+			return fmt.Errorf("check running turns: %w", err)
+		}
+		if len(durableProviderTurnIDs) > 0 {
+			interruptProviderTurnID = durableProviderTurnIDs[0]
+		}
+	}
 	reservationID := c.newID()
 	matched, err := c.store.ReserveQueuedTurnsForInterrupt(
-		ctx, c.conversation.ID, expectedQueuedTurnIDs, reservationID,
+		ctx, c.conversation.ID, expectedQueuedTurnIDs, reservationID, interruptProviderTurnID,
 	)
 	if err != nil {
 		c.sendMu.Unlock()
@@ -2079,20 +2097,9 @@ func (c *Controller) Interrupt(ctx context.Context, expectedQueuedTurnIDs []stri
 	}
 	c.interruptReservationID = reservationID
 	c.interruptQueuedTurnIDs = append([]string(nil), expectedQueuedTurnIDs...)
-	c.mu.Lock()
-	turn := c.pendingTurnID
-	c.mu.Unlock()
 
 	if turn == "" {
-		providerTurnIDs, err := c.store.ListVisibleRunningTurnProviderIDs(ctx, c.conversation.ID)
-		if err != nil {
-			releaseErr := c.finishInterruptQueueDetachedLocked(ctx, false)
-			c.sendMu.Unlock()
-			if releaseErr != nil {
-				return errors.Join(fmt.Errorf("check running turns: %w", err), releaseErr)
-			}
-			return fmt.Errorf("check running turns: %w", err)
-		}
+		providerTurnIDs := durableProviderTurnIDs
 		if len(providerTurnIDs) == 0 {
 			releaseErr := c.finishInterruptQueueDetachedLocked(ctx, false)
 			c.sendMu.Unlock()
