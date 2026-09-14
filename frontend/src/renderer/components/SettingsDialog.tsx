@@ -119,6 +119,7 @@ export function SettingsDialog() {
 						event.preventDefault();
 						requestCloseRef.current();
 					}}
+					data-state="open"
 					role="dialog"
 					tabIndex={-1}
 				>
