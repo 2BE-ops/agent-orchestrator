@@ -1913,7 +1913,6 @@ function ErrorActivityRow({
 	const standaloneActionUrl = actionUrl && !detail?.includes(actionUrl) ? actionUrl : undefined;
 	return (
 		<div
-			data-provider-error-state={resolved ? "resolved" : "unresolved"}
 			className={cn(
 				"flex min-w-0 max-w-full items-baseline overflow-hidden py-0.5 text-[11.5px] leading-snug text-muted-foreground",
 				resolved && "opacity-65",
