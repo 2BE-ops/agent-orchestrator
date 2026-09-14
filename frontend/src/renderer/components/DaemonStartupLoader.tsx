@@ -43,9 +43,12 @@ export function DaemonStartupLoader() {
 		if (typeof isPostUpdateRelaunch !== "function") {
 			return;
 		}
-		void isPostUpdateRelaunch().then((value) => {
-			if (active) setPostUpdate(value);
-		});
+		void isPostUpdateRelaunch().then(
+			(value) => {
+				if (active) setPostUpdate(value);
+			},
+			() => undefined,
+		);
 		return () => {
 			active = false;
 		};

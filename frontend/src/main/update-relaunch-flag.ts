@@ -69,15 +69,22 @@ export async function consumeUpdateRelaunchFlag(options: {
 	now?: number;
 }): Promise<boolean> {
 	const file = path.join(flagDir(options.stateDir), RELAUNCH_FLAG_FILE);
-	let parsed: unknown;
+	let contents: string;
 	try {
-		parsed = JSON.parse(await readFile(file, "utf8"));
+		contents = await readFile(file, "utf8");
 	} catch {
-		// No marker is the normal case; a corrupt one must never block startup.
+		// No marker is the normal case.
 		return false;
 	}
-	// Consume unconditionally: a valid or invalid marker is one-shot either way.
+	// Consume unconditionally: a valid, stale, or corrupt marker is one-shot.
 	await rm(file, { force: true }).catch(() => undefined);
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(contents);
+	} catch {
+		// A corrupt marker must never block startup or survive into later boots.
+		return false;
+	}
 	// A marker that is not a JSON object (null, a bare number, a truncated write)
 	// must read as "not an update", never throw and block startup.
 	if (typeof parsed !== "object" || parsed === null) {

@@ -47,5 +47,6 @@ it("never throws on a marker that is not a JSON object", async () => {
 		await expect(consumeUpdateRelaunchFlag({ stateDir: root, version: "1.2.3", pid: 200, now: 2_000 })).resolves.toBe(
 			false,
 		);
+		await expect(readFile(markerFile(root), "utf8")).rejects.toThrow();
 	}
 });
