@@ -1497,21 +1497,24 @@ function faviconForOpenTab(url: string, tabs: BrowserViewModel["tabs"]): string 
 }
 
 function BrowserSuggestionIcon({ cachedFavicon, url, viewId }: { cachedFavicon?: string; url: string; viewId: string }) {
-	const [favicon, setFavicon] = useState(cachedFavicon);
+	const origin = webOrigin(url);
+	const directFavicon = origin ? `${origin}/favicon.ico` : undefined;
+	const [favicon, setFavicon] = useState(cachedFavicon ?? directFavicon);
 	useEffect(() => {
-		setFavicon(cachedFavicon);
-		if (cachedFavicon || !viewId || !window.ao?.browser) return;
+		setFavicon(cachedFavicon ?? directFavicon);
+		const historyFavicon = window.ao?.browser.historyFavicon;
+		if (cachedFavicon || !viewId || typeof historyFavicon !== "function") return;
 		let current = true;
-		void window.ao.browser.historyFavicon({ viewId, url }).then(
+		void historyFavicon({ viewId, url }).then(
 			(nextFavicon) => {
-				if (current) setFavicon(nextFavicon);
+				if (current && nextFavicon) setFavicon(nextFavicon);
 			},
 			() => undefined,
 		);
 		return () => {
 			current = false;
 		};
-	}, [cachedFavicon, url, viewId]);
+	}, [cachedFavicon, directFavicon, url, viewId]);
 	if (!favicon) {
 		return <Globe2 aria-hidden="true" className="size-icon-base shrink-0 text-settings-muted" />;
 	}
