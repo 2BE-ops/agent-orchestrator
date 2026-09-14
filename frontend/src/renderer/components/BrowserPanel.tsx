@@ -9,6 +9,7 @@ import {
 	type FocusEvent,
 	type FormEvent,
 	type KeyboardEvent,
+	type ReactElement,
 } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -394,6 +395,7 @@ export function BrowserPanelView({
 	const [devicePreset, setDevicePreset] = useState<string | null>(null);
 	const [customDeviceWidth, setCustomDeviceWidth] = useState("390");
 	const [controlsView, setControlsView] = useState<"root" | "devices" | "profiles">("root");
+	const [controlsOpen, setControlsOpen] = useState(false);
 	const [browserProfiles, setBrowserProfiles] = useState<BrowserProfile[]>([]);
 	const [profilesLoading, setProfilesLoading] = useState(false);
 	const openGlobalSettings = useUiStore((state) => state.openGlobalSettings);
@@ -588,7 +590,7 @@ export function BrowserPanelView({
 			!viewId ||
 			!profileState.profileId ||
 			query === navState.url ||
-			query.length < 2
+			query.length < 1
 		) {
 			setHistorySuggestions([]);
 			return;
@@ -811,8 +813,7 @@ export function BrowserPanelView({
 							value={urlEditing || poppedOut ? urlInput : getDisplayUrl(navState.url)}
 						/>
 						{isWebLink(navState.url) ? (
-							<Tooltip>
-								<TooltipTrigger asChild>
+							<BrowserControlTooltip label={t("inspector.openInSystemBrowser")}>
 									<Button
 										aria-label={t("inspector.openInSystemBrowser")}
 										className="browser-panel__url-external"
@@ -823,11 +824,7 @@ export function BrowserPanelView({
 									>
 										<ExternalLink aria-hidden="true" className="size-icon-base" />
 									</Button>
-								</TooltipTrigger>
-								<TooltipContent data-browser-native-overlay="true" side="bottom">
-									{t("inspector.openInSystemBrowser")}
-								</TooltipContent>
-							</Tooltip>
+							</BrowserControlTooltip>
 						) : null}
 					</div>
 				</PopoverAnchor>
@@ -836,7 +833,7 @@ export function BrowserPanelView({
 					aria-label={t("browser.urlSuggestions")}
 					className={cn(
 						SETTINGS_MENU_SURFACE,
-						"browser-panel__history-suggestions p-1",
+						"browser-panel__history-suggestions",
 					)}
 					data-browser-native-overlay="true"
 					id={historyMenuId}
@@ -918,15 +915,16 @@ export function BrowserPanelView({
 					{draggedTopTab ? <BrowserTopTabDragOverlay onlyTab={tabs.length === 1} tab={draggedTopTab} /> : null}
 				</DragOverlay>
 			</DndContext>
-			<button
-				aria-label={t("browser.openNewTab")}
-				className={cn("browser-panel__tab-new", draggedTopTabId && "browser-panel__tab-new--dragging")}
-				onClick={() => void handleOpenTab()}
-				title={t("browser.openNewTab")}
-				type="button"
-			>
-				<Plus aria-hidden="true" className="size-icon-base" />
-			</button>
+				<BrowserControlTooltip label={t("browser.openNewTab")}>
+					<button
+						aria-label={t("browser.openNewTab")}
+						className={cn("browser-panel__tab-new", draggedTopTabId && "browser-panel__tab-new--dragging")}
+						onClick={() => void handleOpenTab()}
+						type="button"
+					>
+						<Plus aria-hidden="true" className="size-icon-base" />
+					</button>
+				</BrowserControlTooltip>
 		</div>
 	);
 	return (
@@ -959,7 +957,8 @@ export function BrowserPanelView({
 					className="browser-panel__toolbar"
 					data-testid="browser-toolbar"
 				>
-				<span className="browser-panel__navigation-control inline-flex" title={t("browser.back")}>
+				<BrowserControlTooltip label={t("browser.back")}>
+					<span className="browser-panel__navigation-control inline-flex">
 							<Button
 								aria-label={t("browser.back")}
 								className="browser-panel__navigation-btn"
@@ -971,8 +970,10 @@ export function BrowserPanelView({
 							>
 								<ArrowLeft aria-hidden="true" className="size-icon-base" />
 							</Button>
-				</span>
-				<span className="browser-panel__navigation-control inline-flex" title={t("browser.forward")}>
+					</span>
+				</BrowserControlTooltip>
+				<BrowserControlTooltip label={t("browser.forward")}>
+					<span className="browser-panel__navigation-control inline-flex">
 							<Button
 								aria-label={t("browser.forward")}
 								className="browser-panel__navigation-btn"
@@ -984,13 +985,14 @@ export function BrowserPanelView({
 							>
 								<ArrowRight aria-hidden="true" className="size-icon-base" />
 							</Button>
-				</span>
-				<Button
+					</span>
+				</BrowserControlTooltip>
+				<BrowserControlTooltip label={navState.isLoading ? t("browser.stop") : t("browser.reload")}>
+					<Button
 							aria-label={navState.isLoading ? t("browser.stop") : t("browser.reload")}
 							className="browser-panel__navigation-btn"
 							onClick={() => void (navState.isLoading ? stop() : reload())}
 							size="icon-sm"
-							title={navState.isLoading ? t("browser.stop") : t("browser.reload")}
 							type="button"
 							variant="ghost"
 						>
@@ -999,7 +1001,8 @@ export function BrowserPanelView({
 							) : (
 								<RefreshCw aria-hidden="true" className="size-icon-base" />
 							)}
-				</Button>
+					</Button>
+				</BrowserControlTooltip>
 				{annotationStatusLabel ? (
 					<span className="sr-only" role="status">
 						{annotationStatusLabel}
@@ -1014,10 +1017,10 @@ export function BrowserPanelView({
 						{tabNotice}
 					</span>
 				) : null}
-				<span
-					className="inline-flex"
-					title={annotationStatusLabel || agentStatusLabel || (canRetryAnnotation ? t("browser.retryAnnotation") : t("browser.annotate"))}
+				<BrowserControlTooltip
+					label={annotationStatusLabel || agentStatusLabel || (canRetryAnnotation ? t("browser.retryAnnotation") : t("browser.annotate"))}
 				>
+					<span className="inline-flex">
 							<Button
 								aria-label={
 									canRetryAnnotation
@@ -1047,7 +1050,8 @@ export function BrowserPanelView({
 									<span aria-hidden="true" className="pointer-events-none absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-accent" />
 								) : null}
 							</Button>
-				</span>
+					</span>
+				</BrowserControlTooltip>
 				{browserDownloads.downloads.length > 0 ? (
 					<DropdownMenu
 						onOpenChange={(open) => {
@@ -1055,19 +1059,20 @@ export function BrowserPanelView({
 						}}
 						open={downloadsOpen}
 					>
-						<DropdownMenuTrigger asChild>
+						<BrowserControlTooltip disabled={downloadsOpen} label={t("browser.downloads.title")}>
+							<DropdownMenuTrigger asChild>
 									<Button
 									aria-label={t("browser.downloads.title")}
 									className={cn("relative", hasActiveDownload && "text-accent")}
 										size="icon-sm"
-										title={t("browser.downloads.title")}
 										type="button"
 										variant="ghost"
 									>
 										<Download aria-hidden="true" className="size-icon-base" />
 										{hasActiveDownload ? <span aria-hidden="true" className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-accent" /> : null}
 									</Button>
-						</DropdownMenuTrigger>
+							</DropdownMenuTrigger>
+						</BrowserControlTooltip>
 						<DropdownMenuContent
 							align="end"
 							className="w-96 p-0"
@@ -1090,22 +1095,22 @@ export function BrowserPanelView({
 				) : null}
 				<DropdownMenu
 					onOpenChange={(open) => {
+						setControlsOpen(open);
 						if (!open) setControlsView("root");
 					}}
 				>
-					<DropdownMenuTrigger asChild>
+					<BrowserControlTooltip disabled={controlsOpen} label={t("browser.controls")}>
+						<DropdownMenuTrigger asChild>
 								<Button
 									aria-label={t("browser.controls")}
 									size="icon-sm"
-									title={t("browser.controls")}
 									type="button"
 									variant="ghost"
 								>
 									<MoreVertical aria-hidden="true" className="size-icon-base" />
 								</Button>
-					</DropdownMenuTrigger>
-					{/* Menus render over the native page and require the compositor handoff.
-					    Toolbar labels use native title tooltips and never enter this path. */}
+						</DropdownMenuTrigger>
+					</BrowserControlTooltip>
 					<DropdownMenuContent
 						align="end"
 						className={controlsView === "root" ? "w-56" : "w-64"}
@@ -1340,6 +1345,29 @@ export function BrowserPanelView({
 	);
 }
 
+function BrowserControlTooltip({
+	children,
+	disabled = false,
+	label,
+}: {
+	children: ReactElement;
+	disabled?: boolean;
+	label: string;
+}) {
+	const [open, setOpen] = useState(false);
+	useEffect(() => {
+		if (disabled) setOpen(false);
+	}, [disabled]);
+	return (
+		<Tooltip open={open} onOpenChange={(nextOpen) => setOpen(disabled ? false : nextOpen)}>
+			<TooltipTrigger asChild>{children}</TooltipTrigger>
+			<TooltipContent data-browser-native-overlay="true" side="bottom" sideOffset={4}>
+				{label}
+			</TooltipContent>
+		</Tooltip>
+	);
+}
+
 const SortableBrowserTopTab = memo(function SortableBrowserTopTab({
 	tab,
 	selected,
@@ -1368,34 +1396,36 @@ const SortableBrowserTopTab = memo(function SortableBrowserTopTab({
 			ref={setNodeRef}
 			style={{ transform: CSS.Transform.toString(transform), transition }}
 		>
-			<button
-				{...attributes}
-				{...listeners}
-				aria-selected={selected}
-				className="browser-panel__tab-select"
-				onClick={() => void onSelect(tab.id)}
-				role="tab"
-				tabIndex={selected ? 0 : -1}
-				title={label.title}
-				type="button"
-			>
-				{tab.favicon ? (
-					<img alt="" className="browser-panel__tab-icon object-cover" src={tab.favicon} />
-				) : (
-					<Globe2 aria-hidden="true" className="browser-panel__tab-icon" />
-				)}
-				<span className="browser-panel__tab-title">{label.title}</span>
-			</button>
-			<button
-				aria-label={closeLabel}
-				className="browser-panel__tab-close"
-				disabled={onlyTab}
-				onClick={() => onClose(tab.id)}
-				title={onlyTab ? t("browser.onlyTab") : closeLabel}
-				type="button"
-			>
-				<X aria-hidden="true" className="size-icon-base" />
-			</button>
+			<BrowserControlTooltip label={label.title}>
+				<button
+					{...attributes}
+					{...listeners}
+					aria-selected={selected}
+					className="browser-panel__tab-select"
+					onClick={() => void onSelect(tab.id)}
+					role="tab"
+					tabIndex={selected ? 0 : -1}
+					type="button"
+				>
+					{tab.favicon ? (
+						<img alt="" className="browser-panel__tab-icon object-cover" src={tab.favicon} />
+					) : (
+						<Globe2 aria-hidden="true" className="browser-panel__tab-icon" />
+					)}
+					<span className="browser-panel__tab-title">{label.title}</span>
+				</button>
+			</BrowserControlTooltip>
+			<BrowserControlTooltip label={onlyTab ? t("browser.onlyTab") : closeLabel}>
+				<button
+					aria-label={closeLabel}
+					className="browser-panel__tab-close"
+					disabled={onlyTab}
+					onClick={() => onClose(tab.id)}
+					type="button"
+				>
+					<X aria-hidden="true" className="size-icon-base" />
+				</button>
+			</BrowserControlTooltip>
 		</div>
 	);
 });

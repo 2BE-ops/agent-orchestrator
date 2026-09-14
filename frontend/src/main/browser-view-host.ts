@@ -345,11 +345,8 @@ export type BrowserViewHost = {
 	clearProfileData: (profileId: BrowserProfileId) => Promise<void>;
 	// Whether browser-owned UI was the most recently used application surface.
 	isLastUsedBrowser: () => boolean;
-	// Same "identical bounds are a no-op, so nudge and restore" trick
-	// window-composition.ts uses for the shell's own stale-surface bug, applied
-	// to the live page's own view. Call right after raising the transparent
-	// shell for an overlay (see the caller in main.ts) — see the comment above
-	// this method's implementation for why the live view needs it too.
+	// Refresh the live page after raising the transparent shell for an overlay.
+	// Its visibility reset completes synchronously so no hidden frame is presented.
 	refreshLastFocusedPanelSurface: () => void;
 };
 
@@ -2403,19 +2400,11 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 		isProfileLive,
 		clearProfileData,
 		isLastUsedBrowser: () => lastUsedViewId !== null && entries.has(lastUsedViewId),
-		// Reported live (macOS, maximized/popped-out panel): opening an overlay
-		// (e.g. a toolbar dropdown) over the browser panel blanks the live page
-		// to black instead of showing it behind the dropdown, and a plain bounds
-		// nudge alone was not enough to clear it (confirmed still reproducing
-		// after that first attempt). window-composition.ts documents the same
-		// class of bug for its own shell view — re-adding a WebContentsView to
-		// reorder it above others can leave its *previous* compositor surface on
-		// screen until something forces a real re-composite, and applying
-		// identical bounds is a no-op Electron ignores. That fix only refreshed
-		// the shell; the live page's own view needs an equivalent nudge whenever
-		// the shell is raised above it. A visibility toggle is a stronger,
-		// more direct signal to re-establish the view's compositor surface than
-		// a 1px bounds change alone, so do both.
+		// Reordering the transparent shell above a live page can leave either
+		// WebContentsView showing a stale compositor surface on macOS. A one-pixel
+		// bounds nudge alone is insufficient: Electron also needs a visibility reset.
+		// Complete that reset synchronously so the compositor never presents a
+		// hidden frame; only the bounds restoration waits until the next tick.
 		refreshLastFocusedPanelSurface: () => {
 			if (lastFocusedViewId === null) return;
 			const session = entries.get(lastFocusedViewId);
@@ -2425,10 +2414,11 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 			if (bounds.width <= 0 || bounds.height <= 0) return;
 			entry.view.setVisible?.(false);
 			applyBrowserViewBounds(entry.view, { ...bounds, height: Math.max(1, bounds.height - 1) });
+			entry.view.setVisible?.(true);
 			setTimeout(() => {
 				const current = lastFocusedViewId !== null ? entries.get(lastFocusedViewId) : undefined;
 				if (!current || !current.visible) return;
-				applyBrowserViewBounds(activeEntry(current).view, current.bounds, true);
+				applyBrowserViewBounds(activeEntry(current).view, current.bounds);
 			}, 0);
 		},
 	};

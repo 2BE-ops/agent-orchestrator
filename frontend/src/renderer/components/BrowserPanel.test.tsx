@@ -313,12 +313,12 @@ describe("BrowserPanel", () => {
 		const addressBar = screen.getByTestId("browser-address-bar");
 		expect(addressBar).not.toHaveClass("browser-panel__address-bar--editing");
 
-		await userEvent.type(input, "git");
+		await userEvent.type(input, "g");
 		expect(addressBar).toHaveClass("browser-panel__address-bar--editing");
 
 		await waitFor(() => expect(window.ao!.browser.historySuggestions).toHaveBeenCalledWith({
 			viewId: "42:sess-1",
-			query: "git",
+			query: "g",
 		}), { timeout: 2_000 });
 		const menu = await screen.findByRole("listbox", { name: "Address suggestions" });
 		expect(menu).toHaveAttribute("data-browser-native-overlay", "true");
@@ -555,7 +555,7 @@ describe("BrowserPanel", () => {
 		expect(useUiStore.getState().settingsModal).toEqual({ scope: "global", section: "browserProfiles" });
 	});
 
-	it("does not show the Downloads tooltip when its menu returns focus", async () => {
+	it("restores the shared Downloads tooltip when its menu returns focus", async () => {
 		window.ao!.browser.downloads.list = vi.fn(async () => ({
 			downloads: [{
 				id: "download-1",
@@ -580,7 +580,7 @@ describe("BrowserPanel", () => {
 		await userEvent.keyboard("{Escape}");
 		await waitFor(() => expect(screen.queryByText("report.pdf")).not.toBeInTheDocument());
 		expect(trigger).toHaveFocus();
-		expect(screen.queryByRole("tooltip", { name: "Downloads" })).not.toBeInTheDocument();
+		expect(document.querySelector('[data-slot="tooltip-content"]')).toHaveTextContent("Downloads");
 	});
 
 	it("keeps browser profiles inside the AO controls menu", async () => {
@@ -691,7 +691,7 @@ describe("BrowserPanel", () => {
 		expect(menu.getAttribute("data-browser-native-overlay")).toBe("true");
 	});
 
-	it("does not mount a renderer tooltip when the dropdown returns focus to its trigger", async () => {
+	it("restores the shared tooltip when the dropdown returns focus to its trigger", async () => {
 		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut={false} session={session} />);
 		const trigger = screen.getByRole("button", { name: "Browser controls" });
 
@@ -701,15 +701,18 @@ describe("BrowserPanel", () => {
 		await waitFor(() => expect(screen.queryByRole("menuitem", { name: "Device preset" })).not.toBeInTheDocument());
 		fireEvent.focus(trigger);
 
-		expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
+		expect(document.querySelector('[data-slot="tooltip-content"]')).toHaveTextContent("Browser controls");
 	});
 
-	it("uses a native tooltip for browser controls", () => {
+	it("uses the shared AO tooltip for browser controls", async () => {
 		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut={false} session={session} />);
 		const trigger = screen.getByRole("button", { name: "Browser controls" });
 
-		expect(trigger).toHaveAttribute("title", "Browser controls");
-		expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
+		expect(trigger).toHaveAttribute("data-slot", "tooltip-trigger");
+		fireEvent.focus(trigger);
+		await waitFor(() => expect(document.querySelector('[data-slot="tooltip-content"]')).not.toBeNull());
+		expect(document.querySelector('[data-slot="tooltip-content"]')).toHaveAttribute("data-browser-native-overlay", "true");
+		expect(document.querySelector('[data-slot="tooltip-content"]')).toHaveAttribute("data-side", "bottom");
 	});
 
 	it("keeps the URL input editable while the browser is maximized", async () => {
@@ -769,7 +772,7 @@ describe("BrowserPanel", () => {
 		expect(hookState.stop).toHaveBeenCalled();
 	});
 
-	it("uses native toolbar tooltips without entering the overlay stacking path", () => {
+	it("uses shared AO tooltips for toolbar controls", async () => {
 		hookState.navState = {
 			viewId: "42:sess-1",
 			url: "http://localhost:5173/",
@@ -781,11 +784,12 @@ describe("BrowserPanel", () => {
 		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut={false} session={session} />);
 
 		const backButton = screen.getByRole("button", { name: /back/i });
-		expect(backButton.parentElement).toHaveAttribute("title", "Back");
-		expect(document.querySelector('[data-browser-native-overlay]')).toBeNull();
+		expect(backButton.parentElement).toHaveAttribute("data-slot", "tooltip-trigger");
+		fireEvent.focus(backButton.parentElement!);
+		await waitFor(() => expect(document.querySelector('[data-slot="tooltip-content"]')).not.toBeNull());
 	});
 
-	it("uses native toolbar tooltips while maximized", () => {
+	it("uses shared AO tooltips while maximized", async () => {
 		hookState.navState = {
 			viewId: "42:sess-1",
 			url: "http://localhost:5173/",
@@ -797,11 +801,12 @@ describe("BrowserPanel", () => {
 		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut session={session} />);
 
 		const annotateButton = screen.getByRole("button", { name: /annotate page/i });
-		expect(annotateButton.closest("[title]")).toHaveAttribute("title", "Annotate page");
-		expect(document.querySelector('[data-browser-native-overlay]')).toBeNull();
+		expect(annotateButton.parentElement).toHaveAttribute("data-slot", "tooltip-trigger");
+		fireEvent.focus(annotateButton.parentElement!);
+		await waitFor(() => expect(document.querySelector('[data-slot="tooltip-content"]')).not.toBeNull());
 	});
 
-	it("keeps a native tooltip on a disabled toolbar button wrapper", () => {
+	it("keeps a shared AO tooltip trigger around a disabled toolbar button", () => {
 		// Disabled buttons never dispatch pointer/focus events natively, so the
 		// hover listener has to live on a wrapping span around the button rather
 		// than on the (potentially disabled) button itself.
@@ -820,7 +825,7 @@ describe("BrowserPanel", () => {
 		const wrapper = backButton.parentElement;
 		expect(wrapper?.tagName).toBe("SPAN");
 
-		expect(wrapper).toHaveAttribute("title", "Back");
+		expect(wrapper).toHaveAttribute("data-slot", "tooltip-trigger");
 	});
 
 	it("shows browser tabs in a horizontal tab strip and selects them", async () => {
@@ -837,6 +842,8 @@ describe("BrowserPanel", () => {
 
 		expect(firstTab).toHaveAttribute("aria-selected", "false");
 		expect(secondTab).toHaveAttribute("aria-selected", "true");
+		expect(firstTab).toHaveAttribute("data-slot", "tooltip-trigger");
+		expect(screen.getByRole("button", { name: "Close tab First app" })).toHaveAttribute("data-slot", "tooltip-trigger");
 		await userEvent.click(firstTab);
 		expect(hookState.selectTab).toHaveBeenCalledWith("t1");
 	});

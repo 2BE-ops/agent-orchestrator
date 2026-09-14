@@ -4718,11 +4718,18 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 }
 
 .browser-panel__history-suggestions {
+	--browser-history-suggestion-inset: 4px;
 	width: min(var(--radix-popover-trigger-width, 240px), calc(100vw - 16px));
 	min-width: min(var(--radix-popover-trigger-width, 240px), calc(100vw - 16px));
 	max-height: min(360px, var(--radix-popover-content-available-height));
+	padding: var(--browser-history-suggestion-inset);
 	overflow-x: hidden;
 	overflow-y: auto;
+	animation: none;
+}
+
+.browser-panel__history-suggestions > [role="option"] {
+	border-radius: calc(var(--radius-settings-panel) - var(--browser-history-suggestion-inset));
 }
 
 .browser-panel__annotate-btn[aria-pressed="true"] {

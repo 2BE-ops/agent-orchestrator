@@ -169,6 +169,7 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 		isLoading: () => false,
 		insertCSS,
 		removeInsertedCSS,
+		invalidate: vi.fn(),
 		loadURL: vi.fn(async (url: string) => {
 			currentURL = url;
 		}),
@@ -1735,10 +1736,10 @@ describe("native browser visibility", () => {
 	// window-composition.ts documents the same class of bug for its own shell
 	// view — re-adding a view to reorder it can leave its *previous*
 	// compositor surface on screen until a real geometry change rebuilds it,
-	// and identical bounds are a no-op Electron ignores. refreshLastFocusedPanelSurface
-	// applies that same "shrink by 1px, restore next tick" nudge to the live
-	// page's own view; main.ts calls it right after raising the shell.
-	it("toggles visibility and nudges the last-focused panel's bounds to force a real resize, then restores both", async () => {
+	// refreshLastFocusedPanelSurface resets visibility synchronously after
+	// main.ts raises the shell, so Electron rebuilds the native surface without
+	// presenting a hidden frame while the bounds restore on the next tick.
+	it("resets visibility synchronously, then restores the last-focused panel bounds", async () => {
 		const { emit, host, invoke, view } = setupHost();
 		await invoke("browser:ensure", "sess-1");
 		emit("browser:setBounds", 1, {
@@ -1751,12 +1752,12 @@ describe("native browser visibility", () => {
 		view.setVisible.mockClear();
 
 		host.refreshLastFocusedPanelSurface();
-		expect(view.setVisible).toHaveBeenLastCalledWith(false);
 		expect(view.setBounds).toHaveBeenLastCalledWith({ x: 10, y: 20, width: 320, height: 239 });
+		expect(view.setVisible.mock.calls).toEqual([[false], [true]]);
 
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(view.setBounds).toHaveBeenLastCalledWith({ x: 10, y: 20, width: 320, height: 240 });
-		expect(view.setVisible).toHaveBeenLastCalledWith(true);
+		expect(view.setVisible.mock.calls).toEqual([[false], [true]]);
 	});
 
 	it("does nothing when nothing has been focused yet, or the panel is hidden", async () => {
