@@ -47,10 +47,9 @@ import {
 	type ReactNode,
 } from "react";
 import { ArrowUp, Loader2, Plus, Square, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
-import { useTranslation } from "react-i18next";
-import { EMPTY_COMPOSER_CONTENT, type ComposerDraftContent } from "../../lib/composer-content";
 import { cn } from "../../lib/utils";
 import { apiErrorCode, apiErrorMessage, getApiBaseUrl } from "../../lib/api-client";
 import { ComposerSuggestMenu } from "./ComposerSuggestMenu";
@@ -88,7 +87,7 @@ import {
 	readChatSessionDraft,
 	subscribeChatDraftRuntime,
 	writeChatAttachments,
-	writeChatComposerContent,
+	writeChatComposerText,
 	type ChatDraftMutationToken,
 	type ChatComposerDelivery,
 	type ChatDraftScope,
@@ -115,22 +114,17 @@ const DEFINITIVE_SEND_REJECTIONS = new Set([
 	"CHAT_CONTROLLER_NOT_READY",
 	"CHAT_INTERFACE_TRANSITION",
 ]);
+
 export interface WorkspaceFileCatalog {
 	paths: string[];
 	truncated: boolean;
-	failed: boolean;
-	error?: string;
-	refreshDegraded: boolean;
-	refreshFailed: boolean;
-	refreshError?: string;
+	unavailable: boolean;
 }
 
 const EMPTY_WORKSPACE_FILE_CATALOG: WorkspaceFileCatalog = {
 	paths: [],
 	truncated: false,
-	failed: false,
-	refreshDegraded: false,
-	refreshFailed: false,
+	unavailable: false,
 };
 
 /**
@@ -214,7 +208,7 @@ export const ChatComposer = memo(function ChatComposer({
 	disabledPlaceholder?: string;
 	/** The provider's skills. Empty leaves `/` an ordinary character. */
 	skills?: ChatSkill[];
-	/** Live worktree paths and their load/refresh state for `@` completion. */
+	/** Live worktree paths and index state for `@` completion. */
 	fileCatalog?: WorkspaceFileCatalog;
 	/**
 	 * Writes staged files into the worktree and answers with the paths the agent
@@ -329,7 +323,7 @@ export const ChatComposer = memo(function ChatComposer({
 	const [steerNextRequest, setSteerNextRequest] = useState(0);
 	// The DOM event is the source of truth while React catches up with the draft
 	// transition. This keeps Enter-after-fast-typing from observing stale state.
-	const contentRef = useRef<ComposerDraftContent>(EMPTY_COMPOSER_CONTENT);
+	const textRef = useRef("");
 	/**
 	 * What Enter does while the agent is working.
 	 *
@@ -536,7 +530,9 @@ export const ChatComposer = memo(function ChatComposer({
 			: willQueue
 				? "⏎ queue"
 				: "Enter to send";
+	const persistedText = persistedDraft?.composer.text;
 	const draftSeedId = draftSeed?.id ?? (draftScopeKey ? `session:${draftScopeKey}` : undefined);
+	const draftSeedText = draftSeed?.text ?? persistedText;
 	const draftPersistenceError =
 		textDraftPersistenceError ?? attachmentDraftPersistenceError;
 
@@ -613,7 +609,7 @@ export const ChatComposer = memo(function ChatComposer({
 	}, [autoFocus, focusEditor]);
 
 	const clearEditorView = useCallback(() => {
-		contentRef.current = EMPTY_COMPOSER_CONTENT;
+		textRef.current = "";
 		hasTextRef.current = false;
 		setHasText(false);
 		setTrigger(undefined);
@@ -744,9 +740,8 @@ export const ChatComposer = memo(function ChatComposer({
 		// A concurrent replacement can render this memoized seed, remain disconnected,
 		// and commit only after another surface accepted and cleared the draft. Read the
 		// session record again at the effect/commit boundary so acknowledgement cannot
-		// turn the runtime snapshot into an ABA that resurrects accepted content or staged
-		// attachment descriptors. An explicit history seed is a new user action and
-		// remains authoritative.
+		// turn the runtime snapshot into an ABA that resurrects accepted text or staged
+		// attachment descriptors.
 		const committedDraft = draftScope ? readChatSessionDraft(draftScope) : undefined;
 		if (committedDraft) {
 			fileAttachments.reconcilePersistedAttachments(
@@ -759,27 +754,20 @@ export const ChatComposer = memo(function ChatComposer({
 				})),
 			);
 		}
-		let committedSeedContent: ComposerDraftContent | undefined;
-		if (draftSeed) {
-			committedSeedContent = { text: draftSeed.text, tokens: [] };
-		} else if (committedDraft) {
-			const committedComposer = committedDraft.composer;
-			committedSeedContent = {
-				text: committedComposer.text,
-				tokens: committedComposer.tokens,
-			};
-		}
-		if (committedSeedContent === undefined) {
+		const committedSeedText =
+			draftSeed?.text ??
+			(committedDraft ? committedDraft.composer.text : draftSeedText);
+		if (committedSeedText === undefined) {
 			restoredSeedKey.current = undefined;
 			return;
 		}
-		const seedKey = editingQueuedTurnId ? draftSeedId : JSON.stringify([draftSeedId, committedSeedContent]);
+		const seedKey = editingQueuedTurnId ? draftSeedId : JSON.stringify([draftSeedId, committedSeedText]);
 		if (restoredSeedKey.current === seedKey) return;
 		restoredSeedKey.current = seedKey;
-		contentRef.current = committedSeedContent;
-		hasTextRef.current = committedSeedContent.text.trim().length > 0;
+		textRef.current = committedSeedText;
+		hasTextRef.current = committedSeedText.trim().length > 0;
 		setHasText(hasTextRef.current);
-		editor.current?.replaceContent(committedSeedContent);
+		editor.current?.setText(committedSeedText);
 		dismissedKeyRef.current = null;
 		setDismissedKey(null);
 		highlightedRef.current = 0;
@@ -790,7 +778,7 @@ export const ChatComposer = memo(function ChatComposer({
 		// A session restore is already durable; writing it again here needlessly
 		// changes the accepted-send revision during mount.
 		if (draftScope && draftSeed) {
-			const result = writeChatComposerContent(draftScope, committedSeedContent);
+			const result = writeChatComposerText(draftScope, committedSeedText);
 			composerRevision.current = result.draft.composer.revision;
 			setTextDraftPersistenceError(
 				result.ok
@@ -802,6 +790,7 @@ export const ChatComposer = memo(function ChatComposer({
 		draftScope,
 		draftSeed,
 		draftSeedId,
+		draftSeedText,
 		editingQueuedTurnId,
 		fileAttachments.reconcilePersistedAttachments,
 	]);
@@ -840,7 +829,7 @@ export const ChatComposer = memo(function ChatComposer({
 		const wasActive = previousApprovalActive.current;
 		previousApprovalActive.current = approvalActive;
 		if (!wasActive || approvalActive) return;
-		editor.current?.replaceContent(contentRef.current);
+		editor.current?.setText(textRef.current);
 	}, [approvalActive]);
 
 	const previousEditingQueuedTurnIdRef = useRef(editingQueuedTurnId);
@@ -853,11 +842,10 @@ export const ChatComposer = memo(function ChatComposer({
 	}, [clearEditorView, editingQueuedTurnId]);
 
 	const onEditorChange = useCallback((snapshot: ComposerEditorSnapshot) => {
-		const content = { text: snapshot.text, tokens: snapshot.tokens };
-		contentRef.current = content;
+		textRef.current = snapshot.text;
 		onQueuedDraftChange?.(snapshot.text);
 		if (draftScope) {
-			const result = writeChatComposerContent(draftScope, content);
+			const result = writeChatComposerText(draftScope, snapshot.text);
 			composerRevision.current = result.draft.composer.revision;
 			// A disabled Lexical editor can still publish an internal state update
 			// while its editability changes. It must not erase the recovery notice
@@ -990,8 +978,7 @@ export const ChatComposer = memo(function ChatComposer({
 	}
 
 	async function performClaimedSubmit(forceSteer?: boolean, mutationToken?: ChatDraftMutationToken) {
-		const currentContent = contentRef.current;
-		const currentText = currentContent.text;
+		const currentText = textRef.current;
 		const body = currentText.trim();
 		const recoveringDelivery = durableDelivery;
 		const sendNativeImages = recoveringDelivery?.nativeImages ?? Boolean(nativeImages);
@@ -1132,10 +1119,10 @@ export const ChatComposer = memo(function ChatComposer({
 				fileAttachments.clear();
 			} catch (error) {
 				if (clearForLocalEcho) {
-					contentRef.current = currentContent;
+					textRef.current = currentText;
 					hasTextRef.current = currentText.trim().length > 0;
 					setHasText(hasTextRef.current);
-					editor.current?.replaceContent(currentContent);
+					editor.current?.setText(currentText);
 				}
 				setSendError(
 					savingQueuedEdit
@@ -1156,7 +1143,7 @@ export const ChatComposer = memo(function ChatComposer({
 		const prepared = prepareChatComposerDelivery(draftScope, {
 			kind: recoveringDelivery?.kind ?? (shouldSteer ? "steer" : "send"),
 			nativeImages: sendNativeImages,
-			composerContent: currentContent,
+			composerText: currentText,
 			attachments: settledAttachments.flatMap((attachment) =>
 				attachment.stagedPath
 					? [{
@@ -1265,18 +1252,18 @@ export const ChatComposer = memo(function ChatComposer({
 		snapshot: ComposerEditorSnapshot,
 		event: globalThis.KeyboardEvent,
 	): boolean {
-		contentRef.current = { text: snapshot.text, tokens: snapshot.tokens };
+		textRef.current = snapshot.text;
 		return handleEnterKey(event);
 	}
 
 	const handleEnterKey = useCallback(
 		(event: globalThis.KeyboardEvent): boolean => {
 			const liveSnapshot = editor.current?.getSnapshot();
-			if (liveSnapshot) contentRef.current = { text: liveSnapshot.text, tokens: liveSnapshot.tokens };
+			if (liveSnapshot) textRef.current = liveSnapshot.text;
 			const liveTrigger = liveSnapshot?.trigger;
 			const liveSuggestions = suggestionsFor(liveTrigger);
 			if (liveSuggestions.length > 0) {
-				if (contentRef.current.text.trim() === "/compact" && onCompact) {
+				if (textRef.current.trim() === "/compact" && onCompact) {
 					void submit();
 					return true;
 				}
@@ -1286,7 +1273,7 @@ export const ChatComposer = memo(function ChatComposer({
 				return true;
 			}
 
-			if (canSteerNext && !contentRef.current.text.trim() && !fileAttachments.hasPendingReads()) {
+			if (canSteerNext && !textRef.current.trim() && !fileAttachments.hasPendingReads()) {
 				setSteerNextRequest((request) => request + 1);
 				return true;
 			}
@@ -1302,9 +1289,7 @@ export const ChatComposer = memo(function ChatComposer({
 		// Enter is handled in Lexical before a newline is inserted; this handler is
 		// only for menu navigation and escape while a completion menu is open.
 		const liveSnapshot = editor.current?.getSnapshot();
-		if (liveSnapshot) {
-			contentRef.current = { text: liveSnapshot.text, tokens: liveSnapshot.tokens };
-		}
+		if (liveSnapshot) textRef.current = liveSnapshot.text;
 		const liveTrigger = liveSnapshot?.trigger;
 		const liveSuggestions = suggestionsFor(liveTrigger);
 		if (liveSuggestions.length > 0) {
@@ -1450,7 +1435,7 @@ export const ChatComposer = memo(function ChatComposer({
 						items={suggestions}
 						highlighted={activeIndex}
 						onPick={pick}
-						truncated={trigger?.kind === "file" && fileCatalog.truncated}
+						truncated={trigger.kind === "file" && fileCatalog.truncated}
 					/>
 				) : null}
 
@@ -1535,28 +1520,16 @@ export const ChatComposer = memo(function ChatComposer({
 					onPaste={onPaste}
 				/>
 
-				{trigger?.kind === "file" && fileCatalog.failed ? (
-					<p role="alert" className="px-1.5 text-[11px] leading-snug text-destructive">
-						{fileCatalog.error
-							? t("chat.composer.fileReferencesLoadFailed", { detail: fileCatalog.error })
-							: t("chat.composer.fileReferencesLoadFailedFallback")}
-					</p>
-				) : null}
-				{trigger?.kind === "file" && !fileCatalog.failed && fileCatalog.refreshFailed ? (
-					<p role="status" className="px-1.5 text-[11px] leading-snug text-warning">
-						{fileCatalog.refreshError
-							? t("chat.composer.fileReferencesRefreshFailed", {
-									detail: fileCatalog.refreshError,
-								})
-							: t("chat.composer.fileReferencesRefreshFailedFallback")}
-					</p>
-				) : null}
-				{trigger?.kind === "file" &&
-				!fileCatalog.failed &&
-				!fileCatalog.refreshFailed &&
-				fileCatalog.refreshDegraded ? (
-					<p role="status" className="px-1.5 text-[11px] leading-snug text-warning">
-						{t("chat.composer.fileReferencesRefreshDegraded")}
+				{trigger?.kind === "file" && fileCatalog.unavailable ? (
+					<p
+						role={fileCatalog.paths.length > 0 ? "status" : "alert"}
+						className="px-1.5 text-[11px] leading-snug text-warning"
+					>
+						{t(
+							fileCatalog.paths.length > 0
+								? "chat.composer.fileReferencesRefreshFailedFallback"
+								: "chat.composer.fileReferencesLoadFailedFallback",
+						)}
 					</p>
 				) : null}
 

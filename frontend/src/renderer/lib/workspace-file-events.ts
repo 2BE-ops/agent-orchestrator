@@ -5,9 +5,6 @@ import { computeSseRetryDelayMs } from "./sse-backoff";
 const INVALIDATE_DEBOUNCE_MS = 150;
 const EVENTSOURCE_CLOSED = 2;
 
-export const workspaceFilePathsQueryKey = (sessionId: string) =>
-	["workspace-file-paths", sessionId] as const;
-
 export type WorkspaceFileConnectionState = "connecting" | "connected" | "degraded";
 type ConnectionPhase = "idle" | "connecting" | "open" | "waiting";
 
@@ -93,7 +90,6 @@ function createWorkspaceStream(sessionId: string, queryClient: QueryClient): Wor
 			void queryClient.invalidateQueries({ queryKey: ["session-workspace-diffs", sessionId] });
 			void queryClient.invalidateQueries({ queryKey: ["session-workspace-search", sessionId] });
 			void queryClient.invalidateQueries({ queryKey: ["session-workspace-tree", sessionId] });
-			void queryClient.invalidateQueries({ queryKey: workspaceFilePathsQueryKey(sessionId) });
 		}, INVALIDATE_DEBOUNCE_MS);
 	};
 	const scheduleRetry = (generation: number) => {

@@ -25,13 +25,11 @@ import {
 	readChatSessionDraft,
 	subscribeChatDraftRuntime,
 	writeChatAttachments,
-	writeChatComposerContent,
 	writeChatComposerText,
 	writeChatInlineEdit,
 	type DraftStorage,
 	type ChatDraftScope,
 } from "./chat-drafts";
-import type { ComposerDraftContent } from "./composer-content";
 
 class MemoryStorage implements DraftStorage {
 	readonly values = new Map<string, string>();
@@ -50,306 +48,6 @@ class MemoryStorage implements DraftStorage {
 }
 
 describe("Chat draft storage", () => {
-	it("round-trips structured composer tokens without losing their exact wire ranges", () => {
-		const storage = new MemoryStorage();
-		const content: ComposerDraftContent = {
-			text: 'Review backend/internal/config.ts and "docs/product notes.md"',
-			tokens: [
-				{
-					kind: "file",
-					value: "backend/internal/config.ts",
-					start: 7,
-					end: 33,
-				},
-				{
-					kind: "file",
-					value: "docs/product notes.md",
-					start: 38,
-					end: 61,
-				},
-			],
-		};
-
-		const written = writeChatComposerContent("session-token-round-trip", content, storage);
-
-		expect(written.ok).toBe(true);
-		expect(readChatSessionDraft("session-token-round-trip", storage).composer).toMatchObject(
-			content,
-		);
-	});
-
-	it("migrates a v2 unresolved delivery without changing its revision or idempotency key", () => {
-		const storage = new MemoryStorage();
-		const sessionId = "session-v2-delivery";
-		const key = `ao.chat.draft:${encodeURIComponent(sessionId)}`;
-		storage.setItem(
-			key,
-			JSON.stringify({
-				schemaVersion: 2,
-				sessionId,
-				incarnation: sessionId,
-				composer: {
-					revision: 7,
-					text: "recover the old draft",
-					attachments: [],
-					delivery: {
-						kind: "send",
-						state: "dispatching",
-						revision: 7,
-						clientMessageId: "v2-stable-delivery",
-						requestText: "recover the old draft",
-					},
-				},
-			}),
-		);
-
-		const migrated = readChatSessionDraft(sessionId, storage);
-		expect(migrated).toMatchObject({
-			schemaVersion: 3,
-			composer: {
-				revision: 7,
-				text: "recover the old draft",
-				tokens: [],
-				delivery: { clientMessageId: "v2-stable-delivery", revision: 7 },
-			},
-		});
-		expect(JSON.parse(storage.getItem(key)!).schemaVersion).toBe(2);
-
-		const retried = prepareChatComposerDelivery(
-			sessionId,
-			{
-				kind: "send",
-				composerContent: { text: "ignored replacement", tokens: [] },
-				attachments: [],
-				requestText: "ignored replacement",
-				clientMessageId: "must-not-replace-v2-id",
-			},
-			storage,
-		);
-		expect(retried).toMatchObject({
-			ok: true,
-			recovered: true,
-			mutation: { clientMessageId: "v2-stable-delivery", revision: 7 },
-		});
-		expect(JSON.parse(storage.getItem(key)!).schemaVersion).toBe(3);
-	});
-
-	it("degrades malformed v3 token annotations to plain text without losing the draft", () => {
-		const storage = new MemoryStorage();
-		const sessionId = "session-malformed-token";
-		storage.setItem(
-			`ao.chat.draft:${encodeURIComponent(sessionId)}`,
-			JSON.stringify({
-				schemaVersion: 3,
-				sessionId,
-				incarnation: sessionId,
-				composer: {
-					revision: 4,
-					text: "Keep backend/internal/config.ts",
-					tokens: [
-						{
-							kind: "file",
-							value: "backend/internal/config.ts",
-							start: 0,
-							end: 26,
-						},
-					],
-					attachments: [],
-					delivery: {
-						kind: "send",
-						state: "dispatching",
-						revision: 4,
-						clientMessageId: "malformed-token-delivery",
-						requestText: "Keep backend/internal/config.ts",
-					},
-				},
-			}),
-		);
-
-		const restored = readChatSessionDraft(sessionId, storage);
-		expect(restored.composer).toMatchObject({
-			revision: 4,
-			text: "Keep backend/internal/config.ts",
-			tokens: [],
-			delivery: { clientMessageId: "malformed-token-delivery" },
-		});
-	});
-
-	it("degrades a persisted carriage-return token to plain text", () => {
-		const storage = new MemoryStorage();
-		const sessionId = "session-carriage-return-token";
-		const value = "odd\rname.ts";
-		const text = `"${value}"`;
-		storage.setItem(
-			`ao.chat.draft:${encodeURIComponent(sessionId)}`,
-			JSON.stringify({
-				schemaVersion: 3,
-				sessionId,
-				incarnation: sessionId,
-				composer: {
-					revision: 1,
-					text,
-					tokens: [{ kind: "file", value, start: 0, end: text.length }],
-					attachments: [],
-				},
-			}),
-		);
-
-		expect(readChatSessionDraft(sessionId, storage).composer).toMatchObject({
-			text,
-			tokens: [],
-		});
-	});
-
-	it("treats a token-only change as a new composer revision for accepted-send CAS", () => {
-		const storage = new MemoryStorage();
-		const sessionId = "session-token-cas";
-		const text = "backend/internal/config.ts";
-		const plain = writeChatComposerContent(
-			sessionId,
-			{ text, tokens: [] },
-			storage,
-		);
-		const chippedContent: ComposerDraftContent = {
-			text,
-			tokens: [
-				{
-					kind: "file",
-					value: text,
-					start: 0,
-					end: 26,
-				},
-			],
-		};
-		const chipped = writeChatComposerContent(sessionId, chippedContent, storage);
-		expect(chipped.draft.composer.revision).toBe(plain.draft.composer.revision + 1);
-		expect(
-			writeChatComposerContent(sessionId, chippedContent, storage).draft.composer.revision,
-		).toBe(chipped.draft.composer.revision);
-
-		const prepared = prepareChatComposerDelivery(
-			sessionId,
-			{
-				kind: "send",
-				composerContent: chippedContent,
-				attachments: [],
-				requestText: text,
-				clientMessageId: "token-cas-delivery",
-			},
-			storage,
-		);
-		expect(prepared.mutation?.revision).toBe(chipped.draft.composer.revision);
-
-		const laterPlain = writeChatComposerContent(
-			sessionId,
-			{ text, tokens: [] },
-			storage,
-		);
-		expect(laterPlain.draft.composer.revision).toBe(chipped.draft.composer.revision + 1);
-		expect(
-			markChatComposerDeliveryAccepted(
-				sessionId,
-				"token-cas-delivery",
-				prepared.mutation!.revision,
-				storage,
-			).ok,
-		).toBe(true);
-
-		expect(
-			clearAcceptedChatComposer(sessionId, prepared.mutation!.revision, storage),
-		).toMatchObject({ ok: true, cleared: false });
-		expect(readChatSessionDraft(sessionId, storage).composer).toMatchObject({
-			text,
-			tokens: [],
-		});
-	});
-
-	it("clears semantic tokens only with their exact accepted composer revision", () => {
-		const storage = new MemoryStorage();
-		const sessionId = "session-token-clear";
-		const content: ComposerDraftContent = {
-			text: "backend/internal/config.ts",
-			tokens: [
-				{
-					kind: "file",
-					value: "backend/internal/config.ts",
-					start: 0,
-					end: 26,
-				},
-			],
-		};
-		const prepared = prepareChatComposerDelivery(
-			sessionId,
-			{
-				kind: "send",
-				composerContent: content,
-				attachments: [],
-				requestText: content.text,
-				clientMessageId: "token-clear-delivery",
-			},
-			storage,
-		);
-		expect(prepared.ok).toBe(true);
-		expect(
-			markChatComposerDeliveryAccepted(
-				sessionId,
-				"token-clear-delivery",
-				prepared.mutation!.revision,
-				storage,
-			).ok,
-		).toBe(true);
-
-		const cleared = clearAcceptedChatComposer(
-			sessionId,
-			prepared.mutation!.revision,
-			storage,
-		);
-		expect(cleared).toMatchObject({
-			ok: true,
-			cleared: true,
-			draft: { composer: { text: "", tokens: [], attachments: [] } },
-		});
-		expect(readChatSessionDraft(sessionId, storage).composer.tokens).toEqual([]);
-	});
-
-	it("preserves semantic tokens when a steer is definitively refused", () => {
-		const storage = new MemoryStorage();
-		const sessionId = "session-token-refusal";
-		const content: ComposerDraftContent = {
-			text: "backend/internal/config.ts",
-			tokens: [
-				{
-					kind: "file",
-					value: "backend/internal/config.ts",
-					start: 0,
-					end: 26,
-				},
-			],
-		};
-		const prepared = prepareChatComposerDelivery(
-			sessionId,
-			{
-				kind: "steer",
-				composerContent: content,
-				attachments: [],
-				requestText: content.text,
-				clientMessageId: "token-refusal-delivery",
-			},
-			storage,
-		);
-		expect(prepared.ok).toBe(true);
-
-		expect(
-			clearRejectedChatComposerDelivery(
-				sessionId,
-				"token-refusal-delivery",
-				prepared.mutation!.revision,
-				storage,
-			),
-		).toMatchObject({ ok: true });
-		expect(readChatSessionDraft(sessionId, storage).composer).toMatchObject(content);
-	});
-
 	it("lets authoritative recreation purge once while every late obsolete callback fails closed", () => {
 		const storage = new MemoryStorage();
 		const first: ChatDraftScope = {
@@ -379,7 +77,7 @@ describe("Chat draft storage", () => {
 			first,
 			{
 				kind: "steer",
-				composerContent: { text: "belongs to deleted session", tokens: [] },
+				composerText: "belongs to deleted session",
 				attachments: [],
 				requestText: "belongs to deleted session",
 				clientMessageId: "old-unresolved-delivery",
@@ -581,7 +279,7 @@ describe("Chat draft storage", () => {
 			scope,
 			{
 				kind: "steer",
-				composerContent: { text: "possibly delivered", tokens: [] },
+				composerText: "possibly delivered",
 				attachments: [attachment],
 				requestText: "possibly delivered",
 				clientMessageId: "uncertain-steer",
@@ -767,7 +465,7 @@ describe("Chat draft storage", () => {
 			"session-proof",
 			{
 				kind: "send",
-				composerContent: { text: "  durable prompt  ", tokens: [] },
+				composerText: "  durable prompt  ",
 				attachments,
 				requestText: "durable prompt\n\nAttached files:\n- .ao/attachments/attachment-a.png",
 				clientMessageId: "delivery-proof-1",
@@ -793,7 +491,7 @@ describe("Chat draft storage", () => {
 			"session-proof",
 			{
 				kind: "send",
-				composerContent: { text: "ignored after reload", tokens: [] },
+				composerText: "ignored after reload",
 				attachments: [],
 				requestText: "ignored after reload",
 				clientMessageId: "must-not-replace-the-durable-id",
@@ -813,7 +511,7 @@ describe("Chat draft storage", () => {
 			"session-restored-proof",
 			{
 				kind: "send",
-				composerContent: { text: "restore me", tokens: [] },
+				composerText: "restore me",
 				attachments: [],
 				requestText: "restore me",
 				clientMessageId: "restored-proof-1",
@@ -833,7 +531,7 @@ describe("Chat draft storage", () => {
 				"session-restored-proof",
 				{
 					kind: "send",
-					composerContent: { text: "restore me", tokens: [] },
+					composerText: "restore me",
 					attachments: [],
 					requestText: "restore me",
 					clientMessageId: "must-still-reuse-restored-proof-1",
@@ -855,7 +553,7 @@ describe("Chat draft storage", () => {
 				"session-unproven",
 				{
 					kind: "steer",
-					composerContent: { text: "do not dispatch", tokens: [] },
+					composerText: "do not dispatch",
 					attachments: [],
 					requestText: "do not dispatch",
 					clientMessageId: "unproven-1",
@@ -871,7 +569,7 @@ describe("Chat draft storage", () => {
 			"session-accepted",
 			{
 				kind: "send",
-				composerContent: { text: "accepted once", tokens: [] },
+				composerText: "accepted once",
 				attachments: [],
 				requestText: "accepted once",
 				clientMessageId: "accepted-1",
@@ -914,7 +612,7 @@ describe("Chat draft storage", () => {
 			"session-later-composer",
 			{
 				kind: "send",
-				composerContent: { text: "submitted", tokens: [] },
+				composerText: "submitted",
 				attachments: [],
 				requestText: "submitted",
 				clientMessageId: "submitted-1",
@@ -942,7 +640,7 @@ describe("Chat draft storage", () => {
 			"session-refused-later-composer",
 			{
 				kind: "steer",
-				composerContent: { text: "submitted steer", tokens: [] },
+				composerText: "submitted steer",
 				attachments: [],
 				requestText: "submitted steer",
 				clientMessageId: "refused-steer-1",

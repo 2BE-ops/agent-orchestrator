@@ -34,16 +34,15 @@ vi.mock("../lib/workspace-file-events", () => ({
 	subscribeWorkspaceFileChanges: subscribeWorkspaceFileChangesMock,
 	getWorkspaceFileConnectionState: getWorkspaceFileConnectionStateMock,
 	subscribeWorkspaceFileConnectionState: subscribeWorkspaceFileConnectionStateMock,
-	workspaceFilePathsQueryKey: (sessionId: string) => ["workspace-file-paths", sessionId] as const,
 }));
 
 import {
 	clearConversationProviderCatalogs,
 	conversationConfigOptionsQueryKey,
 	useConversation,
-	useWorkspaceFilePaths,
 	useConversationCommands,
 	useConversationConfigOptions,
+	useWorkspaceFilePaths,
 } from "./useConversation";
 import { workspaceQueryKey } from "./useWorkspaceQuery";
 
@@ -68,12 +67,6 @@ it("preserves queued-edit API error codes for delivery recovery", async () => {
 	const { result } = renderHook(() => useConversationCommands("ao-1"), { wrapper });
 	await expect(result.current.editQueuedTurn("queued-1", "edited")).rejects.toBe(refusal);
 });
-
-function wrapperFor(queryClient: QueryClient) {
-	return function QueryWrapper({ children }: { children: ReactNode }) {
-		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-	};
-}
 
 /** The provider state the daemon now serves, in wire shape. */
 const WIRE = {
@@ -132,7 +125,7 @@ beforeEach(() => {
 });
 
 describe("workspace file references", () => {
-	it("loads readable paths and subscribes them to workspace changes", async () => {
+	it("reuses the workspace file cache and subscribes it to live changes", async () => {
 		getMock.mockResolvedValue({
 			data: {
 				files: [
@@ -146,61 +139,19 @@ describe("workspace file references", () => {
 
 		const { result } = renderHook(() => useWorkspaceFilePaths("ao-1", true), { wrapper });
 		await waitFor(() => expect(result.current.paths).toEqual(["src/live.ts"]));
-
 		expect(result.current.truncated).toBe(true);
-		expect(result.current.error).toBeUndefined();
+		expect(result.current.unavailable).toBe(false);
 		expect(subscribeWorkspaceFileChangesMock).toHaveBeenCalledWith(
 			"ao-1",
 			expect.any(QueryClient),
 		);
 	});
 
-	it("exposes a catalog failure instead of silently presenting an empty worktree", async () => {
+	it("reports an unavailable workspace index", async () => {
 		getMock.mockResolvedValue({ data: undefined, error: { code: "WORKSPACE_OFFLINE" } });
-		apiErrorMessageMock.mockReturnValue("workspace index is offline");
-
 		const { result } = renderHook(() => useWorkspaceFilePaths("ao-1", true), { wrapper });
-		await waitFor(() => expect(result.current.error).toBe("workspace index is offline"));
+		await waitFor(() => expect(result.current.unavailable).toBe(true));
 		expect(result.current.paths).toEqual([]);
-	});
-
-	it("marks suggestions as potentially stale while workspace events are degraded", async () => {
-		getWorkspaceFileConnectionStateMock.mockReturnValue("degraded");
-		getMock.mockResolvedValue({
-			data: { files: [{ path: "src/cached.ts", status: "modified" }], truncated: false },
-			error: undefined,
-		});
-
-		const { result } = renderHook(() => useWorkspaceFilePaths("ao-1", true), { wrapper });
-		await waitFor(() => expect(result.current.paths).toEqual(["src/cached.ts"]));
-		expect(result.current.refreshDegraded).toBe(true);
-	});
-
-	it("keeps cached paths usable when a later catalog refresh fails", async () => {
-		getMock
-			.mockResolvedValueOnce({
-				data: { files: [{ path: "src/cached.ts", status: "modified" }], truncated: false },
-				error: undefined,
-			})
-			.mockResolvedValueOnce({ data: undefined, error: { code: "WORKSPACE_OFFLINE" } });
-		apiErrorMessageMock.mockReturnValue("workspace refresh is offline");
-		const queryClient = new QueryClient({
-			defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-		});
-
-		const { result } = renderHook(() => useWorkspaceFilePaths("ao-1", true), {
-			wrapper: wrapperFor(queryClient),
-		});
-		await waitFor(() => expect(result.current.paths).toEqual(["src/cached.ts"]));
-
-		await act(async () => {
-			await queryClient.invalidateQueries({ queryKey: ["workspace-file-paths", "ao-1"] });
-		});
-
-		await waitFor(() => expect(result.current.refreshFailed).toBe(true));
-		expect(result.current.failed).toBe(false);
-		expect(result.current.paths).toEqual(["src/cached.ts"]);
-		expect(result.current.refreshError).toBe("workspace refresh is offline");
 	});
 });
 
@@ -277,9 +228,9 @@ describe("accepted conversation sends", () => {
 			await firstSend;
 		});
 
-		await waitFor(() => expect(result.current.pendingAcceptedTurnId).toBe("turn-2"));
+		expect(result.current.pendingAcceptedTurnId).toBe("turn-2");
 		rerender({ sessionId: "ao-1" });
-		await waitFor(() => expect(result.current.pendingAcceptedTurnId).toBe("turn-1"));
+		expect(result.current.pendingAcceptedTurnId).toBe("turn-1");
 	});
 
 	it("retains an in-flight send when Chat unmounts before the response", async () => {

@@ -374,7 +374,7 @@ export interface ChatWorkspaceProps {
 	activateBranchError?: string;
 	/** The provider's skills. Empty leaves `/` an ordinary character. */
 	skills?: ChatSkill[];
-	/** Live worktree paths and their load/refresh state for `@` completion. */
+	/** Live worktree paths and index state for `@` completion. */
 	fileCatalog?: WorkspaceFileCatalog;
 	/** Renderer-only human messages awaiting their exact durable counterpart. */
 	localEchos?: ConversationLocalEcho[];

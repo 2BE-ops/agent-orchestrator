@@ -8,7 +8,7 @@ describe("workspaceFilesRefetchInterval", () => {
 		expect(workspaceFilesRefetchInterval("degraded")).toBe(30_000);
 	});
 
-	it("polls while recovering from a failed refresh with cached data", () => {
+	it("polls while recovering from a failed workspace file request", () => {
 		expect(workspaceFilesRefetchInterval("connected", true)).toBe(30_000);
 	});
 });

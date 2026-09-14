@@ -20,12 +20,10 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import type { components } from "../../api/schema";
 import { apiClient, apiErrorCode, apiErrorMessage } from "../lib/api-client";
-import {
-	subscribeWorkspaceFileChanges,
-	workspaceFilePathsQueryKey,
-} from "../lib/workspace-file-events";
+import { subscribeWorkspaceFileChanges } from "../lib/workspace-file-events";
 import { workspaceQueryKey } from "./useWorkspaceQuery";
 import {
+	sessionWorkspaceFilesQueryOptions,
 	useWorkspaceFileConnectionState,
 	workspaceFilesRefetchInterval,
 } from "./useSessionWorkspaceFiles";
@@ -1334,47 +1332,25 @@ export function useWorkspaceFilePaths(sessionId: string | undefined, enabled: bo
 	const queryClient = useQueryClient();
 	const connectionState = useWorkspaceFileConnectionState(sessionId ?? "");
 	const query = useQuery({
-		queryKey: workspaceFilePathsQueryKey(sessionId ?? ""),
+		...sessionWorkspaceFilesQueryOptions(sessionId ?? ""),
 		enabled: Boolean(sessionId) && enabled,
-		// Workspace SSE invalidates this cache in the normal path. Poll only while
-		// that stream is degraded or a refresh failed with cached data, so stale
-		// references recover without making every live conversation poll continuously.
+		// SSE invalidates this shared cache normally; polling is only a recovery path.
 		staleTime: 30 * 1000,
 		refetchInterval: (activeQuery) =>
-			workspaceFilesRefetchInterval(
-				connectionState,
-				activeQuery.state.data !== undefined && activeQuery.state.error !== null,
-			),
+			workspaceFilesRefetchInterval(connectionState, activeQuery.state.error !== null),
 		retry: false,
-		queryFn: async () => {
-			const { data, error } = await apiClient.GET("/api/v1/sessions/{sessionId}/workspace/files", {
-				params: { path: { sessionId: sessionId as string } },
-			});
-			if (error) throw error;
-			return {
-				// A deleted path cannot be read, so offering it would insert a
-				// reference the agent then fails to resolve.
-				paths: (data?.files ?? [])
-					.filter((file) => file.status !== "deleted")
-					.map((file) => file.path),
-				truncated: Boolean(data?.truncated),
-			};
-		},
 	});
 	useEffect(() => {
 		if (!sessionId || !enabled) return;
 		return subscribeWorkspaceFileChanges(sessionId, queryClient);
 	}, [enabled, queryClient, sessionId]);
-	const queryError = query.error ? apiErrorMessage(query.error, "") || undefined : undefined;
 	return {
-		paths: query.data?.paths ?? [],
+		paths: (query.data?.files ?? [])
+			.filter((file) => file.status !== "deleted")
+			.map((file) => file.path),
 		truncated: query.data?.truncated ?? false,
 		isLoading: query.isLoading,
-		failed: query.isLoadingError,
-		error: query.isLoadingError ? queryError : undefined,
-		refreshDegraded: connectionState === "degraded",
-		refreshFailed: query.isRefetchError,
-		refreshError: query.isRefetchError ? queryError : undefined,
+		unavailable: query.error !== null,
 	};
 }
 
