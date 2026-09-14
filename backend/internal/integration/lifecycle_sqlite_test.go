@@ -294,23 +294,18 @@ func TestDelegateEndpointDoesNotDependOnCodexDeviceReconciliation(t *testing.T) 
 		t.Fatalf("ordinary launch opened account-management client %d times", factory.opens.Load())
 	}
 
-	if err := agents.EnsureCodexDeviceAccountReconciled(ctx); err == nil {
-		t.Fatal("first explicit reconciliation unexpectedly succeeded")
+	if err := agents.EnsureCodexDeviceAccountReconciled(ctx); err != nil {
+		t.Fatalf("local device reconciliation: %v", err)
 	}
-
-	now.Add(2)
-	if err := agents.EnsureCodexDeviceAccountReconciled(ctx); err == nil {
-		t.Fatal("unmatched signed-out device credential was treated as a managed account")
-	}
-	if factory.opens.Load() != 2 {
-		t.Fatalf("account client opens = %d, want 2", factory.opens.Load())
+	if factory.opens.Load() != 0 {
+		t.Fatalf("local reconciliation opened account-management client %d times", factory.opens.Load())
 	}
 	accounts, err := agents.CachedCodexAccounts(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if accounts.ActiveAccountID != "" {
-		t.Fatalf("device-only recovery state = %#v", accounts)
+	if accounts.ActiveAccountID == "" || !accounts.DeviceReconciliation.ActiveAccountVerified {
+		t.Fatalf("locally imported device account was not active: %#v", accounts)
 	}
 	if runtime.created != 1 {
 		t.Fatalf("reconciliation restarted sessions: runtime Create calls=%d", runtime.created)

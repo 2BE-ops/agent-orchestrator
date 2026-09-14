@@ -1,7 +1,6 @@
 package sqlite
 
 import (
-	"database/sql"
 	"testing"
 	"testing/fstest"
 
@@ -17,14 +16,7 @@ func TestMigrateRepairsRenumberedCodexAccountSwitchHistory(t *testing.T) {
 		{name: "restart_policy_and_source_kind", includeSourceKind: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			dataDir := t.TempDir()
-			db, err := sql.Open("sqlite", databaseURI(dataDir)+pragmas)
-			if err != nil {
-				t.Fatal(err)
-			}
-			db.SetMaxOpenConns(1)
-			t.Cleanup(func() { _ = db.Close() })
-			upTo(t, db, 128)
+			db := openMigratedDatabaseCopy(t, 128)
 
 			restartMigration := []byte(`-- +goose Up
 ALTER TABLE codex_account_switches ADD COLUMN restart_running_sessions BOOLEAN NOT NULL DEFAULT TRUE;
