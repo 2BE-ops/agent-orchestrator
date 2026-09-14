@@ -40,7 +40,7 @@ func newCodexLaunchReadinessFixture(t *testing.T) *codexLaunchReadinessFixture {
 	if err := ensurePrivateDirectory(globalHome); err != nil {
 		t.Fatal(err)
 	}
-	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 1}, found: true}
+	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 1}}
 	manager := newCodexAccountManager(context.Background(),
 		filepath.Join(root, "accounts"), filepath.Join(root, "pending"),
 		filepath.Join(root, "staging"), globalHome, nil, nil)

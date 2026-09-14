@@ -1086,7 +1086,6 @@ func TestGlobalReconciliationMatchesRotatedOAuthByAccountID(t *testing.T) {
 	email := "known@example.com"
 	state := &testCodexDeviceSeed{
 		active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 7},
-		found:  true,
 	}
 	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, nil)
 	manager.catalog.newID = func() string { return testAccountID }
@@ -1130,7 +1129,7 @@ func TestGlobalReconciliationExactCredentialMatchRemainsActiveOffline(t *testing
 	if err := ensurePrivateDirectory(globalHome); err != nil {
 		t.Fatal(err)
 	}
-	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 7}, found: true}
+	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 7}}
 	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, nil)
 	manager.catalog.newID = func() string { return testAccountID }
 	email := "known@example.com"
@@ -1174,7 +1173,7 @@ func TestExternalDeviceSwitchImportsBWithoutWritingIntoA(t *testing.T) {
 	if err := writeGlobalCredentialAtomic(filepath.Join(globalHome, codexCredentialFilename), credentialB); err != nil {
 		t.Fatal(err)
 	}
-	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 3}, found: true}
+	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 3}}
 	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, nil)
 	accountBID := "bb1e9a5d-37ad-43f8-83bd-13de8168f8af"
 	ids := []string{testAccountID, accountBID}
@@ -1215,7 +1214,6 @@ func TestGlobalReconciliationMissingGlobalClearsActiveProjectionWithoutRestoring
 	}
 	state := &testCodexDeviceSeed{
 		active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 4},
-		found:  true,
 	}
 	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, nil)
 	manager.catalog.newID = func() string { return testAccountID }
@@ -1258,7 +1256,6 @@ func TestEnsureCodexAccountsReconcilesRecentlyRemovedGlobalCredentialBeforeAccou
 	credential := testOAuthCredential("provider-account", "access-token")
 	state := &testCodexDeviceSeed{
 		active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 1},
-		found:  true,
 	}
 	var opened []ports.CodexAccountContext
 	email := "saved@example.com"
@@ -1341,7 +1338,6 @@ func TestEnsureCodexAccountsRetriesSavedAccountWhenGlobalCredentialDisappearsDur
 	credential := testOAuthCredential("provider-account", "access-token")
 	state := &testCodexDeviceSeed{
 		active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 1},
-		found:  true,
 	}
 	email := "saved@example.com"
 	removedGlobal := false
@@ -1674,7 +1670,7 @@ func TestLocalReconciliationPreservesActiveSlotProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	slotEmail := "saved@example.com"
-	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 3}, found: true}
+	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 3}}
 	var opened []ports.CodexAccountContext
 	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, nil)
 	manager.catalog.newID = func() string { return testAccountID }
@@ -2073,7 +2069,6 @@ func newSwitchAdmissionFixture(t *testing.T, factory *fakeCodexAccountFactory, o
 	sourceID := "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 	state := &testCodexDeviceSeed{
 		active: testCodexDeviceAccount{AccountID: sourceID, Revision: 1},
-		found:  true,
 	}
 	manager := newCodexAccountManager(context.Background(),
 		filepath.Join(root, "accounts"), filepath.Join(root, "pending"),
