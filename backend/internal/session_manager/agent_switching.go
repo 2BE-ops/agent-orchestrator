@@ -3518,7 +3518,10 @@ func (m *Manager) reconcileStartingTarget(ctx context.Context, store ports.Agent
 	}
 	targetNative, found, err := store.GetAgentNativeSession(ctx, *sw.TargetNativeSessionRef)
 	if err != nil {
-		return m.retainRecoveredTargetIdentityAmbiguity(ctx, store, sw, fmt.Errorf("read target native session: %w", err), execution)
+		cause := fmt.Errorf("read target native session: %w", err)
+		_, recoveryErr := m.retainRecoveredTargetIdentityAmbiguity(ctx, store, sw, cause, execution)
+		// A persisted marker does not make a storage read failure safe to ignore.
+		return false, errors.Join(cause, recoveryErr)
 	}
 	if !found || targetNative.AOSessionID != rec.ID || targetNative.Harness != sw.TargetHarness ||
 		targetNative.LastGenerationID != sw.TargetGenerationID || strings.TrimSpace(targetNative.NativeSessionID) == "" {
@@ -3563,8 +3566,11 @@ func (m *Manager) retainRecoveredTargetIdentityAmbiguity(
 	recorder.boundary(domain.AgentSwitchFailureRecoveryNativeIdentity)
 	recorder.callOutcome = domain.AgentSwitchCallEffectUnknown
 	recorder.retain(true)
-	_, markerErr := m.markTargetStartUnconfirmedWithRecorder(ctx, store, sw, recorder)
-	return false, errors.Join(cause, markerErr)
+	marked, markerErr := m.markTargetStartUnconfirmedWithRecorder(ctx, store, sw, recorder)
+	if markerErr != nil {
+		return false, errors.Join(cause, markerErr)
+	}
+	return false, quarantinedAgentSwitchError(marked, cause)
 }
 
 func (m *Manager) failRecoveredSwitchWithSourceRollback(
