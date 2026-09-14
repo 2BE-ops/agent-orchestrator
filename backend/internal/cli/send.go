@@ -13,9 +13,11 @@ import (
 )
 
 type sendOptions struct {
-	session string
-	message string
-	steer   bool
+	session         string
+	message         string
+	steer           bool
+	clientMessageID string
+	recoverOnly     bool
 }
 
 // sendAPIRequest mirrors the daemon's SendSessionMessageRequest body for
@@ -30,6 +32,7 @@ type sendAPIRequest struct {
 type steerAPIRequest struct {
 	Text            string `json:"text"`
 	ClientMessageID string `json:"clientMessageId"`
+	RecoverOnly     bool   `json:"recoverOnly,omitempty"`
 }
 
 type steerAPIResponse struct {
@@ -59,17 +62,28 @@ func newSendCommand(ctx *commandContext) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&opts.session, "session", "", "Session id (required)")
-	cmd.Flags().StringVar(&opts.message, "message", "", "Message body (required)")
+	cmd.Flags().StringVar(&opts.message, "message", "", "Message body (required unless --recover-only)")
 	cmd.Flags().BoolVar(&opts.steer, "steer", false, "Steer an active Chat turn, or start the next turn when idle")
+	cmd.Flags().StringVar(&opts.clientMessageID, "client-message-id", "", "Stable steering delivery handle")
+	cmd.Flags().BoolVar(&opts.recoverOnly, "recover-only", false, "Recover a steering result without contacting the provider")
 	return cmd
 }
 
 func (c *commandContext) sendMessage(ctx context.Context, opts sendOptions) error {
-	if strings.TrimSpace(opts.message) == "" {
+	if opts.recoverOnly && !opts.steer {
+		return usageError{errors.New("usage: --recover-only requires --steer")}
+	}
+	if strings.TrimSpace(opts.clientMessageID) != "" && !opts.steer {
+		return usageError{errors.New("usage: --client-message-id requires --steer")}
+	}
+	if opts.recoverOnly && strings.TrimSpace(opts.clientMessageID) == "" {
+		return usageError{errors.New("usage: --recover-only requires --client-message-id")}
+	}
+	if !opts.recoverOnly && strings.TrimSpace(opts.message) == "" {
 		return usageError{errors.New("usage: --message is required")}
 	}
 	message := opts.message
-	if sender := strings.TrimSpace(os.Getenv("AO_SESSION_ID")); sender != "" {
+	if sender := strings.TrimSpace(os.Getenv("AO_SESSION_ID")); !opts.recoverOnly && sender != "" {
 		message = "[from " + sender + "] " + message
 	}
 	session := strings.TrimSpace(opts.session)
@@ -83,23 +97,46 @@ func (c *commandContext) sendMessage(ctx context.Context, opts sendOptions) erro
 	if !opts.steer {
 		return c.postJSON(ctx, path+"/send", sendAPIRequest{Message: message}, nil)
 	}
-	return c.steerMessage(ctx, path, message)
+	return c.steerMessage(ctx, path, message, strings.TrimSpace(opts.clientMessageID), opts.recoverOnly)
 }
 
-func (c *commandContext) steerMessage(ctx context.Context, sessionPath, message string) error {
-	clientMessageID := uuid.NewString()
+func (c *commandContext) steerMessage(
+	ctx context.Context,
+	sessionPath, message, clientMessageID string,
+	recoverOnly bool,
+) error {
+	if clientMessageID == "" {
+		clientMessageID = uuid.NewString()
+	}
 	var steered steerAPIResponse
 	err := c.postJSON(ctx, sessionPath+"/conversation/steer", steerAPIRequest{
-		Text: message, ClientMessageID: clientMessageID,
+		Text: message, ClientMessageID: clientMessageID, RecoverOnly: recoverOnly,
 	}, &steered)
 	if err == nil {
+		if recoverOnly {
+			_, _ = fmt.Fprintf(c.deps.Out,
+				"Recovered steering receipt for active turn %s with delivery handle %s; agent action is not confirmed.\n",
+				steered.ProviderTurnID, clientMessageID)
+			return nil
+		}
 		_, _ = fmt.Fprintf(c.deps.Out,
-			"Steering accepted by provider for active turn %s; agent action is not confirmed.\n",
-			steered.ProviderTurnID)
+			"Steering accepted by provider for active turn %s with delivery handle %s; agent action is not confirmed.\n",
+			steered.ProviderTurnID, clientMessageID)
 		return nil
 	}
 
 	var responseErr apiResponseError
+	if errors.As(err, &responseErr) && responseErr.ErrorBody.Code == "CHAT_STEER_UNCERTAIN" {
+		if recoverOnly {
+			return fmt.Errorf("%w; delivery handle %s remains unresolved and was not resent", err, clientMessageID)
+		}
+		return fmt.Errorf(
+			"%w; recover this delivery without resending it: ao send --session %s --steer --recover-only --client-message-id %s",
+			err, strings.TrimPrefix(sessionPath, "sessions/"), clientMessageID)
+	}
+	if recoverOnly {
+		return err
+	}
 	if !errors.As(err, &responseErr) || responseErr.ErrorBody.Code != "CHAT_NO_ACTIVE_TURN" {
 		return err
 	}
