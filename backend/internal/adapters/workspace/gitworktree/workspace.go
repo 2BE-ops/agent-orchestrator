@@ -669,6 +669,9 @@ func (w *Workspace) destroy(ctx context.Context, info ports.WorkspaceInfo) (port
 		return reclaim, fmt.Errorf("gitworktree: refusing to remove %q: path is still registered after git worktree prune", path)
 	}
 	if err := removeAllWithRetry(ctx, path); err != nil {
+		if errors.Is(err, errRemoveRetryExhausted) {
+			return reclaim, fmt.Errorf("gitworktree: remove unregistered path %q: %w (cause: %w)", path, ports.ErrWorkspaceDeferred, err)
+		}
 		return reclaim, fmt.Errorf("gitworktree: remove unregistered path %q: %w", path, err)
 	}
 	return reclaim, nil
