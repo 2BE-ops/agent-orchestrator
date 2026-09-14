@@ -21,13 +21,16 @@ type Store interface {
 	PutProjectSummary(ctx context.Context, summary domain.ProjectSummary) error
 }
 
+// Service builds and persists project summary projections.
 type Service struct {
 	store Store
 	clock func() time.Time
 }
 
+// New constructs a project summary service.
 func New(store Store) *Service { return &Service{store: store, clock: time.Now} }
 
+// Get reads the current projection and regenerates it when requested or missing.
 func (s *Service) Get(ctx context.Context, projectID domain.ProjectID, refresh bool) (domain.ProjectSummary, error) {
 	if _, ok, err := s.store.GetProject(ctx, string(projectID)); err != nil {
 		return domain.ProjectSummary{}, err

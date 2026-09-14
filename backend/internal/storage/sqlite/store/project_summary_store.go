@@ -9,6 +9,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 )
 
+// GetProjectSummary reads the durable project summary projection.
 func (s *Store) GetProjectSummary(ctx context.Context, projectID domain.ProjectID) (domain.ProjectSummary, bool, error) {
 	var summary domain.ProjectSummary
 	var projection string
@@ -27,6 +28,7 @@ func (s *Store) GetProjectSummary(ctx context.Context, projectID domain.ProjectI
 	return summary, true, nil
 }
 
+// PutProjectSummary replaces the durable project summary projection.
 func (s *Store) PutProjectSummary(ctx context.Context, summary domain.ProjectSummary) error {
 	projection, err := json.Marshal(summary)
 	if err != nil {
