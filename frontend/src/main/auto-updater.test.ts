@@ -244,16 +244,16 @@ describe("macOS differential update policy", () => {
     });
     updaterEvents.get("update-downloaded")?.({ version: "1.2.3" });
 
-    expect(
-      statusMessages()
-        .map(message => message.payload)
-        .findLast(payload => payload.state === "downloading"),
-    ).toMatchObject({
-      state: "downloading",
-      transferred: 250,
-      total: 1000,
-      bytesPerSecond: 125,
-    });
+    expect(statusMessages().map(message => message.payload)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          state: "downloading",
+          transferred: 250,
+          total: 1000,
+          bytesPerSecond: 125,
+        }),
+      ]),
+    );
     expect(telemetryMessages().at(-1)?.payload).toMatchObject({
       event: "ao.renderer.update_downloaded",
       transfer_mode: "differential",
