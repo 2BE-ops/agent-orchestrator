@@ -74,6 +74,10 @@ type ProjectResponse struct {
 	Project projectsvc.Project `json:"project"`
 }
 
+type ProjectSummaryResponse struct {
+	Summary domain.ProjectSummary `json:"summary"`
+}
+
 // GetProjectResponse is the { status, project } body of GET /projects/{id},
 // where project is oneOf Project|Degraded discriminated by status.
 type GetProjectResponse struct {

@@ -207,9 +207,13 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"DomainContainerReapConfig":       "ContainerReapConfig",
 	"DomainAgentConfig":               "AgentConfig",
 	"DomainRoleOverride":              "RoleOverride",
+	"DomainProjectSummary":            "ProjectSummaryView",
+	"DomainProjectAttentionItem":      "ProjectAttentionItem",
+	"DomainProjectSummaryOutput":      "ProjectSummaryOutput",
 	// httpd/controllers (wire envelopes)
 	"ControllersListProjectsResponse":                     "ListProjectsResponse",
 	"ControllersProjectResponse":                          "ProjectResponse",
+	"ControllersProjectSummaryResponse":                   "ProjectSummaryResponse",
 	"ControllersAgentIDParam":                             "AgentIDParam",
 	"ControllersCodexAccountIDParam":                      "CodexAccountIDParam",
 	"ControllersCodexAccountLoginIDParam":                 "CodexAccountLoginIDParam",
@@ -1716,6 +1720,18 @@ func projectOperations() []operation {
 				{http.StatusOK, controllers.ListProjectsResponse{}},
 				{http.StatusInternalServerError, envelope.APIError{}},
 			},
+		},
+		{
+			method: http.MethodGet, path: "/api/v1/projects/{id}/summary", id: "getProjectSummary", tag: "projects",
+			summary:    "Read the durable project briefing, generating it when missing",
+			pathParams: []any{controllers.ProjectIDParam{}},
+			resps:      []respUnit{{http.StatusOK, controllers.ProjectSummaryResponse{}}, {http.StatusInternalServerError, envelope.APIError{}}},
+		},
+		{
+			method: http.MethodPost, path: "/api/v1/projects/{id}/summary/refresh", id: "refreshProjectSummary", tag: "projects",
+			summary:    "Refresh the project briefing when its source watermark changed",
+			pathParams: []any{controllers.ProjectIDParam{}},
+			resps:      []respUnit{{http.StatusOK, controllers.ProjectSummaryResponse{}}, {http.StatusInternalServerError, envelope.APIError{}}},
 		},
 		{
 			method: http.MethodPost, path: "/api/v1/projects", id: "addProject", tag: "projects",

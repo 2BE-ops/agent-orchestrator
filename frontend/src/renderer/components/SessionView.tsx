@@ -33,6 +33,7 @@ import { SessionFileTab } from "./SessionFileTabs";
 import { SessionFileWorkspace } from "./SessionFileWorkspace";
 import { SessionActionsMenu } from "./SessionActionsMenu";
 import { SessionInspector } from "./SessionInspector";
+import { ProjectSummaryPanel } from "./ProjectSummaryPanel";
 import {
 	SessionInterfaceSwitchButton,
 	SessionInterfaceSwitchDialog,
@@ -65,6 +66,7 @@ import {
 } from "../hooks/useSessionInterfaceTransition";
 import { useAgentSwitchRouteVisibility } from "../hooks/useAgentSwitchVisibility";
 import { useWorkspaceSession, workspaceQueryKey } from "../hooks/useWorkspaceQuery";
+import { useProjectSummary } from "../hooks/useProjectSummary";
 import { cloudLifecycleStage, type CloudLifecycleStage } from "../lib/cloud-lifecycle";
 import { useCloudCp } from "../hooks/useCloudCp";
 import { useSessionHandoffMenu } from "../hooks/useSessionHandoffMenu";
@@ -480,6 +482,7 @@ function CloudLifecycleStatus({ stage }: { stage: CloudLifecycleStage }) {
 
 export function SessionView({ sessionId }: SessionViewProps) {
 	const { t } = useTranslation();
+	const [projectSummaryOpen, setProjectSummaryOpen] = useState(false);
 	const [confirmedDraftDiscard, setConfirmedDraftDiscard] = useState<{
 		sessionId: string;
 		transitionId: string;
@@ -1180,6 +1183,8 @@ export function SessionView({ sessionId }: SessionViewProps) {
 		);
 	}, [availableReviewerTerminal, reviewerQuery.isFetched]);
 	const isOrchestrator = session ? isOrchestratorSession(session) : false;
+	const projectSummary = useProjectSummary(session?.workspaceId ?? "", isOrchestrator);
+	const projectSummaryAttention = projectSummary.data?.needsAttention.length ?? 0;
 	// Orchestrators get the full workspace width; only workers need the inspector rail.
 	const hasInspector = Boolean(session && !isOrchestrator);
 	const sizing = useMemo(() => inspectorSizing(inspectorView), [inspectorView]);
@@ -1603,6 +1608,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 
 	useEffect(() => {
 		setHandoffDialogOpen(false);
+		setProjectSummaryOpen(false);
 	}, [sessionId]);
 
 	// The pane shows one terminal at a time, so selecting a shell or the reviewer
@@ -2130,6 +2136,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 						/>
 					</SessionInspectorRail>
 				) : null}
+				{isOrchestrator && projectSummaryOpen && session ? <ProjectSummaryPanel key={session.workspaceId} onClose={() => setProjectSummaryOpen(false)} orchestrator={session} /> : null}
 			</div>
 			{hasInspector ? (
 				<div className="session-pinned-actions" data-testid="session-pinned-actions" style={noDragStyle}>
@@ -2150,6 +2157,14 @@ export function SessionView({ sessionId }: SessionViewProps) {
 						</TooltipContent>
 					</Tooltip>
 					{/* Keep the global notification action trailing at the window edge. */}
+					<NotificationCenter style={noDragStyle} />
+				</div>
+			) : isOrchestrator ? (
+				<div className="session-pinned-actions" data-testid="orchestrator-pinned-actions" style={noDragStyle}>
+					<TopbarButton aria-label={projectSummaryOpen ? "Close project summary" : "Open project summary"} aria-pressed={projectSummaryOpen} onClick={() => setProjectSummaryOpen((open) => !open)} variant="icon">
+						<PanelRight className="size-icon-md" aria-hidden="true" />
+						{projectSummaryAttention > 0 ? <span className="min-w-4 rounded-full bg-warning px-1 font-mono text-[9px] leading-4 text-warning-foreground">{projectSummaryAttention}</span> : null}
+					</TopbarButton>
 					<NotificationCenter style={noDragStyle} />
 				</div>
 			) : null}

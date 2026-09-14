@@ -2197,6 +2197,60 @@ paths:
       summary: Remember project permissions for future sessions
       tags:
       - projects
+  /api/v1/projects/{id}/summary:
+    get:
+      operationId: getProjectSummary
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectSummaryResponse'
+          description: OK
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+      summary: Read the durable project briefing, generating it when missing
+      tags:
+      - projects
+  /api/v1/projects/{id}/summary/refresh:
+    post:
+      operationId: refreshProjectSummary
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectSummaryResponse'
+          description: OK
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+      summary: Refresh the project briefing when its source watermark changed
+      tags:
+      - projects
   /api/v1/projects/clone:
     post:
       operationId: cloneProject
@@ -10389,6 +10443,19 @@ components:
       - defaultBranch
       - folderMissing
       type: object
+    ProjectAttentionItem:
+      properties:
+        question:
+          type: string
+        sessionId:
+          type: string
+        sessionName:
+          type: string
+      required:
+      - sessionId
+      - sessionName
+      - question
+      type: object
     ProjectClonePreparationCleanupInput:
       properties:
         path:
@@ -10498,6 +10565,70 @@ components:
       - kind
       - sessionPrefix
       - folderMissing
+      type: object
+    ProjectSummaryOutput:
+      properties:
+        kind:
+          enum:
+          - pull_request
+          type: string
+        number:
+          type: integer
+        sessionId:
+          type: string
+        sessionName:
+          type: string
+        state:
+          type: string
+        url:
+          type: string
+      required:
+      - sessionId
+      - sessionName
+      - kind
+      - url
+      - number
+      - state
+      type: object
+    ProjectSummaryResponse:
+      properties:
+        summary:
+          $ref: '#/components/schemas/ProjectSummaryView'
+      required:
+      - summary
+      type: object
+    ProjectSummaryView:
+      properties:
+        activeWorkers:
+          type: integer
+        completedWorkers:
+          type: integer
+        generatedAt:
+          format: date-time
+          type: string
+        narrative:
+          type: string
+        needsAttention:
+          items:
+            $ref: '#/components/schemas/ProjectAttentionItem'
+          type: array
+        outputs:
+          items:
+            $ref: '#/components/schemas/ProjectSummaryOutput'
+          type: array
+        projectId:
+          type: string
+        sourceWatermark:
+          type: string
+      required:
+      - projectId
+      - narrative
+      - activeWorkers
+      - completedWorkers
+      - needsAttention
+      - outputs
+      - sourceWatermark
+      - generatedAt
       type: object
     PromoteQueuedTurnResponse:
       properties:

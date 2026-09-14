@@ -929,6 +929,40 @@ export interface paths {
         patch: operations["setProjectPermissions"];
         trace?: never;
     };
+    "/api/v1/projects/{id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the durable project briefing, generating it when missing */
+        get: operations["getProjectSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/summary/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh the project briefing when its source watermark changed */
+        post: operations["refreshProjectSummary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/clone": {
         parameters: {
             query?: never;
@@ -3663,6 +3697,11 @@ export interface components {
             repo: string;
             workspaceRepos?: components["schemas"]["WorkspaceRepo"][];
         };
+        ProjectAttentionItem: {
+            question: string;
+            sessionId: string;
+            sessionName: string;
+        };
         ProjectClonePreparationCleanupInput: {
             path: string;
             preparationId: string;
@@ -3706,6 +3745,29 @@ export interface components {
             path: string;
             resolveError?: string;
             sessionPrefix: string;
+        };
+        ProjectSummaryOutput: {
+            /** @enum {string} */
+            kind: "pull_request";
+            number: number;
+            sessionId: string;
+            sessionName: string;
+            state: string;
+            url: string;
+        };
+        ProjectSummaryResponse: {
+            summary: components["schemas"]["ProjectSummaryView"];
+        };
+        ProjectSummaryView: {
+            activeWorkers: number;
+            completedWorkers: number;
+            /** Format: date-time */
+            generatedAt: string;
+            narrative: string;
+            needsAttention: components["schemas"]["ProjectAttentionItem"][];
+            outputs: components["schemas"]["ProjectSummaryOutput"][];
+            projectId: string;
+            sourceWatermark: string;
         };
         PromoteQueuedTurnResponse: {
             activityId: string;
@@ -7404,6 +7466,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getProjectSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSummaryResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    refreshProjectSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSummaryResponse"];
                 };
             };
             /** @description Internal Server Error */
