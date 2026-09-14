@@ -4719,6 +4719,7 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 
 .browser-panel__history-suggestions {
 	width: min(var(--radix-popover-trigger-width, 240px), calc(100vw - 16px));
+	min-width: min(var(--radix-popover-trigger-width, 240px), calc(100vw - 16px));
 	max-height: min(360px, var(--radix-popover-content-available-height));
 	overflow-x: hidden;
 	overflow-y: auto;

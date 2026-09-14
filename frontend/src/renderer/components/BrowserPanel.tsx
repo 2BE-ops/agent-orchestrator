@@ -120,6 +120,7 @@ const DEVICE_PRESETS: { id: string; label: string; width: number; height: number
 	{ id: "nest-hub-max", label: "Nest Hub Max", width: 1280, height: 800, category: "tablet" },
 ];
 const CUSTOM_DEVICE_PRESET_ID = "custom";
+const MAX_HISTORY_SUGGESTIONS = 4;
 const MIN_DEVICE_FRAME_WIDTH = 240;
 const MAX_DEVICE_FRAME_WIDTH = 2560;
 
@@ -595,7 +596,7 @@ export function BrowserPanelView({
 			void window.ao!.browser.historySuggestions({ viewId, query }).then(
 				(suggestions) => {
 					if (!current) return;
-					setHistorySuggestions(suggestions);
+					setHistorySuggestions(suggestions.slice(0, MAX_HISTORY_SUGGESTIONS));
 					setActiveHistorySuggestion(-1);
 				},
 				() => {
@@ -851,7 +852,10 @@ export function BrowserPanelView({
 							role="option"
 							type="button"
 						>
-							<Globe2 aria-hidden="true" className="size-icon-base shrink-0 text-settings-muted" />
+							<BrowserSuggestionIcon
+								cachedFavicon={faviconForOpenTab(suggestion.url, tabs)}
+								url={suggestion.url}
+							/>
 							<span className="min-w-0 flex-1">
 								{suggestion.title ? (
 									<span className="block truncate text-control text-settings-title">{suggestion.title}</span>
@@ -1474,6 +1478,39 @@ function getDisplayUrl(url: string): string {
 	} catch {
 		return url;
 	}
+}
+
+function webOrigin(url: string): string | undefined {
+	try {
+		const parsed = new URL(url);
+		return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.origin : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function faviconForOpenTab(url: string, tabs: BrowserViewModel["tabs"]): string | undefined {
+	const origin = webOrigin(url);
+	if (!origin) return undefined;
+	return tabs.find((tab) => tab.favicon && webOrigin(tab.url) === origin)?.favicon;
+}
+
+function BrowserSuggestionIcon({ cachedFavicon, url }: { cachedFavicon?: string; url: string }) {
+	const origin = webOrigin(url);
+	const favicon = cachedFavicon ?? (origin ? `${origin}/favicon.ico` : undefined);
+	const [failedFavicon, setFailedFavicon] = useState<string>();
+	if (!favicon || favicon === failedFavicon) {
+		return <Globe2 aria-hidden="true" className="size-icon-base shrink-0 text-settings-muted" />;
+	}
+	return (
+		<img
+			alt=""
+			className="size-icon-base shrink-0 rounded-sm object-contain"
+			onError={() => setFailedFavicon(favicon)}
+			referrerPolicy="no-referrer"
+			src={favicon}
+		/>
+	);
 }
 
 function StaticPreview({ url }: { url: string }) {

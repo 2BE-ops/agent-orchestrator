@@ -294,6 +294,10 @@ describe("BrowserPanel", () => {
 		};
 		window.ao!.browser.historySuggestions = vi.fn(async () => [
 			{ url: "https://github.com/openai", title: "OpenAI" },
+			{ url: "https://gitlab.com/example", title: "GitLab" },
+			{ url: "https://github.blog/example", title: "GitHub Blog" },
+			{ url: "https://gist.github.com/example", title: "Gist" },
+			{ url: "https://githubstatus.com", title: "Fifth result" },
 		]);
 		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut={false} session={session} />);
 		const input = screen.getByRole("textbox", { name: /browser url/i });
@@ -309,10 +313,14 @@ describe("BrowserPanel", () => {
 		}), { timeout: 2_000 });
 		const menu = await screen.findByRole("listbox", { name: "Address suggestions" });
 		expect(menu).toHaveAttribute("data-browser-native-overlay", "true");
+		expect(menu).toHaveClass("browser-panel__history-suggestions");
+		expect(screen.getAllByRole("option")).toHaveLength(4);
 		expect(screen.getByText("OpenAI")).toBeInTheDocument();
 		expect(screen.getByText("https://github.com/openai")).toBeInTheDocument();
+		expect(screen.queryByText("Fifth result")).not.toBeInTheDocument();
+		expect(menu.querySelector("img")).toHaveAttribute("src", "https://github.com/favicon.ico");
 
-		await userEvent.click(screen.getByRole("option"));
+		await userEvent.click(screen.getAllByRole("option")[0]!);
 		expect(hookState.navigate).toHaveBeenCalledWith("https://github.com/openai");
 		expect(input).not.toHaveFocus();
 		expect(addressBar).not.toHaveClass("browser-panel__address-bar--editing");
