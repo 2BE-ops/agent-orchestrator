@@ -10,7 +10,11 @@ const { getAvailableAgentsMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("../hooks/useCloudCp", () => ({
-	useCloudCp: () => ({ client: { getAvailableAgents: getAvailableAgentsMock } }),
+	useCloudCp: () => ({
+		client: { getAvailableAgents: getAvailableAgentsMock },
+		ready: true,
+		baseUrl: "http://127.0.0.1:8081",
+	}),
 }));
 
 vi.mock("../hooks/useCloudOrg", () => ({

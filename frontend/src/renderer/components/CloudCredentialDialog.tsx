@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "./ui/button";
 import {
 	Dialog,
@@ -19,6 +19,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import type { CloudCpAgentProvider } from "../lib/cloud-cp";
 import { useCloudCp } from "../hooks/useCloudCp";
 import { useCloudOrg } from "../hooks/useCloudOrg";
+import {
+	cloudAvailableAgentsQueryKey,
+	useCloudAvailableAgents,
+} from "../hooks/useCloudAvailableAgents";
 import { providerConnectionsQueryKey } from "../hooks/useProviderConnections";
 import { useCredentialDialogStore } from "../stores/credential-dialog-store";
 import { cn } from "../lib/utils";
@@ -61,16 +65,9 @@ export function CloudCredentialDialog() {
 	const open = useCredentialDialogStore((s) => s.open);
 	const setOpen = useCredentialDialogStore((s) => s.setOpen);
 
-	const availableAgentsQuery = useQuery({
-		queryKey: ["cloud", "agents", "available", org?.id],
-		enabled: open && org !== undefined,
-		queryFn: async () => {
-			const response = await client.getAvailableAgents(org!.id);
-			return response.agents.map((a) => a.id as CloudCpAgentProvider);
-		},
-	});
+	const availableAgentsQuery = useCloudAvailableAgents(org?.id, open);
 
-	const defaultAgent = availableAgentsQuery.data?.[0] ?? ("claude-code" as CloudCpAgentProvider);
+	const defaultAgent = (availableAgentsQuery.data?.[0]?.id ?? "claude-code") as CloudCpAgentProvider;
 	const defaultCredType = AGENT_METADATA[defaultAgent]?.creds[0]?.value ?? "api_key";
 
 	const [agent, setAgent] = useState<CloudCpAgentProvider>(defaultAgent);
@@ -120,6 +117,7 @@ export function CloudCredentialDialog() {
 				return;
 			}
 			await queryClient.invalidateQueries({ queryKey: providerConnectionsQueryKey(org.id) });
+			await queryClient.invalidateQueries({ queryKey: cloudAvailableAgentsQueryKey(org.id) });
 			setPhase("success");
 			setSecret("");
 		} catch (err) {
@@ -168,9 +166,9 @@ export function CloudCredentialDialog() {
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
-									{(availableAgentsQuery.data ?? []).map((agentId) => (
-										<SelectItem key={agentId} value={agentId}>
-											{AGENT_METADATA[agentId]?.label ?? agentId}
+									{(availableAgentsQuery.data ?? []).map(({ id }) => (
+										<SelectItem key={id} value={id}>
+											{AGENT_METADATA[id as CloudCpAgentProvider]?.label ?? id}
 										</SelectItem>
 									))}
 								</SelectContent>

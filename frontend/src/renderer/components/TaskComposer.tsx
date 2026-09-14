@@ -22,7 +22,7 @@ import { type FileAttachmentPayload, useFileAttachments } from "../hooks/useFile
 import { useSettings } from "../hooks/useSettings";
 import { useCloudCp } from "../hooks/useCloudCp";
 import { useCloudOrg } from "../hooks/useCloudOrg";
-import { useProviderConnections } from "../hooks/useProviderConnections";
+import { useCloudAvailableAgents } from "../hooks/useCloudAvailableAgents";
 import { useSandboxProviderStore } from "../stores/sandbox-provider-store";
 import { cloudSessionsQueryKey, useCloudProjectsQuery } from "../hooks/useWorkspaceQuery";
 import {
@@ -244,21 +244,21 @@ export function TaskComposer({
 	const projectModelForSelectedAgent = selectedAgent === defaultWorkerAgent ? defaultWorkerModel : "";
 	const projectModeForSelectedAgent = selectedAgent === defaultWorkerAgent ? defaultWorkerMode : "";
 	const agentCatalog = agentsQuery.data;
-	const providerConnections = useProviderConnections(isCloudProject ? cloudOrg?.id : undefined);
+	const cloudAgentsQuery = useCloudAvailableAgents(cloudOrg?.id, isCloudProject);
 	const agentsForDropdown = useMemo(() => {
 		if (!isCloudProject || !agentCatalog?.agents) return agentCatalog?.agents;
-		const validAgents = new Set<string>();
-		providerConnections.data?.forEach((conn) => {
-			if (conn.validationState === "valid") {
-				validAgents.add(conn.provider);
-			}
-		});
-		return agentCatalog.agents.map((agent) => ({
-			...agent,
-			disabled: !validAgents.has(agent.id),
-			hint: !validAgents.has(agent.id) ? "Needs auth" : undefined,
-		}));
-	}, [isCloudProject, agentCatalog?.agents, providerConnections.data]);
+		const availability = new Map(cloudAgentsQuery.data?.map((agent) => [agent.id, agent]));
+		return agentCatalog.agents
+			.filter((agent) => availability.has(agent.id))
+			.map((agent) => {
+				const hasValidCredential = availability.get(agent.id)?.hasValidCred === true;
+				return {
+					...agent,
+					disabled: !hasValidCredential,
+					hint: hasValidCredential ? undefined : "Needs auth",
+				};
+			});
+	}, [isCloudProject, agentCatalog?.agents, cloudAgentsQuery.data]);
 
 	// Shares the picker's query key, so this is the same fetch, not a second one.
 	const modelCatalogQuery = useQuery(agentModelsQueryOptions(selectedAgent, modelsProjectId));
@@ -418,7 +418,10 @@ export function TaskComposer({
 				placeholder: t("newTask.selectAgent"),
 				value: selectedAgent,
 				agents: agentsForDropdown,
-				disabled: isSubmitting || (agentsQuery.isFetching && agentCatalog === undefined),
+				disabled:
+					isSubmitting ||
+					(agentsQuery.isFetching && agentCatalog === undefined) ||
+					(isCloudProject && cloudAgentsQuery.isLoading),
 				onChange: (value) => {
 					setAgent(value);
 					setAgentTouched(true);
