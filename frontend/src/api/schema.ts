@@ -2907,7 +2907,7 @@ export interface components {
             /** Format: int64 */
             previewRevision?: number;
             previewUrl?: string;
-            projectId: string;
+            projectId?: string;
             prs: components["schemas"]["SessionPRFacts"][];
             reviewerConfig?: components["schemas"]["AgentConfig"];
             /** @enum {string} */
@@ -2916,6 +2916,8 @@ export interface components {
             scmStatus?: "pr_open" | "draft" | "ci_failed" | "review_pending" | "changes_requested" | "approved" | "mergeable" | "merged";
             /** @enum {string} */
             status: "working" | "pr_open" | "draft" | "ci_failed" | "review_pending" | "changes_requested" | "approved" | "mergeable" | "merged" | "needs_input" | "exited" | "idle" | "terminated" | "no_signal";
+            /** @enum {string} */
+            statusReadiness: "checking" | "ready" | "unavailable";
             terminalGeneration?: string;
             terminalHandleId?: string;
             terminateOnPrMerge: boolean;
@@ -4138,7 +4140,7 @@ export interface components {
             /** @enum {string} */
             mode?: "chat" | "tui";
             model?: string;
-            projectId: string;
+            projectId?: string;
             prompt?: string;
             /** @enum {string} */
             trackerProvider?: "github" | "gitlab";

@@ -151,7 +151,7 @@ type AppSetting struct {
 
 type ChangeLog struct {
 	Seq       int64
-	ProjectID domain.ProjectID
+	ProjectID *domain.ProjectID
 	SessionID *domain.SessionID
 	EventType cdc.EventType
 	Payload   string
@@ -176,7 +176,7 @@ type CodexAccountSwitch struct {
 type Conversation struct {
 	ID                         string
 	Scope                      domain.ConversationScope
-	ProjectID                  domain.ProjectID
+	ProjectID                  *domain.ProjectID
 	SessionID                  *domain.SessionID
 	CurrentSessionID           *domain.SessionID
 	LatestSequence             int64
@@ -361,7 +361,7 @@ type ModelUsageEvent struct {
 type Notification struct {
 	ID         string
 	SessionID  domain.SessionID
-	ProjectID  domain.ProjectID
+	ProjectID  *domain.ProjectID
 	PRURL      string
 	Type       domain.NotificationType
 	Title      string
@@ -520,7 +520,7 @@ type ReviewRun struct {
 
 type Session struct {
 	ID                        domain.SessionID
-	ProjectID                 domain.ProjectID
+	ProjectID                 *domain.ProjectID
 	Num                       int64
 	IssueID                   domain.IssueID
 	Kind                      domain.SessionKind

@@ -8373,6 +8373,12 @@ components:
           - terminated
           - no_signal
           type: string
+        statusReadiness:
+          enum:
+          - checking
+          - ready
+          - unavailable
+          type: string
         terminalGeneration:
           type: string
         terminalHandleId:
@@ -8384,7 +8390,6 @@ components:
           type: string
       required:
       - id
-      - projectId
       - kind
       - autoReviewEnabled
       - mode
@@ -8396,6 +8401,7 @@ components:
       - createdAt
       - updatedAt
       - isPinned
+      - statusReadiness
       - chatProviderPreserved
       - status
       - kanbanColumn
@@ -11655,8 +11661,6 @@ components:
           - github
           - gitlab
           type: string
-      required:
-      - projectId
       type: object
     SpawnSessionResponse:
       properties:

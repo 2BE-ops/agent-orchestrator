@@ -93,7 +93,7 @@ type SessionMetadata struct {
 // metadata. The user-facing Status is derived from these facts plus PR facts.
 type SessionRecord struct {
 	ID        SessionID    `json:"id"`
-	ProjectID ProjectID    `json:"projectId"`
+	ProjectID ProjectID    `json:"projectId,omitempty"`
 	IssueID   IssueID      `json:"issueId,omitempty"`
 	Kind      SessionKind  `json:"kind"`
 	Harness   AgentHarness `json:"harness,omitempty"`
@@ -135,6 +135,9 @@ type SessionRecord struct {
 	PinnedAt          *time.Time `json:"pinnedAt,omitempty"`
 }
 
+// IsStandalone reports whether the session has no registered project owner.
+func (s SessionRecord) IsStandalone() bool { return s.ProjectID == "" }
+
 // SessionControllerOwner is the durable identity of the process/controller
 // currently allowed to act for a session. Narrow lifecycle writes compare this
 // snapshot before updating so stale launch work cannot mutate a replacement.
@@ -168,6 +171,9 @@ func (r SessionRecord) ControllerOwner() SessionControllerOwner {
 // persisted.
 type Session struct {
 	SessionRecord
+	// StatusReadiness describes startup verification, never a persisted status.
+	// Clients must withhold activity labels until ready; unavailable permits retry.
+	StatusReadiness string `json:"statusReadiness" enum:"checking,ready,unavailable"`
 	// ChatProviderPreserved is a live-controller observation, never stored.
 	// False also covers recovery/unknown ownership; callers must not infer safety.
 	ChatProviderPreserved bool          `json:"chatProviderPreserved"`
