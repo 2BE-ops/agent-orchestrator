@@ -13,10 +13,19 @@ function viewSubmenu(): readonly SubmenuItem[] {
 }
 
 describe("buildWindowsAppMenuTemplate", () => {
-	it("does not expose application zoom controls", () => {
-		expect(viewSubmenu()).not.toContainEqual(
-			expect.objectContaining({ role: expect.stringMatching(/^zoom|resetZoom$/) }),
+	it("registers both plus key forms for zoom in", () => {
+		const zoomInItems = viewSubmenu().filter((item) => item.role === "zoomIn");
+
+		expect(zoomInItems).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ accelerator: "Ctrl+=", role: "zoomIn" }),
+				expect.objectContaining({ accelerator: "Ctrl+Plus", role: "zoomIn", visible: false }),
+			]),
 		);
+	});
+
+	it("keeps the direct minus accelerator for zoom out", () => {
+		expect(viewSubmenu()).toContainEqual(expect.objectContaining({ accelerator: "Ctrl+-", role: "zoomOut" }));
 	});
 });
 
@@ -57,9 +66,4 @@ describe("buildMacAppMenuTemplate", () => {
 		expect(macViewSubmenu()).toContainEqual(expect.objectContaining({ role: "forceReload" }));
 	});
 
-	it("does not expose application zoom controls", () => {
-		expect(macViewSubmenu()).not.toContainEqual(
-			expect.objectContaining({ role: expect.stringMatching(/^zoom|resetZoom$/) }),
-		);
-	});
 });

@@ -267,6 +267,16 @@ export function WindowTitlebar() {
             <DropdownMenuShortcut>Ctrl+Shift+I</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={act("view.zoomIn")}>
+            {t("titlebar.zoomIn")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={act("view.zoomOut")}>
+            {t("titlebar.zoomOut")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={act("view.zoomReset")}>
+            {t("titlebar.zoomReset")}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={act("view.fullscreen")}>
             {t("titlebar.fullscreen")}
             <DropdownMenuShortcut>F11</DropdownMenuShortcut>

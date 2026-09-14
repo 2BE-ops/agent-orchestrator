@@ -608,11 +608,6 @@ async function createWindowInternal(): Promise<void> {
 	syncNativeWindowBackground();
 	const shellWebContents = getShellWebContents();
 	if (!shellWebContents) throw new Error("AO shell WebContents was not created");
-	// The supervisor layout is pixel-tuned and embeds native WebContentsViews.
-	// Keep it at its designed scale instead of allowing app zoom to reflow the
-	// chrome independently from the native surfaces.
-	shellWebContents.setZoomLevel(0);
-	void shellWebContents.setVisualZoomLevelLimits(1, 1);
 	trustedShellWebContents.set(shellWebContents.id, shellWebContents);
 	agentSwitchVisibilityController?.registerWindow(shellWebContents.id);
 	shellWebContents.once("destroyed", () => {
@@ -2041,6 +2036,12 @@ ipcMain.handle("menu:action", (_event, action: string) => {
 				}).catch(() => wc?.toggleDevTools());
 			}
 			return wc?.toggleDevTools();
+		case "view.zoomIn":
+			return wc.setZoomLevel(wc.getZoomLevel() + 0.5);
+		case "view.zoomOut":
+			return wc.setZoomLevel(wc.getZoomLevel() - 0.5);
+		case "view.zoomReset":
+			return wc.setZoomLevel(0);
 		case "view.fullscreen":
 			return win.setFullScreen(!win.isFullScreen());
 		case "window.minimize":

@@ -98,21 +98,6 @@ describe("WindowTitlebar", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("does not offer application zoom controls", async () => {
-    const { WindowTitlebar } = await loadWindowTitlebar();
-
-    render(
-      <TooltipProvider>
-        <WindowTitlebar />
-      </TooltipProvider>,
-    );
-
-    await userEvent.click(screen.getByRole("button", { name: "View" }));
-    expect(screen.queryByText("Zoom In")).not.toBeInTheDocument();
-    expect(screen.queryByText("Zoom Out")).not.toBeInTheDocument();
-    expect(screen.queryByText("Reset Zoom")).not.toBeInTheDocument();
-  });
-
   it("renders the back and forward navigation buttons", async () => {
     const { WindowTitlebar } = await loadWindowTitlebar();
 
