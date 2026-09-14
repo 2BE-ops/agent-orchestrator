@@ -403,6 +403,7 @@ export function BrowserPanelView({
 			: DEVICE_PRESETS.find((preset) => preset.id === devicePreset)?.width;
 	const urlInputRef = useRef<HTMLInputElement>(null);
 	const historyMenuRef = useRef<HTMLDivElement>(null);
+	const historyRequestGenerationRef = useRef(0);
 	const [draggedTopTabId, setDraggedTopTabId] = useState<string | null>(null);
 	const draggedTopTab = tabs.find((tab) => tab.id === draggedTopTabId);
 	const {
@@ -579,6 +580,7 @@ export function BrowserPanelView({
 	}, [navState.url]);
 
 	useEffect(() => {
+		const generation = ++historyRequestGenerationRef.current;
 		const query = urlInput.trim();
 		if (
 			!urlEditing ||
@@ -595,12 +597,12 @@ export function BrowserPanelView({
 		const timer = window.setTimeout(() => {
 			void window.ao!.browser.historySuggestions({ viewId, query }).then(
 				(suggestions) => {
-					if (!current) return;
+					if (!current || historyRequestGenerationRef.current !== generation) return;
 					setHistorySuggestions(suggestions.slice(0, MAX_HISTORY_SUGGESTIONS));
 					setActiveHistorySuggestion(-1);
 				},
 				() => {
-					if (!current) return;
+					if (!current || historyRequestGenerationRef.current !== generation) return;
 					setHistorySuggestions([]);
 					setActiveHistorySuggestion(-1);
 				},
@@ -622,6 +624,7 @@ export function BrowserPanelView({
 		if (!onPageFocus) return;
 		return onPageFocus((focusedViewId) => {
 			if (focusedViewId !== viewId) return;
+			historyRequestGenerationRef.current += 1;
 			urlInputRef.current?.blur();
 			setUrlEditing(false);
 			setUrlInput(navState.url);
@@ -646,6 +649,7 @@ export function BrowserPanelView({
 	}, [cancelPicking, enqueue, viewId]);
 
 	const navigateFromAddressBar = (url: string) => {
+		historyRequestGenerationRef.current += 1;
 		urlInputRef.current?.blur();
 		setUrlEditing(false);
 		setUrlInput(url);
@@ -661,11 +665,19 @@ export function BrowserPanelView({
 	};
 
 	const handleURLChange = (value: string) => {
+		historyRequestGenerationRef.current += 1;
 		setUrlInput(value);
 		setActiveHistorySuggestion(-1);
 	};
 
 	const handleURLKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+		if (event.key === "Escape") {
+			event.preventDefault();
+			historyRequestGenerationRef.current += 1;
+			setHistorySuggestions([]);
+			setActiveHistorySuggestion(-1);
+			return;
+		}
 		if (historySuggestions.length === 0) return;
 		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
 			event.preventDefault();
@@ -681,15 +693,11 @@ export function BrowserPanelView({
 			navigateFromAddressBar(historySuggestions[activeHistorySuggestion]!.url);
 			return;
 		}
-		if (event.key === "Escape") {
-			event.preventDefault();
-			setHistorySuggestions([]);
-			setActiveHistorySuggestion(-1);
-		}
 	};
 
 	const endUrlEditing = (event: FocusEvent<HTMLInputElement>) => {
 		if (event.relatedTarget instanceof Node && historyMenuRef.current?.contains(event.relatedTarget)) return;
+		historyRequestGenerationRef.current += 1;
 		setUrlEditing(false);
 		setUrlInput(navState.url);
 		setHistorySuggestions([]);
@@ -777,6 +785,7 @@ export function BrowserPanelView({
 			<Popover
 				onOpenChange={(open) => {
 					if (!open && suggestionsOpen) {
+						historyRequestGenerationRef.current += 1;
 						setHistorySuggestions([]);
 						setActiveHistorySuggestion(-1);
 					}

@@ -362,6 +362,27 @@ describe("BrowserPanel", () => {
 		expect(hookState.navigate).toHaveBeenCalledWith("https://github.com/aoagents");
 	});
 
+	it("keeps address suggestions closed when an escaped request resolves late", async () => {
+		hookState.profileState = {
+			viewId: "42:sess-1",
+			profileId: "11111111-1111-4111-8111-111111111111",
+			temporary: false,
+		};
+		let resolveSuggestions: (suggestions: Array<{ url: string; title?: string }>) => void = () => undefined;
+		window.ao!.browser.historySuggestions = vi.fn(() => new Promise<Array<{ url: string; title?: string }>>((resolve) => {
+			resolveSuggestions = resolve;
+		}));
+		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut={false} session={session} />);
+		const input = screen.getByRole("textbox", { name: /browser url/i });
+
+		await userEvent.type(input, "git");
+		await waitFor(() => expect(window.ao!.browser.historySuggestions).toHaveBeenCalledOnce());
+		await userEvent.keyboard("{Escape}");
+		await act(async () => resolveSuggestions([{ url: "https://github.com/openai", title: "OpenAI" }]));
+
+		expect(screen.queryByRole("listbox", { name: "Address suggestions" })).not.toBeInTheDocument();
+	});
+
 	it("does not search imported history until the address is edited", async () => {
 		hookState.profileState = {
 			viewId: "42:sess-1",
