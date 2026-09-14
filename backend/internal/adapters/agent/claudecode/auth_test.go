@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
@@ -404,5 +405,47 @@ func TestProbeAnswersFromCacheWithoutReprobing(t *testing.T) {
 	verdict, ok := (&Plugin{}).probeVerdict(context.Background(), claudeAuthReport{APIProvider: "firstParty"}, true)
 	if !ok || verdict.State != ports.AgentAuthStatusAuthorized {
 		t.Fatalf("verdict = %+v, want the cached acceptance", verdict)
+	}
+}
+
+// The provider response that proves the credential works also owns the model
+// and effort catalog. Model discovery must reuse that exact response instead
+// of issuing a second validation request that can fail independently.
+func TestProviderModelsReuseTheValidatedAuthResponse(t *testing.T) {
+	clearClaudeCredentialEnv(t)
+	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-cached-models")
+	InvalidateAuthCache()
+	t.Cleanup(InvalidateAuthCache)
+
+	requests := 0
+	server := withStubValidator(t, func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		_, _ = w.Write([]byte(`{"data":[{"id":"claude-opus-5","display_name":"Claude Opus 5","capabilities":{"effort":{"supported":true,"low":{"supported":true},"medium":{"supported":true},"high":{"supported":true},"xhigh":{"supported":true},"max":{"supported":true}}}}]}`))
+	})
+	t.Setenv("ANTHROPIC_BASE_URL", server.URL)
+
+	verdict, ok := (&Plugin{}).probeVerdict(
+		context.Background(), claudeAuthReport{APIProvider: "gateway"}, true,
+	)
+	if !ok || verdict.State != ports.AgentAuthStatusAuthorized {
+		t.Fatalf("verdict = %+v, want the provider acceptance", verdict)
+	}
+
+	models, err := ProviderModels(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("models = %+v, want the validated provider model", models)
+	}
+	if models[0].ID != "claude-opus-5" || models[0].Label != "Claude Opus 5" {
+		t.Fatalf("model = %+v, want the provider identity and label", models[0])
+	}
+	wantEfforts := []string{"low", "medium", "high", "xhigh", "max"}
+	if !slices.Equal(models[0].Efforts, wantEfforts) {
+		t.Fatalf("efforts = %v, want %v", models[0].Efforts, wantEfforts)
+	}
+	if requests != 1 {
+		t.Fatalf("provider requests = %d, want one validation response reused for discovery", requests)
 	}
 }

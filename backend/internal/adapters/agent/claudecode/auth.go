@@ -409,7 +409,18 @@ func ProviderModels(ctx context.Context, env map[string]string) ([]ports.AgentMo
 	// requires running the CLI first to resolve the intended provider.
 	probeCtx, cancel := context.WithTimeout(ctx, agentcreds.DefaultTimeout)
 	defer cancel()
-	result := claudeValidator().ValidateLocal(probeCtx, "", opts)
+	result := agentcreds.Result{}
+	if provider, ok := agentcreds.ResolveProvider("", opts); ok {
+		if cred, found := agentcreds.ResolveLocal(probeCtx, provider, opts); found {
+			if cached, hit := claudeAuthCache.Get(claudeAgentID, cred.Fingerprint()); hit &&
+				cached.State == agentcreds.StateValid && len(cached.Models) > 0 {
+				result = cached
+			}
+		}
+	}
+	if result.State == "" {
+		result = claudeValidator().ValidateLocal(probeCtx, "", opts)
+	}
 	if result.State != agentcreds.StateValid {
 		return nil, fmt.Errorf("claude-code: model discovery: %s", result.Detail)
 	}
