@@ -3,16 +3,19 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
 type sendOptions struct {
 	session string
 	message string
+	steer   bool
 }
 
 // sendAPIRequest mirrors the daemon's SendSessionMessageRequest body for
@@ -20,6 +23,29 @@ type sendOptions struct {
 // import httpd.
 type sendAPIRequest struct {
 	Message string `json:"message"`
+}
+
+// The steering DTOs mirror the daemon conversation API without coupling the
+// thin CLI to the HTTP controller package.
+type steerAPIRequest struct {
+	Text            string `json:"text"`
+	ClientMessageID string `json:"clientMessageId"`
+}
+
+type steerAPIResponse struct {
+	ProviderTurnID string `json:"providerTurnId"`
+}
+
+type chatSendAPIRequest struct {
+	Text            string `json:"text"`
+	ClientMessageID string `json:"clientMessageId"`
+}
+
+type chatSendAPIResponse struct {
+	TurnID         string `json:"turnId"`
+	ProviderTurnID string `json:"providerTurnId"`
+	State          string `json:"state"`
+	Duplicate      bool   `json:"duplicate"`
 }
 
 func newSendCommand(ctx *commandContext) *cobra.Command {
@@ -34,6 +60,7 @@ func newSendCommand(ctx *commandContext) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&opts.session, "session", "", "Session id (required)")
 	cmd.Flags().StringVar(&opts.message, "message", "", "Message body (required)")
+	cmd.Flags().BoolVar(&opts.steer, "steer", false, "Steer an active Chat turn, or start the next turn when idle")
 	return cmd
 }
 
@@ -52,6 +79,43 @@ func (c *commandContext) sendMessage(ctx context.Context, opts sendOptions) erro
 
 	// PathEscape: session ids are already "-"/digit safe, but may later come
 	// from sanitized issue refs; keep the URL well-formed regardless.
-	path := "sessions/" + url.PathEscape(session) + "/send"
-	return c.postJSON(ctx, path, sendAPIRequest{Message: message}, nil)
+	path := "sessions/" + url.PathEscape(session)
+	if !opts.steer {
+		return c.postJSON(ctx, path+"/send", sendAPIRequest{Message: message}, nil)
+	}
+	return c.steerMessage(ctx, path, message)
+}
+
+func (c *commandContext) steerMessage(ctx context.Context, sessionPath, message string) error {
+	clientMessageID := uuid.NewString()
+	var steered steerAPIResponse
+	err := c.postJSON(ctx, sessionPath+"/conversation/steer", steerAPIRequest{
+		Text: message, ClientMessageID: clientMessageID,
+	}, &steered)
+	if err == nil {
+		_, _ = fmt.Fprintf(c.deps.Out,
+			"Steering accepted by provider for active turn %s; agent action is not confirmed.\n",
+			steered.ProviderTurnID)
+		return nil
+	}
+
+	var responseErr apiResponseError
+	if !errors.As(err, &responseErr) || responseErr.ErrorBody.Code != "CHAT_NO_ACTIVE_TURN" {
+		return err
+	}
+
+	var sent chatSendAPIResponse
+	if err := c.postJSON(ctx, sessionPath+"/conversation/messages", chatSendAPIRequest{
+		Text: message, ClientMessageID: clientMessageID,
+	}, &sent); err != nil {
+		return err
+	}
+	if sent.Duplicate {
+		_, _ = fmt.Fprintln(c.deps.Out, "Message was already accepted; delivery state is unchanged.")
+		return nil
+	}
+	_, _ = fmt.Fprintf(c.deps.Out,
+		"No active turn to steer. Message accepted as a normal Chat turn in %s state; provider delivery is not confirmed.\n",
+		sent.State)
+	return nil
 }

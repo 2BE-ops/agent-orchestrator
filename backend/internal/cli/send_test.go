@@ -84,6 +84,145 @@ func TestSend_Success(t *testing.T) {
 	}
 }
 
+func TestSend_SteerActiveTurnUsesProviderSteeringWithoutQueueing(t *testing.T) {
+	t.Setenv("AO_SESSION_ID", "source-2")
+	cfg := setConfigEnv(t)
+	var paths, bodies []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/internal/") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		paths = append(paths, r.URL.Path)
+		raw, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(raw))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, `{"providerTurnId":"provider-turn-1","activityId":"activity-1"}`)
+	}))
+	t.Cleanup(srv.Close)
+	writeRunFileFor(t, cfg, srv)
+
+	out, errOut, err := executeCLI(t, Deps{ProcessAlive: func(int) bool { return true }},
+		"send", "--session", "demo-1", "--steer", "--message", "correct course")
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr=%s", err, errOut)
+	}
+	if len(paths) != 1 || paths[0] != "/api/v1/sessions/demo-1/conversation/steer" {
+		t.Fatalf("paths = %v, want one steer request", paths)
+	}
+	var req steerAPIRequest
+	if err := json.Unmarshal([]byte(bodies[0]), &req); err != nil {
+		t.Fatal(err)
+	}
+	if req.Text != "[from source-2] correct course" || req.ClientMessageID == "" {
+		t.Errorf("request = %+v", req)
+	}
+	if !strings.Contains(out, "accepted by provider") || !strings.Contains(out, "action is not confirmed") {
+		t.Errorf("output = %q", out)
+	}
+}
+
+func TestSend_SteerIdleStartsOneNormalChatTurn(t *testing.T) {
+	t.Setenv("AO_SESSION_ID", "")
+	cfg := setConfigEnv(t)
+	var paths, ids []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/internal/") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		paths = append(paths, r.URL.Path)
+		var req struct {
+			Text string `json:"text"`
+			ID   string `json:"clientMessageId"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		ids = append(ids, req.ID)
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/steer") {
+			w.WriteHeader(http.StatusConflict)
+			_, _ = io.WriteString(w, `{"error":"conflict","code":"CHAT_NO_ACTIVE_TURN","message":"idle"}`)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, `{"turnId":"turn-2","state":"running","duplicate":false}`)
+	}))
+	t.Cleanup(srv.Close)
+	writeRunFileFor(t, cfg, srv)
+
+	out, errOut, err := executeCLI(t, Deps{ProcessAlive: func(int) bool { return true }},
+		"send", "--session", "demo-1", "--steer", "--message", "next work")
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr=%s", err, errOut)
+	}
+	wantPaths := []string{
+		"/api/v1/sessions/demo-1/conversation/steer",
+		"/api/v1/sessions/demo-1/conversation/messages",
+	}
+	if strings.Join(paths, ",") != strings.Join(wantPaths, ",") {
+		t.Fatalf("paths = %v, want %v", paths, wantPaths)
+	}
+	if len(ids) != 2 || ids[0] == "" || ids[0] != ids[1] {
+		t.Fatalf("delivery ids = %v, want one stable non-empty id", ids)
+	}
+	if !strings.Contains(out, "normal Chat turn in running state") || !strings.Contains(out, "not confirmed") {
+		t.Errorf("output = %q", out)
+	}
+}
+
+func TestSend_SteerUnsupportedDoesNotSilentlyQueue(t *testing.T) {
+	cfg := setConfigEnv(t)
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/internal/") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_, _ = io.WriteString(w, `{"error":"conflict","code":"CHAT_STEER_UNSUPPORTED","message":"cannot steer"}`)
+	}))
+	t.Cleanup(srv.Close)
+	writeRunFileFor(t, cfg, srv)
+
+	_, _, err := executeCLI(t, Deps{ProcessAlive: func(int) bool { return true }},
+		"send", "--session", "demo-1", "--steer", "--message", "correction")
+	if err == nil || !strings.Contains(err.Error(), "CHAT_STEER_UNSUPPORTED") {
+		t.Fatalf("err = %v, want explicit unsupported error", err)
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, unsupported steer must not queue", calls)
+	}
+}
+
+func TestSend_SteerProviderFailureDoesNotQueue(t *testing.T) {
+	cfg := setConfigEnv(t)
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/internal/") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = io.WriteString(w, `{"error":"provider","code":"CHAT_PROVIDER_FAILED","message":"provider failed"}`)
+	}))
+	t.Cleanup(srv.Close)
+	writeRunFileFor(t, cfg, srv)
+
+	_, _, err := executeCLI(t, Deps{ProcessAlive: func(int) bool { return true }},
+		"send", "--session", "demo-1", "--steer", "--message", "correction")
+	if err == nil || !strings.Contains(err.Error(), "CHAT_PROVIDER_FAILED") {
+		t.Fatalf("err = %v, want provider failure", err)
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, failed steer must not queue", calls)
+	}
+}
+
 func TestSend_PrefixesMessageWithSenderSessionID(t *testing.T) {
 	t.Setenv("AO_SESSION_ID", "aa-47")
 	cfg := setConfigEnv(t)
