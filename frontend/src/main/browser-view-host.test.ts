@@ -573,7 +573,7 @@ function setupTabHost(
 	// localhost dev server — every view's loadURL checks this shared set.
 	const failNavigationTo = new Set<string>();
 	const makeElectronSession = () => ({
-		fetch: vi.fn(async () => ({ ok: false })),
+		fetch: vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: false } as Response)),
 		setPermissionCheckHandler: vi.fn(),
 		setPermissionRequestHandler: vi.fn(),
 		webRequest: {
@@ -1367,7 +1367,10 @@ describe("browser profile partitions and replacement", () => {
 			{ url: "https://github.com/openai", title: "OpenAI" },
 		]);
 		await expect(named.invoke("browser:history:favicon", { viewId: namedNav.viewId, url: "https://github.com/openai" })).resolves.toBeUndefined();
-		expect(named.views[0]!.webContents.session.fetch).toHaveBeenCalledWith("https://github.com/favicon.ico");
+		expect(named.views[0]!.webContents.session.fetch).toHaveBeenCalledWith(
+			"https://github.com/favicon.ico",
+			{ signal: expect.objectContaining({ aborted: false }) },
+		);
 
 		const temporary = setupTabHost(undefined, false, undefined, history);
 		const temporaryNav = (await temporary.invoke("browser:ensure", "worker-2")) as BrowserNavState;
@@ -1378,6 +1381,62 @@ describe("browser profile partitions and replacement", () => {
 		);
 		expect(await temporary.invoke("browser:history:suggest", { viewId: temporaryNav.viewId, query: "example" })).toEqual([]);
 		expect(history.record).toHaveBeenCalledTimes(1);
+	});
+
+	it("bounds and times out history favicon downloads", async () => {
+		const named = setupTabHost(fakeBrowserProfileStore(profile, { "worker-1": profile.id }));
+		const namedNav = (await named.invoke("browser:ensure", "worker-1")) as BrowserNavState;
+		const fetch = named.views[0]!.webContents.session.fetch;
+
+		const responseCancel = vi.fn(async () => undefined);
+		fetch.mockResolvedValueOnce({
+			ok: true,
+			headers: new Headers({ "content-length": String(256 * 1024 + 1) }),
+			body: { cancel: responseCancel },
+		} as unknown as Response);
+		await expect(named.invoke("browser:history:favicon", {
+			viewId: namedNav.viewId,
+			url: "https://declared-too-large.example/icon",
+		})).resolves.toBeUndefined();
+		expect(responseCancel).toHaveBeenCalledOnce();
+
+		const readerCancel = vi.fn(async () => undefined);
+		const releaseLock = vi.fn();
+		fetch.mockResolvedValueOnce({
+			ok: true,
+			headers: new Headers(),
+			body: {
+				getReader: () => ({
+					read: vi.fn(async () => ({ done: false, value: new Uint8Array(256 * 1024 + 1) })),
+					cancel: readerCancel,
+					releaseLock,
+				}),
+			},
+		} as unknown as Response);
+		await expect(named.invoke("browser:history:favicon", {
+			viewId: namedNav.viewId,
+			url: "https://stream-too-large.example/icon",
+		})).resolves.toBeUndefined();
+		expect(readerCancel).toHaveBeenCalledOnce();
+		expect(releaseLock).toHaveBeenCalledOnce();
+
+		vi.useFakeTimers();
+		try {
+			let requestSignal: AbortSignal | undefined;
+			fetch.mockImplementationOnce((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
+				requestSignal = init.signal as AbortSignal;
+				requestSignal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+			}));
+			const favicon = named.invoke("browser:history:favicon", {
+				viewId: namedNav.viewId,
+				url: "https://never-responds.example/icon",
+			});
+			await vi.advanceTimersByTimeAsync(5_000);
+			await expect(favicon).resolves.toBeUndefined();
+			expect(requestSignal?.aborted).toBe(true);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("cleans the old runtime before rebuilding tabs and preserves hardening on new views", async () => {

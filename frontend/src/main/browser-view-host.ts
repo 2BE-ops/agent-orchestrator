@@ -482,6 +482,7 @@ const MAX_BROWSER_SIGNALS = MAX_NETWORK_REQUESTS;
 const MAX_BROWSER_SIGNAL_BYTES = 16 * 1024;
 const FAVICON_SIZE = 32;
 const MAX_FAVICON_BYTES = 256 * 1024;
+const FAVICON_REQUEST_TIMEOUT_MS = 5_000;
 const DEFAULT_NATIVE_DEVTOOLS_PLACEMENT: BrowserDevToolsPlacement = "right";
 const MAX_EXTERNAL_TEXT_BYTES = 1 << 20;
 // Annotation submit must never feel laggy: capture is best-effort and bounded
@@ -2764,6 +2765,8 @@ async function fetchFavicon(entry: BrowserEntry, url: string): Promise<string | 
 }
 
 async function fetchFaviconFromSession(tabSession: Session, url: string): Promise<string | undefined> {
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), FAVICON_REQUEST_TIMEOUT_MS);
 	try {
 		// Some sites inline a tiny favicon as a data: URI rather than serving a
 		// file — decode it directly instead of rejecting it as an unsupported
@@ -2775,16 +2778,46 @@ async function fetchFaviconFromSession(tabSession: Session, url: string): Promis
 		}
 		const parsed = new URL(url);
 		if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return undefined;
-		const response = await tabSession.fetch(url);
+		const response = await tabSession.fetch(url, { signal: controller.signal });
 		if (!response.ok) return undefined;
-		const buffer = Buffer.from(await response.arrayBuffer());
-		if (buffer.byteLength === 0 || buffer.byteLength > MAX_FAVICON_BYTES) return undefined;
+		const buffer = await readBoundedResponseBody(response, MAX_FAVICON_BYTES);
+		if (!buffer || buffer.byteLength === 0) return undefined;
 		const image = nativeImage.createFromBuffer(buffer);
 		if (image.isEmpty()) return undefined;
 		return image.resize({ width: FAVICON_SIZE, height: FAVICON_SIZE, quality: "good" }).toDataURL();
 	} catch {
 		return undefined;
+	} finally {
+		clearTimeout(timeout);
 	}
+}
+
+async function readBoundedResponseBody(response: Response, maxBytes: number): Promise<Buffer | undefined> {
+	const declaredLength = Number(response.headers.get("content-length"));
+	if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+		await response.body?.cancel().catch(() => undefined);
+		return undefined;
+	}
+	const reader = response.body?.getReader();
+	if (!reader) return undefined;
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			if (!value) continue;
+			total += value.byteLength;
+			if (total > maxBytes) {
+				await reader.cancel().catch(() => undefined);
+				return undefined;
+			}
+			chunks.push(value);
+		}
+	} finally {
+		reader.releaseLock();
+	}
+	return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), total);
 }
 
 function cancelAnnotation(
