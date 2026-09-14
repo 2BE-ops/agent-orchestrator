@@ -38,8 +38,12 @@ func New(store Store, generator NarrativeGenerator) *Service {
 // Get reads the current projection and regenerates it when requested or missing.
 func (s *Service) Get(ctx context.Context, projectID domain.ProjectID, refresh bool) (domain.ProjectSummary, error) {
 	lock, _ := s.locks.LoadOrStore(projectID, &sync.Mutex{})
-	lock.(*sync.Mutex).Lock()
-	defer lock.(*sync.Mutex).Unlock()
+	projectLock, ok := lock.(*sync.Mutex)
+	if !ok {
+		return domain.ProjectSummary{}, fmt.Errorf("project %s summary lock has unexpected type", projectID)
+	}
+	projectLock.Lock()
+	defer projectLock.Unlock()
 
 	projectRecord, ok, err := s.store.GetProject(ctx, string(projectID))
 	if err != nil {
