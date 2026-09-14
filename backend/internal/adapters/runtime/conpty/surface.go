@@ -3,7 +3,6 @@ package conpty
 import (
 	"io"
 	"strings"
-	"sync"
 
 	vt "github.com/unixshells/vt-go"
 )
@@ -14,7 +13,6 @@ import (
 // interface handoff.
 type renderedSurface struct {
 	emulator *vt.SafeEmulator
-	writeMu  sync.Mutex
 	titles   oscTitleFilter
 }
 
@@ -30,8 +28,6 @@ func newRenderedSurface(cols, rows int) *renderedSurface {
 }
 
 func (s *renderedSurface) Write(p []byte) {
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
 	_, _ = s.emulator.Write(s.titles.filter(p))
 }
 

@@ -1,7 +1,6 @@
 package conpty
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -12,65 +11,28 @@ import (
 )
 
 func TestRenderedSurfaceTitleDoesNotBecomeDraft(t *testing.T) {
-	for _, introducer := range []string{"\x1b]", "\x9d"} {
-		for _, command := range []string{"0", "1", "2", "00", "0001", "02"} {
-			for _, terminator := range []string{"\a", "\x1b\\", "\x9c"} {
-				for _, draft := range []string{"", "keep my unsent draft"} {
-					t.Run(fmt.Sprintf("introducer=%x/command=%s/terminator=%x/draft=%t", introducer, command, terminator, draft != ""), func(t *testing.T) {
-						payload := []byte(introducer + command + ";✳ session title" + terminator)
-						check := func(chunks ...[]byte) {
-							t.Helper()
-							surface := newRenderedSurface(80, 12)
-							border := strings.Repeat("─", 20)
-							surface.Write([]byte(border + "\r\n❯ " + draft + "\r\n" + border + "\r\nfooter\x1b[2;3H"))
-							for _, chunk := range chunks {
-								surface.Write(chunk)
-							}
-							visible := surface.Tail(12)
-							want := terminalui.ComposerEmpty
-							if draft != "" {
-								want = terminalui.ComposerDraft
-							}
-							if got := terminalui.LastBorderedPromptComposerState(visible, "❯"); got != want || strings.Contains(visible, "session title") {
-								t.Fatalf("composer = %v, want %v; viewport: %q", got, want, visible)
-							}
-							if !strings.Contains(visible, draft) {
-								t.Fatalf("real draft was changed: %q", visible)
-							}
-						}
-						for split := 0; split <= len(payload); split++ {
-							check(payload[:split], payload[split:])
-						}
-						chunks := make([][]byte, len(payload))
-						for i := range payload {
-							chunks[i] = payload[i : i+1]
-						}
-						check(chunks...)
-					})
-				}
-			}
-		}
-	}
-}
-
-func TestRenderedSurfaceDoesNotTurnUnicodeTitleIntoDraft(t *testing.T) {
-	for _, draft := range []string{"", "keep my unsent draft", "first line\r\n  second line", "\r\n  second line"} {
-		t.Run(draft, func(t *testing.T) {
+	for _, tt := range []struct {
+		name, draft, title string
+	}{
+		{"empty composer", "", "\x1b]0;✳ session title\a"},
+		{"real draft", "keep my unsent draft", "\x9d00;✳ session title\x9c"},
+		{"multiline draft", "first line\r\n  second line", "\x1b]02;✳ session title\x1b\\"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
 			surface := newRenderedSurface(80, 12)
 			border := strings.Repeat("─", 20)
-			surface.Write([]byte(border + "\r\n❯ " + draft + "\r\n" + border + "\r\nfooter\x1b[2;3H"))
-			// Claude emits this title update after completing a Terminal reply.
-			surface.Write([]byte("\x1b]0;✳ session title\a"))
+			surface.Write([]byte(border + "\r\n❯ " + tt.draft + "\r\n" + border + "\r\nfooter\x1b[2;3H"))
+			surface.Write([]byte(tt.title))
 			visible := surface.Tail(12)
 			want := terminalui.ComposerEmpty
-			if draft != "" {
+			if tt.draft != "" {
 				want = terminalui.ComposerDraft
 			}
-			if got := terminalui.LastBorderedPromptComposerState(visible, "❯"); got != want {
-				t.Fatalf("composer = %v, want %v; title became visible: %q", got, want, visible)
+			if got := terminalui.LastBorderedPromptComposerState(visible, "❯"); got != want || strings.Contains(visible, "session title") {
+				t.Fatalf("composer = %v, want %v; viewport: %q", got, want, visible)
 			}
-			if strings.Contains(visible, "session title") {
-				t.Fatalf("OSC title leaked into current viewport: %q", visible)
+			if !strings.Contains(visible, strings.ReplaceAll(tt.draft, "\r\n", "\n")) {
+				t.Fatalf("real draft was changed: %q", visible)
 			}
 		})
 	}

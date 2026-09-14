@@ -50,25 +50,15 @@ func (f *oscTitleFilter) filter(p []byte) []byte {
 			switch {
 			case b >= '0' && b <= '9':
 				out = append(out, b)
-				// Only 0, 1, and 2 are titles. Saturating all larger
-				// values avoids overflow while accepting any number of
-				// leading zeros without buffering the command.
-				if f.commandValue <= 2 {
-					f.commandValue = f.commandValue*10 + int(b-'0')
-					if f.commandValue > 2 {
-						f.commandValue = 3
-					}
-				}
+				f.commandValue = min(3, f.commandValue*10+int(b-'0'))
 				continue
 			case b == ';':
 				out = append(out, b)
 				f.inCommand = false
 				f.inTitle = f.commandValue <= 2
-				f.commandValue = 0
 				continue
 			default:
 				f.inCommand = false
-				f.commandValue = 0
 			}
 		}
 
@@ -89,9 +79,6 @@ func (f *oscTitleFilter) filter(p []byte) []byte {
 			f.prefix = f.prefix[:0]
 			f.inCommand = true
 			f.commandValue = int(b - '0')
-			if f.commandValue > 2 {
-				f.commandValue = 3
-			}
 			continue
 		}
 		out = append(out, f.prefix...)
