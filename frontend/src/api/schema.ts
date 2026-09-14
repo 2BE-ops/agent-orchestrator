@@ -4050,7 +4050,7 @@ export interface components {
         };
         SessionImportDestination: {
             /** @enum {string} */
-            action: "import" | "add_project" | "open" | "unavailable";
+            action: "import" | "add_project" | "standalone" | "open" | "unavailable";
             confirmationToken?: string;
             id: string;
             path?: string;
@@ -4086,7 +4086,6 @@ export interface components {
         SessionImportSelectedInput: {
             addProject: boolean;
             confirmationToken: string;
-            locateFolder?: string;
         };
         SessionImportSelectedResult: {
             alreadyImported: boolean;
@@ -8259,9 +8258,7 @@ export interface operations {
     };
     getSessionImportDestination: {
         parameters: {
-            query?: {
-                locateFolder?: string;
-            };
+            query?: never;
             header?: never;
             path: {
                 resultId: string;

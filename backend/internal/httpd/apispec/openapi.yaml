@@ -2675,10 +2675,6 @@ paths:
         required: true
         schema:
           type: string
-      - in: query
-        name: locateFolder
-        schema:
-          type: string
       responses:
         "200":
           content:
@@ -11349,6 +11345,7 @@ components:
           enum:
           - import
           - add_project
+          - standalone
           - open
           - unavailable
           type: string
@@ -11439,8 +11436,6 @@ components:
         addProject:
           type: boolean
         confirmationToken:
-          type: string
-        locateFolder:
           type: string
       required:
       - confirmationToken

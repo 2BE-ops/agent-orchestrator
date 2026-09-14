@@ -2577,8 +2577,3 @@ type SessionSearchQuery struct {
 type SessionSearchResultParam struct {
 	ResultID string `path:"resultId"`
 }
-
-// SessionSearchDestinationQuery optionally locates another checkout of the same repository.
-type SessionSearchDestinationQuery struct {
-	LocateFolder string `query:"locateFolder,omitempty"`
-}

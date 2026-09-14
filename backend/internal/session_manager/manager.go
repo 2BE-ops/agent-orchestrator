@@ -1370,7 +1370,7 @@ func resolveSpawnDiffBase(ctx context.Context, root, defaultBranch string) (stri
 // Import fallback branches are unique to the conversation and data directory.
 // Separate isolated databases can allocate the same session id in a shared repo.
 func (m *Manager) importSpawnBranch(cfg ports.SpawnConfig, project domain.ProjectRecord, id domain.SessionID) string {
-	branch := DefaultSpawnBranch(id, cfg.Kind, sessionPrefix(project), project.Kind.WithDefault(), m.dataDir)
+	branch := DefaultSpawnBranch(id, cfg.Kind, sessionPrefix(project), projectKindForSession(project, cfg.ProjectID), m.dataDir)
 	if branch == "" || cfg.ResumeNativeSession == nil {
 		return branch
 	}

@@ -67,12 +67,30 @@ func (s *Store) CreateSessions(ctx context.Context, records []domain.SessionReco
 			num, ok := next[rec.ProjectID]
 			if !ok {
 				var err error
-				num, err = q.NextSessionNum(ctx, optionalProjectID(rec.ProjectID))
+				if rec.ProjectID == "" {
+					num, err = q.NextStandaloneSessionNum(ctx)
+				} else {
+					num, err = q.NextSessionNum(ctx, optionalProjectID(rec.ProjectID))
+				}
 				if err != nil {
 					return err
 				}
 			}
-			rec.ID = domain.SessionID(fmt.Sprintf("%s-%d", rec.ProjectID, num))
+			prefix := string(rec.ProjectID)
+			if prefix == "" {
+				prefix = "standalone"
+			}
+			for {
+				rec.ID = domain.SessionID(fmt.Sprintf("%s-%d", prefix, num))
+				exists, err := q.SessionIDExists(ctx, rec.ID)
+				if err != nil {
+					return err
+				}
+				if !exists {
+					break
+				}
+				num++
+			}
 			if err := q.InsertSession(ctx, recordToInsert(rec, num)); err != nil {
 				return err
 			}

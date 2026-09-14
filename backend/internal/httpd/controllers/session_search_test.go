@@ -31,7 +31,7 @@ func (f *searchAPIFake) Search(context.Context, string, int, string) (sessionimp
 func (f *searchAPIFake) RefreshSearch() sessionimportsvc.SearchStatus {
 	return sessionimportsvc.SearchStatus{Running: true, Errors: []string{}}
 }
-func (f *searchAPIFake) Destination(context.Context, string, string) (sessionimportsvc.Destination, error) {
+func (f *searchAPIFake) Destination(context.Context, string) (sessionimportsvc.Destination, error) {
 	return sessionimportsvc.Destination{Action: "unavailable"}, f.err
 }
 func (f *searchAPIFake) ImportSelected(context.Context, string, sessionimportsvc.SelectedInput) (sessionimportsvc.SelectedResult, error) {

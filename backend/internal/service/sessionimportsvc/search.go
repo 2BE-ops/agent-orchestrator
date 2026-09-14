@@ -58,7 +58,7 @@ type Destination struct {
 	ID                string `json:"id"`
 	Title             string `json:"title"`
 	Provider          string `json:"provider"`
-	Action            string `json:"action" enum:"import,add_project,open,unavailable"`
+	Action            string `json:"action" enum:"import,add_project,standalone,open,unavailable"`
 	ProjectID         string `json:"projectId,omitempty"`
 	SessionID         string `json:"sessionId,omitempty"`
 	Path              string `json:"path,omitempty"`
@@ -71,7 +71,6 @@ type Destination struct {
 type SelectedInput struct {
 	ConfirmationToken string `json:"confirmationToken"`
 	AddProject        bool   `json:"addProject"`
-	LocateFolder      string `json:"locateFolder,omitempty"`
 }
 
 // SelectedResult reports a dormant import, including retryable partial registration.
@@ -355,7 +354,7 @@ func (s *Service) selected(ctx context.Context, id string) (sessionimport.Import
 }
 
 // Destination previews a selected source or returns its already-imported session.
-func (s *Service) Destination(ctx context.Context, id, locate string) (Destination, error) {
+func (s *Service) Destination(ctx context.Context, id string) (Destination, error) {
 	if existing, ok, err := s.existingSelected(ctx, id); err != nil {
 		return Destination{}, err
 	} else if ok {
@@ -389,38 +388,30 @@ func (s *Service) Destination(ctx context.Context, id, locate string) (Destinati
 		}
 		return Destination{ID: id, Action: "unavailable", Reason: "The source history is unavailable. Restore its original location and refresh."}, nil
 	}
-	return s.destination(ctx, id, target, locate)
+	return s.destination(ctx, id, target)
 }
-func (s *Service) destination(ctx context.Context, id string, target sessionimport.ImportableSession, locate string) (Destination, error) {
+func (s *Service) destination(ctx context.Context, id string, target sessionimport.ImportableSession) (Destination, error) {
 	d := Destination{ID: id, Title: target.Title, Provider: string(target.Provider), SourceCWD: target.CWD, Action: "unavailable"}
+	standalone := func(reason string) (Destination, error) {
+		d.Action = "standalone"
+		d.Reason = reason
+		d.ProjectID = ""
+		d.Path = ""
+		d.ConfirmationToken = importindex.ID(id, "standalone", "")
+		return d, nil
+	}
 	cwd := target.CWD
 	if !filepath.IsAbs(cwd) {
-		d.Reason = "This conversation has no repository working directory. Projectless import is not available yet."
-		return d, nil
+		return standalone("This conversation will be imported under Ad hoc agents because it has no repository working directory.")
 	}
 	common := gitCommonDir(cwd)
 	if _, err := os.Stat(cwd); err != nil {
 		common = target.RepositoryCommonDir
-		if locate == "" {
-			d.Reason = "The original working directory is missing. Locate another checkout of the same repository."
-			return d, nil
-		}
+		return standalone("This conversation will be imported under Ad hoc agents because its original working directory is missing.")
 	}
 	if common == "" {
-		d.Reason = "The source folder is not an available Git repository. Restore the original checkout and refresh."
-		return d, nil
+		return standalone("This conversation will be imported under Ad hoc agents because its source folder is not a Git repository.")
 	}
-	if locate != "" {
-		if !filepath.IsAbs(locate) || gitCommonDir(locate) != common {
-			d.Reason = "Choose a folder in the same repository as the source conversation."
-			return d, nil
-		}
-		if info, err := os.Stat(locate); err != nil || !info.IsDir() {
-			d.Reason = "Choose an existing repository folder."
-			return d, nil //nolint:nilerr // An invalid user-selected folder is an unavailable destination, not an API failure.
-		}
-	}
-
 	projects, err := s.projects.List(ctx)
 	if err != nil {
 		return d, err
@@ -440,13 +431,11 @@ func (s *Service) destination(ctx context.Context, id string, target sessionimpo
 		d.Action = "import"
 	} else { // Linked worktrees share the owning checkout's .git directory.
 		if filepath.Base(common) != ".git" {
-			d.Reason = "The repository uses a separate Git directory. Register its main checkout first."
-			return d, nil
+			return standalone("This conversation will be imported under Ad hoc agents because its owning Git checkout is unavailable.")
 		}
 		d.Path = filepath.Dir(common)
 		if gitCommonDir(d.Path) != common {
-			d.Reason = "The owning checkout is missing. Restore it before importing."
-			return d, nil
+			return standalone("This conversation will be imported under Ad hoc agents because its owning Git checkout is missing.")
 		}
 		d.Action = "add_project"
 	}
@@ -469,7 +458,7 @@ func (s *Service) ImportSelected(ctx context.Context, id string, in SelectedInpu
 	if err != nil {
 		return SelectedResult{}, err
 	}
-	d, err := s.destination(ctx, id, target, in.LocateFolder)
+	d, err := s.destination(ctx, id, target)
 	if err != nil {
 		return SelectedResult{}, err
 	}

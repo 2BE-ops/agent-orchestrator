@@ -61,3 +61,33 @@ func TestImportedSourceBranchAndPermissionsRoundTripTogether(t *testing.T) {
 		t.Fatalf("metadata did not survive batch storage: %+v", rows[0].Metadata)
 	}
 }
+
+func TestCreateSessionsAvoidsProjectAndStandaloneIDCollisions(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	seedProject(t, s, "standalone")
+
+	standalone := sampleRecord("")
+	standalone.Kind = domain.KindWorker
+	first, err := s.CreateSession(ctx, standalone)
+	if err != nil || first.ID != "standalone-1" {
+		t.Fatalf("create standalone session: %+v %v", first, err)
+	}
+
+	projectSession := sampleRecord("standalone")
+	rows, err := s.CreateSessions(ctx, []domain.SessionRecord{projectSession, projectSession})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0].ID != "standalone-2" || rows[1].ID != "standalone-3" {
+		t.Fatalf("collision-safe project identities = %+v", rows)
+	}
+
+	moreStandalone, err := s.CreateSessions(ctx, []domain.SessionRecord{standalone})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(moreStandalone) != 1 || moreStandalone[0].ID != "standalone-4" {
+		t.Fatalf("collision-safe standalone identity = %+v", moreStandalone)
+	}
+}

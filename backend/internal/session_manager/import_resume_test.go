@@ -40,3 +40,29 @@ func TestImportedHistoryResumeFailurePreservesHistoryAndReusesWorkspace(t *testi
 		t.Fatalf("retry duplicated workspace or sent a prompt: branches=%v, turns=%v", ws.createBranches, launcher.turns)
 	}
 }
+
+func TestStandaloneImportedHistoryResumeCreatesPlainWorkspace(t *testing.T) {
+	launcher := &recordingLauncher{}
+	m, st, _ := newChatManager(launcher)
+	ws := m.workspace.(*fakeWorkspace)
+	rec := domain.SessionRecord{
+		ID: "standalone-1", Kind: domain.KindWorker,
+		Harness: domain.HarnessCodex, Mode: domain.SessionModeChat,
+		Activity: domain.Activity{State: domain.ActivityExited},
+		Metadata: domain.SessionMetadata{
+			ProviderConversationID: "native-standalone",
+			NativeTranscriptPath:   "/home/user/.codex/archived_sessions/history.jsonl",
+		},
+	}
+	st.sessions[rec.ID] = rec
+	if _, err := m.ResumeAgentWithMode(context.Background(), rec.ID); err != nil {
+		t.Fatal(err)
+	}
+	got := st.sessions[rec.ID]
+	if !got.IsStandalone() || got.Metadata.WorkspacePath == "" || got.Metadata.Branch != "" {
+		t.Fatalf("resumed standalone import = %+v", got)
+	}
+	if len(ws.createBranches) != 1 || ws.createBranches[0] != "" {
+		t.Fatalf("standalone resume created Git branch: %v", ws.createBranches)
+	}
+}

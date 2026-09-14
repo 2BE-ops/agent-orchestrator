@@ -45,3 +45,35 @@ func TestRegisterImportRejectsMissingProjectBeforeWriting(t *testing.T) {
 		t.Fatal("invalid import created a row")
 	}
 }
+
+func TestRegisterImportAllowsDormantStandaloneHistory(t *testing.T) {
+	st := newFakeStore()
+	svc := NewWithDeps(Deps{Store: st, Clock: time.Now})
+	session, _, _, err := svc.RegisterImport(context.Background(), ports.SpawnConfig{
+		Kind: domain.KindWorker, Harness: domain.HarnessClaudeCode, DisplayName: "Imported history",
+		ResumeNativeSession: &ports.ResumeNativeSession{
+			Provider: domain.HarnessClaudeCode, NativeSessionID: "native-standalone", TranscriptPath: "/history/standalone.jsonl",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.ProjectID != "" || !session.IsStandalone() || session.Metadata.WorkspacePath != "" {
+		t.Fatalf("standalone dormant import = %+v", session.SessionRecord)
+	}
+	if session.Metadata.ProviderConversationID != "native-standalone" || len(st.sessions) != 1 {
+		t.Fatalf("standalone import identity was not preserved: %+v", session.SessionRecord)
+	}
+}
+
+func TestRegisterImportRejectsStandaloneOrchestrator(t *testing.T) {
+	st := newFakeStore()
+	svc := NewWithDeps(Deps{Store: st, Clock: time.Now})
+	_, _, _, err := svc.RegisterImport(context.Background(), ports.SpawnConfig{
+		Kind:                domain.KindOrchestrator,
+		ResumeNativeSession: &ports.ResumeNativeSession{NativeSessionID: "native", TranscriptPath: "/history/native.jsonl"},
+	})
+	if err == nil || len(st.sessions) != 0 {
+		t.Fatalf("standalone orchestrator import err=%v sessions=%d", err, len(st.sessions))
+	}
+}

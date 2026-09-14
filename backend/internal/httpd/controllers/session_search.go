@@ -17,7 +17,7 @@ import (
 type SessionSearchService interface {
 	Search(context.Context, string, int, string) (sessionimportsvc.SearchPage, error)
 	RefreshSearch() sessionimportsvc.SearchStatus
-	Destination(context.Context, string, string) (sessionimportsvc.Destination, error)
+	Destination(context.Context, string) (sessionimportsvc.Destination, error)
 	ImportSelected(context.Context, string, sessionimportsvc.SelectedInput) (sessionimportsvc.SelectedResult, error)
 }
 
@@ -65,7 +65,7 @@ func (c *SessionsController) importDestination(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
-	d, err := s.Destination(r.Context(), chi.URLParam(r, "resultId"), r.URL.Query().Get("locateFolder"))
+	d, err := s.Destination(r.Context(), chi.URLParam(r, "resultId"))
 	if err != nil {
 		envelope.WriteError(w, r, err)
 		return

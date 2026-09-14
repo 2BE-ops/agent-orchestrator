@@ -1,7 +1,8 @@
 // Package sessionimportsvc turns an on-disk agent conversation, discovered by
 // the sessionimport scanners, into a resumable AO chat session. It is the bridge
 // between provider transcripts and AO's session/project services: it resolves
-// the registered project the conversation ran in, then registers a dormant
+// the registered project the conversation ran in when one remains available,
+// otherwise it uses AO's standalone session model, then registers a dormant
 // chat session bound to its native transcript. Agent startup is explicit.
 package sessionimportsvc
 

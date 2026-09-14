@@ -12,8 +12,14 @@ import (
 // a checkout, or requiring credentials. Workspace ownership starts only when the
 // user explicitly resumes the imported session.
 func (s *Service) RegisterImport(ctx context.Context, cfg ports.SpawnConfig) (domain.Session, int, int, error) {
-	if _, err := s.requireProject(ctx, cfg.ProjectID); err != nil {
-		return domain.Session{}, 0, 0, err
+	if cfg.ProjectID == "" {
+		if cfg.Kind != domain.KindWorker {
+			return domain.Session{}, 0, 0, fmt.Errorf("standalone import requires a worker session")
+		}
+	} else {
+		if _, err := s.requireProject(ctx, cfg.ProjectID); err != nil {
+			return domain.Session{}, 0, 0, err
+		}
 	}
 	native := cfg.ResumeNativeSession
 	if native == nil || native.NativeSessionID == "" || native.TranscriptPath == "" {

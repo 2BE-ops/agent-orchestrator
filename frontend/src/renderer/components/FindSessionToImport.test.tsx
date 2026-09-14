@@ -86,7 +86,6 @@ describe("selected session import", () => {
 				body: {
 					confirmationToken: "confirmed",
 					addProject: false,
-					locateFolder: undefined,
 				},
 			}),
 		);
@@ -149,6 +148,55 @@ describe("selected session import", () => {
 		expect(
 			post.mock.calls.filter(([path]) => path.endsWith("/import")),
 		).toHaveLength(0);
+	});
+	it("imports and opens a repository-less result under Ad hoc agents", async () => {
+		get.mockImplementation((path: string) =>
+			Promise.resolve({
+				data: path.endsWith("destination")
+					? {
+							...destination,
+							action: "standalone",
+							projectId: undefined,
+							path: undefined,
+							reason: "This conversation will be imported under Ad hoc agents.",
+						}
+					: page,
+			}),
+		);
+		post.mockResolvedValue({
+			data: {
+				sessionId: "standalone-1",
+				alreadyImported: false,
+				projectCreated: false,
+			},
+		});
+		const onOpen = vi.fn();
+		render(<FindSessionToImport initialQuery="" onOpen={onOpen} />);
+		fireEvent.click(await screen.findByRole("option"));
+		expect(await screen.findByText(/imported under Ad hoc agents/)).toBeInTheDocument();
+		fireEvent.click(await screen.findByRole("button", { name: "Import under Ad hoc agents" }));
+		await waitFor(() => expect(onOpen).toHaveBeenCalledWith("__standalone__", "standalone-1"));
+		expect(post).toHaveBeenLastCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				body: expect.objectContaining({ addProject: false }),
+			}),
+		);
+	});
+	it("opens an already imported standalone result without a write", async () => {
+		get.mockImplementation((path: string) =>
+			Promise.resolve({
+				data: path.endsWith("destination")
+					? { ...destination, action: "open", projectId: undefined, sessionId: "standalone-1" }
+					: page,
+			}),
+		);
+		const onOpen = vi.fn();
+		render(<FindSessionToImport initialQuery="" onOpen={onOpen} />);
+		fireEvent.click(await screen.findByRole("option"));
+		fireEvent.click(await screen.findByRole("button", { name: "Open" }));
+		expect(onOpen).toHaveBeenCalledWith("__standalone__", "standalone-1");
+		expect(post.mock.calls.filter(([path]) => path.endsWith("/import"))).toHaveLength(0);
 	});
 	it.each([false, true])(
 		"ignores stale search completion (error=%s)",
@@ -232,6 +280,32 @@ describe("selected session import", () => {
 			}),
 		);
 		expect(await screen.findByRole("option")).toHaveTextContent("New result");
+	});
+	it("keeps background indexing and pending polls quiet while results are usable", async () => {
+		vi.useFakeTimers();
+		try {
+			get.mockResolvedValue({
+				data: { ...page, status: { ...page.status, running: true, scanned: 211 } },
+			});
+			render(<FindSessionToImport initialQuery="payment" onOpen={vi.fn()} />);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(10);
+			});
+			expect(screen.getByRole("option")).toBeInTheDocument();
+			expect(screen.queryByText(/Indexing histories/)).not.toBeInTheDocument();
+			const poll = deferred<object>();
+			get.mockReturnValueOnce(poll.promise);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(1600);
+			});
+			expect(screen.getByRole("option")).toBeInTheDocument();
+			expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
+			await act(async () => {
+				poll.resolve({ data: page });
+			});
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 	it("recovers automatically after a failed index poll and clears the error", async () => {
 		vi.useFakeTimers();

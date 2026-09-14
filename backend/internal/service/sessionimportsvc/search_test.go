@@ -108,7 +108,7 @@ func TestSelectedOldSmallNewProjectExplicitAndConcurrentIdempotency(t *testing.T
 		t.Fatal(page, err)
 	}
 	id := page.Results[0].ID
-	d, err := s.Destination(ctx, id, "")
+	d, err := s.Destination(ctx, id)
 	canonicalRepo, canonicalErr := filepath.EvalSymlinks(repo)
 	if canonicalErr != nil {
 		t.Fatal(canonicalErr)
@@ -145,7 +145,7 @@ func TestSelectedOldSmallNewProjectExplicitAndConcurrentIdempotency(t *testing.T
 	if err != nil || !result.AlreadyImported {
 		t.Fatal(result, err)
 	}
-	d, err = s.Destination(ctx, id, "")
+	d, err = s.Destination(ctx, id)
 	if err != nil || d.Action != "open" {
 		t.Fatal(d, err)
 	}
@@ -156,14 +156,14 @@ func TestSelectedPartialProjectRegistrationRetry(t *testing.T) {
 	refreshWait(t, s)
 	page, _ := s.Search(ctx, "", 50, "")
 	id := page.Results[0].ID
-	d, _ := s.Destination(ctx, id, "")
+	d, _ := s.Destination(ctx, id)
 	store.fail = true
 	result, err := s.ImportSelected(ctx, id, SelectedInput{ConfirmationToken: d.ConfirmationToken, AddProject: true})
 	if err != nil || !result.ProjectCreated || result.ProjectID == "" || result.Error == "" {
 		t.Fatal(result, err)
 	}
 	store.fail = false
-	d, _ = s.Destination(ctx, id, "")
+	d, _ = s.Destination(ctx, id)
 	if d.Action != "import" {
 		t.Fatal(d)
 	}
@@ -172,21 +172,59 @@ func TestSelectedPartialProjectRegistrationRetry(t *testing.T) {
 		t.Fatal(result, err, projects.creates)
 	}
 }
-func TestSelectedMissingAndUnrelatedDestination(t *testing.T) {
+func TestSelectedMissingDestinationBecomesStandalone(t *testing.T) {
 	s, _, _, _, repo := searchFixture(t)
 	refreshWait(t, s)
 	page, _ := s.Search(context.Background(), "", 50, "")
 	id := page.Results[0].ID
-	d, err := s.Destination(context.Background(), id, t.TempDir())
-	if err != nil || d.Action != "unavailable" {
-		t.Fatal(d, err)
-	}
-	if err = os.RemoveAll(repo); err != nil {
+	if err := os.RemoveAll(repo); err != nil {
 		t.Fatal(err)
 	}
-	d, err = s.Destination(context.Background(), id, "")
-	if err != nil || d.Action != "unavailable" {
+	d, err := s.Destination(context.Background(), id)
+	if err != nil || d.Action != "standalone" || d.ProjectID != "" || d.ConfirmationToken == "" {
 		t.Fatal(d, err)
+	}
+}
+
+func TestSelectedNonRepositoryImportsAsStandaloneAndRetriesIdempotently(t *testing.T) {
+	s, store, projects, path, _ := searchFixture(t)
+	nonRepo := t.TempDir()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var line map[string]any
+	if err = json.Unmarshal(raw, &line); err != nil {
+		t.Fatal(err)
+	}
+	line["cwd"] = nonRepo
+	raw, _ = json.Marshal(line)
+	if err = os.WriteFile(path, append(raw, '\n'), 0600); err != nil {
+		t.Fatal(err)
+	}
+	refreshWait(t, s)
+	page, err := s.Search(context.Background(), "ancient", 50, "")
+	if err != nil || len(page.Results) != 1 {
+		t.Fatal(page, err)
+	}
+	d, err := s.Destination(context.Background(), page.Results[0].ID)
+	if err != nil || d.Action != "standalone" || d.ProjectID != "" || d.Path != "" || d.ConfirmationToken == "" {
+		t.Fatal(d, err)
+	}
+	result, err := s.ImportSelected(context.Background(), d.ID, SelectedInput{ConfirmationToken: d.ConfirmationToken})
+	if err != nil || result.SessionID == "" || result.ProjectID != "" || result.ProjectCreated {
+		t.Fatal(result, err)
+	}
+	if projects.creates != 0 || store.creates != 1 || len(store.records) != 1 || !store.records[0].IsStandalone() {
+		t.Fatalf("projects=%d sessions=%d records=%+v", projects.creates, store.creates, store.records)
+	}
+	d, err = s.Destination(context.Background(), d.ID)
+	if err != nil || d.Action != "open" || d.ProjectID != "" || d.SessionID != result.SessionID {
+		t.Fatal(d, err)
+	}
+	retry, err := s.ImportSelected(context.Background(), d.ID, SelectedInput{})
+	if err != nil || !retry.AlreadyImported || retry.ProjectID != "" || store.creates != 1 {
+		t.Fatal(retry, err, store.creates)
 	}
 }
 
@@ -241,8 +279,8 @@ func TestRefreshCoalescesAndCancelsWithoutDeleting(t *testing.T) {
 	}
 }
 
-func TestSelectedLocateMissingSubdirectoryUsesPersistedRepository(t *testing.T) {
-	s, _, projects, path, repo := searchFixture(t)
+func TestSelectedMissingSubdirectoryImportsStandalone(t *testing.T) {
+	s, store, projects, path, repo := searchFixture(t)
 	sub := filepath.Join(repo, "removed")
 	if err := os.Mkdir(sub, 0700); err != nil {
 		t.Fatal(err)
@@ -265,12 +303,12 @@ func TestSelectedLocateMissingSubdirectoryUsesPersistedRepository(t *testing.T) 
 	if err = os.Remove(sub); err != nil {
 		t.Fatal(err)
 	}
-	d, err := s.Destination(context.Background(), page.Results[0].ID, repo)
-	if err != nil || d.Action != "add_project" {
+	d, err := s.Destination(context.Background(), page.Results[0].ID)
+	if err != nil || d.Action != "standalone" {
 		t.Fatal(d, err)
 	}
-	result, err := s.ImportSelected(context.Background(), d.ID, SelectedInput{ConfirmationToken: d.ConfirmationToken, AddProject: true, LocateFolder: repo})
-	if err != nil || result.SessionID == "" || projects.creates != 1 {
+	result, err := s.ImportSelected(context.Background(), d.ID, SelectedInput{ConfirmationToken: d.ConfirmationToken})
+	if err != nil || result.SessionID == "" || result.ProjectID != "" || projects.creates != 0 || len(store.records) != 1 || !store.records[0].IsStandalone() {
 		t.Fatal(result, err)
 	}
 }
@@ -373,7 +411,7 @@ func TestDestinationPropagatesCacheErrors(t *testing.T) {
 	if err := s.search.index.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if d, err := s.Destination(context.Background(), page.Results[0].ID, ""); err == nil {
+	if d, err := s.Destination(context.Background(), page.Results[0].ID); err == nil {
 		t.Fatal("cache failure masked as destination", d)
 	}
 }
@@ -446,7 +484,7 @@ func TestBulkRootAliasSearchAndSelectedRetry(t *testing.T) {
 	if err = os.RemoveAll(filepath.Dir(path)); err != nil {
 		t.Fatal(err)
 	}
-	d, err := s.Destination(ctx, id, "")
+	d, err := s.Destination(ctx, id)
 	if err != nil || d.Action != "open" {
 		t.Fatal(d, err)
 	}
@@ -477,7 +515,7 @@ func TestOpenDestinationKeepsMetadataWithoutSource(t *testing.T) {
 		t.Fatal(page, err)
 	}
 	id := page.Results[0].ID
-	preview, err := s.Destination(ctx, id, "")
+	preview, err := s.Destination(ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -491,13 +529,13 @@ func TestOpenDestinationKeepsMetadataWithoutSource(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		d, err := s.Destination(ctx, id, "")
+		d, err := s.Destination(ctx, id)
 		if err != nil || d.Action != "open" || d.Title != title || d.Provider != "claude-code" || d.Path != preview.Path || d.SessionID != result.SessionID {
 			t.Fatal(missing, d, err)
 		}
 	}
 	refreshWait(t, s)
-	d, err := s.Destination(ctx, id, "")
+	d, err := s.Destination(ctx, id)
 	if err != nil || d.Action != "open" || d.Title == "" || d.Provider != "claude-code" || d.Path != preview.Path {
 		t.Fatal("durable fallback after index deletion", d, err)
 	}

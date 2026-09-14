@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { components } from "../../api/schema";
 import { apiClient, apiErrorMessage } from "../lib/api-client";
+import { STANDALONE_WORKSPACE_ID } from "../types/workspace";
 import { Button } from "./ui/button";
 
 type Result = components["schemas"]["SessionImportSearchResult"];
@@ -24,7 +25,6 @@ export function FindSessionToImport({
 	const [selected, setSelected] = useState("");
 	const [previewId, setPreviewId] = useState<string>();
 	const [destination, setDestination] = useState<Destination>();
-	const [folder, setFolder] = useState("");
 	const [error, setError] = useState("");
 	const [searchError, setSearchError] = useState("");
 	const [loading, setLoading] = useState(false);
@@ -128,7 +128,7 @@ export function FindSessionToImport({
 		return () => window.clearTimeout(timer);
 	}, [page, loading]);
 
-	async function preview(id: string, locateFolder = "", preserveError = false) {
+	async function preview(id: string, preserveError = false) {
 		const current = ++previewGeneration.current;
 		previewAbort.current?.abort();
 		const controller = new AbortController();
@@ -140,10 +140,7 @@ export function FindSessionToImport({
 			const { data, error: failure } = await apiClient.GET(
 				"/api/v1/session-import/search/{resultId}/destination",
 				{
-					params: {
-						path: { resultId: id },
-						query: { locateFolder: locateFolder || undefined },
-					},
+					params: { path: { resultId: id } },
 					signal: controller.signal,
 				},
 			);
@@ -160,8 +157,8 @@ export function FindSessionToImport({
 	async function confirm() {
 		if (!destination || busy.current) return;
 		if (destination.action === "open") {
-			if (destination.projectId && destination.sessionId)
-				onOpen(destination.projectId, destination.sessionId);
+			if (destination.sessionId)
+				onOpen(destination.projectId ?? STANDALONE_WORKSPACE_ID, destination.sessionId);
 			return;
 		}
 		if (!destination.confirmationToken) return;
@@ -176,7 +173,6 @@ export function FindSessionToImport({
 					body: {
 						confirmationToken: destination.confirmationToken,
 						addProject: destination.action === "add_project",
-						locateFolder: folder || undefined,
 					},
 				},
 			);
@@ -189,13 +185,13 @@ export function FindSessionToImport({
 						? `${t("importSearch.projectRetained")} ${data.error}`
 						: data.error,
 				);
-			if (!data?.projectId || !data.sessionId)
+			if (!data?.sessionId)
 				throw new Error(t("command.failed"));
-			onOpen(data.projectId, data.sessionId);
+			onOpen(data.projectId ?? STANDALONE_WORKSPACE_ID, data.sessionId);
 		} catch (failure) {
 			if (alive.current) {
 				setError(String(failure));
-				await preview(destination.id, folder, true);
+				await preview(destination.id, true);
 			}
 		} finally {
 			busy.current = false;
@@ -219,7 +215,6 @@ export function FindSessionToImport({
 							previewAbort.current?.abort();
 							setPreviewId(undefined);
 							setDestination(undefined);
-							setFolder("");
 							setError("");
 						}}
 					>
@@ -243,28 +238,7 @@ export function FindSessionToImport({
 							{destination.reason && (
 								<p className="text-xs">{destination.reason}</p>
 							)}
-							{destination.action === "unavailable" ? (
-								<form
-									className="space-y-2"
-									onSubmit={(event) => {
-										event.preventDefault();
-										void preview(previewId, folder);
-									}}
-								>
-									<label className="text-xs" htmlFor="import-folder">
-										{t("importSearch.locate")}
-									</label>
-									<input
-										id="import-folder"
-										className="w-full rounded border p-2 text-sm"
-										value={folder}
-										onChange={(event) => setFolder(event.target.value)}
-									/>
-									<Button type="submit" disabled={!folder.trim()}>
-										{t("importSearch.checkFolder")}
-									</Button>
-								</form>
-							) : (
+							{destination.action !== "unavailable" && (
 								<Button
 									ref={confirmButton}
 									disabled={
@@ -278,9 +252,11 @@ export function FindSessionToImport({
 										? t("importSearch.importing")
 										: destination.action === "open"
 											? t("command.open")
-											: destination.action === "add_project"
-												? t("importSearch.addProject")
-												: t("importSearch.import")}
+										: destination.action === "add_project"
+											? t("importSearch.addProject")
+											: destination.action === "standalone"
+												? t("importSearch.importStandalone")
+											: t("importSearch.import")}
 								</Button>
 							)}
 						</div>
@@ -288,7 +264,7 @@ export function FindSessionToImport({
 						!error && <p role="status">{t("importSearch.loading")}</p>
 					)}
 					{!destination && error && (
-						<Button onClick={() => void preview(previewId, folder)}>
+						<Button onClick={() => void preview(previewId)}>
 							{t("importSearch.retry")}
 						</Button>
 					)}
@@ -387,7 +363,7 @@ export function FindSessionToImport({
 							</button>
 						))}
 					</div>
-					{(loading || (pageQuery !== query && !searchError)) && (
+					{!currentPage && (loading || (pageQuery !== query && !searchError)) && (
 						<p role="status" className="text-xs">
 							{t("importSearch.loading")}
 						</p>
@@ -405,11 +381,6 @@ export function FindSessionToImport({
 						</Button>
 					)}
 				</>
-			)}
-			{page?.status.running && (
-				<p role="status" className="text-xs text-muted-foreground">
-					{t("importSearch.indexing", { count: page.status.scanned })}
-				</p>
 			)}
 			{!!page?.status.errors.length && (
 				<div role="status" className="text-xs">
