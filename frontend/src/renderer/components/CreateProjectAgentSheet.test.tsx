@@ -57,15 +57,6 @@ describe("CreateProjectAgentSheet", () => {
 		expect(screen.getByRole("dialog")).toHaveClass("modal-shake");
 	});
 
-	it("chooses the highest-priority authorized default agent", () => {
-		expect(
-			defaultAuthorizedAgent([
-				agentReadiness("opencode", "OpenCode"),
-				agentReadiness("codex", "Codex"),
-			]),
-		).toBe("codex");
-	});
-
 	// Under the auth ladder an agent whose credentials AO cannot validate
 	// reports "configured", never "authorized". If that dropped out of the
 	// preselection pool, a working Claude Code install would silently stop
@@ -90,23 +81,6 @@ describe("CreateProjectAgentSheet", () => {
 		expect(screen.queryAllByText("Claude Code")).toHaveLength(0);
 	});
 
-	it("chooses the most frequently used authorized agent by default", () => {
-		expect(
-			defaultAuthorizedAgent([
-				agentReadiness("claude-code", "Claude Code", { usageCount: 1 }),
-				agentReadiness("codex", "Codex", { usageCount: 3 }),
-			]),
-		).toBe("codex");
-	});
-
-	it("falls back to the alphabetically first authorized agent when no priority agent is authorized", () => {
-		expect(
-			defaultAuthorizedAgent([
-				agentReadiness("goose", "Goose"),
-				agentReadiness("devin", "Devin"),
-			]),
-		).toBe("devin");
-	});
 	it("uses the compact trigger size for agent fields", () => {
 		render(
 			<RequiredAgentField

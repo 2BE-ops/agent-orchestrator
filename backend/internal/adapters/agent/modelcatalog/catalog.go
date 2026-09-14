@@ -483,6 +483,15 @@ func claudeCodeResolvedModel(workingDir string, env map[string]string) string {
 	if fromEnv := strings.TrimSpace(os.Getenv("ANTHROPIC_MODEL")); fromEnv != "" {
 		return fromEnv
 	}
+	for _, candidate := range claudeCodeSettingsPaths(workingDir) {
+		if configured := claudeCodeSettingsModel(candidate); configured != "" {
+			return configured
+		}
+	}
+	return ""
+}
+
+func claudeCodeSettingsPaths(workingDir string) []string {
 	var candidates []string
 	if dir := strings.TrimSpace(workingDir); dir != "" {
 		candidates = append(candidates,
@@ -493,12 +502,7 @@ func claudeCodeResolvedModel(workingDir string, env map[string]string) string {
 	if home, err := os.UserHomeDir(); err == nil {
 		candidates = append(candidates, filepath.Join(home, ".claude", "settings.json"))
 	}
-	for _, candidate := range candidates {
-		if configured := claudeCodeSettingsModel(candidate); configured != "" {
-			return configured
-		}
-	}
-	return ""
+	return candidates
 }
 
 // claudeCodeSettingsModel reads one settings file's "model". An unreadable or
@@ -627,12 +631,53 @@ func CatalogFingerprint(ctx context.Context, agentID, binary, workingDir string,
 // or "" when the catalog depends on the binary alone.
 func discoveryConfigInputs(agentID, workingDir string, env map[string]string) string {
 	if agentID == "claude-code" {
-		return "model=" + claudeCodeResolvedModel(workingDir, env)
+		return "config=" + claudeCodeDiscoveryFingerprint(workingDir, env)
 	}
 	if config := configDiscoveryFingerprint(agentID, workingDir, env); config != "" {
 		return "config=" + config
 	}
 	return ""
+}
+
+func claudeCodeDiscoveryFingerprint(workingDir string, env map[string]string) string {
+	hash := sha256.New()
+	_, _ = hash.Write([]byte("model\x00" + claudeCodeResolvedModel(workingDir, env) + "\x00"))
+	keys := []string{
+		"CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
+		"ANTHROPIC_BASE_URL", "ANTHROPIC_FOUNDRY_BASE_URL", "ANTHROPIC_FOUNDRY_RESOURCE",
+		"AWS_REGION", "AWS_DEFAULT_REGION",
+		"ANTHROPIC_VERTEX_PROJECT_ID", "GOOGLE_CLOUD_PROJECT", "CLOUD_ML_REGION", "GOOGLE_CLOUD_REGION",
+		"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
+		"ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_FOUNDRY_AUTH_TOKEN",
+		"AWS_BEARER_TOKEN_BEDROCK", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+		"GOOGLE_OAUTH_ACCESS_TOKEN", "GOOGLE_APPLICATION_CREDENTIALS",
+	}
+	for _, key := range keys {
+		value, present := env[key]
+		if !present {
+			value = os.Getenv(key)
+		}
+		_, _ = hash.Write([]byte(key + "\x00" + strings.TrimSpace(value) + "\x00"))
+	}
+	for _, path := range claudeCodeSettingsPaths(workingDir) {
+		raw, err := readModelConfig(path)
+		if err != nil {
+			continue
+		}
+		_, _ = hash.Write([]byte(path))
+		_, _ = hash.Write([]byte{0})
+		_, _ = hash.Write(raw)
+		_, _ = hash.Write([]byte{0})
+	}
+	if credentialPath, present := env["GOOGLE_APPLICATION_CREDENTIALS"]; !present {
+		credentialPath = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+		if raw, err := readModelConfig(strings.TrimSpace(credentialPath)); err == nil {
+			_, _ = hash.Write(raw)
+		}
+	} else if raw, err := readModelConfig(strings.TrimSpace(credentialPath)); err == nil {
+		_, _ = hash.Write(raw)
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil)[:8])
 }
 
 func catalog(agentID, source string, entryMode ports.CustomModelEntryMode, at time.Time, models ...ports.AgentModelInfo) ports.AgentModelCatalog {

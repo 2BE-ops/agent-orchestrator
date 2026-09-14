@@ -157,6 +157,43 @@ describe("TaskComposer", () => {
 		expect(h.get.mock.calls.some(([path]) => path === "/api/v1/projects/{id}")).toBe(false);
 	});
 
+	it("sends the selected effort when starting a standalone worker", async () => {
+		h.get.mockImplementation(async (path: string) => {
+			if (path.includes("/models")) {
+				return {
+					data: {
+						agent: "codex",
+						selectionMode: "text",
+						models: [{ id: "gpt-5", label: "GPT-5", isDefault: true, efforts: ["high"] }],
+						allowCustom: true,
+						refreshRecommended: false,
+					},
+				};
+			}
+			return { data: { status: "ok", project: { config: {} } } };
+		});
+		h.post.mockResolvedValueOnce({ data: { session: { id: "standalone-1" } } });
+
+		render(
+			<Wrap>
+				<TaskComposer projectId="__standalone__" onCreated={vi.fn()} />
+			</Wrap>,
+		);
+
+		fireEvent.click(screen.getByLabelText("Agent"));
+		const effort = await screen.findByRole("button", { name: "Reasoning effort" });
+		await userEvent.click(effort);
+		await userEvent.click(screen.getByRole("menuitem", { name: "High" }));
+		fireEvent.click(screen.getByText("Start task"));
+
+		await waitFor(() =>
+			expect(h.post).toHaveBeenCalledWith(
+				"/api/v1/sessions",
+				expect.objectContaining({ body: expect.objectContaining({ effort: "high" }) }),
+			),
+		);
+	});
+
 	it("ensures display readiness for every harness when the composer opens", async () => {
 		render(
 			<Wrap>
@@ -182,6 +219,30 @@ describe("TaskComposer", () => {
 				purpose: "launch",
 			}),
 		);
+	});
+
+	it("blocks submission when targeted readiness confirms the selected agent is unauthorized", async () => {
+		h.get.mockImplementation(async (path: string) => {
+			if (path.includes("/models")) {
+				return { data: { agent: "codex", selectionMode: "text", models: [], allowCustom: true } };
+			}
+			return { data: { status: "ok", project: { agent: "codex", config: {} } } };
+		});
+		const unauthorized = agentReadiness("codex", "Codex", { authentication: "unauthorized" });
+		h.ensureTargetedReadiness.mockResolvedValueOnce({ agents: [unauthorized] });
+		h.post.mockResolvedValueOnce({ data: { workerId: "should-not-spawn" } });
+
+		render(
+			<Wrap>
+				<TaskComposer projectId="proj-1" onCreated={vi.fn()} />
+			</Wrap>,
+		);
+		await waitFor(() => expect(screen.getByTestId("agent-field")).toHaveAttribute("data-value", "codex"));
+		fireEvent.click(screen.getByRole("button", { name: "Start task" }));
+
+		expect(await screen.findByText("Codex is not authorized. Check settings to authenticate.")).toBeInTheDocument();
+		expect(h.ensureTargetedReadiness).toHaveBeenCalledWith(["codex"], "launch");
+		expect(h.post).not.toHaveBeenCalled();
 	});
 
 	it("waits for and caches targeted readiness after a binary launch failure", async () => {

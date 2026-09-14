@@ -387,7 +387,11 @@ func ParseAuthReport(out []byte) (AuthReport, bool) {
 //
 // An error means the provider could not be asked. Callers must fall back to
 // their static list rather than presenting an empty picker.
-func ProviderModels(ctx context.Context, env map[string]string) ([]ports.AgentModelInfo, error) {
+var claudeModelAuthReport = func(ctx context.Context, binary string) (claudeAuthReport, bool) {
+	return (&Plugin{}).claudeCLIAuthReport(ctx, binary)
+}
+
+func ProviderModels(ctx context.Context, binary string, env map[string]string) ([]ports.AgentModelInfo, error) {
 	opts := agentcreds.ResolveOptions{AllowKeychain: true}
 	if len(env) > 0 {
 		// Prefer the session's own environment so a project-scoped provider or
@@ -400,17 +404,16 @@ func ProviderModels(ctx context.Context, env map[string]string) ([]ports.AgentMo
 		}
 	}
 
-	// The reported provider is unavailable here without running the CLI, so
-	// resolution falls back to the environment gate. That is safe: it either
-	// identifies a provider or declines, and never guesses a host.
-	// FIXME: A machine configured for Bedrock/Vertex through settings.json that
-	// also carries a working first-party credential in the keychain may report
-	// first-party model IDs instead of provider-prefixed ones. This edge case
-	// requires running the CLI first to resolve the intended provider.
+	reported := ""
+	if strings.TrimSpace(binary) != "" {
+		if report, ok := claudeModelAuthReport(ctx, binary); ok {
+			reported = report.APIProvider
+		}
+	}
 	probeCtx, cancel := context.WithTimeout(ctx, agentcreds.DefaultTimeout)
 	defer cancel()
 	result := agentcreds.Result{}
-	if provider, ok := agentcreds.ResolveProvider("", opts); ok {
+	if provider, ok := agentcreds.ResolveProvider(reported, opts); ok {
 		if cred, found := agentcreds.ResolveLocal(probeCtx, provider, opts); found {
 			if cached, hit := claudeAuthCache.Get(claudeAgentID, cred.Fingerprint()); hit &&
 				cached.State == agentcreds.StateValid && len(cached.Models) > 0 {
@@ -419,7 +422,7 @@ func ProviderModels(ctx context.Context, env map[string]string) ([]ports.AgentMo
 		}
 	}
 	if result.State == "" {
-		result = claudeValidator().ValidateLocal(probeCtx, "", opts)
+		result = claudeValidator().ValidateLocal(probeCtx, reported, opts)
 	}
 	if result.State != agentcreds.StateValid {
 		return nil, fmt.Errorf("claude-code: model discovery: %s", result.Detail)

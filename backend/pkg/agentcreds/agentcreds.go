@@ -108,11 +108,26 @@ type Credential struct {
 	BaseURL string
 }
 
-// Fingerprint returns sha256(secret)[:12], or "" when there is no secret.
-// It is a cache key, never a credential: it is safe to log, and it changes
-// when the underlying secret changes, which is what makes it usable to
-// invalidate a cached verdict.
-func (c Credential) Fingerprint() string { return Fingerprint(c.Secret) }
+// Fingerprint identifies the credential and provider configuration used by a
+// validation result. The scope fields prevent a verdict from one endpoint or
+// cloud account being reused for another that happens to share the secret.
+func (c Credential) Fingerprint() string {
+	secret := strings.TrimSpace(c.Secret)
+	if secret == "" {
+		return ""
+	}
+	identity := strings.Join([]string{
+		secret,
+		string(c.Kind),
+		string(c.Provider),
+		strings.TrimSpace(c.BaseURL),
+		strings.TrimSpace(c.Region),
+		strings.TrimSpace(c.Project),
+		strings.TrimSpace(c.Resource),
+	}, "\x00")
+	sum := sha256.Sum256([]byte(identity))
+	return hex.EncodeToString(sum[:])[:12]
+}
 
 // Fingerprint returns sha256(secret)[:12], or "" for an empty secret.
 func Fingerprint(secret string) string {

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // The classification table is the core of the package, and two of its rows are
@@ -160,6 +161,40 @@ func TestFingerprintIsShortAndNotTheSecret(t *testing.T) {
 	}
 	if Fingerprint(secret) == Fingerprint(secret+"x") {
 		t.Fatal("a changed secret must change the fingerprint")
+	}
+}
+
+func TestCredentialFingerprintScopesCacheIdentityToProviderConfiguration(t *testing.T) {
+	base := Credential{
+		Kind: KindAPIKey, Secret: "shared-secret", Provider: ProviderGateway,
+		BaseURL: "https://gateway.example", Region: "us-east-1",
+		Project: "project-a", Resource: "resource-a",
+	}
+	changes := map[string]func(*Credential){
+		"kind":     func(cred *Credential) { cred.Kind = KindOAuthToken },
+		"provider": func(cred *Credential) { cred.Provider = ProviderFirstParty },
+		"base URL": func(cred *Credential) { cred.BaseURL = "https://other.example" },
+		"region":   func(cred *Credential) { cred.Region = "eu-west-1" },
+		"project":  func(cred *Credential) { cred.Project = "project-b" },
+		"resource": func(cred *Credential) { cred.Resource = "resource-b" },
+	}
+
+	for name, change := range changes {
+		t.Run(name, func(t *testing.T) {
+			other := base
+			change(&other)
+			if other.Fingerprint() == base.Fingerprint() {
+				t.Fatalf("changing %s reused credential fingerprint %q", name, base.Fingerprint())
+			}
+		})
+	}
+
+	cache := NewCache(time.Minute)
+	cache.Put("claude-code", Result{State: StateValid, Fingerprint: base.Fingerprint()})
+	otherProvider := base
+	otherProvider.Provider = ProviderFirstParty
+	if _, ok := cache.Get("claude-code", otherProvider.Fingerprint()); ok {
+		t.Fatal("a verdict for one provider configuration must miss for another")
 	}
 }
 

@@ -218,6 +218,7 @@ export function TaskComposer({
 					prompt: input.brief,
 					displayName,
 					model: input.model,
+					...(input.effort ? { effort: input.effort } : {}),
 					...(input.mode ? { mode: input.mode } : {}),
 					...(input.attachments && input.attachments.length > 0 ? { attachments: input.attachments } : {}),
 				},
@@ -386,6 +387,20 @@ export function TaskComposer({
 		setError(undefined);
 		setFallbackAction(undefined);
 		try {
+			if (!isCloudProject && selectedAgent) {
+				try {
+					const completed = await ensureAgentReadiness([selectedAgent], "launch");
+					cacheAgentReadiness(queryClient, completed);
+					const selectedReadiness = completed.agents.find((item) => item.id === selectedAgent);
+					if (selectedReadiness?.authentication.state === "unauthorized") {
+						setError(t("newTask.agentUnauthorized", { agent: selectedReadiness.label || selectedAgent }));
+						return;
+					}
+				} catch {
+					// Readiness is advisory when the targeted check is inconclusive; the
+					// launch path remains the authoritative validator.
+				}
+			}
 			const attachmentPayloads = await toSettledPayload();
 			const sessionId = await createTask({
 				projectId,

@@ -396,7 +396,9 @@ func TestProbeAnswersFromCacheWithoutReprobing(t *testing.T) {
 
 	claudeAuthCache.Put(claudeAgentID, agentcreds.Result{
 		State: agentcreds.StateValid, Source: "ANTHROPIC_API_KEY",
-		Fingerprint: agentcreds.Fingerprint("sk-ant-cached"),
+		Fingerprint: (agentcreds.Credential{
+			Kind: agentcreds.KindAPIKey, Secret: "sk-ant-cached", Provider: agentcreds.ProviderFirstParty,
+		}).Fingerprint(),
 	})
 	withStubValidator(t, func(http.ResponseWriter, *http.Request) {
 		t.Fatal("a cache hit must not reach the provider")
@@ -431,7 +433,7 @@ func TestProviderModelsReuseTheValidatedAuthResponse(t *testing.T) {
 		t.Fatalf("verdict = %+v, want the provider acceptance", verdict)
 	}
 
-	models, err := ProviderModels(context.Background(), nil)
+	models, err := ProviderModels(context.Background(), "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,5 +449,42 @@ func TestProviderModelsReuseTheValidatedAuthResponse(t *testing.T) {
 	}
 	if requests != 1 {
 		t.Fatalf("provider requests = %d, want one validation response reused for discovery", requests)
+	}
+}
+
+func TestProviderModelsUsesCLIReportedProvider(t *testing.T) {
+	clearClaudeCredentialEnv(t)
+	InvalidateAuthCache()
+	t.Cleanup(InvalidateAuthCache)
+	env := map[string]string{
+		"AWS_BEARER_TOKEN_BEDROCK": "bedrock-token",
+		"AWS_REGION":               "us-east-1",
+	}
+	opts := agentcreds.ResolveOptions{Env: func(name string) string { return env[name] }}
+	cred, ok := agentcreds.ResolveLocal(context.Background(), agentcreds.ProviderBedrock, opts)
+	if !ok {
+		t.Fatal("bedrock credential did not resolve")
+	}
+	claudeAuthCache.Put(claudeAgentID, agentcreds.Result{
+		State: agentcreds.StateValid, Provider: agentcreds.ProviderBedrock,
+		Fingerprint: cred.Fingerprint(),
+		Models:      []agentcreds.Model{{ID: "anthropic.claude-opus-v1"}},
+	})
+
+	previous := claudeModelAuthReport
+	claudeModelAuthReport = func(_ context.Context, binary string) (claudeAuthReport, bool) {
+		if binary != "/opt/claude" {
+			t.Fatalf("binary = %q, want /opt/claude", binary)
+		}
+		return claudeAuthReport{APIProvider: "bedrock"}, true
+	}
+	t.Cleanup(func() { claudeModelAuthReport = previous })
+
+	models, err := ProviderModels(context.Background(), "/opt/claude", env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 || models[0].ID != "anthropic.claude-opus-v1" {
+		t.Fatalf("models = %+v, want the Bedrock catalog", models)
 	}
 }
