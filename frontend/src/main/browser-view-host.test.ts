@@ -552,8 +552,9 @@ function setupTabHost(
 			openWindow: (url: string) => void;
 			close: ReturnType<typeof vi.fn>;
 			emitConsoleMessage: (level: number, message: string, line?: number, sourceId?: string) => void;
-			session: {
-				setPermissionCheckHandler: ReturnType<typeof vi.fn>;
+				session: {
+					fetch: ReturnType<typeof vi.fn>;
+					setPermissionCheckHandler: ReturnType<typeof vi.fn>;
 				setPermissionRequestHandler: ReturnType<typeof vi.fn>;
 				webRequest: {
 					onCompleted: ReturnType<typeof vi.fn>;
@@ -572,6 +573,7 @@ function setupTabHost(
 	// localhost dev server — every view's loadURL checks this shared set.
 	const failNavigationTo = new Set<string>();
 	const makeElectronSession = () => ({
+		fetch: vi.fn(async () => ({ ok: false })),
 		setPermissionCheckHandler: vi.fn(),
 		setPermissionRequestHandler: vi.fn(),
 		webRequest: {
@@ -1364,6 +1366,8 @@ describe("browser profile partitions and replacement", () => {
 		await expect(named.invoke("browser:history:suggest", { viewId: namedNav.viewId, query: "openai" })).resolves.toEqual([
 			{ url: "https://github.com/openai", title: "OpenAI" },
 		]);
+		await expect(named.invoke("browser:history:favicon", { viewId: namedNav.viewId, url: "https://github.com/openai" })).resolves.toBeUndefined();
+		expect(named.views[0]!.webContents.session.fetch).toHaveBeenCalledWith("https://github.com/favicon.ico");
 
 		const temporary = setupTabHost(undefined, false, undefined, history);
 		const temporaryNav = (await temporary.invoke("browser:ensure", "worker-2")) as BrowserNavState;

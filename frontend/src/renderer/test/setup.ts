@@ -200,6 +200,7 @@ if (typeof window !== "undefined") {
 				isLoading: false,
 			}),
 			historySuggestions: async () => [],
+			historyFavicon: async () => undefined,
 			clear: async (viewId: string) => ({
 				viewId,
 				url: "",

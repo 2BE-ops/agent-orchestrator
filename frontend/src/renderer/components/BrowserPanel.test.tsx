@@ -227,6 +227,7 @@ describe("BrowserPanel", () => {
 			};
 		});
 		window.ao!.browser.historySuggestions = vi.fn(async () => []);
+		window.ao!.browser.historyFavicon = vi.fn(async () => undefined);
 		window.ao!.browser.captureScreenshot = vi.fn(async () => undefined);
 		window.ao!.browser.downloads.list = vi.fn(async () => ({ downloads: [] }));
 		window.ao!.browser.selectProfile = vi.fn(async () => undefined);
@@ -299,6 +300,9 @@ describe("BrowserPanel", () => {
 			{ url: "https://gist.github.com/example", title: "Gist" },
 			{ url: "https://githubstatus.com", title: "Fifth result" },
 		]);
+		window.ao!.browser.historyFavicon = vi.fn(async ({ url }) =>
+			url.startsWith("https://github.com/") ? "data:image/png;base64,github" : undefined,
+		);
 		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut={false} session={session} />);
 		const input = screen.getByRole("textbox", { name: /browser url/i });
 		const addressBar = screen.getByTestId("browser-address-bar");
@@ -318,7 +322,11 @@ describe("BrowserPanel", () => {
 		expect(screen.getByText("OpenAI")).toBeInTheDocument();
 		expect(screen.getByText("https://github.com/openai")).toBeInTheDocument();
 		expect(screen.queryByText("Fifth result")).not.toBeInTheDocument();
-		expect(menu.querySelector("img")).toHaveAttribute("src", "https://github.com/favicon.ico");
+		await waitFor(() => expect(menu.querySelector("img")).toHaveAttribute("src", "data:image/png;base64,github"));
+		expect(window.ao!.browser.historyFavicon).toHaveBeenCalledWith({
+			viewId: "42:sess-1",
+			url: "https://github.com/openai",
+		});
 
 		await userEvent.click(screen.getAllByRole("option")[0]!);
 		expect(hookState.navigate).toHaveBeenCalledWith("https://github.com/openai");

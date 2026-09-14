@@ -855,6 +855,7 @@ export function BrowserPanelView({
 							<BrowserSuggestionIcon
 								cachedFavicon={faviconForOpenTab(suggestion.url, tabs)}
 								url={suggestion.url}
+								viewId={viewId}
 							/>
 							<span className="min-w-0 flex-1">
 								{suggestion.title ? (
@@ -1495,19 +1496,30 @@ function faviconForOpenTab(url: string, tabs: BrowserViewModel["tabs"]): string 
 	return tabs.find((tab) => tab.favicon && webOrigin(tab.url) === origin)?.favicon;
 }
 
-function BrowserSuggestionIcon({ cachedFavicon, url }: { cachedFavicon?: string; url: string }) {
-	const origin = webOrigin(url);
-	const favicon = cachedFavicon ?? (origin ? `${origin}/favicon.ico` : undefined);
-	const [failedFavicon, setFailedFavicon] = useState<string>();
-	if (!favicon || favicon === failedFavicon) {
+function BrowserSuggestionIcon({ cachedFavicon, url, viewId }: { cachedFavicon?: string; url: string; viewId: string }) {
+	const [favicon, setFavicon] = useState(cachedFavicon);
+	useEffect(() => {
+		setFavicon(cachedFavicon);
+		if (cachedFavicon || !viewId || !window.ao?.browser) return;
+		let current = true;
+		void window.ao.browser.historyFavicon({ viewId, url }).then(
+			(nextFavicon) => {
+				if (current) setFavicon(nextFavicon);
+			},
+			() => undefined,
+		);
+		return () => {
+			current = false;
+		};
+	}, [cachedFavicon, url, viewId]);
+	if (!favicon) {
 		return <Globe2 aria-hidden="true" className="size-icon-base shrink-0 text-settings-muted" />;
 	}
 	return (
 		<img
 			alt=""
 			className="size-icon-base shrink-0 rounded-sm object-contain"
-			onError={() => setFailedFavicon(favicon)}
-			referrerPolicy="no-referrer"
+			onError={() => setFavicon(undefined)}
 			src={favicon}
 		/>
 	);

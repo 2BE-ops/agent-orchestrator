@@ -148,6 +148,11 @@ type BrowserHistorySuggestInput = {
 	query: string;
 };
 
+type BrowserHistoryFaviconInput = {
+	viewId: string;
+	url: string;
+};
+
 type BrowserTabInput = {
 	viewId: string;
 	tabId: string;
@@ -549,6 +554,7 @@ export function scaleBoundsForZoom(rect: BrowserRect, zoomFactor: number): Brows
 
 export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserViewHost {
 	const entries = new Map<string, BrowserSessionEntry>();
+	const historyFaviconCache = new WeakMap<Session, Map<string, Promise<string | undefined>>>();
 	const signalWatchers = new Map<
 		BrowserElectronSession,
 		{ viewIds: Set<string>; webRequest: BrowserElectronSession["webRequest"] }
@@ -1916,6 +1922,34 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 		if (!profileId || !options.browserHistoryStore) return [];
 		return options.browserHistoryStore.suggest(profileId, input.query);
 	});
+	handle("browser:history:favicon", (event, input: BrowserHistoryFaviconInput) => {
+		if (
+			!input ||
+			typeof input.viewId !== "string" ||
+			typeof input.url !== "string" ||
+			input.url.length > 4_096 ||
+			!isRendererOwned(event, input.viewId)
+		) {
+			return undefined;
+		}
+		const origin = originOf(input.url);
+		const entry = entries.get(input.viewId);
+		if (!origin || !entry) return undefined;
+		const tabSession = (activeEntry(entry).view.webContents as unknown as WebContents).session;
+		let cache = historyFaviconCache.get(tabSession);
+		if (!cache) {
+			cache = new Map();
+			historyFaviconCache.set(tabSession, cache);
+		}
+		const cached = cache.get(origin);
+		if (cached) return cached;
+		const pending = fetchFaviconFromSession(tabSession, `${origin}/favicon.ico`).then((favicon) => {
+			if (!favicon) cache?.delete(origin);
+			return favicon;
+		});
+		cache.set(origin, pending);
+		return pending;
+	});
 	handle("browser:clear", (event, viewId: string) =>
 		isRendererOwned(event, viewId) ? clear(viewId) : emptyNavState(viewId),
 	);
@@ -2725,6 +2759,11 @@ function originOf(url: string): string | undefined {
 // it carries whatever cookies/proxy config that site's tab already has, and
 // resized/re-encoded like other browser-view thumbnail capture in this file.
 async function fetchFavicon(entry: BrowserEntry, url: string): Promise<string | undefined> {
+	const tabSession = (entry.view.webContents as unknown as WebContents).session;
+	return fetchFaviconFromSession(tabSession, url);
+}
+
+async function fetchFaviconFromSession(tabSession: Session, url: string): Promise<string | undefined> {
 	try {
 		// Some sites inline a tiny favicon as a data: URI rather than serving a
 		// file — decode it directly instead of rejecting it as an unsupported
@@ -2736,7 +2775,6 @@ async function fetchFavicon(entry: BrowserEntry, url: string): Promise<string | 
 		}
 		const parsed = new URL(url);
 		if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return undefined;
-		const tabSession = (entry.view.webContents as unknown as WebContents).session;
 		const response = await tabSession.fetch(url);
 		if (!response.ok) return undefined;
 		const buffer = Buffer.from(await response.arrayBuffer());

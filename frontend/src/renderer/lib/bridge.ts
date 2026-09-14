@@ -113,6 +113,7 @@ export const aoBridge: AoBridge =
 				isLoading: false,
 			}),
 			historySuggestions: async () => [],
+			historyFavicon: async () => undefined,
 			clear: async (viewId: string) => ({
 				viewId,
 				url: "",
