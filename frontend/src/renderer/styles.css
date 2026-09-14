@@ -3568,11 +3568,31 @@ html.sidebar-reordering * {
 	justify-self: end;
 }
 
-/* Compact inspector chrome needs a smaller center track, not application zoom.
-   Keep the field centered while giving the tab controls room on both sides. */
+/* Once zoom or a narrow window leaves too little horizontal room, put the URL
+   field on its own row. The inspector tabs and actions keep the first row, so
+   none of the controls can overlap. */
 @container inspector (max-width: 360px) {
 	.session-inspector__topbar--browser {
-		grid-template-columns: minmax(0, 1fr) minmax(0, 180px) minmax(0, 1fr);
+		height: calc(var(--size-inspector-tabs) + var(--size-inspector-tabs));
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-rows: var(--size-inspector-tabs) var(--size-inspector-tabs);
+	}
+
+	.session-inspector__topbar--browser > .session-inspector__tablist {
+		grid-column: 1;
+		grid-row: 1;
+	}
+
+	.session-inspector__topbar--browser > .session-inspector-actions-spacer {
+		grid-column: 2;
+		grid-row: 1;
+	}
+
+	.session-inspector__topbar--browser > .browser-panel__topbar-host {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		width: 180px;
+		justify-self: center;
 	}
 }
 

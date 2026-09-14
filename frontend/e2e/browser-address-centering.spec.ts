@@ -17,7 +17,18 @@ async function expectAddressWidth(page: Page, width: number) {
 		.toBe(width);
 }
 
-test("@P0 browser address remains centered and narrows with the compact inspector", async ({ page }) => {
+async function expectAddressBelowInspectorTabs(page: Page) {
+	await expect
+		.poll(async () => {
+			const tabs = await page.locator("#inspector .session-inspector__tablist").boundingBox();
+			const address = await page.getByTestId("browser-address-bar").boundingBox();
+			if (!tabs || !address) return false;
+			return address.y >= tabs.y + tabs.height;
+		})
+		.toBe(true);
+}
+
+test("@P0 browser address remains centered and moves below tabs in the compact inspector", async ({ page }) => {
 	await page.goto("/#/projects/ao-demo/sessions/demo-working");
 	await page.locator("#inspector").getByRole("tab", { name: "Browser" }).click();
 	await expect(page.getByTestId("browser-address-bar")).toBeVisible();
@@ -27,4 +38,5 @@ test("@P0 browser address remains centered and narrows with the compact inspecto
 	await page.setViewportSize({ width: 960, height: 720 });
 	await expectAddressCentered(page);
 	await expectAddressWidth(page, 180);
+	await expectAddressBelowInspectorTabs(page);
 });
