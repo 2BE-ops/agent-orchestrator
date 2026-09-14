@@ -147,16 +147,33 @@ func fakeNativeLogoutClient(t *testing.T, account ports.CodexAccountContext) por
 	}}
 }
 
-type fakeCodexAccountStateStore struct {
-	mu     sync.Mutex
-	active domain.CodexActiveAccount
+type testCodexDeviceAccount struct {
+	AccountID   string
+	Revision    int64
+	ActivatedAt time.Time
+	UpdatedAt   time.Time
+}
+
+func setTestDeviceAccount(manager *codexAccountManager, active testCodexDeviceAccount) {
+	manager.deviceAccountID = active.AccountID
+	manager.deviceCredentialPresent = active.AccountID != ""
+	manager.snapshotRevision = active.Revision
+	manager.reconciliation = domain.CodexDeviceReconciliation{
+		Status: domain.CodexDeviceReconciliationVerified, ActiveAccountVerified: active.AccountID != "", ReasonCode: "verified",
+	}
+}
+
+type testCodexDeviceStateSeed interface {
+	testDeviceAccount() (testCodexDeviceAccount, bool)
+}
+
+type testCodexDeviceSeed struct {
+	active testCodexDeviceAccount
 	found  bool
 }
 
-type committedErrorCodexAccountStateStore struct {
-	mu     sync.Mutex
-	active domain.CodexActiveAccount
-	err    error
+func (s *testCodexDeviceSeed) testDeviceAccount() (testCodexDeviceAccount, bool) {
+	return s.active, s.found
 }
 
 type blockingExclusiveCodexGate struct {
@@ -183,39 +200,6 @@ func (g *blockingExclusiveCodexGate) AcquireExclusive(ctx context.Context) (port
 	}
 }
 func (*blockingExclusiveCodexGate) ExclusivePendingOrHeld() bool { return false }
-
-func (s *committedErrorCodexAccountStateStore) GetCodexActiveAccount(context.Context) (domain.CodexActiveAccount, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.active, true, nil
-}
-
-func (s *committedErrorCodexAccountStateStore) SetCodexActiveAccount(_ context.Context, id string, expected int64, at time.Time) (domain.CodexActiveAccount, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.active.Revision != expected {
-		return domain.CodexActiveAccount{}, ports.ErrCodexAccountRevisionConflict
-	}
-	s.active = domain.CodexActiveAccount{AccountID: id, Revision: expected + 1, ActivatedAt: at, UpdatedAt: at}
-	return domain.CodexActiveAccount{}, s.err
-}
-
-func (s *fakeCodexAccountStateStore) GetCodexActiveAccount(context.Context) (domain.CodexActiveAccount, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.active, s.found, nil
-}
-
-func (s *fakeCodexAccountStateStore) SetCodexActiveAccount(_ context.Context, id string, expected int64, at time.Time) (domain.CodexActiveAccount, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if (!s.found && expected != 0) || (s.found && s.active.Revision != expected) {
-		return domain.CodexActiveAccount{}, ports.ErrCodexAccountRevisionConflict
-	}
-	s.active = domain.CodexActiveAccount{AccountID: id, Revision: expected + 1, ActivatedAt: at, UpdatedAt: at}
-	s.found = true
-	return s.active, nil
-}
 
 type fakeCodexLoginTerminal struct {
 	mu              sync.Mutex
@@ -261,13 +245,25 @@ func supportedCodexAccountCapabilities() domain.CodexAccountCapabilities {
 	}
 }
 
-func newTestCodexAccountManager(t *testing.T, factory ports.CodexAccountClientFactory, state CodexAccountStateStore) *codexAccountManager {
+func newTestCodexAccountManager(t *testing.T, factory ports.CodexAccountClientFactory, state testCodexDeviceStateSeed) *codexAccountManager {
 	t.Helper()
 	root := t.TempDir()
-	return newCodexAccountManager(context.Background(),
+	manager := newCodexAccountManager(context.Background(),
 		filepath.Join(root, "accounts"), filepath.Join(root, "pending-accounts"),
 		filepath.Join(root, "switch-staging"), filepath.Join(root, "device-home"),
-		factory, state, nil)
+		factory, nil)
+	manager.snapshotRevision = 0
+	if state != nil {
+		if active, ok := state.testDeviceAccount(); ok && active.AccountID != "" {
+			manager.deviceAccountID = active.AccountID
+			manager.deviceCredentialPresent = true
+			manager.snapshotRevision = active.Revision
+			manager.reconciliation = domain.CodexDeviceReconciliation{
+				Status: domain.CodexDeviceReconciliationVerified, ActiveAccountVerified: true, ReasonCode: "verified",
+			}
+		}
+	}
+	return manager
 }
 
 func TestCachedCodexAccountsPerformsNoFilesystemOrNativeWork(t *testing.T) {
@@ -285,7 +281,7 @@ func TestCachedCodexAccountsPerformsNoFilesystemOrNativeWork(t *testing.T) {
 	}
 }
 
-func TestStaleActivePointerUsesSavedHomeDuringTemporaryReconciliationFailure(t *testing.T) {
+func TestUnverifiedDeviceAssociationUsesSavedHomeDuringTemporaryReconciliationFailure(t *testing.T) {
 	manager := newTestCodexAccountManager(t, nil, nil)
 	manager.catalog.newID = func() string { return testAccountID }
 	record := commitTestAccount(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", ports.CodexAccountObservation{
@@ -293,7 +289,7 @@ func TestStaleActivePointerUsesSavedHomeDuringTemporaryReconciliationFailure(t *
 		Method:         domain.CodexAuthMethodAPIKey,
 	})
 	manager.mu.Lock()
-	manager.active = domain.CodexActiveAccount{AccountID: record.Snapshot.ID, Revision: 2}
+	setTestDeviceAccount(manager, testCodexDeviceAccount{AccountID: record.Snapshot.ID, Revision: 2})
 	manager.reconciliation = domain.CodexDeviceReconciliation{
 		Status:                domain.CodexDeviceReconciliationTemporarilyUnavailable,
 		ActiveAccountVerified: false,
@@ -331,7 +327,7 @@ func TestCheckingReconciliationKeepsLastMatchedAccountVisibleWithoutUsingGlobalH
 		Email:          &activeEmail,
 	})
 	manager.mu.Lock()
-	manager.active = domain.CodexActiveAccount{AccountID: record.Snapshot.ID, Revision: 2}
+	setTestDeviceAccount(manager, testCodexDeviceAccount{AccountID: record.Snapshot.ID, Revision: 2})
 	manager.deviceAccountID = record.Snapshot.ID
 	manager.deferredAccountID = record.Snapshot.ID
 	manager.reconciliation = domain.CodexDeviceReconciliation{
@@ -342,8 +338,8 @@ func TestCheckingReconciliationKeepsLastMatchedAccountVisibleWithoutUsingGlobalH
 	manager.mu.Unlock()
 
 	view := manager.cached()
-	if view.ActiveAccountID != record.Snapshot.ID || len(view.Accounts) != 2 || view.Accounts[0].ID != record.Snapshot.ID || !view.Accounts[0].Active || view.Accounts[1].ID != inactiveID || view.Accounts[1].Active {
-		t.Fatalf("checking reconciliation hid the last matched account: %#v", view)
+	if view.ActiveAccountID != "" || len(view.Accounts) != 2 || view.Accounts[0].Active || view.Accounts[1].Active {
+		t.Fatalf("checking reconciliation exposed an unverified active account: %#v", view)
 	}
 	accountContext := manager.accountContext(record)
 	if accountContext.Home != record.Home || !accountContext.Managed {
@@ -423,8 +419,7 @@ func TestNativeLoginCreatesAndActivatesFirstAccountWithoutProviderCheck(t *testi
 	email := "person@example.com"
 	client := &fakeCodexAccountClient{read: ports.CodexAccountObservation{Authentication: domain.AgentAuthenticationAuthorized, Method: domain.CodexAuthMethodChatGPT, Email: &email}}
 	factory := &fakeCodexAccountFactory{capabilities: supportedCodexAccountCapabilities(), open: func(ports.CodexAccountContext) (ports.CodexAccountClient, error) { return client, nil }}
-	state := &fakeCodexAccountStateStore{}
-	manager := newTestCodexAccountManager(t, factory, state)
+	manager := newTestCodexAccountManager(t, factory, nil)
 	ids := []string{"b60a377d-da68-4a61-86f2-f31f04c571f2", testAccountID}
 	index := 0
 	manager.newID = func() string { id := ids[index]; index++; return id }
@@ -440,14 +435,11 @@ func TestNativeLoginCreatesAndActivatesFirstAccountWithoutProviderCheck(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if completed.Status != domain.CodexAccountLoginCompleted || completed.Account == nil || !completed.Account.Active || completed.Account.Authentication.State != domain.AgentAuthenticationUnknown {
+	if completed.Status != domain.CodexAccountLoginCompleted || completed.Account == nil || !completed.Account.Active || completed.Account.Authentication.State != domain.AgentAuthenticationAuthorized {
 		t.Fatalf("completed login = %#v", completed)
 	}
 	if active := manager.activeAccountID(); active != testAccountID {
 		t.Fatalf("active account = %q", active)
-	}
-	if state.active.Revision != 1 || state.active.AccountID != testAccountID {
-		t.Fatalf("durable active account = %#v", state.active)
 	}
 	if len(terminal.closed) != 1 || terminal.closed[0] != "shellterm-login-1" {
 		t.Fatalf("closed terminals = %#v", terminal.closed)
@@ -466,8 +458,7 @@ func TestNativeLoginVerificationDoesNotReplaceExistingDeviceAccount(t *testing.T
 	email := "saved@example.com"
 	client := &fakeCodexAccountClient{read: ports.CodexAccountObservation{Authentication: domain.AgentAuthenticationAuthorized, Method: domain.CodexAuthMethodChatGPT, Email: &email}}
 	factory := &fakeCodexAccountFactory{capabilities: supportedCodexAccountCapabilities(), open: func(ports.CodexAccountContext) (ports.CodexAccountClient, error) { return client, nil }}
-	state := &fakeCodexAccountStateStore{}
-	manager := newTestCodexAccountManager(t, factory, state)
+	manager := newTestCodexAccountManager(t, factory, nil)
 	if err := ensurePrivateDirectory(manager.globalHome); err != nil {
 		t.Fatal(err)
 	}
@@ -497,8 +488,8 @@ func TestNativeLoginVerificationDoesNotReplaceExistingDeviceAccount(t *testing.T
 	if err != nil || !bytes.Equal(current, original) {
 		t.Fatalf("existing device credential changed: %q, %v", current, err)
 	}
-	if state.found || manager.activeAccountID() != "" {
-		t.Fatalf("saved account became active: %#v", state.active)
+	if manager.activeAccountID() != "" {
+		t.Fatalf("saved account became active: %q", manager.activeAccountID())
 	}
 }
 
@@ -511,8 +502,7 @@ func TestNativeLoginVerificationSavesAccountWhileDeviceReconciliationRetries(t *
 		capabilities: supportedCodexAccountCapabilities(),
 		open:         func(ports.CodexAccountContext) (ports.CodexAccountClient, error) { return client, nil },
 	}
-	state := &fakeCodexAccountStateStore{}
-	manager := newTestCodexAccountManager(t, factory, state)
+	manager := newTestCodexAccountManager(t, factory, nil)
 	manager.mu.Lock()
 	manager.reconciliation = domain.CodexDeviceReconciliation{
 		Status:     domain.CodexDeviceReconciliationTemporarilyUnavailable,
@@ -540,8 +530,8 @@ func TestNativeLoginVerificationSavesAccountWhileDeviceReconciliationRetries(t *
 	if completed.Status != domain.CodexAccountLoginCompleted || completed.Account == nil || !completed.Account.Active || completed.AccountID != testAccountID {
 		t.Fatalf("completed login = %#v", completed)
 	}
-	if active := manager.activeAccountID(); active != testAccountID || !state.found {
-		t.Fatalf("first saved account was not activated: active=%q durable=%#v", active, state.active)
+	if active := manager.activeAccountID(); active != testAccountID {
+		t.Fatalf("first saved account was not activated: active=%q", active)
 	}
 	if _, err := readOpaqueCredential(filepath.Join(manager.catalog.root, testAccountID, codexCredentialHomeDirectory, codexCredentialFilename)); err != nil {
 		t.Fatalf("saved account credential: %v", err)
@@ -591,14 +581,14 @@ func TestNativeReauthenticationReplacesTheExistingAccountSlot(t *testing.T) {
 	if completed.Status != domain.CodexAccountLoginCompleted || completed.Account == nil || completed.Account.ID != record.Snapshot.ID {
 		t.Fatalf("completed reauthentication = %#v", completed)
 	}
-	if completed.Account.Authentication.State != domain.AgentAuthenticationUnknown || completed.Account.Capacity.State != domain.CodexCapacityUnknown {
+	if completed.Account.Authentication.State != domain.AgentAuthenticationAuthorized || completed.Account.Capacity.State != domain.CodexCapacityUnknown {
 		t.Fatalf("completed reauthentication state = %#v", completed.Account)
 	}
 	if completed.Account.Capacity.ReasonCode == domain.CodexCapacityReasonSkippedSignedOut {
 		t.Fatalf("completed reauthentication retained signed-out capacity: %#v", completed.Account.Capacity)
 	}
 	cached := manager.cached().Accounts[0]
-	if cached.Authentication.State != domain.AgentAuthenticationUnknown || cached.Capacity.State != domain.CodexCapacityUnknown {
+	if cached.Authentication.State != domain.AgentAuthenticationAuthorized || cached.Capacity.State != domain.CodexCapacityUnknown {
 		t.Fatalf("cached reauthentication state = %#v", cached)
 	}
 	if snapshots := manager.catalog.snapshots(); len(snapshots) != 1 || snapshots[0].ID != record.Snapshot.ID {
@@ -621,8 +611,8 @@ func TestActiveReauthenticationRevalidatesAndReplacesTheDeviceCredential(t *test
 			return &fakeCodexAccountClient{read: observation}, nil
 		},
 	}
-	state := &fakeCodexAccountStateStore{
-		active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 1}, found: true,
+	state := &testCodexDeviceSeed{
+		active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 1}, found: true,
 	}
 	manager := newTestCodexAccountManager(t, factory, state)
 	manager.catalog.newID = func() string { return testAccountID }
@@ -635,7 +625,7 @@ func TestActiveReauthenticationRevalidatesAndReplacesTheDeviceCredential(t *test
 		t.Fatal(err)
 	}
 	manager.mu.Lock()
-	manager.active = state.active
+	setTestDeviceAccount(manager, state.active)
 	manager.markDeviceReconciledLocked(true, time.Now().UTC())
 	manager.mu.Unlock()
 	manager.newID = func() string { return "1c5de3ab-82d0-4a68-a06b-8495cdeab909" }
@@ -661,8 +651,8 @@ func TestActiveReauthenticationRevalidatesAndReplacesTheDeviceCredential(t *test
 	if err != nil || !bytes.Equal(globalCredential, testOAuthCredential("provider-account", "new-access")) {
 		t.Fatalf("device credential = %q, err=%v", globalCredential, err)
 	}
-	if state.active.AccountID != testAccountID || state.active.Revision != 2 {
-		t.Fatalf("durable active account = %#v", state.active)
+	if manager.activeAccountID() != testAccountID {
+		t.Fatalf("active account = %q", manager.activeAccountID())
 	}
 }
 
@@ -680,8 +670,8 @@ func TestActiveReauthenticationCommitsWhenProviderIsUnavailable(t *testing.T) {
 			return &fakeCodexAccountClient{read: observation}, nil
 		},
 	}
-	state := &fakeCodexAccountStateStore{
-		active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 1}, found: true,
+	state := &testCodexDeviceSeed{
+		active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 1}, found: true,
 	}
 	manager := newTestCodexAccountManager(t, factory, state)
 	manager.catalog.newID = func() string { return testAccountID }
@@ -694,7 +684,7 @@ func TestActiveReauthenticationCommitsWhenProviderIsUnavailable(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager.mu.Lock()
-	manager.active = state.active
+	setTestDeviceAccount(manager, state.active)
 	manager.markDeviceReconciledLocked(true, time.Now().UTC())
 	manager.mu.Unlock()
 	manager.newID = func() string { return "1c5de3ab-82d0-4a68-a06b-8495cdeab909" }
@@ -806,7 +796,7 @@ func TestUnsupportedNativeLogoutPreservesAccountCredential(t *testing.T) {
 }
 
 func TestInactiveLogoutReclassifiesAccountAfterGlobalGateAdmission(t *testing.T) {
-	state := &fakeCodexAccountStateStore{active: domain.CodexActiveAccount{AccountID: "source-account", Revision: 1}, found: true}
+	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: "source-account", Revision: 1}, found: true}
 	manager := newTestCodexAccountManager(t, nil, state)
 	manager.catalog.newID = func() string { return testAccountID }
 	record := commitTestAccount(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", ports.CodexAccountObservation{
@@ -835,11 +825,8 @@ func TestInactiveLogoutReclassifiesAccountAfterGlobalGateAdmission(t *testing.T)
 		t.Fatal("inactive logout mutated without acquiring the global gate")
 	}
 	manager.mu.Lock()
-	manager.active = domain.CodexActiveAccount{AccountID: record.Snapshot.ID, Revision: 2}
+	setTestDeviceAccount(manager, testCodexDeviceAccount{AccountID: record.Snapshot.ID, Revision: 2})
 	manager.mu.Unlock()
-	state.mu.Lock()
-	state.active = manager.active
-	state.mu.Unlock()
 	close(gate.release)
 	if err := <-done; err != nil {
 		t.Fatal(err)
@@ -868,7 +855,7 @@ func TestDeleteAccountRequiresSignedOutInactiveAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager.mu.Lock()
-	manager.active = domain.CodexActiveAccount{AccountID: record.Snapshot.ID, Revision: 1}
+	setTestDeviceAccount(manager, testCodexDeviceAccount{AccountID: record.Snapshot.ID, Revision: 1})
 	manager.mu.Unlock()
 	err = manager.deleteAccount(context.Background(), record.Snapshot.ID)
 	apiError = nil
@@ -878,7 +865,7 @@ func TestDeleteAccountRequiresSignedOutInactiveAccount(t *testing.T) {
 		t.Fatalf("delete active account error = %#v", err)
 	}
 	manager.mu.Lock()
-	manager.active = domain.CodexActiveAccount{}
+	setTestDeviceAccount(manager, testCodexDeviceAccount{})
 	manager.mu.Unlock()
 	if err := manager.deleteAccount(context.Background(), record.Snapshot.ID); err != nil {
 		t.Fatal(err)
@@ -888,17 +875,17 @@ func TestDeleteAccountRequiresSignedOutInactiveAccount(t *testing.T) {
 	}
 }
 
-func TestLogoutActiveAccountClearsDeviceCredentialAndPointer(t *testing.T) {
+func TestLogoutActiveAccountClearsDeviceCredentialAndActiveProjection(t *testing.T) {
 	email := "active@example.com"
 	observation := ports.CodexAccountObservation{Authentication: domain.AgentAuthenticationAuthorized, Method: domain.CodexAuthMethodChatGPT, Email: &email}
 	factory := &fakeCodexAccountFactory{open: func(account ports.CodexAccountContext) (ports.CodexAccountClient, error) {
 		return fakeNativeLogoutClient(t, account), nil
 	}}
-	state := &fakeCodexAccountStateStore{active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 1}, found: true}
+	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 1}, found: true}
 	manager := newTestCodexAccountManager(t, factory, state)
 	manager.catalog.newID = func() string { return testAccountID }
 	record := commitTestAccount(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", observation)
-	manager.active = state.active
+	setTestDeviceAccount(manager, state.active)
 	if err := ensurePrivateDirectory(manager.globalHome); err != nil {
 		t.Fatal(err)
 	}
@@ -916,8 +903,8 @@ func TestLogoutActiveAccountClearsDeviceCredentialAndPointer(t *testing.T) {
 	if _, err := os.Stat(manager.globalCredentialPath()); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("device credential still exists: %v", err)
 	}
-	if state.active.AccountID != "" || state.active.Revision != 2 || manager.activeAccountID() != "" {
-		t.Fatalf("active pointer = %#v, manager=%q", state.active, manager.activeAccountID())
+	if manager.activeAccountID() != "" {
+		t.Fatalf("active account = %q", manager.activeAccountID())
 	}
 	loggedOut, _ := manager.catalog.record(record.Snapshot.ID)
 	if loggedOut.Snapshot.Status != domain.CodexAccountStatusSignedOut {
@@ -925,49 +912,14 @@ func TestLogoutActiveAccountClearsDeviceCredentialAndPointer(t *testing.T) {
 	}
 }
 
-func TestLogoutAdoptsActivePointerCommitReportedAsError(t *testing.T) {
-	email := "active@example.com"
-	observation := ports.CodexAccountObservation{Authentication: domain.AgentAuthenticationAuthorized, Method: domain.CodexAuthMethodChatGPT, Email: &email}
-	state := &committedErrorCodexAccountStateStore{
-		active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 1},
-		err:    errors.New("injected post-commit failure"),
-	}
-	manager := newTestCodexAccountManager(t, &fakeCodexAccountFactory{open: func(account ports.CodexAccountContext) (ports.CodexAccountClient, error) {
-		return fakeNativeLogoutClient(t, account), nil
-	}}, state)
-	manager.catalog.newID = func() string { return testAccountID }
-	record := commitTestAccount(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", observation)
-	manager.active = state.active
-	if err := ensurePrivateDirectory(manager.globalHome); err != nil {
-		t.Fatal(err)
-	}
-	credential := []byte("active-device-credential")
-	if err := writePrivateFileAtomic(filepath.Join(record.Home, codexCredentialFilename), credential); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeGlobalCredentialAtomic(manager.globalCredentialPath(), credential); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := manager.logout(context.Background(), record.Snapshot.ID); err != nil {
-		t.Fatalf("logout rejected a confirmed pointer commit: %v", err)
-	}
-	if _, err := os.Stat(manager.globalCredentialPath()); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("device credential remained after confirmed logout: %v", err)
-	}
-	if state.active.AccountID != "" || manager.activeAccountID() != "" {
-		t.Fatalf("active pointer = %#v, manager=%q", state.active, manager.activeAccountID())
-	}
-}
-
 func TestLogoutActiveAPIKeyRejectsExternalCredentialReplacement(t *testing.T) {
-	state := &fakeCodexAccountStateStore{active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 1}, found: true}
+	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 1}, found: true}
 	manager := newTestCodexAccountManager(t, nil, state)
 	manager.catalog.newID = func() string { return testAccountID }
 	record := commitTestAccount(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", ports.CodexAccountObservation{
 		Authentication: domain.AgentAuthenticationAuthorized, Method: domain.CodexAuthMethodAPIKey,
 	})
-	manager.active = state.active
+	setTestDeviceAccount(manager, state.active)
 	if err := ensurePrivateDirectory(manager.globalHome); err != nil {
 		t.Fatal(err)
 	}
@@ -997,8 +949,8 @@ func TestLogoutActiveAPIKeyRejectsExternalCredentialReplacement(t *testing.T) {
 	if err != nil || !bytes.Equal(saved, testAPIKeyCredential("saved-api-key")) {
 		t.Fatalf("saved credential changed = %q, %v", saved, err)
 	}
-	if state.active.AccountID != record.Snapshot.ID {
-		t.Fatalf("active pointer changed = %#v", state.active)
+	if manager.activeAccountID() != record.Snapshot.ID {
+		t.Fatalf("active account changed = %q", manager.activeAccountID())
 	}
 }
 
@@ -1034,8 +986,7 @@ func TestBootstrapImportsUnknownDeviceCredentialOnlyOnce(t *testing.T) {
 	if err := writePrivateFileAtomic(deviceCredential, original); err != nil {
 		t.Fatal(err)
 	}
-	state := &fakeCodexAccountStateStore{}
-	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), device, nil, state, nil)
+	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), device, nil, nil)
 	manager.catalog.newID = func() string { return testAccountID }
 	if err := manager.waitAccountStore(context.Background()); err != nil {
 		t.Fatal(err)
@@ -1079,10 +1030,6 @@ func TestGlobalReconciliationKeepsMatchingDeviceAccountActiveWithoutProactiveRef
 		Method:         domain.CodexAuthMethodChatGPT,
 		Email:          &email,
 	}
-	state := &fakeCodexAccountStateStore{
-		active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 1},
-		found:  true,
-	}
 	manager := newCodexAccountManager(
 		context.Background(),
 		filepath.Join(root, "accounts"),
@@ -1090,7 +1037,6 @@ func TestGlobalReconciliationKeepsMatchingDeviceAccountActiveWithoutProactiveRef
 		filepath.Join(root, "staging"),
 		globalHome,
 		nil,
-		state,
 		nil,
 	)
 	manager.catalog.newID = func() string { return testAccountID }
@@ -1138,18 +1084,18 @@ func TestGlobalReconciliationMatchesRotatedOAuthByAccountID(t *testing.T) {
 		t.Fatal(err)
 	}
 	email := "known@example.com"
-	state := &fakeCodexAccountStateStore{
-		active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 7},
+	state := &testCodexDeviceSeed{
+		active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 7},
 		found:  true,
 	}
-	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, state, nil)
+	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, nil)
 	manager.catalog.newID = func() string { return testAccountID }
 	record := commitTestAccountWithCredential(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", testOAuthCredential("provider-account-a", "old-access"), ports.CodexAccountObservation{
 		Authentication: domain.AgentAuthenticationAuthorized,
 		Method:         domain.CodexAuthMethodChatGPT,
 		Email:          &email,
 	})
-	manager.active = state.active
+	setTestDeviceAccount(manager, state.active)
 	manager.catalog.updateSnapshot(record.Snapshot.ID, func(snapshot *domain.CodexAccountSnapshot) {
 		snapshot.Authentication = accountAuthenticationObservation(time.Now().UTC(), domain.AgentAuthenticationAuthorized)
 	})
@@ -1163,9 +1109,6 @@ func TestGlobalReconciliationMatchesRotatedOAuthByAccountID(t *testing.T) {
 		t.Fatal(err)
 	}
 	view := manager.cached()
-	if state.active.AccountID != testAccountID || state.active.Revision != 7 {
-		t.Fatalf("durable active account changed = %#v", state.active)
-	}
 	if view.ActiveAccountID != testAccountID || len(view.Accounts) != 1 || !view.Accounts[0].Active {
 		t.Fatalf("rotated OAuth account was not matched = %#v", view)
 	}
@@ -1187,8 +1130,8 @@ func TestGlobalReconciliationExactCredentialMatchRemainsActiveOffline(t *testing
 	if err := ensurePrivateDirectory(globalHome); err != nil {
 		t.Fatal(err)
 	}
-	state := &fakeCodexAccountStateStore{active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 7}, found: true}
-	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, state, nil)
+	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 7}, found: true}
+	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, nil)
 	manager.catalog.newID = func() string { return testAccountID }
 	email := "known@example.com"
 	record := commitTestAccount(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", ports.CodexAccountObservation{
@@ -1201,7 +1144,7 @@ func TestGlobalReconciliationExactCredentialMatchRemainsActiveOffline(t *testing
 	if err := writeGlobalCredentialAtomic(manager.globalCredentialPath(), saved); err != nil {
 		t.Fatal(err)
 	}
-	manager.active = state.active
+	setTestDeviceAccount(manager, state.active)
 	manager.factory = &fakeCodexAccountFactory{open: func(account ports.CodexAccountContext) (ports.CodexAccountClient, error) {
 		if account.Managed || account.Home != globalHome {
 			t.Fatalf("matched device verification context = %#v", account)
@@ -1231,8 +1174,8 @@ func TestExternalDeviceSwitchImportsBWithoutWritingIntoA(t *testing.T) {
 	if err := writeGlobalCredentialAtomic(filepath.Join(globalHome, codexCredentialFilename), credentialB); err != nil {
 		t.Fatal(err)
 	}
-	state := &fakeCodexAccountStateStore{active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 3}, found: true}
-	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, state, nil)
+	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 3}, found: true}
+	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, nil)
 	accountBID := "bb1e9a5d-37ad-43f8-83bd-13de8168f8af"
 	ids := []string{testAccountID, accountBID}
 	manager.catalog.newID = func() string { id := ids[0]; ids = ids[1:]; return id }
@@ -1241,7 +1184,7 @@ func TestExternalDeviceSwitchImportsBWithoutWritingIntoA(t *testing.T) {
 	recordA := commitTestAccountWithCredential(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", credentialA, ports.CodexAccountObservation{
 		Authentication: domain.AgentAuthenticationAuthorized, Method: domain.CodexAuthMethodChatGPT, Email: &aEmail,
 	})
-	manager.active = state.active
+	setTestDeviceAccount(manager, state.active)
 	manager.factory = &fakeCodexAccountFactory{open: func(ports.CodexAccountContext) (ports.CodexAccountClient, error) {
 		t.Fatal("local reconciliation opened Codex")
 		return nil, nil
@@ -1264,17 +1207,17 @@ func TestExternalDeviceSwitchImportsBWithoutWritingIntoA(t *testing.T) {
 	}
 }
 
-func TestGlobalReconciliationMissingGlobalClearsActivePointerWithoutRestoringSavedAccount(t *testing.T) {
+func TestGlobalReconciliationMissingGlobalClearsActiveProjectionWithoutRestoringSavedAccount(t *testing.T) {
 	root := t.TempDir()
 	globalHome := filepath.Join(root, "global-codex")
 	if err := ensurePrivateDirectory(globalHome); err != nil {
 		t.Fatal(err)
 	}
-	state := &fakeCodexAccountStateStore{
-		active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 4},
+	state := &testCodexDeviceSeed{
+		active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 4},
 		found:  true,
 	}
-	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, state, nil)
+	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, nil)
 	manager.catalog.newID = func() string { return testAccountID }
 	record := commitTestAccount(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", ports.CodexAccountObservation{
 		Authentication: domain.AgentAuthenticationAuthorized,
@@ -1284,7 +1227,7 @@ func TestGlobalReconciliationMissingGlobalClearsActivePointerWithoutRestoringSav
 	if err != nil {
 		t.Fatal(err)
 	}
-	manager.active = state.active
+	setTestDeviceAccount(manager, state.active)
 	manager.factory = &fakeCodexAccountFactory{open: func(ports.CodexAccountContext) (ports.CodexAccountClient, error) {
 		t.Fatal("missing-global reconciliation opened Codex")
 		return nil, nil
@@ -1293,11 +1236,8 @@ func TestGlobalReconciliationMissingGlobalClearsActivePointerWithoutRestoringSav
 	if err := manager.reconcileGlobal(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if state.active.AccountID != "" || state.active.Revision != 5 {
-		t.Fatalf("missing device credential did not clear active pointer = %#v", state.active)
-	}
 	view := manager.cached()
-	if view.ActiveAccountID != "" || len(view.Accounts) != 1 || view.Accounts[0].Active {
+	if manager.activeAccountID() != "" || view.ActiveAccountID != "" || len(view.Accounts) != 1 || view.Accounts[0].Active {
 		t.Fatalf("saved account remained active without a device credential: %#v", view)
 	}
 	storedCredential, err := readOpaqueCredential(filepath.Join(record.Home, codexCredentialFilename))
@@ -1316,8 +1256,8 @@ func TestEnsureCodexAccountsReconcilesRecentlyRemovedGlobalCredentialBeforeAccou
 		t.Fatal(err)
 	}
 	credential := testOAuthCredential("provider-account", "access-token")
-	state := &fakeCodexAccountStateStore{
-		active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 1},
+	state := &testCodexDeviceSeed{
+		active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 1},
 		found:  true,
 	}
 	var opened []ports.CodexAccountContext
@@ -1336,7 +1276,7 @@ func TestEnsureCodexAccountsReconcilesRecentlyRemovedGlobalCredentialBeforeAccou
 			}, nil
 		},
 	}
-	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, factory, state, nil)
+	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, factory, nil)
 	manager.catalog.newID = func() string { return testAccountID }
 	record := commitTestAccountWithCredential(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", credential, ports.CodexAccountObservation{
 		Authentication: domain.AgentAuthenticationAuthorized,
@@ -1346,7 +1286,7 @@ func TestEnsureCodexAccountsReconcilesRecentlyRemovedGlobalCredentialBeforeAccou
 	if err := writeGlobalCredentialAtomic(manager.globalCredentialPath(), credential); err != nil {
 		t.Fatal(err)
 	}
-	manager.active = state.active
+	setTestDeviceAccount(manager, state.active)
 	manager.accountStoreReady = true
 	now := time.Now().UTC()
 	manager.reconciliation = domain.CodexDeviceReconciliation{
@@ -1379,8 +1319,8 @@ func TestEnsureCodexAccountsReconcilesRecentlyRemovedGlobalCredentialBeforeAccou
 	if view.Accounts[0].Authentication.State != domain.AgentAuthenticationAuthorized {
 		t.Fatalf("saved credential was not checked independently: %#v", view.Accounts[0].Authentication)
 	}
-	if state.active.AccountID != "" || state.active.Revision != 2 {
-		t.Fatalf("durable active pointer was not cleared: %#v", state.active)
+	if manager.activeAccountID() != "" {
+		t.Fatalf("active account was not cleared: %q", manager.activeAccountID())
 	}
 	if len(opened) == 0 {
 		t.Fatal("saved account was not checked")
@@ -1399,14 +1339,14 @@ func TestEnsureCodexAccountsRetriesSavedAccountWhenGlobalCredentialDisappearsDur
 		t.Fatal(err)
 	}
 	credential := testOAuthCredential("provider-account", "access-token")
-	state := &fakeCodexAccountStateStore{
-		active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 1},
+	state := &testCodexDeviceSeed{
+		active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 1},
 		found:  true,
 	}
 	email := "saved@example.com"
 	removedGlobal := false
 	var opened []ports.CodexAccountContext
-	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, state, nil)
+	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, nil)
 	manager.catalog.newID = func() string { return testAccountID }
 	record := commitTestAccountWithCredential(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", credential, ports.CodexAccountObservation{
 		Authentication: domain.AgentAuthenticationAuthorized,
@@ -1437,7 +1377,7 @@ func TestEnsureCodexAccountsRetriesSavedAccountWhenGlobalCredentialDisappearsDur
 			}, nil
 		},
 	}
-	manager.active = state.active
+	setTestDeviceAccount(manager, state.active)
 	manager.accountStoreReady = true
 	readiness := newReadinessCoordinator(readinessCoordinatorConfig{
 		Agents: []agentregistry.HarnessAgent{harnessAgent(string(domain.HarnessCodex), "Codex", nil)},
@@ -1531,8 +1471,7 @@ func TestGlobalReconciliationReusesImportedAccountAcrossExternalTokenRotation(t 
 	if err := writePrivateFileAtomic(globalCredential, credentialA); err != nil {
 		t.Fatal(err)
 	}
-	state := &fakeCodexAccountStateStore{}
-	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, state, nil)
+	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, nil)
 	manager.catalog.newID = func() string { return testAccountID }
 
 	if err := manager.initializeAccountStore(); err != nil {
@@ -1543,7 +1482,7 @@ func TestGlobalReconciliationReusesImportedAccountAcrossExternalTokenRotation(t 
 	}
 	first := manager.cached()
 	if first.ActiveAccountID != testAccountID || len(first.Accounts) != 1 || !first.Accounts[0].Active {
-		t.Fatalf("first imported account = %#v, state=%#v", first, state.active)
+		t.Fatalf("first imported account = %#v", first)
 	}
 	credentialB := testOAuthCredential("provider-account", "access-b")
 	if err := writeGlobalCredentialAtomic(globalCredential, credentialB); err != nil {
@@ -1554,7 +1493,7 @@ func TestGlobalReconciliationReusesImportedAccountAcrossExternalTokenRotation(t 
 	}
 	second := manager.cached()
 	if second.ActiveAccountID != testAccountID || len(second.Accounts) != 1 || !second.Accounts[0].Active {
-		t.Fatalf("rotated account was not reused: %#v state=%#v", second, state.active)
+		t.Fatalf("rotated account was not reused: %#v", second)
 	}
 	record, ok := manager.catalog.record(testAccountID)
 	if !ok {
@@ -1577,7 +1516,7 @@ func TestGlobalReconciliationMatchesAPIKeyDirectlyWhenFileBytesChange(t *testing
 	if err := writePrivateFileAtomic(globalCredential, credentialA); err != nil {
 		t.Fatal(err)
 	}
-	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, &fakeCodexAccountStateStore{}, nil)
+	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, nil)
 	manager.catalog.newID = func() string { return testAccountID }
 	if err := manager.initializeAccountStore(); err != nil {
 		t.Fatal(err)
@@ -1625,8 +1564,7 @@ func TestGlobalReconciliationReactivatesSignedOutIdentityFromDeviceCredential(t 
 			return &fakeCodexAccountClient{read: observation}, nil
 		},
 	}
-	state := &fakeCodexAccountStateStore{}
-	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, factory, state, nil)
+	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, factory, nil)
 	manager.catalog.newID = func() string { return testAccountID }
 	record := commitTestAccountWithCredential(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", testOAuthCredential("returning-account", "old-access"), observation)
 	if _, err := manager.catalog.markSignedOut(record.Snapshot.ID); err != nil {
@@ -1736,14 +1674,14 @@ func TestLocalReconciliationPreservesActiveSlotProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	slotEmail := "saved@example.com"
-	state := &fakeCodexAccountStateStore{active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 3}, found: true}
+	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 3}, found: true}
 	var opened []ports.CodexAccountContext
-	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, state, nil)
+	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, nil)
 	manager.catalog.newID = func() string { return testAccountID }
 	record := commitTestAccount(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", ports.CodexAccountObservation{
 		Authentication: domain.AgentAuthenticationAuthorized, Method: domain.CodexAuthMethodChatGPT, Email: &slotEmail,
 	})
-	manager.active = state.active
+	setTestDeviceAccount(manager, state.active)
 	manager.factory = &fakeCodexAccountFactory{capabilities: supportedCodexAccountCapabilities(), open: func(account ports.CodexAccountContext) (ports.CodexAccountClient, error) {
 		opened = append(opened, account)
 		if account.Managed {
@@ -1778,7 +1716,7 @@ func TestLocalReconciliationPreservesActiveSlotProjection(t *testing.T) {
 type apiKeySwitchFixture struct {
 	manager *codexAccountManager
 	service *Service
-	state   *fakeCodexAccountStateStore
+	state   *testCodexDeviceSeed
 	source  codexAccountRecord
 	target  codexAccountRecord
 }
@@ -1790,8 +1728,8 @@ func newAPIKeySwitchFixture(t *testing.T) apiKeySwitchFixture {
 	if err := ensurePrivateDirectory(globalHome); err != nil {
 		t.Fatal(err)
 	}
-	state := &fakeCodexAccountStateStore{active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 1}, found: true}
-	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, state, nil)
+	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 1}, found: true}
+	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, nil)
 	ids := []string{testAccountID, "bb1e9a5d-37ad-43f8-83bd-13de8168f8af"}
 	manager.catalog.newID = func() string { id := ids[0]; ids = ids[1:]; return id }
 	observation := ports.CodexAccountObservation{Authentication: domain.AgentAuthenticationAuthorized, Method: domain.CodexAuthMethodAPIKey}
@@ -1806,7 +1744,7 @@ func newAPIKeySwitchFixture(t *testing.T) apiKeySwitchFixture {
 	if err := writeGlobalCredentialAtomic(manager.globalCredentialPath(), testAPIKeyCredential("source-api-key")); err != nil {
 		t.Fatal(err)
 	}
-	manager.active = state.active
+	setTestDeviceAccount(manager, state.active)
 	manager.accountStoreReady = true
 	manager.mu.Lock()
 	manager.markDeviceReconciledLocked(true, time.Now().UTC())
@@ -1829,7 +1767,7 @@ func TestVerifySwitchTargetDoesNotRequireManagedDeviceSource(t *testing.T) {
 		},
 	}
 
-	if err := fixture.service.PrepareCodexAccountForSwitch(context.Background(), fixture.target.Snapshot.ID); err != nil {
+	if _, err := fixture.service.PrepareCodexAccountForSwitch(context.Background(), "6f8dfc76-8db4-4621-8974-c480093e0d55", fixture.target.Snapshot.ID); err != nil {
 		t.Fatalf("PrepareCodexAccountForSwitch: %v", err)
 	}
 	fixture.manager.mu.Lock()
@@ -1916,36 +1854,27 @@ func TestPrepareSwitchRejectsChangedAPIKeyCredential(t *testing.T) {
 	if err := writePrivateFileAtomic(filepath.Join(fixture.target.Home, codexCredentialFilename), []byte("malformed-target-credential")); err != nil {
 		t.Fatal(err)
 	}
-	if err := fixture.service.PrepareCodexAccountForSwitch(context.Background(), fixture.target.Snapshot.ID); err == nil {
+	if _, err := fixture.service.PrepareCodexAccountForSwitch(context.Background(), "6f8dfc76-8db4-4621-8974-c480093e0d55", fixture.target.Snapshot.ID); err == nil {
 		t.Fatal("switch preparation accepted a changed API-key credential")
-	}
-}
-
-func TestCheckpointRejectsExternalAPIKeySourceReplacement(t *testing.T) {
-	fixture := newAPIKeySwitchFixture(t)
-	if err := writeGlobalCredentialAtomic(fixture.manager.globalCredentialPath(), testAPIKeyCredential("external-source-api-key")); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := fixture.service.CheckpointAndActivateCodexAccount(context.Background(), domain.CodexAccountSwitchSourceManaged, "6f8dfc76-8db4-4621-8974-c480093e0d55", fixture.target.Snapshot.ID, 1); err == nil {
-		t.Fatal("checkpoint accepted an externally replaced source API-key credential")
-	}
-	saved, err := readOpaqueCredential(filepath.Join(fixture.source.Home, codexCredentialFilename))
-	if err != nil || !bytes.Equal(saved, testAPIKeyCredential("source-api-key")) {
-		t.Fatalf("source slot was overwritten = %q, %v", saved, err)
 	}
 }
 
 func TestActivationRejectsExternalAuthorizedAPIKeyReplacement(t *testing.T) {
 	fixture := newAPIKeySwitchFixture(t)
+	switchID := "6f8dfc76-8db4-4621-8974-c480093e0d55"
+	source, err := fixture.service.PrepareCodexAccountForSwitch(context.Background(), switchID, fixture.target.Snapshot.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := writeGlobalCredentialAtomic(fixture.manager.globalCredentialPath(), testAPIKeyCredential("external-activation-api-key")); err != nil {
 		t.Fatal(err)
 	}
-	_, err := fixture.manager.activateFromCredentialLocked(context.Background(), fixture.target.Snapshot.ID, 1, filepath.Join(fixture.target.Home, codexCredentialFilename), testAPIKeyCredential("source-api-key"))
+	err = fixture.service.ActivatePreparedCodexAccountSwitch(context.Background(), source.Kind, switchID, fixture.target.Snapshot.ID)
 	if !errors.Is(err, ports.ErrCodexGlobalAccountChanged) {
 		t.Fatalf("activation error = %v, want global-account-changed", err)
 	}
-	if fixture.state.active.AccountID != fixture.source.Snapshot.ID || fixture.state.active.Revision != 1 {
-		t.Fatalf("active pointer changed = %#v", fixture.state.active)
+	if fixture.manager.activeAccountID() != fixture.source.Snapshot.ID {
+		t.Fatalf("device account changed = %q", fixture.manager.activeAccountID())
 	}
 }
 
@@ -1954,7 +1883,7 @@ func TestConfirmCodexAccountSwitchTargetRejectsExternalAPIKeyReplacement(t *test
 	if err := writeGlobalCredentialAtomic(fixture.manager.globalCredentialPath(), testAPIKeyCredential("external")); err != nil {
 		t.Fatal(err)
 	}
-	err := fixture.service.ConfirmCodexAccountSwitchTarget(context.Background(), fixture.target.Snapshot.ID)
+	err := fixture.service.ConfirmCodexAccountSwitchTarget(context.Background(), "6f8dfc76-8db4-4621-8974-c480093e0d55", fixture.target.Snapshot.ID)
 	if err == nil {
 		t.Fatal("confirmation accepted an externally replaced API key")
 	}
@@ -1973,11 +1902,11 @@ func TestConfirmCodexAccountSwitchTargetAdoptsDeviceTargetAfterPointerLag(t *tes
 	if err := writeGlobalCredentialAtomic(fixture.manager.globalCredentialPath(), targetCredential); err != nil {
 		t.Fatal(err)
 	}
-	if err := fixture.service.ConfirmCodexAccountSwitchTarget(context.Background(), fixture.target.Snapshot.ID); err != nil {
+	if err := fixture.service.ConfirmCodexAccountSwitchTarget(context.Background(), "6f8dfc76-8db4-4621-8974-c480093e0d55", fixture.target.Snapshot.ID); err != nil {
 		t.Fatal(err)
 	}
-	if fixture.manager.active.AccountID != fixture.target.Snapshot.ID || fixture.manager.active.Revision != 2 {
-		t.Fatalf("active pointer = %#v, want verified target revision 2", fixture.manager.active)
+	if fixture.manager.deviceAccountID != fixture.target.Snapshot.ID {
+		t.Fatalf("device account = %q, want verified target", fixture.manager.deviceAccountID)
 	}
 	if fixture.manager.deviceAccountID != fixture.target.Snapshot.ID || !fixture.manager.reconciliation.ActiveAccountVerified {
 		t.Fatalf("device association was not adopted: account=%q reconciliation=%#v", fixture.manager.deviceAccountID, fixture.manager.reconciliation)
@@ -1990,45 +1919,15 @@ func TestCredentialActivationDoesNotOpenCodex(t *testing.T) {
 		t.Fatal("credential activation opened Codex")
 		return nil, nil
 	}}
-	active, err := fixture.manager.activateFromCredentialLocked(context.Background(), fixture.target.Snapshot.ID, 1, filepath.Join(fixture.target.Home, codexCredentialFilename), testAPIKeyCredential("source-api-key"))
+	err := fixture.manager.activateFromCredentialLocked(fixture.target.Snapshot.ID, filepath.Join(fixture.target.Home, codexCredentialFilename), testAPIKeyCredential("source-api-key"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if active.AccountID != fixture.target.Snapshot.ID || active.Revision != 2 {
-		t.Fatalf("active account = %#v", active)
+	if fixture.manager.activeAccountID() != fixture.target.Snapshot.ID {
+		t.Fatalf("active account = %q", fixture.manager.activeAccountID())
 	}
 	if fixture.manager.factory.(*fakeCodexAccountFactory).opens != 0 {
 		t.Fatal("credential activation opened Codex")
-	}
-}
-
-func TestCredentialActivationAdoptsPointerCommitReportedAsError(t *testing.T) {
-	fixture := newAPIKeySwitchFixture(t)
-	state := &committedErrorCodexAccountStateStore{
-		active: fixture.state.active,
-		err:    errors.New("injected post-commit failure"),
-	}
-	fixture.manager.stateStore = state
-	fixture.manager.factory = &fakeCodexAccountFactory{open: func(ports.CodexAccountContext) (ports.CodexAccountClient, error) {
-		return &fakeCodexAccountClient{read: ports.CodexAccountObservation{
-			Authentication: domain.AgentAuthenticationAuthorized,
-			Method:         domain.CodexAuthMethodAPIKey,
-		}}, nil
-	}}
-
-	active, err := fixture.manager.activateFromCredentialLocked(
-		context.Background(), fixture.target.Snapshot.ID, 1,
-		filepath.Join(fixture.target.Home, codexCredentialFilename), testAPIKeyCredential("source-api-key"),
-	)
-	if err != nil {
-		t.Fatalf("activation rejected a confirmed pointer commit: %v", err)
-	}
-	if active.AccountID != fixture.target.Snapshot.ID || fixture.manager.activeAccountID() != fixture.target.Snapshot.ID {
-		t.Fatalf("active account = %#v, manager=%q", active, fixture.manager.activeAccountID())
-	}
-	global, readErr := readOpaqueCredential(fixture.manager.globalCredentialPath())
-	if readErr != nil || !bytes.Equal(global, testAPIKeyCredential("target-api-key")) {
-		t.Fatalf("target credential was rolled back after pointer commit: %q, %v", global, readErr)
 	}
 }
 
@@ -2116,7 +2015,7 @@ func TestLoginDeduplicatesExistingAccountByProviderID(t *testing.T) {
 			return client, nil
 		},
 	}
-	state := &fakeCodexAccountStateStore{}
+	state := &testCodexDeviceSeed{}
 	manager := newTestCodexAccountManager(t, factory, state)
 
 	existingID := "a1111111-1111-4111-8111-111111111111"
@@ -2172,13 +2071,13 @@ func newSwitchAdmissionFixture(t *testing.T, factory *fakeCodexAccountFactory, o
 		t.Fatal(err)
 	}
 	sourceID := "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-	state := &fakeCodexAccountStateStore{
-		active: domain.CodexActiveAccount{AccountID: sourceID, Revision: 1},
+	state := &testCodexDeviceSeed{
+		active: testCodexDeviceAccount{AccountID: sourceID, Revision: 1},
 		found:  true,
 	}
 	manager := newCodexAccountManager(context.Background(),
 		filepath.Join(root, "accounts"), filepath.Join(root, "pending"),
-		filepath.Join(root, "staging"), globalHome, factory, state, nil)
+		filepath.Join(root, "staging"), globalHome, factory, nil)
 	ids := []string{sourceID, testAccountID}
 	idx := 0
 	manager.catalog.newID = func() string { id := ids[idx]; idx++; return id }
@@ -2190,7 +2089,7 @@ func newSwitchAdmissionFixture(t *testing.T, factory *fakeCodexAccountFactory, o
 	if err := writeGlobalCredentialAtomic(manager.globalCredentialPath(), sourceCredential); err != nil {
 		t.Fatal(err)
 	}
-	manager.active = state.active
+	setTestDeviceAccount(manager, state.active)
 	manager.accountStoreReady = true
 	manager.reconciliation = domain.CodexDeviceReconciliation{
 		Status: domain.CodexDeviceReconciliationVerified, ActiveAccountVerified: true,
@@ -2214,7 +2113,7 @@ func TestSwitchAdmissionDoesNotOpenCodexWhenProviderIsUnavailable(t *testing.T) 
 	}
 	_, svc, record := newSwitchAdmissionFixture(t, factory, observation)
 
-	err := svc.PrepareCodexAccountForSwitch(context.Background(), record.Snapshot.ID)
+	_, err := svc.PrepareCodexAccountForSwitch(context.Background(), "6f8dfc76-8db4-4621-8974-c480093e0d55", record.Snapshot.ID)
 	if err != nil {
 		t.Fatalf("local switch admission was blocked by provider state: %v", err)
 	}
@@ -2238,7 +2137,7 @@ func TestSwitchAdmissionIgnoresStaleAuthenticationFailure(t *testing.T) {
 	}
 	_, svc, record := newSwitchAdmissionFixture(t, factory, observation)
 
-	err := svc.PrepareCodexAccountForSwitch(context.Background(), record.Snapshot.ID)
+	_, err := svc.PrepareCodexAccountForSwitch(context.Background(), "6f8dfc76-8db4-4621-8974-c480093e0d55", record.Snapshot.ID)
 	if err != nil {
 		t.Fatalf("stale authentication failure blocked local switch admission: %v", err)
 	}
@@ -2253,7 +2152,7 @@ func TestSwitchAdmissionIgnoresCachedUnauthorizedState(t *testing.T) {
 	})
 	manager.requireReauthentication(record.Snapshot.ID)
 
-	if err := svc.PrepareCodexAccountForSwitch(context.Background(), record.Snapshot.ID); err != nil {
+	if _, err := svc.PrepareCodexAccountForSwitch(context.Background(), "6f8dfc76-8db4-4621-8974-c480093e0d55", record.Snapshot.ID); err != nil {
 		t.Fatalf("cached provider rejection blocked a locally valid credential: %v", err)
 	}
 }

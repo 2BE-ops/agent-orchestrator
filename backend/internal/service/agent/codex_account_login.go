@@ -39,7 +39,13 @@ func (m *codexAccountManager) openLoginTerminal(ctx context.Context, targetAccou
 	}
 	id := m.newID()
 	now := m.now()
-	snapshot := domain.CodexAccountLoginOperation{OperationID: id, AccountID: targetAccountID, Status: domain.CodexAccountLoginPending, ReasonCode: domain.CodexAccountLoginReasonPending, Reason: "Waiting for Codex sign-in.", ExpiresAt: now.Add(codexAccountLoginLifetime)}
+	loginReason := "Sign in with the same Codex account."
+	if targetAccountID == "" {
+		loginReason = "Sign in to add a Codex account."
+	} else if record, ok := m.catalog.record(targetAccountID); ok && record.Snapshot.AccountEmail != nil && safeAccountEmail(*record.Snapshot.AccountEmail) {
+		loginReason = "Sign in with " + strings.TrimSpace(*record.Snapshot.AccountEmail) + ". A different account will not be saved."
+	}
+	snapshot := domain.CodexAccountLoginOperation{OperationID: id, AccountID: targetAccountID, Status: domain.CodexAccountLoginPending, ReasonCode: domain.CodexAccountLoginReasonPending, Reason: loginReason, ExpiresAt: now.Add(codexAccountLoginLifetime)}
 	m.mu.Lock()
 	if m.login != nil && !terminalLoginStatus(m.login.snapshot.Status) {
 		m.mu.Unlock()
@@ -192,10 +198,7 @@ func (m *codexAccountManager) verifyLogin(ctx context.Context, operationID strin
 			return m.finishLogin(operationID, domain.CodexAccountLoginFailed, domain.CodexAccountLoginReasonFailed, "Sign in with the same Codex account to replace its credentials.", nil), nil
 		}
 		credential := pendingCredential
-		m.mu.Lock()
-		active := m.active
-		m.mu.Unlock()
-		if active.AccountID == targetAccountID {
+		if m.activeAccountID() == targetAccountID {
 			expectedGlobal, verifyErr := m.activeAccountCredentialLocked(target)
 			if verifyErr != nil {
 				reason := "The device Codex account could not be confirmed. Try again."
@@ -204,7 +207,7 @@ func (m *codexAccountManager) verifyLogin(ctx context.Context, operationID strin
 				}
 				return m.finishLogin(operationID, domain.CodexAccountLoginFailed, domain.CodexAccountLoginReasonFailed, reason, nil), nil
 			}
-			if _, activateErr := m.activateFromCredentialLocked(m.ctx, targetAccountID, active.Revision, filepath.Join(home, codexCredentialFilename), expectedGlobal); activateErr != nil {
+			if activateErr := m.activateFromCredentialLocked(targetAccountID, filepath.Join(home, codexCredentialFilename), expectedGlobal); activateErr != nil {
 				return m.finishLogin(operationID, domain.CodexAccountLoginFailed, domain.CodexAccountLoginReasonFailed, "The account was verified but could not be activated.", nil), nil
 			}
 			record, _ = m.catalog.record(targetAccountID)
@@ -218,7 +221,7 @@ func (m *codexAccountManager) verifyLogin(ctx context.Context, operationID strin
 		_ = os.RemoveAll(pendingDir)
 		m.clearReauthenticationRequired(targetAccountID)
 		m.catalog.updateSnapshot(targetAccountID, func(snapshot *domain.CodexAccountSnapshot) {
-			snapshot.Authentication = uncheckedAuthentication()
+			snapshot.Authentication = successfulAuthentication(m.now(), domain.AgentAuthenticationAuthorized, domain.AgentReadinessReasonAuthorized, "Codex is signed in.")
 			if observation.Method != domain.CodexAuthMethodUnknown {
 				snapshot.AuthMethod = observation.Method
 			}
@@ -245,7 +248,7 @@ func (m *codexAccountManager) verifyLogin(ctx context.Context, operationID strin
 		}
 		activationCredentialPath := filepath.Join(record.Home, codexCredentialFilename)
 		m.catalog.updateSnapshot(record.Snapshot.ID, func(s *domain.CodexAccountSnapshot) {
-			s.Authentication = uncheckedAuthentication()
+			s.Authentication = successfulAuthentication(m.now(), domain.AgentAuthenticationAuthorized, domain.AgentReadinessReasonAuthorized, "Codex is signed in.")
 			if observation.Method != domain.CodexAuthMethodUnknown {
 				s.AuthMethod = observation.Method
 			}
@@ -254,16 +257,13 @@ func (m *codexAccountManager) verifyLogin(ctx context.Context, operationID strin
 			}
 			s.Label = accountLabel(s.ID, s.AuthMethod, s.AccountEmail)
 		})
-		m.mu.Lock()
 		activateFirst := !op.deviceState.exists
-		expectedRevision := m.active.Revision
-		m.mu.Unlock()
 		if activateFirst {
 			// First-account convenience is only safe while the device store is
 			// still empty. The empty expected value is an explicit compare-and-
 			// swap guard, so an external login that appeared during the terminal
 			// flow is never overwritten.
-			_, activationErr := m.activateFromCredentialLocked(m.ctx, record.Snapshot.ID, expectedRevision, activationCredentialPath, []byte{})
+			activationErr := m.activateFromCredentialLocked(record.Snapshot.ID, activationCredentialPath, []byte{})
 			if errors.Is(activationErr, ports.ErrCodexGlobalAccountChanged) {
 				// An external login appeared after Add started. The account is still
 				// safely saved; leave the device untouched and let reconciliation
@@ -283,6 +283,12 @@ func (m *codexAccountManager) verifyLogin(ctx context.Context, operationID strin
 		}
 	}
 	m.invalidateCredentialEvidence(record.Snapshot.ID)
+	// A native login just produced and committed this credential. Keep that
+	// immediate success visible while the independent protected check enriches
+	// email, plan and usage in the background.
+	m.catalog.updateSnapshot(record.Snapshot.ID, func(snapshot *domain.CodexAccountSnapshot) {
+		snapshot.Authentication = successfulAuthentication(m.now(), domain.AgentAuthenticationAuthorized, domain.AgentReadinessReasonAuthorized, "Codex is signed in.")
+	})
 	latestRecord, _ := m.catalog.record(record.Snapshot.ID)
 	snapshot := latestRecord.Snapshot
 	snapshot.Active = snapshot.ID == m.activeAccountID()

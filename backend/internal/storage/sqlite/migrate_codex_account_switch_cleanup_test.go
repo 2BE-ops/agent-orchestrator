@@ -62,3 +62,42 @@ func TestMigration0142RemovesRetiredCodexAccountSwitchState(t *testing.T) {
 		})
 	}
 }
+
+func TestMigration0143RemovesActivePointerAndSwitchRevision(t *testing.T) {
+	db := openMigratedDatabaseCopy(t, 142)
+	now := time.Now().UTC().Truncate(time.Second)
+	if _, err := db.Exec(`INSERT INTO codex_active_account
+		(singleton_id, account_id, revision, activated_at, updated_at)
+		VALUES (1, 'account-a', 7, ?, ?)`, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO codex_account_switches (
+		id, source_account_id, target_account_id, idempotency_key,
+		request_fingerprint, expected_account_revision, phase, failure_code,
+		created_at, updated_at, source_kind
+	) VALUES ('switch-a', 'account-a', 'account-b', 'request-a',
+		'v4:target', 7, 'completed', '', ?, ?, 'managed')`, now, now); err != nil {
+		t.Fatal(err)
+	}
+
+	upTo(t, db, 143)
+
+	var activeTable, revisionColumn int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'codex_active_account'`).Scan(&activeTable); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('codex_account_switches') WHERE name = 'expected_account_revision'`).Scan(&revisionColumn); err != nil {
+		t.Fatal(err)
+	}
+	if activeTable != 0 || revisionColumn != 0 {
+		t.Fatalf("retired state remains: active table=%d revision column=%d", activeTable, revisionColumn)
+	}
+
+	var source, target, phase string
+	if err := db.QueryRow(`SELECT source_account_id, target_account_id, phase FROM codex_account_switches WHERE id = 'switch-a'`).Scan(&source, &target, &phase); err != nil {
+		t.Fatal(err)
+	}
+	if source != "account-a" || target != "account-b" || phase != "completed" {
+		t.Fatalf("preserved switch = (%q,%q,%q)", source, target, phase)
+	}
+}

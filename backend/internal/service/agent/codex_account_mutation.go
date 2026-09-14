@@ -90,15 +90,8 @@ func (m *codexAccountManager) logout(ctx context.Context, accountID string) erro
 	}
 	if active {
 		m.mu.Lock()
-		current := m.active
-		m.mu.Unlock()
-		cleared, pointerErr := m.commitActivePointer(ctx, "", current, m.now())
-		if pointerErr != nil {
-			// Logout is irreversible; reconciliation will retry pointer cleanup.
-			return pointerErr
-		}
-		m.mu.Lock()
-		m.active = cleared
+		m.deviceAccountID = ""
+		m.deviceCredentialPresent = false
 		m.markDeviceReconciledLocked(false, m.now())
 		m.mu.Unlock()
 	}
@@ -141,12 +134,15 @@ func (m *codexAccountManager) deleteAccount(ctx context.Context, accountID strin
 func (m *codexAccountManager) activeAccountID() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.active.AccountID
+	if !m.reconciliation.ActiveAccountVerified {
+		return ""
+	}
+	return m.deviceAccountID
 }
 
-func (m *codexAccountManager) activateFromCredentialLocked(ctx context.Context, accountID string, expectedRevision int64, sourceCredential string, expectedGlobal []byte) (domain.CodexActiveAccount, error) {
-	notCommitted := func(err error) (domain.CodexActiveAccount, error) {
-		return domain.CodexActiveAccount{}, errors.Join(ports.ErrCodexAccountSwitchNotCommitted, err)
+func (m *codexAccountManager) activateFromCredentialLocked(accountID, sourceCredential string, expectedGlobal []byte) error {
+	notCommitted := func(err error) error {
+		return errors.Join(ports.ErrCodexAccountSwitchNotCommitted, err)
 	}
 	record, ok := m.catalog.record(accountID)
 	if !ok || record.Snapshot.Status != domain.CodexAccountStatusValid {
@@ -171,30 +167,16 @@ func (m *codexAccountManager) activateFromCredentialLocked(ctx context.Context, 
 		}
 	}
 	if err := writeGlobalCredentialSettled(globalPath, targetCredential); err != nil {
-		return domain.CodexActiveAccount{}, err
+		return err
 	}
 	currentCredential, currentState, currentErr := readCodexFileState(globalPath, false)
 	latestCredential, latestState, latestErr := readCodexFileState(globalPath, false)
 	if currentErr != nil || latestErr != nil || !sameCodexFileState(currentState, latestState) ||
 		!bytes.Equal(currentCredential, latestCredential) || !bytes.Equal(currentCredential, targetCredential) {
-		return domain.CodexActiveAccount{}, ports.ErrCodexGlobalAccountChanged
+		return ports.ErrCodexGlobalAccountChanged
 	}
 	now := m.now()
-	current := domain.CodexActiveAccount{Revision: expectedRevision}
 	m.mu.Lock()
-	if m.active.Revision == expectedRevision {
-		current = m.active
-	}
-	m.mu.Unlock()
-	active, err := m.commitActivePointer(ctx, accountID, current, now)
-	if err != nil {
-		// The global credential already changed. Leave it in place so the durable
-		// switch can finish the pointer update locally; rolling it back here made
-		// a healthy device account look like an ambiguous recovery.
-		return domain.CodexActiveAccount{}, err
-	}
-	m.mu.Lock()
-	m.active = active
 	m.deviceAccountID = accountID
 	m.deferredAccountID = ""
 	m.deviceCredentialPresent = true
@@ -205,7 +187,7 @@ func (m *codexAccountManager) activateFromCredentialLocked(ctx context.Context, 
 	}
 	m.invalidate(accountID)
 	m.publish()
-	return active, nil
+	return nil
 }
 
 func writeGlobalCredentialSettled(path string, data []byte) error {

@@ -159,27 +159,18 @@ type ChangeLog struct {
 }
 
 type CodexAccountSwitch struct {
-	ID                      string
-	SourceAccountID         string
-	TargetAccountID         string
-	IdempotencyKey          string
-	RequestFingerprint      string
-	ExpectedAccountRevision int64
-	Phase                   string
-	FailureCode             string
-	CredentialsCommittedAt  sql.NullTime
-	CreatedAt               time.Time
-	UpdatedAt               time.Time
-	CompletedAt             sql.NullTime
-	SourceKind              string
-}
-
-type CodexActiveAccount struct {
-	SingletonID int64
-	AccountID   string
-	Revision    int64
-	ActivatedAt time.Time
-	UpdatedAt   time.Time
+	ID                     string
+	SourceAccountID        string
+	TargetAccountID        string
+	IdempotencyKey         string
+	RequestFingerprint     string
+	Phase                  string
+	FailureCode            string
+	CredentialsCommittedAt sql.NullTime
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	CompletedAt            sql.NullTime
+	SourceKind             string
 }
 
 type Conversation struct {

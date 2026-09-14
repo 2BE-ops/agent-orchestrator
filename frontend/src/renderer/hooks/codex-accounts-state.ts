@@ -19,7 +19,7 @@ export function mergeCodexAccounts(
 	const presentedActiveID = incoming.deviceReconciliation?.activeAccountVerified
 		? incoming.activeAccountId
 		: incoming.deviceReconciliation?.status === "checking"
-			? incomingPresentedActiveID ?? (currentPresentedActiveID === incoming.activeAccountId ? currentPresentedActiveID : undefined)
+			? incomingPresentedActiveID ?? currentPresentedActiveID
 			: undefined;
 	const normalized = accounts.map((account) => ({
 		...account,

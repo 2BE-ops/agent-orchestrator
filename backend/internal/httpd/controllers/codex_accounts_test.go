@@ -339,7 +339,7 @@ func TestCodexAccountResetCreditRouteRequiresIdempotencyAndReturnsRefreshedAccou
 func TestCodexAccountSwitchRequiresIdempotencyAndRedactsPrivateIdentity(t *testing.T) {
 	fake := &fakeCodexAccounts{result: codexAccountsFixture(), switchResult: domain.CodexAccountSwitch{
 		ID: "switch-1", SourceAccountID: "source", TargetAccountID: "target", Phase: domain.CodexAccountSwitchRequested,
-		IdempotencyKey: "private-key", RequestFingerprint: "private-fingerprint", ExpectedAccountRevision: 3,
+		IdempotencyKey: "private-key", RequestFingerprint: "private-fingerprint",
 	}}
 	srv := newCodexAccountServer(t, fake)
 	defer srv.Close()

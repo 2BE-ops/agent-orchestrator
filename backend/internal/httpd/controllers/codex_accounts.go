@@ -88,8 +88,7 @@ func (c *CodexAccountsController) startSwitch(w http.ResponseWriter, r *http.Req
 		return
 	}
 	result, err := c.Svc.StartCodexAccountSwitch(r.Context(), ports.CodexAccountSwitchConfig{
-		TargetAccountID: request.TargetAccountID, ExpectedAccountRevision: request.ExpectedAccountRevision,
-		IdempotencyKey: request.IdempotencyKey,
+		TargetAccountID: request.TargetAccountID, IdempotencyKey: request.IdempotencyKey,
 	})
 	if err != nil {
 		writeCodexAccountSwitchError(w, r, err)
@@ -102,8 +101,6 @@ func writeCodexAccountSwitchError(w http.ResponseWriter, r *http.Request, err er
 	switch {
 	case errors.Is(err, ports.ErrCodexAccountAlreadyActive):
 		envelope.WriteAPIError(w, r, http.StatusConflict, "conflict", "CODEX_ACCOUNT_ALREADY_ACTIVE", "This Codex account is already active", nil)
-	case errors.Is(err, ports.ErrCodexAccountRevisionConflict):
-		envelope.WriteAPIError(w, r, http.StatusConflict, "conflict", "CODEX_ACCOUNT_REVISION_CONFLICT", "The active Codex account changed", nil)
 	case errors.Is(err, ports.ErrCodexAccountSwitchInProgress):
 		envelope.WriteAPIError(w, r, http.StatusConflict, "conflict", "CODEX_ACCOUNT_SWITCH_IN_PROGRESS", "A Codex account switch is already in progress", nil)
 	case errors.Is(err, ports.ErrCodexAccountSwitchIdempotencyConflict):

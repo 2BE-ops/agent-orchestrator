@@ -20,7 +20,6 @@ const (
 type CodexAccountSwitchSource struct {
 	Kind      CodexAccountSwitchSourceKind
 	AccountID string
-	Revision  int64
 }
 
 // CodexAccountSwitchPhase is the durable global credential-switch phase.
@@ -60,7 +59,6 @@ type CodexAccountSwitch struct {
 	UpdatedAt              time.Time                    `json:"updatedAt"`
 	CompletedAt            *time.Time                   `json:"completedAt,omitempty"`
 	// Daemon-private idempotency data.
-	IdempotencyKey          string `json:"-"`
-	RequestFingerprint      string `json:"-"`
-	ExpectedAccountRevision int64  `json:"-"`
+	IdempotencyKey     string `json:"-"`
+	RequestFingerprint string `json:"-"`
 }

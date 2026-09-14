@@ -146,6 +146,7 @@ var shippedMigrations = map[int64]string{
 	139: "0139_conversation_steer_delivery.sql",
 	141: "0141_codex_switch_source_kind.sql",
 	142: "0142_codex_account_switch_cleanup.sql",
+	143: "0143_codex_account_pointer_cleanup.sql",
 }
 
 // burnedVersion reports version numbers that must never be (re)used: they

@@ -1220,8 +1220,8 @@ type CodexAccountsResponse struct {
 	CurrentSwitch        *CodexAccountSwitchResponse       `json:"currentSwitch,omitempty"`
 }
 
-// CodexDeviceReconciliationResponse reports whether the durable active pointer
-// has been verified against Codex's canonical device credential.
+// CodexDeviceReconciliationResponse reports whether the device credential was
+// locally associated with a saved account.
 type CodexDeviceReconciliationResponse struct {
 	Status                string     `json:"status" enum:"not_checked,checking,verified,temporarily_unavailable,blocked"`
 	ActiveAccountVerified bool       `json:"activeAccountVerified"`
@@ -1377,8 +1377,9 @@ type CodexAccountLoginTerminalResponse struct {
 
 // StartCodexAccountSwitchRequest requests an idempotent global account change.
 type StartCodexAccountSwitchRequest struct {
-	TargetAccountID         string `json:"targetAccountId" minLength:"1"`
-	ExpectedAccountRevision int64  `json:"expectedAccountRevision" minimum:"0"`
+	TargetAccountID string `json:"targetAccountId" minLength:"1"`
+	// ExpectedAccountRevision is accepted temporarily for older clients and ignored.
+	ExpectedAccountRevision *int64 `json:"expectedAccountRevision,omitempty" minimum:"0" deprecated:"true"`
 	IdempotencyKey          string `json:"idempotencyKey" minLength:"1"`
 }
 

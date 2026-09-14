@@ -33,7 +33,7 @@ export function CodexAccountLoginTerminalPanel({ activeLogin, pending, onCheckAg
 	}, [operationKey]);
 	useEffect(() => { panelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [operationKey]);
 	const status = activeLogin.status === "pending"
-		? t("settings.codexAccounts.loginRunning")
+		? activeLogin.reason
 		: activeLogin.status === "verifying"
 			? t("settings.codexAccounts.loginVerifying")
 			: t(codexAccountReasonKey(activeLogin.reasonCode));

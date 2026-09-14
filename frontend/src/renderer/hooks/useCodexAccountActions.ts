@@ -143,7 +143,7 @@ export function useCodexAccountActions(queryClient: QueryClient) {
 		setError(null);
 		setAuthenticationRetryAccountId(accountId);
 		try {
-			const next = await ensureCodexAccounts([accountId], false, true);
+			const next = await ensureCodexAccounts([accountId], true, true);
 			writeCodexAccounts(queryClient, next, "preserveMissing");
 		} catch (cause) {
 			setError(errorMessage(cause, t("settings.codexAccounts.authenticationRetryFailed")));
@@ -167,10 +167,10 @@ export function useCodexAccountActions(queryClient: QueryClient) {
 		}
 	}, [queryClient, t]);
 
-	const switchAccount = useCallback(async (account: CodexAccount, revision: number, idempotencyKey: string) => {
+	const switchAccount = useCallback(async (account: CodexAccount, idempotencyKey: string) => {
 		setError(null);
 		try {
-			const nextSwitch = await startCodexAccountSwitch(account.id, revision, idempotencyKey);
+			const nextSwitch = await startCodexAccountSwitch(account.id, idempotencyKey);
 			writeCurrent((snapshot) => ({ ...snapshot, currentSwitch: nextSwitch }));
 		} catch (cause) {
 			setError(errorMessage(cause, t("settings.codexAccounts.switchFailed")));

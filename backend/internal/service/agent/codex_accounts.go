@@ -71,13 +71,6 @@ type codexAccountLoginTerminalService interface {
 	CloseShellTerminal(context.Context, string) error
 }
 
-// CodexAccountStateStore persists only the active-account pointer and revision.
-// Account descriptors and credentials remain filesystem-owned.
-type CodexAccountStateStore interface {
-	GetCodexActiveAccount(context.Context) (domain.CodexActiveAccount, bool, error)
-	SetCodexActiveAccount(context.Context, string, int64, time.Time) (domain.CodexActiveAccount, error)
-}
-
 type accountAuthCall struct {
 	done     chan struct{}
 	previous domain.AgentAuthenticationObservation
@@ -120,7 +113,6 @@ type codexAccountManager struct {
 	ctx               context.Context
 	catalog           *codexAccountCatalog
 	factory           ports.CodexAccountClientFactory
-	stateStore        CodexAccountStateStore
 	operationGate     ports.CodexOperationGate
 	logger            *slog.Logger
 	now               func() time.Time
@@ -142,7 +134,7 @@ type codexAccountManager struct {
 	auth                    map[string]*accountAuthState
 	usage                   map[string]*accountUsageState
 	capabilities            domain.CodexAccountCapabilities
-	active                  domain.CodexActiveAccount
+	snapshotRevision        int64
 	deviceAccountID         string
 	deferredAccountID       string
 	deviceCredentialPresent bool
@@ -158,7 +150,7 @@ type codexAccountManager struct {
 	subscribers             map[chan CodexAccounts]struct{}
 }
 
-func newCodexAccountManager(ctx context.Context, accountRoot, pendingRoot, switchStagingRoot, globalHome string, factory ports.CodexAccountClientFactory, stateStore CodexAccountStateStore, logger *slog.Logger, operationGates ...ports.CodexOperationGate) *codexAccountManager {
+func newCodexAccountManager(ctx context.Context, accountRoot, pendingRoot, switchStagingRoot, globalHome string, factory ports.CodexAccountClientFactory, logger *slog.Logger, operationGates ...ports.CodexOperationGate) *codexAccountManager {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -170,13 +162,14 @@ func newCodexAccountManager(ctx context.Context, accountRoot, pendingRoot, switc
 		operationGate = operationGates[0]
 	}
 	m := &codexAccountManager{
-		ctx: ctx, catalog: newCodexAccountCatalog(accountRoot, logger), factory: factory, stateStore: stateStore, operationGate: operationGate,
+		ctx: ctx, catalog: newCodexAccountCatalog(accountRoot, logger), factory: factory, operationGate: operationGate,
 		logger: logger, now: func() time.Time { return time.Now().UTC() }, newID: uuid.NewString,
 		after:     time.After,
 		processes: make(chan struct{}, codexAccountProcessLimit), mutations: make(chan struct{}, 1), executable: os.Executable,
 		globalHome: canonicalPath(globalHome), pendingRoot: canonicalPath(pendingRoot), switchStagingRoot: canonicalPath(switchStagingRoot),
 		auth: map[string]*accountAuthState{}, usage: map[string]*accountUsageState{},
 		capabilities: unavailableCodexCapabilities(), subscribers: map[chan CodexAccounts]struct{}{},
+		snapshotRevision: time.Now().UTC().UnixNano(),
 		reconciliation: domain.CodexDeviceReconciliation{
 			Status: domain.CodexDeviceReconciliationNotChecked, ReasonCode: "not_checked",
 		},
@@ -247,16 +240,9 @@ func (m *codexAccountManager) view(ids []string) (CodexAccounts, error) {
 		return CodexAccounts{}, mapUnknownCodexAccount(err)
 	}
 	m.mu.Lock()
-	active, capabilities, reconciliation := m.active, m.capabilities, m.reconciliation
+	snapshotRevision, capabilities, reconciliation := m.snapshotRevision, m.capabilities, m.reconciliation
 	deviceAccountID := ""
 	if reconciliation.ActiveAccountVerified {
-		deviceAccountID = active.AccountID
-	} else if reconciliation.Status == domain.CodexDeviceReconciliationChecking {
-		// Reconciliation deliberately stops trusting the global home while it
-		// inspects auth.json, but the last locally matched account remains the best
-		// presentation until that short check finishes. accountContext still uses
-		// ActiveAccountVerified, so this cannot route reads through stale global
-		// credentials or mix one device account into another saved slot.
 		deviceAccountID = m.deviceAccountID
 	}
 	var activeLogin *CodexActiveLogin
@@ -294,7 +280,7 @@ func (m *codexAccountManager) view(ids []string) (CodexAccounts, error) {
 			}
 		}
 	}
-	return CodexAccounts{ActiveAccountID: deviceAccountID, AccountRevision: active.Revision, Accounts: accounts, Capabilities: capabilities, DeviceReconciliation: reconciliation, ActiveLogin: activeLogin}, nil
+	return CodexAccounts{ActiveAccountID: deviceAccountID, AccountRevision: snapshotRevision, Accounts: accounts, Capabilities: capabilities, DeviceReconciliation: reconciliation, ActiveLogin: activeLogin}, nil
 }
 
 func (m *codexAccountManager) cached() CodexAccounts { result, _ := m.view(nil); return result }
@@ -302,11 +288,10 @@ func (m *codexAccountManager) cached() CodexAccounts { result, _ := m.view(nil);
 func (m *codexAccountManager) accountContext(record codexAccountRecord) ports.CodexAccountContext {
 	home := record.Home
 	m.mu.Lock()
-	active, associated := m.active.AccountID, m.reconciliation.ActiveAccountVerified
+	active, associated := m.deviceAccountID, m.reconciliation.ActiveAccountVerified
 	m.mu.Unlock()
-	// The durable pointer is only a last-known cache. The global home is safe for
-	// a saved slot only after the current device credential has been positively
-	// associated with that exact slot.
+	// The global home is safe for a saved slot only after the current device
+	// credential has been positively associated with that exact slot.
 	if associated && record.Snapshot.ID == active {
 		return ports.CodexAccountContext{Home: m.globalHome, Managed: false}
 	}
@@ -316,7 +301,7 @@ func (m *codexAccountManager) accountContext(record codexAccountRecord) ports.Co
 func (m *codexAccountManager) deferAccountRead(id string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	associated := m.reconciliation.ActiveAccountVerified && id == m.active.AccountID
+	associated := m.reconciliation.ActiveAccountVerified && id == m.deviceAccountID
 	return id != "" && id == m.deferredAccountID && !associated
 }
 
@@ -966,6 +951,13 @@ func (m *codexAccountManager) subscribe(ctx context.Context) <-chan CodexAccount
 	return ch
 }
 func (m *codexAccountManager) publish() {
+	m.mu.Lock()
+	next := m.now().UnixNano()
+	if next <= m.snapshotRevision {
+		next = m.snapshotRevision + 1
+	}
+	m.snapshotRevision = next
+	m.mu.Unlock()
 	snapshot := m.cached()
 	m.mu.Lock()
 	defer m.mu.Unlock()

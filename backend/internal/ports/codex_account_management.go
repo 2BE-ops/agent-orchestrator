@@ -12,8 +12,6 @@ var (
 	ErrCodexAccountSwitchInProgress = errors.New("codex account switch already in progress")
 	// ErrCodexAccountAlreadyActive rejects selecting the current account.
 	ErrCodexAccountAlreadyActive = errors.New("codex account is already active")
-	// ErrCodexAccountRevisionConflict reports a stale active-account revision.
-	ErrCodexAccountRevisionConflict = errors.New("codex account revision conflict")
 	// ErrCodexAccountSwitchIdempotencyConflict rejects reused mismatched keys.
 	ErrCodexAccountSwitchIdempotencyConflict = errors.New("codex account switch idempotency conflict")
 	// ErrCodexAccountLoginInProgress means native login owns the account gate.
@@ -51,19 +49,17 @@ type CodexAccountCredentialManager interface {
 	EnsureCodexDeviceAccountReconciled(context.Context) error
 	BeginCodexAccountMutation(context.Context) error
 	EndCodexAccountMutation()
-	CurrentCodexActiveAccount() domain.CodexActiveAccount
-	CurrentCodexAccountSwitchSource() domain.CodexAccountSwitchSource
-	PrepareCodexAccountForSwitch(context.Context, string) error
-	ConfirmCodexAccountSwitchTarget(context.Context, string) error
-	CheckpointAndActivateCodexAccount(context.Context, domain.CodexAccountSwitchSourceKind, string, string, int64) (domain.CodexActiveAccount, error)
+	PrepareCodexAccountForSwitch(context.Context, string, string) (domain.CodexAccountSwitchSource, error)
+	ConfirmCodexAccountSwitchTarget(context.Context, string, string) error
+	ActivatePreparedCodexAccountSwitch(context.Context, domain.CodexAccountSwitchSourceKind, string, string) error
 	CleanupCodexAccountSwitch(context.Context, string) error
+	CleanupInactiveCodexAccountSwitches(context.Context, string) error
 }
 
 // CodexAccountSwitchConfig is the validated input to the global switch coordinator.
 type CodexAccountSwitchConfig struct {
-	TargetAccountID         string
-	ExpectedAccountRevision int64
-	IdempotencyKey          string
+	TargetAccountID string
+	IdempotencyKey  string
 }
 
 // CodexAccountSwitchStore persists global switch facts and CAS transitions.

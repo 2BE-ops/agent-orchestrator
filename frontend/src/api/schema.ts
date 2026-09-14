@@ -4172,8 +4172,8 @@ export interface components {
             operation?: "install" | "reinstall";
         };
         StartCodexAccountSwitchRequest: {
-            /** Format: int64 */
-            expectedAccountRevision: number;
+            /** @deprecated */
+            expectedAccountRevision?: null | number;
             idempotencyKey: string;
             targetAccountId: string;
         };

@@ -52,6 +52,7 @@ describe("mergeCodexAccounts", () => {
 		], "a");
 		const incoming = {
 			...response([account("a", "2026-01-02T00:00:00Z")], "a"),
+			activeAccountId: undefined,
 			deviceReconciliation: {
 				status: "checking",
 				activeAccountVerified: false,

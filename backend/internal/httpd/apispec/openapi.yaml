@@ -11725,9 +11725,11 @@ components:
     StartCodexAccountSwitchRequest:
       properties:
         expectedAccountRevision:
-          format: int64
+          deprecated: true
           minimum: 0
-          type: integer
+          type:
+          - "null"
+          - integer
         idempotencyKey:
           minLength: 1
           type: string
@@ -11736,7 +11738,6 @@ components:
           type: string
       required:
       - targetAccountId
-      - expectedAccountRevision
       - idempotencyKey
       type: object
     StartPreviewServerRequest:

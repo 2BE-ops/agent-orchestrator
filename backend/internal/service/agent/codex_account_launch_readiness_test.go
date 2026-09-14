@@ -40,10 +40,10 @@ func newCodexLaunchReadinessFixture(t *testing.T) *codexLaunchReadinessFixture {
 	if err := ensurePrivateDirectory(globalHome); err != nil {
 		t.Fatal(err)
 	}
-	state := &fakeCodexAccountStateStore{active: domain.CodexActiveAccount{AccountID: testAccountID, Revision: 1}, found: true}
+	state := &testCodexDeviceSeed{active: testCodexDeviceAccount{AccountID: testAccountID, Revision: 1}, found: true}
 	manager := newCodexAccountManager(context.Background(),
 		filepath.Join(root, "accounts"), filepath.Join(root, "pending"),
-		filepath.Join(root, "staging"), globalHome, nil, state, nil)
+		filepath.Join(root, "staging"), globalHome, nil, nil)
 	ids := []string{testAccountID, otherCodexAccountID, "6f8dfc76-8db4-4621-8974-c480093e0d55"}
 	manager.catalog.newID = func() string { id := ids[0]; ids = ids[1:]; return id }
 	manager.newID = func() string { return "b9a4e5c6-4f31-4b1a-9d2a-7b4a4c0f9a11" }
@@ -62,7 +62,7 @@ func newCodexLaunchReadinessFixture(t *testing.T) *codexLaunchReadinessFixture {
 	if err := writeGlobalCredentialAtomic(manager.globalCredentialPath(), activeCredential); err != nil {
 		t.Fatal(err)
 	}
-	manager.active = state.active
+	setTestDeviceAccount(manager, state.active)
 	manager.accountStoreReady = true
 	manager.reconciliation = domain.CodexDeviceReconciliation{Status: domain.CodexDeviceReconciliationVerified, ActiveAccountVerified: true, ReasonCode: "verified"}
 	manager.deviceAccountID = active.Snapshot.ID

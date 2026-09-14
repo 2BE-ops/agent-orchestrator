@@ -210,12 +210,3 @@ type CodexAccountLoginOperation struct {
 	Account     *CodexAccountSnapshot   `json:"account,omitempty"`
 	ExpiresAt   time.Time               `json:"expiresAt"`
 }
-
-// CodexActiveAccount identifies the AO account currently installed in the
-// device-global Codex credential store.
-type CodexActiveAccount struct {
-	AccountID   string    `json:"accountId"`
-	Revision    int64     `json:"revision"`
-	ActivatedAt time.Time `json:"activatedAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
-}

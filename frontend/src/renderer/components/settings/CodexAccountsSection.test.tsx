@@ -167,9 +167,10 @@ it("keeps saved accounts and local actions available while device reconciliation
 	expect(screen.getByRole("button", { name: "Add account" })).toBeEnabled();
 	expect(screen.queryByRole("button", { name: "Switch account" })).not.toBeInTheDocument();
 
-	const durablePointerRow = container.querySelector(`[data-account-id="${activeAccount.id}"]`) as HTMLElement;
-	fireEvent.click(within(durablePointerRow).getByRole("button", { name: /active@example.com/i }));
-	expect(within(durablePointerRow).getByRole("button", { name: "Log out" })).toBeDisabled();
+	const previouslyActiveRow = container.querySelector(`[data-account-id="${activeAccount.id}"]`) as HTMLElement;
+	fireEvent.click(within(previouslyActiveRow).getByRole("button", { name: /active@example.com/i }));
+	expect(within(previouslyActiveRow).getByRole("button", { name: "Log out" })).toBeEnabled();
+	expect(within(previouslyActiveRow).getByRole("button", { name: "Use this account" })).toBeEnabled();
 
 	const inactiveRow = container.querySelector(`[data-account-id="${inactiveAccount.id}"]`) as HTMLElement;
 	fireEvent.click(within(inactiveRow).getByRole("button", { name: /other@example.com/i }));
@@ -203,7 +204,7 @@ it("retries an inconclusive sign-in check without opening the login terminal", a
 
 	await waitFor(() => expect(postMock).toHaveBeenCalledWith(
 		"/api/v1/agents/codex/accounts/ensure",
-		{ body: { accountIds: [activeAccount.id], includeUsage: false, forceAuthentication: true } },
+		{ body: { accountIds: [activeAccount.id], includeUsage: true, forceAuthentication: true } },
 	));
 	expect(screen.queryByRole("button", { name: "Codex sign-in" })).not.toBeInTheDocument();
 	expect((await screen.findAllByText("Signed in")).length).toBeGreaterThan(0);
@@ -476,8 +477,7 @@ it("uses safe fallback headings and preserves stale values without exposing raw 
 
 	expect(await screen.findByText("Additional usage limits")).toBeInTheDocument();
 	expect(screen.queryByText("provider-secret-bucket-id")).not.toBeInTheDocument();
-	expect(screen.getByRole("status")).toHaveTextContent("Codex could not provide usage limits for this account.");
-	expect(screen.getByRole("status")).toHaveTextContent(/Showing information last checked/);
+	expect(screen.getByRole("status")).toHaveTextContent(/Last updated/);
 	expect(screen.getByRole("status")).not.toHaveTextContent("raw provider text");
 	expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "25");
 });
@@ -489,22 +489,26 @@ it("shows a safe provider-unavailable reason when no previous usage limits exist
 			...capacity,
 			state: "unknown",
 			freshness: "stale",
+			plan: null,
+			remainingPercent: null,
 			reasonCode: "capacity_provider_unavailable",
 			reason: "raw transport error must not be rendered",
 			checkedAt: null,
 			overall: null,
 			additionalBuckets: [],
+			resetCredits: null,
 		},
 	};
 	const unavailableResponse = { ...accountResponse, accounts: [unavailableAccount] };
 	getMock.mockResolvedValue({ data: unavailableResponse });
 	postMock.mockResolvedValue({ data: unavailableResponse });
 	const { container } = renderSection();
-	await screen.findByText("active@example.com");
+	expect((await screen.findAllByText("active@example.com")).length).toBeGreaterThan(0);
 	fireEvent.click(container.querySelector(`[data-account-id="${activeAccount.id}"] button`) as HTMLButtonElement);
 
-	expect(await screen.findByRole("status")).toHaveTextContent("Codex usage limits are temporarily unavailable.");
-	expect(screen.getByRole("status")).not.toHaveTextContent("raw transport error");
+	expect(await screen.findByText("Usage unavailable.")).toBeInTheDocument();
+	expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+	expect(screen.queryByText("raw transport error")).not.toBeInTheDocument();
 });
 
 it("quietly refreshes invalidated capacity without showing an internal warning", async () => {
@@ -763,7 +767,7 @@ it("deletes a signed-out account after confirmation", async () => {
 	await screen.findByText("other@example.com");
 	const signedOutRow = container.querySelector(`[data-account-id="${signedOutAccount.id}"]`) as HTMLElement;
 	expect(screen.queryByText("Login expired.")).not.toBeInTheDocument();
-	expect(screen.queryByText("Usage details are not available for this account.")).not.toBeInTheDocument();
+	expect(screen.queryByText("Usage unavailable.")).not.toBeInTheDocument();
 	expect(within(signedOutRow).queryByText("ChatGPT")).not.toBeInTheDocument();
 	const deleteButton = within(signedOutRow).getByRole("button", { name: "Delete account" });
 	expect(deleteButton).toBeEnabled();
@@ -828,7 +832,7 @@ it("explains an invalid sign-in and deletes it after local logout", async () => 
 	await waitFor(() => expect(screen.queryByText("active@example.com")).not.toBeInTheDocument());
 });
 
-it("starts a global switch with the displayed account revision", async () => {
+it("starts a global switch without revision admission", async () => {
 	const switchOperation = { id: "switch-1", phase: "requested", failureCode: null };
 	vi.stubGlobal("crypto", { randomUUID: () => "idempotency-1" });
 	postMock.mockImplementation((path: string) => {
@@ -847,7 +851,7 @@ it("starts a global switch with the displayed account revision", async () => {
 	expect(dialog).not.toHaveTextContent("external terminals, IDEs, and ChatGPT");
 	fireEvent.click(within(dialog).getByRole("button", { name: "Switch account" }));
 	await waitFor(() => expect(postMock).toHaveBeenCalledWith("/api/v1/agents/codex/account-switches", {
-		body: { targetAccountId: inactiveAccount.id, expectedAccountRevision: 3, idempotencyKey: "idempotency-1" },
+		body: { targetAccountId: inactiveAccount.id, idempotencyKey: "idempotency-1" },
 	}));
 	vi.unstubAllGlobals();
 });
@@ -876,7 +880,7 @@ it("keeps a locally valid target switchable during a temporary sign-in check fai
 });
 
 it("locks the switch confirmation while the request is submitted", async () => {
-	vi.stubGlobal("crypto", { randomUUID: () => "restart-idempotency" });
+	vi.stubGlobal("crypto", { randomUUID: () => "switch-idempotency" });
 	let finishSwitch: ((value: { data: object }) => void) | undefined;
 	postMock.mockImplementation((path: string) => {
 		if (path === "/api/v1/agents/codex/accounts/ensure") return Promise.resolve({ data: accountResponse });
@@ -895,7 +899,7 @@ it("locks the switch confirmation while the request is submitted", async () => {
 	const dialog = await openSwitchDialog();
 	await userEvent.click(within(dialog).getByRole("button", { name: "Switch account" }));
 	await waitFor(() => expect(postMock).toHaveBeenCalledWith("/api/v1/agents/codex/account-switches", {
-		body: { targetAccountId: inactiveAccount.id, expectedAccountRevision: 3, idempotencyKey: "restart-idempotency" },
+		body: { targetAccountId: inactiveAccount.id, idempotencyKey: "switch-idempotency" },
 	}));
 	expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
 	expect(within(dialog).getByRole("button", { name: "Switch account" })).toBeDisabled();

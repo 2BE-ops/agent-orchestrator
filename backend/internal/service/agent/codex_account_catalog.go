@@ -81,22 +81,11 @@ func signedOutAuthentication(at time.Time, reason string) domain.AgentAuthentica
 	return successfulAuthentication(at, domain.AgentAuthenticationUnauthorized, domain.AgentReadinessReasonUnauthorized, reason)
 }
 
-func accountLabel(id string, method domain.CodexAuthMethod, email *string) string {
+func accountLabel(_ string, _ domain.CodexAuthMethod, email *string) string {
 	if email != nil && safeAccountEmail(*email) {
 		return strings.TrimSpace(*email)
 	}
-	short := id
-	if len(short) > 8 {
-		short = short[:8]
-	}
-	switch method {
-	case domain.CodexAuthMethodChatGPT:
-		return "Codex ChatGPT account · " + short
-	case domain.CodexAuthMethodAPIKey:
-		return "Codex API key account · " + short
-	default:
-		return "Codex account · " + short
-	}
+	return "Codex account"
 }
 
 func validAccountAuthMethod(method domain.CodexAuthMethod) bool {
