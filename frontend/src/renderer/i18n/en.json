@@ -1,4 +1,7 @@
 {
+	"session.statusChecking": "Checking…",
+	"session.statusUnavailable": "Unable to verify",
+	"session.retryStatus": "Retry status check",
 	"activity.active": "Working",
 	"activity.blocked": "Awaiting Decision",
 	"activity.exited": "Exited",
@@ -1506,6 +1509,8 @@
 	"startup.recommendedInstallGh": "Recommended: install gh",
 	"startup.retryPrefix": "Retry: {{label}}",
 	"startup.startingServices": "Starting local services",
+	"startup.updatingApp": "Updating AO",
+	"startup.restartingApp": "Restarting AO",
 	"status.approved": "Approved",
 	"status.changes_requested": "Changes requested",
 	"status.ci_failed": "CI failed",

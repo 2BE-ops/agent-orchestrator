@@ -1,4 +1,7 @@
 {
+	"session.statusChecking": "Vérification…",
+	"session.statusUnavailable": "Impossible de vérifier",
+	"session.retryStatus": "Revérifier le statut",
 	"activity.active": "En cours",
 	"activity.blocked": "En attente de décision",
 	"activity.exited": "Terminé",
@@ -1390,6 +1393,8 @@
 	"startup.recommendedInstallGh": "Recommandé : installer gh",
 	"startup.retryPrefix": "Réessayer : {{label}}",
 	"startup.startingServices": "Démarrage des services locaux",
+	"startup.updatingApp": "Mise à jour d'AO",
+	"startup.restartingApp": "Redémarrage d'AO",
 	"status.approved": "Approuvé",
 	"status.changes_requested": "Modifications demandées",
 	"status.ci_failed": "CI en échec",

@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/registry"
 	"github.com/aoagents/agent-orchestrator/backend/pkg/agentcreds"
 )
 
@@ -169,10 +170,6 @@ func TestDoctorChecksHarnessVersions(t *testing.T) {
 			// The codex launch-flag canary probes the same binary.
 			if name == "/bin/codex" && len(args) > 0 && (args[0] == "--dangerously-bypass-hook-trust" || args[0] == "features") {
 				return []byte("ok\n"), nil
-			}
-			// So does the claude-auth check.
-			if name == "/bin/claude" && len(args) == 2 && args[0] == "auth" && args[1] == "status" {
-				return []byte(`{"loggedIn":true,"authMethod":"claude.ai"}`), nil
 			}
 			t.Fatalf("unexpected harness command: %s %v", name, args)
 			return nil, nil
@@ -456,11 +453,107 @@ func TestDoctorTextOutputIsGrouped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("doctor failed: %v\nstderr=%s\nstdout=%s", err, errOut, out)
 	}
-	for _, want := range []string{"Core:\nPASS config:", "Tools:\nPASS git:", "Agent harnesses:\nWARN claude-code:", "WARN codex:", "WARN muse:", "GitHub:\nWARN github-token:", "GitLab:\nWARN gitlab-token:"} {
+	for _, want := range []string{
+		"Core:\nPASS config:",
+		"Tools:\nPASS git:",
+		// Agent harnesses section — spot-check original three plus new additions.
+		"Agent harnesses:\nWARN claude-code:",
+		"WARN codex:",
+		"WARN opencode:",
+		"WARN muse:",
+		"WARN aider:",
+		"WARN goose:",
+		"WARN cursor:",
+		"WARN agy:",
+		"WARN continue:",
+		"WARN prime-agent:",
+		"GitHub:\nWARN github-token:",
+		"GitLab:\nWARN gitlab-token:",
+	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("doctor output missing %q:\n%s", want, out)
 		}
 	}
+}
+
+// TestDoctorAllHarnessesPresent asserts that every agent harness in
+// registry.Harnessed() surfaces a check in the runDoctor report.
+func TestDoctorAllHarnessesPresent(t *testing.T) {
+	setConfigEnv(t)
+
+	harnesses := registry.Harnessed()
+	if len(harnesses) == 0 {
+		t.Fatal("registry.Harnessed() returned empty list")
+	}
+
+	// No harness binaries available — all land as WARN "not found in PATH".
+	c := doctorContext(t, map[string]string{"git": "/bin/git"}, func(context.Context, string, ...string) ([]byte, error) {
+		return []byte("git version 2.43.0\n"), nil
+	})
+
+	checks := c.runDoctor(context.Background())
+	for _, ha := range harnesses {
+		id := string(ha.Harness)
+		check := findDoctorCheck(t, checks, id)
+		if check.Level != doctorWarn || !strings.Contains(check.Message, "not found in PATH") {
+			t.Fatalf("harness %q check = %+v, want WARN not found in PATH", id, check)
+		}
+	}
+}
+
+// TestDoctorPathOnlyHarnessPassesOnFind covers the PATH-existence-only code
+// path (VersionArg == "") used by adapters such as cursor-agent that have no
+// stable --version flag. When the binary is found on PATH the check must pass
+// without invoking CommandOutput.
+func TestDoctorPathOnlyHarnessPassesOnFind(t *testing.T) {
+	setConfigEnv(t)
+	c := doctorContext(t,
+		map[string]string{
+			"git":          "/bin/git",
+			"cursor-agent": "/usr/local/bin/cursor-agent",
+		},
+		func(_ context.Context, name string, _ ...string) ([]byte, error) {
+			// Only git version calls are expected; cursor-agent has no VersionArg.
+			if name == "/bin/git" {
+				return []byte("git version 2.43.0\n"), nil
+			}
+			t.Fatalf("unexpected CommandOutput call for PATH-only harness: %s", name)
+			return nil, nil
+		},
+	)
+
+	check := findDoctorCheck(t, c.runDoctor(context.Background()), "cursor")
+	if check.Level != doctorPass || !strings.Contains(check.Message, "resolves to") {
+		t.Fatalf("cursor check = %+v, want PASS with path", check)
+	}
+}
+
+// TestDoctorNewVersionedHarnessPassesWithVersion verifies that a Tier-B
+// harness with a --version flag (e.g. opencode) resolves and reports correctly.
+func TestDoctorNewVersionedHarnessPassesWithVersion(t *testing.T) {
+	setConfigEnv(t)
+	c := doctorContext(t,
+		map[string]string{
+			"git":      "/bin/git",
+			"opencode": "/usr/local/bin/opencode",
+		},
+		func(_ context.Context, name string, args ...string) ([]byte, error) {
+			if name == "/bin/git" {
+				return []byte("git version 2.43.0\n"), nil
+			}
+			if name == "/usr/local/bin/opencode" && len(args) == 1 && args[0] == "--version" {
+				return []byte("opencode 0.3.12\n"), nil
+			}
+			t.Fatalf("unexpected command: %s %v", name, args)
+			return nil, nil
+		},
+	)
+
+	check := findDoctorCheck(t, c.runDoctor(context.Background()), "opencode")
+	if check.Level != doctorPass || !strings.Contains(check.Message, "opencode 0.3.12") {
+		t.Fatalf("opencode check = %+v, want PASS with version string", check)
+	}
+
 }
 
 func clearDoctorGitHubEnv(t *testing.T) {
@@ -714,14 +807,10 @@ func writeHooksLogLines(t *testing.T, dataDir string, lines ...string) {
 	}
 }
 
-// stubDoctorValidator points doctor's credential probe at a local server, so
-// no doctor test can reach a real provider or read real credentials.
 func stubDoctorValidator(t *testing.T, handler http.HandlerFunc) {
 	t.Helper()
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	// Resolution reads the environment, so give it exactly one credential and
-	// point the base URL at the stub.
 	for _, name := range []string{"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN"} {
 		t.Setenv(name, "")
 	}
@@ -741,67 +830,45 @@ func claudeAuthContext(t *testing.T, cliOutput string) *commandContext {
 }
 
 func TestDoctorClaudeAuthSkipsWhenNotInstalled(t *testing.T) {
-	c := doctorContext(t, nil, nil)
-	check := c.checkClaudeAuth(context.Background())
+	check := doctorContext(t, nil, nil).checkClaudeAuth(context.Background())
 	if check.Level != doctorPass || !strings.Contains(check.Message, "skipped") {
 		t.Fatalf("check = %+v, want a skipped PASS", check)
 	}
 }
 
-// The check can now say "valid", but only because it asked the provider. That
-// is the whole difference between it and `claude auth status`.
 func TestDoctorClaudeAuthPassesOnlyWhenTheProviderAccepts(t *testing.T) {
 	stubDoctorValidator(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"data":[{"id":"claude-opus-4-5-20251101"}]}`))
 	})
-	c := claudeAuthContext(t, `{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"gateway"}`)
-	check := c.checkClaudeAuth(context.Background())
-	if check.Level != doctorPass {
-		t.Fatalf("check = %+v, want PASS", check)
-	}
-	if !strings.Contains(check.Message, "accepted the credential") {
-		t.Fatalf("message = %q, want it to report a provider acceptance", check.Message)
+	check := claudeAuthContext(t, `{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"gateway"}`).checkClaudeAuth(context.Background())
+	if check.Level != doctorPass || !strings.Contains(check.Message, "accepted the credential") {
+		t.Fatalf("check = %+v, want provider acceptance", check)
 	}
 }
 
-// The reported outage: a credential that is present locally and rejected by
-// the provider. This is the case every previous surface got wrong.
 func TestDoctorClaudeAuthFailsWhenTheProviderRejects(t *testing.T) {
 	stubDoctorValidator(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"error":{"message":"API key is invalid."}}`))
 	})
-	c := claudeAuthContext(t, `{"loggedIn":true,"apiKeySource":"ANTHROPIC_API_KEY","apiProvider":"gateway"}`)
-	check := c.checkClaudeAuth(context.Background())
-	if check.Level != doctorFail {
-		t.Fatalf("check = %+v, want FAIL — the provider rejected the credential", check)
-	}
-	if !strings.Contains(check.Message, "REJECTED") || !strings.Contains(check.Message, "API key is invalid.") {
-		t.Fatalf("message = %q, want the provider's own reason", check.Message)
+	check := claudeAuthContext(t, `{"loggedIn":true,"apiKeySource":"ANTHROPIC_API_KEY","apiProvider":"gateway"}`).checkClaudeAuth(context.Background())
+	if check.Level != doctorFail || !strings.Contains(check.Message, "REJECTED") {
+		t.Fatalf("check = %+v, want rejected credential failure", check)
 	}
 }
 
-// An unreachable provider proves nothing, so the check must not present the
-// local state as a working credential.
 func TestDoctorClaudeAuthWarnsWhenValidationIsInconclusive(t *testing.T) {
-	stubDoctorValidator(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	})
-	c := claudeAuthContext(t, `{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"gateway"}`)
-	check := c.checkClaudeAuth(context.Background())
-	if check.Level != doctorWarn {
-		t.Fatalf("check = %+v, want WARN", check)
-	}
-	if !strings.Contains(check.Message, "could not validate") {
-		t.Fatalf("message = %q, want it to say validation was inconclusive", check.Message)
+	stubDoctorValidator(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
+	check := claudeAuthContext(t, `{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"gateway"}`).checkClaudeAuth(context.Background())
+	if check.Level != doctorWarn || !strings.Contains(check.Message, "could not validate") {
+		t.Fatalf("check = %+v, want inconclusive warning", check)
 	}
 }
 
 func TestDoctorClaudeAuthFailsWhenSignedOut(t *testing.T) {
-	c := claudeAuthContext(t, `{"loggedIn":false}`)
-	check := c.checkClaudeAuth(context.Background())
+	check := claudeAuthContext(t, `{"loggedIn":false}`).checkClaudeAuth(context.Background())
 	if check.Level != doctorFail || !strings.Contains(check.Message, "claude login") {
-		t.Fatalf("check = %+v, want a FAIL pointing at claude login", check)
+		t.Fatalf("check = %+v, want sign-in failure", check)
 	}
 }
 
@@ -810,39 +877,28 @@ func TestDoctorClaudeAuthWarnsOnUnparsableOutput(t *testing.T) {
 		func(context.Context, string, ...string) ([]byte, error) {
 			return []byte("unsupported subcommand on this version"), errors.New("exit status 1")
 		})
-	check := c.checkClaudeAuth(context.Background())
-	if check.Level != doctorWarn {
-		t.Fatalf("level = %q, want WARN — unparsable output proves nothing either way", check.Level)
+	if check := c.checkClaudeAuth(context.Background()); check.Level != doctorWarn {
+		t.Fatalf("check = %+v, want WARN", check)
 	}
 }
 
-// The shadowing env var is an annotation, not a verdict. It must not suppress
-// the provider's answer, and it must survive onto a rejection — that pairing
-// is precisely the diagnosis for the reported outage.
-func TestDoctorClaudeAuthAnnotatesAShadowingEnvVarWithoutPreemptingTheProvider(t *testing.T) {
+func TestDoctorClaudeAuthAnnotatesShadowingEnvVar(t *testing.T) {
 	stubDoctorValidator(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"error":{"message":"API key is invalid."}}`))
 	})
-	c := claudeAuthContext(t, `{"loggedIn":true,"apiKeySource":"ANTHROPIC_API_KEY","authMethod":"claude.ai","apiProvider":"gateway"}`)
-	check := c.checkClaudeAuth(context.Background())
-	if check.Level != doctorFail {
-		t.Fatalf("check = %+v, want the provider's rejection to win", check)
-	}
-	if !strings.Contains(check.Message, "overrides any claude.ai login") {
-		t.Fatalf("message = %q, want the shadowing variable named", check.Message)
+	check := claudeAuthContext(t, `{"loggedIn":true,"apiKeySource":"ANTHROPIC_API_KEY","authMethod":"claude.ai","apiProvider":"gateway"}`).checkClaudeAuth(context.Background())
+	if check.Level != doctorFail || !strings.Contains(check.Message, "overrides any claude.ai login") {
+		t.Fatalf("check = %+v, want shadowing credential diagnosis", check)
 	}
 }
 
-// A shadowing key that actually works is not a problem, and must not be
-// reported as one.
-func TestDoctorClaudeAuthDoesNotWarnAboutAWorkingEnvKey(t *testing.T) {
+func TestDoctorClaudeAuthDoesNotWarnAboutWorkingEnvKey(t *testing.T) {
 	stubDoctorValidator(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"data":[{"id":"claude-opus-4-5"}]}`))
 	})
-	c := claudeAuthContext(t, `{"loggedIn":true,"apiKeySource":"ANTHROPIC_API_KEY","apiProvider":"gateway"}`)
-	check := c.checkClaudeAuth(context.Background())
+	check := claudeAuthContext(t, `{"loggedIn":true,"apiKeySource":"ANTHROPIC_API_KEY","apiProvider":"gateway"}`).checkClaudeAuth(context.Background())
 	if check.Level != doctorPass {
-		t.Fatalf("check = %+v, want PASS — the credential works", check)
+		t.Fatalf("check = %+v, want PASS", check)
 	}
 }

@@ -132,6 +132,7 @@ function setupBridge() {
 		showProfileMenu: vi.fn(),
 		selectProfile: vi.fn(),
 		historySuggestions: vi.fn(async () => []),
+		historyFavicon: vi.fn(async () => undefined),
 		captureScreenshot: vi.fn(async () => undefined),
 		downloads: {
 			list: vi.fn(async () => ({ downloads: [] })),

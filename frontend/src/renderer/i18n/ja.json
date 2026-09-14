@@ -1,4 +1,7 @@
 {
+	"session.statusChecking": "確認中…",
+	"session.statusUnavailable": "確認できません",
+	"session.retryStatus": "状態を再確認",
 	"activity.active": "作業中",
 	"activity.blocked": "判断待ち",
 	"activity.exited": "終了済み",
@@ -1369,6 +1372,8 @@
 	"startup.recommendedInstallGh": "推奨: gh をインストール",
 	"startup.retryPrefix": "再試行: {{label}}",
 	"startup.startingServices": "ローカルサービスを起動中",
+	"startup.updatingApp": "AO を更新しています",
+	"startup.restartingApp": "AO を再起動しています",
 	"status.approved": "承認済み",
 	"status.changes_requested": "変更リクエストあり",
 	"status.ci_failed": "CI 失敗",
