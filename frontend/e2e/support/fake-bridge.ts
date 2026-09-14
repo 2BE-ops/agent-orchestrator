@@ -160,6 +160,7 @@ export async function installFakeBridge(page: Page, opts: FakeBridgeOptions = {}
 					setOverlayOpen: () => undefined,
 					navigate: async ({ viewId }: { viewId: string }) => navState(viewId),
 					historySuggestions: async () => [],
+					historyFavicon: async () => undefined,
 					clear: async (viewId: string) => navState(viewId),
 					goBack: async (viewId: string) => navState(viewId),
 					goForward: async (viewId: string) => navState(viewId),
@@ -711,6 +712,7 @@ export async function installFakeAgent(page: Page, opts: FakeAgentOptions = {}):
 					navigate: async ({ viewId, url }: { viewId: string; url: string }) =>
 						state.browserError ? navState(viewId, "", state.browserError) : navState(viewId, url),
 					historySuggestions: async () => [],
+					historyFavicon: async () => undefined,
 					clear: async (viewId: string) => navState(viewId),
 					goBack: async (viewId: string) => navState(viewId),
 					goForward: async (viewId: string) => navState(viewId),
