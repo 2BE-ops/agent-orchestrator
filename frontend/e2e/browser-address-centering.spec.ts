@@ -35,6 +35,10 @@ test("@P0 browser address remains centered and moves below tabs in the compact i
 
 	await expectAddressCentered(page);
 	await expectAddressWidth(page, 240);
+	await page.setViewportSize({ width: 1100, height: 720 });
+	await expectAddressCentered(page);
+	await expectAddressWidth(page, 180);
+	await expectAddressBelowInspectorTabs(page);
 	await page.setViewportSize({ width: 960, height: 720 });
 	await expectAddressCentered(page);
 	await expectAddressWidth(page, 180);

@@ -3571,7 +3571,7 @@ html.sidebar-reordering * {
 /* Once zoom or a narrow window leaves too little horizontal room, put the URL
    field on its own row. The inspector tabs and actions keep the first row, so
    none of the controls can overlap. */
-@container inspector (max-width: 360px) {
+@container inspector (max-width: 440px) {
 	.session-inspector__topbar--browser {
 		height: calc(var(--size-inspector-tabs) + var(--size-inspector-tabs));
 		grid-template-columns: minmax(0, 1fr) auto;
