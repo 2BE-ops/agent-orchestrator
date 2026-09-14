@@ -33,7 +33,7 @@ func TestFreshInterfaceEpochReleasesOnlyUntouchedRootProvider(t *testing.T) {
 				t.Fatal(err)
 			}
 			if name == "provider turn" {
-				if err := st.AdoptProviderTurn(ctx, conversation.ID, sess.ID, "chat-generation", "turn-1", "provider-turn-1", now); err != nil {
+				if err := st.AdoptProviderTurn(ctx, conversation.ID, sess.ID, "chat-generation", "turn-1", "provider-turn-1", false, now); err != nil {
 					t.Fatal(err)
 				}
 			}

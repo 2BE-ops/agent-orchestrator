@@ -2,7 +2,7 @@ package sqlite
 
 import "testing"
 
-func TestMigration0117AddsTerminalImportProvenanceWithoutReclassifyingExistingTurns(t *testing.T) {
+func TestMigration0142AddsTerminalImportProvenanceWithoutReclassifyingExistingTurns(t *testing.T) {
 	db := openTestDB(t)
 	upTo(t, db, 108)
 	mustExec(t, db, `
@@ -36,7 +36,7 @@ INSERT INTO conversation_turns (
     'recovered', CURRENT_TIMESTAMP, 'conversation-1:root'
 );`)
 
-	upTo(t, db, 117)
+	upTo(t, db, 142)
 
 	var existing bool
 	if err := db.QueryRow(`
