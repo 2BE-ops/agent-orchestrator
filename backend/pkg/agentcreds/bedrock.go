@@ -45,9 +45,7 @@ func (v *Validator) bedrockRequest(ctx context.Context, cred Credential) (reques
 		if err != nil {
 			return requestSpec{}, err
 		}
-		if err := signAWSRequestV4(request, keys, "bedrock", region, v.now().UTC()); err != nil {
-			return requestSpec{}, err
-		}
+		signAWSRequestV4(request, keys, "bedrock", region, v.now().UTC())
 	default:
 		return requestSpec{}, fmt.Errorf("agentcreds: credential kind %q cannot authenticate to Bedrock", cred.Kind)
 	}
@@ -128,7 +126,7 @@ func parseAWSKeys(secret string) (awsKeys, error) {
 // SigV4 in four steps: canonicalize the request, hash it into a string to
 // sign, derive a signing key by chaining HMACs over date/region/service, then
 // sign. See docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv-create-signed-request.html
-func signAWSRequestV4(request *http.Request, keys awsKeys, service, region string, now time.Time) error {
+func signAWSRequestV4(request *http.Request, keys awsKeys, service, region string, now time.Time) {
 	const algorithm = "AWS4-HMAC-SHA256"
 	amzDate := now.Format("20060102T150405Z")
 	dateStamp := now.Format("20060102")
@@ -174,7 +172,6 @@ func signAWSRequestV4(request *http.Request, keys awsKeys, service, region strin
 		"%s Credential=%s/%s, SignedHeaders=%s, Signature=%s",
 		algorithm, keys.AccessKeyID, scope, signedHeaders, signature,
 	))
-	return nil
 }
 
 // canonicalizeHeaders builds SigV4's canonical header block: lowercase names,

@@ -30,7 +30,6 @@ import {
 	refreshAgentModels,
 	revalidateAgentModels,
 } from "../hooks/useAgentModelsQuery";
-<<<<<<< HEAD
 import { AgentEffortSelect } from "./settings/AgentEffortSelect";
 import { STANDALONE_WORKSPACE_ID } from "../types/workspace";
 import { AgentModelCombobox } from "./settings/AgentModelCombobox";

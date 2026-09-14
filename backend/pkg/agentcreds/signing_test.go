@@ -32,9 +32,7 @@ func TestSigV4MatchesTheAWSTestVector(t *testing.T) {
 		SecretAccessKey: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
 	}
 	signedAt := time.Date(2015, 8, 30, 12, 36, 0, 0, time.UTC)
-	if err := signAWSRequestV4(request, keys, "service", "us-east-1", signedAt); err != nil {
-		t.Fatal(err)
-	}
+	signAWSRequestV4(request, keys, "service", "us-east-1", signedAt)
 
 	authorization := request.Header.Get("Authorization")
 	if !strings.HasPrefix(authorization, "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request") {
@@ -56,9 +54,7 @@ func TestSigV4MatchesTheAWSTestVector(t *testing.T) {
 func TestSigV4CoversTheSessionToken(t *testing.T) {
 	request, _ := http.NewRequest(http.MethodGet, "https://bedrock.us-east-1.amazonaws.com/foundation-models", http.NoBody)
 	keys := awsKeys{AccessKeyID: "AKIA", SecretAccessKey: "secret", SessionToken: "session-token"}
-	if err := signAWSRequestV4(request, keys, "bedrock", "us-east-1", time.Now().UTC()); err != nil {
-		t.Fatal(err)
-	}
+	signAWSRequestV4(request, keys, "bedrock", "us-east-1", time.Now().UTC())
 	if request.Header.Get("X-Amz-Security-Token") != "session-token" {
 		t.Fatal("the session token must be sent")
 	}
@@ -73,10 +69,12 @@ func TestSigV4IsDeterministic(t *testing.T) {
 	at := time.Date(2026, 9, 10, 8, 0, 0, 0, time.UTC)
 	sign := func() string {
 		request, _ := http.NewRequest(http.MethodGet, "https://bedrock.us-east-1.amazonaws.com/foundation-models", http.NoBody)
-		_ = signAWSRequestV4(request, awsKeys{AccessKeyID: "AKIA", SecretAccessKey: "s"}, "bedrock", "us-east-1", at)
+		signAWSRequestV4(request, awsKeys{AccessKeyID: "AKIA", SecretAccessKey: "s"}, "bedrock", "us-east-1", at)
 		return request.Header.Get("Authorization")
 	}
-	if sign() != sign() {
+	firstSignature := sign()
+	secondSignature := sign()
+	if firstSignature != secondSignature {
 		t.Fatal("the same request signed at the same instant must produce the same signature")
 	}
 }
@@ -214,8 +212,8 @@ func TestVertexRejectedKeyExchangeIsInvalid(t *testing.T) {
 		// The probe URL is never reached; the exchange fails first.
 		Provider: ProviderVertex, Region: "us-east5", Project: "p", BaseURL: "http://127.0.0.1:1",
 	})
-	if result.State != StateUnknown {
-		t.Fatalf("state = %q, want unknown", result.State)
+	if result.State != StateInvalid {
+		t.Fatalf("state = %q, want invalid", result.State)
 	}
 	if result.Err == nil {
 		t.Fatal("a rejected exchange must carry its error")

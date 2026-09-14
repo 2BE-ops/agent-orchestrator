@@ -953,16 +953,19 @@ describe("TaskComposer", () => {
 						agent: "codex",
 						selectionMode: "text",
 						models: [
-							{ id: "claude-opus", label: "Claude Opus", isDefault: true },
-							{ id: "effort:medium", label: "Medium", isDefault: false },
-							{ id: "effort:high", label: "High", isDefault: false },
+							{
+								id: "claude-opus",
+								label: "Claude Opus",
+								isDefault: true,
+								efforts: ["medium", "high"],
+							},
 						],
 						allowCustom: true,
 						refreshRecommended: false,
 					},
 				};
 			}
-			return { data: { status: "ok", project: { config: {} } } };
+			return { data: { status: "ok", project: { agent: "codex", config: {} } } };
 		});
 		h.post.mockResolvedValueOnce({ data: { workerId: "sess-1" } });
 
@@ -973,8 +976,8 @@ describe("TaskComposer", () => {
 		);
 
 		// Select an effort level without changing the model (stays at default)
-		const model = await screen.findByRole("button", { name: "Model" });
-		await userEvent.click(model);
+		const effort = await screen.findByRole("button", { name: "Reasoning effort" });
+		await userEvent.click(effort);
 		await userEvent.click(screen.getByRole("menuitem", { name: "High" }));
 
 		fireEvent.change(task(), { target: { value: "Do the thing" } });
@@ -984,7 +987,7 @@ describe("TaskComposer", () => {
 			expect(h.post).toHaveBeenCalledWith(
 				"/api/v1/orchestrators/delegate",
 				expect.objectContaining({
-					body: expect.objectContaining({ effort: "effort:high" }),
+					body: expect.objectContaining({ effort: "high" }),
 				}),
 			),
 		);

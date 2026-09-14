@@ -21,7 +21,7 @@ import (
 const vertexScope = "https://www.googleapis.com/auth/cloud-platform"
 
 // googleTokenURL is where a signed JWT is exchanged for an access token.
-const googleTokenURL = "https://oauth2.googleapis.com/token"
+const googleTokenURL = "https://oauth2.googleapis.com/token" //nolint:gosec // Public OAuth endpoint, not a credential.
 
 // vertexRequest builds the Vertex AI probe.
 //

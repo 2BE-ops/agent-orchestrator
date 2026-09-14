@@ -71,11 +71,11 @@ const (
 	KindAPIKey Kind = "api_key"
 	// KindOAuthToken is a claude.ai login or `claude setup-token` credential,
 	// sent as a bearer token. Both are the same sk-ant-oat01- class.
-	KindOAuthToken Kind = "oauth_token"
+	KindOAuthToken Kind = "oauth_token" //nolint:gosec // Credential kind label, not a credential value.
 	// KindAuthToken is ANTHROPIC_AUTH_TOKEN, sent as a bearer token.
 	KindAuthToken Kind = "auth_token"
 	// KindAzureAPIKey is an Azure AI Foundry key, sent as api-key.
-	KindAzureAPIKey Kind = "azure_api_key"
+	KindAzureAPIKey Kind = "azure_api_key" //nolint:gosec // Credential kind label, not a credential value.
 	// KindAWSSigV4 is a static AWS access key pair, which signs the request
 	// rather than being sent verbatim.
 	KindAWSSigV4 Kind = "aws_sigv4"
@@ -245,7 +245,7 @@ func (v *Validator) Validate(ctx context.Context, cred Credential) Result {
 		result.Detail = err.Error()
 		return result
 	}
-	return v.probe(ctx, result, spec)
+	return v.probe(result, spec)
 }
 
 // requestSpec is one prepared, already-authenticated HTTP request plus the
@@ -268,7 +268,7 @@ type requestSpec struct {
 // status that is neither an explicit rejection nor an explicit success is
 // Unknown rather than a failure — a 404 from a gateway that does not implement
 // model listing says nothing at all about the credential.
-func (v *Validator) probe(ctx context.Context, result Result, spec requestSpec) Result {
+func (v *Validator) probe(result Result, spec requestSpec) Result {
 	response, err := v.client.Do(spec.request)
 	if err != nil {
 		result.State = StateUnknown

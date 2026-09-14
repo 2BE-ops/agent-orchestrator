@@ -128,7 +128,7 @@ func TestKeychainFailureFallsThroughToFile(t *testing.T) {
 	cred, ok := ResolveLocal(context.Background(), ProviderFirstParty, ResolveOptions{
 		Env: envFrom(nil), ConfigDir: dir, GOOS: "darwin", AllowKeychain: true,
 		Runner: func(context.Context, string, ...string) ([]byte, error) {
-			return nil, errors.New("security: SecKeychainSearchCopyNext: User interaction is not allowed.")
+			return nil, errors.New("security: SecKeychainSearchCopyNext: user interaction is not allowed")
 		},
 	})
 	if !ok || cred.Secret != "from-file" {

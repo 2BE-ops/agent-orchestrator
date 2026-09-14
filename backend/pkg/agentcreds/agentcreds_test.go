@@ -131,11 +131,11 @@ func TestIsResolverBug(t *testing.T) {
 			t.Fatalf("IsResolverBug(%q) = false, want true", detail)
 		}
 	}
-	real := []string{
+	rejections := []string{
 		"Anthropic rejected the credential: API key is invalid.",
 		"Anthropic rejected the credential: OAuth access token is invalid.",
 	}
-	for _, detail := range real {
+	for _, detail := range rejections {
 		if IsResolverBug(detail) {
 			t.Fatalf("IsResolverBug(%q) = true, want false — this is a genuine rejection", detail)
 		}
@@ -154,7 +154,8 @@ func TestFingerprintIsShortAndNotTheSecret(t *testing.T) {
 	if Fingerprint("") != "" || Fingerprint("  ") != "" {
 		t.Fatal("an empty secret has no fingerprint")
 	}
-	if Fingerprint(secret) != Fingerprint(secret) {
+	secondFingerprint := Fingerprint(secret)
+	if fingerprint != secondFingerprint {
 		t.Fatal("fingerprints must be stable")
 	}
 	if Fingerprint(secret) == Fingerprint(secret+"x") {

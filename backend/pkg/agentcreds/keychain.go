@@ -50,7 +50,7 @@ func readKeychain(ctx context.Context, opts ResolveOptions) (string, Kind, bool)
 		return "", "", false
 	}
 	if err == nil {
-		if token, ok := oauthTokenFromCredentialsJSON([]byte(out)); ok {
+		if token, ok := oauthTokenFromCredentialsJSON(out); ok {
 			return token, KindOAuthToken, true
 		}
 		// Older entries store the bare token rather than a JSON document.
@@ -74,7 +74,7 @@ func readKeychain(ctx context.Context, opts ResolveOptions) (string, Kind, bool)
 	if raw := strings.TrimSpace(lastNonEmptyLine(string(apiKeyOut))); raw != "" && !strings.HasPrefix(raw, "{") {
 		return raw, kindForToken(raw), true
 	}
-	if token, ok := oauthTokenFromCredentialsJSON([]byte(apiKeyOut)); ok {
+	if token, ok := oauthTokenFromCredentialsJSON(apiKeyOut); ok {
 		return token, KindOAuthToken, true
 	}
 	return "", "", false
