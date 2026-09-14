@@ -1,6 +1,6 @@
 # Isolated macOS differential v2
 
-PR #4906 prepares this protocol but does not enable it. Current AO explicitly
+PR #4906 implements the production client protocol but does not activate it. Current AO explicitly
 sets macOS `disableDifferentialDownload = true` before checks and uses the stock
 full-ZIP updater. `scripts/mac-differential-rollout.json` stays false and
 `scripts/mac-differential-v2-trust.json` is an empty keyring. Windows/Linux flags
@@ -38,7 +38,8 @@ The signed payload has:
 | `repository` | Exactly `Untrivial-ai/agent-orchestrator` |
 | `channel` | Exactly `nightly` in PR1 |
 | `enabled` | Exactly boolean `true`; false/malformed denies |
-| `expiresAt` | Canonical UTC ISO timestamp, future and no more than 72 hours away |
+| `issuedAt` | Canonical UTC ISO timestamp, no more than 72 hours old and never in the future |
+| `expiresAt` | Canonical UTC ISO timestamp after `issuedAt`, future and no more than 72 hours after issuance |
 | `candidate` | Exact version, `v<version>` tag and 40-character lowercase source commit |
 | `artifacts` | One or two entries, unique `arm64`/`x64` architecture |
 
@@ -71,7 +72,10 @@ against electron-updater's offered full-ZIP identity before touching the output.
 UTF-8 canonical payload: recursively sorted object keys, array order preserved,
 JSON primitive encoding and no whitespace. The compatible client separately
 pins SPKI public keys by key ID; metadata cannot introduce its own trust key.
-Unknown keys, invalid signatures, explicit denial, expiry and malformed values
+Each key ID also pins canonical `validFrom` and `validUntil` timestamps. The
+manifest issuance and expiry interval must fit entirely inside that key window.
+Overlapping public keys permit deliberate rotation without changing the private
+key boundary. Unknown keys, keys outside their validity window, invalid signatures, explicit denial, expiry and malformed values
 all fall back. Authorization is re-read per attempt, not inferred from sidecar
 presence. This signed manifest is the authoritative remote authorization. The
 running implementation must also expose the compiled `mac-differential-v2`
@@ -87,7 +91,7 @@ expired historical metadata simply makes the update full-ZIP-only.
 `verifyMacV2Assets`. Node 24 supports the shared TypeScript schema import. No
 package, feed, build, make or publish hook invokes generation. There is no upload
 command. Explicit `allow: true`, Nightly channel, candidate/baseline identities,
-minimum client version, local ZIP paths, expiration and an Ed25519 private key are required. Otherwise
+minimum client version, local ZIP paths, issuance, expiration and an Ed25519 private key are required. Otherwise
 no v2 assets are generated. The key is supplied by the caller and is never
 serialized. Tests use ephemeral in-memory keys and temporary ZIPs.
 
@@ -108,7 +112,8 @@ A separate reviewed `ao-releases` change must:
    auditable v2 isolation/runtime evidence before calling generation. Missing or
    malformed authorization denies. No assumption about older-client adoption is
    permitted.
-3. Sign the complete envelope using an independently managed trusted key, verify
+3. Sign the complete envelope using an independently managed trusted key whose
+   public key ID and validity window are already compiled into eligible clients, verify
    it and all referenced bytes before upload, and upload an explicit verified
    asset manifest rather than unrestricted `dist/*`.
 4. Download and exact-inventory-check draft assets and run both legacy and v2
@@ -121,6 +126,15 @@ independent client gate disabled and omit future maps during rollback. Preserve
 historical ZIPs and maps; manifest removal is the explicit authorization
 revocation operation, not release-history deletion. Short metadata expiry
 bounds stale authorization; flags do not cancel a transfer already started.
+
+The explicit upload inventory is the candidate ZIP, `ao-diff-v2-mac.json`, and
+the candidate and baseline versioned `.aoblockmap` files named by the verified
+manifest. Draft redownload verification rejects missing or additional v2 assets
+and every conventional macOS sidecar. Rollback removes the named manifest,
+disables conductor generation, and leaves legacy feeds and historical assets
+unchanged. Apple Developer ID signing and notarization establish macOS artifact
+identity. Ed25519 establishes remote v2 authorization. Neither trust system
+substitutes for the other.
 
 ## Supported extension and resource ownership
 
@@ -154,7 +168,13 @@ single fallback decision only after cleanup. MacUpdater then owns exactly one
 full GET, its existing SHA-512 validation and native handoff. Cancellation is
 terminal: it settles v2 work and starts no replacement transfer. A final signal
 check after awaited reconstruction catches cancellation during digest or handle
-cleanup before returning success to the dependency. A failed full
+cleanup before returning success to the dependency. A verified differential
+candidate writes a private cache marker. Every marked final-cache hit fetches
+and verifies the current signed manifest again, matches the exact offered
+version, URL, size, and SHA-512, and digests the cached bytes before native
+handoff. Denial, expiry, corruption, or mismatch removes the pending candidate
+and marker before one full fallback. An unmarked stock full-download cache stays
+on the stock path. A failed full
 ZIP hash produces no handoff. The stock 6.8.9 differential worker remains
 unsafe on 416; this implementation avoids it through the declared extension,
 not by claiming that dependency was fixed.
@@ -181,11 +201,17 @@ identity, legacy discovery isolation, denial/expiry/metadata/map failures,
 range failures including empty/body/delayed/second-range 416, repeated failures
 on one updater, no progress/ranges after fallback, sentinel descriptor survival,
 cancellation and no handoff on a bad full digest. It also asserts stock
-`differentialDownloadInstaller` is never invoked for v2.
+`differentialDownloadInstaller` is never invoked for v2. The protected
+`dispatchUpdateDownloaded` hook is the final synchronous boundary before
+Squirrel starts. Cancellation there suppresses the downloaded event, disarms
+the native request, waits for the dependency to settle, clears the pending
+candidate, and rejects terminally.
 
-These are standalone Node tests on macOS arm64 with simulated architecture
-selection, not native x64 execution or packaged Electron acceptance. Real
-Electron net, signed/notarized ZIP reconstruction, native Squirrel handoff and
-installation still require packaged macOS verification before any enablement.
-The independent upstream dependency proposal from helper 273 remains separate
-supporting evidence with its own narrower coverage limits.
+The Node harness simulates architecture selection and does not establish native
+x64 acceptance. Production rollout evidence additionally requires a packaged
+Electron build using Electron net, Developer ID signed and notarized baseline
+and candidate ZIPs, repository `verify-mac-artifact.sh` acceptance, byte-identical
+delta reconstruction with measured savings, and an isolated real Squirrel swap
+whose installed bundle identity matches the candidate. The local rollout gate
+and public keyring remain disabled until that evidence and the private conductor
+contract are both reviewed.

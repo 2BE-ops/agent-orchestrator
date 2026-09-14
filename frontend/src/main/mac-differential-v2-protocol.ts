@@ -21,9 +21,15 @@ export interface MacV2Payload {
   repository: typeof MAC_V2_REPOSITORY;
   channel: "nightly";
   enabled: boolean;
+  issuedAt: string;
   expiresAt: string;
   candidate: MacV2Identity;
   artifacts: MacV2Artifact[];
+}
+export interface MacV2TrustedKey {
+  publicKey: string;
+  validFrom: string;
+  validUntil: string;
 }
 export interface MacV2Envelope {
   payload: MacV2Payload;
@@ -86,13 +92,16 @@ export function macV2ZipName(url: string, id: MacV2Identity, arch: MacV2Arch): s
 }
 
 export function validateMacV2Payload(value: unknown): MacV2Payload {
-  const p = record(value, ["schemaVersion", "minimumClientVersion", "protocol", "repository", "channel", "enabled", "expiresAt", "candidate", "artifacts"]);
+  const p = record(value, ["schemaVersion", "minimumClientVersion", "protocol", "repository", "channel", "enabled", "issuedAt", "expiresAt", "candidate", "artifacts"]);
   if (p.schemaVersion !== 2 || typeof p.minimumClientVersion !== "string" ||
       semver.valid(p.minimumClientVersion) !== p.minimumClientVersion) throw new Error("Invalid v2 client authorization");
   if (p.protocol !== "ao-mac-differential-v2" || p.repository !== MAC_V2_REPOSITORY || p.channel !== "nightly") throw new Error("Ineligible v2 protocol/channel");
-  if (p.enabled !== true || typeof p.expiresAt !== "string" ||
+  if (p.enabled !== true || typeof p.issuedAt !== "string" || typeof p.expiresAt !== "string" ||
+      !Number.isFinite(Date.parse(p.issuedAt)) || new Date(p.issuedAt).toISOString() !== p.issuedAt ||
       !Number.isFinite(Date.parse(p.expiresAt)) || new Date(p.expiresAt).toISOString() !== p.expiresAt ||
-      Date.parse(p.expiresAt) <= Date.now() || Date.parse(p.expiresAt) > Date.now() + 72 * 60 * 60 * 1000) {
+      Date.parse(p.issuedAt) > Date.now() || Date.parse(p.issuedAt) < Date.now() - 72 * 60 * 60 * 1000 ||
+      Date.parse(p.expiresAt) <= Date.now() || Date.parse(p.expiresAt) <= Date.parse(p.issuedAt) ||
+      Date.parse(p.expiresAt) > Date.parse(p.issuedAt) + 72 * 60 * 60 * 1000) {
     throw new Error("Denied or expired v2 authorization");
   }
   const candidate = identity(p.candidate);
@@ -122,15 +131,21 @@ export function validateMacV2Payload(value: unknown): MacV2Payload {
   return p as unknown as MacV2Payload;
 }
 
-export function verifyMacV2Envelope(bytes: Uint8Array, trustedKeys: Readonly<Record<string, string>>): MacV2Payload {
+export function verifyMacV2Envelope(bytes: Uint8Array, trustedKeys: Readonly<Record<string, MacV2TrustedKey>>): MacV2Payload {
   if (bytes.byteLength > MAC_V2_MAX_METADATA) throw new Error("Oversized v2 metadata");
   const envelope = record(JSON.parse(Buffer.from(bytes).toString("utf8")), ["payload", "signature"]);
   const signature = record(envelope.signature, ["keyId", "value"]);
   if (typeof signature.keyId !== "string" || !Object.hasOwn(trustedKeys, signature.keyId) ||
       typeof signature.value !== "string" || !/^[A-Za-z0-9+/]{86}==$/.test(signature.value)) throw new Error("Unknown v2 signing key");
-  const key = createPublicKey(trustedKeys[signature.keyId]);
+  const trusted = trustedKeys[signature.keyId];
+  const payload = validateMacV2Payload(envelope.payload);
+  if (new Date(trusted.validFrom).toISOString() !== trusted.validFrom ||
+      new Date(trusted.validUntil).toISOString() !== trusted.validUntil ||
+      Date.parse(payload.issuedAt) < Date.parse(trusted.validFrom) ||
+      Date.parse(payload.expiresAt) > Date.parse(trusted.validUntil)) throw new Error("V2 signing key outside validity window");
+  const key = createPublicKey(trusted.publicKey);
   if (key.asymmetricKeyType !== "ed25519" || !verify(null, Buffer.from(macV2Canonical(envelope.payload)), key, Buffer.from(signature.value, "base64"))) {
     throw new Error("Invalid v2 signature");
   }
-  return validateMacV2Payload(envelope.payload);
+  return payload;
 }

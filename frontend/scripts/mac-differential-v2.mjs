@@ -12,8 +12,8 @@ import {
 import { writeBlockmap } from "./blockmap.mjs";
 const identity = (url, bytes) => ({ url, size: bytes.length, sha512: macV2Digest(bytes) });
 
-export async function generateMacV2Assets({ allow = false, channel, minimumClientVersion, candidate, inputs, dir, keyId, privateKey, expiresAt }) {
-  if (typeof minimumClientVersion !== "string" || semver.valid(minimumClientVersion) !== minimumClientVersion || allow !== true || channel !== "nightly" || !keyId || !privateKey || !expiresAt || !Array.isArray(inputs) || !inputs.length) {
+export async function generateMacV2Assets({ allow = false, channel, minimumClientVersion, candidate, inputs, dir, keyId, privateKey, issuedAt, expiresAt }) {
+  if (typeof minimumClientVersion !== "string" || semver.valid(minimumClientVersion) !== minimumClientVersion || allow !== true || channel !== "nightly" || !keyId || !privateKey || !issuedAt || !expiresAt || !Array.isArray(inputs) || !inputs.length) {
     throw new Error("V2 generation denied");
   }
   const created = [];
@@ -36,13 +36,15 @@ export async function generateMacV2Assets({ allow = false, channel, minimumClien
       const baseline = await make(input.baseline.zipPath, input.baseline.identity);
       artifacts.push({ arch: input.arch, ...target, baseline: { ...input.baseline.identity, ...baseline } });
     }
-    const payload = validateMacV2Payload({ schemaVersion: 2, minimumClientVersion, protocol: "ao-mac-differential-v2", repository: MAC_V2_REPOSITORY, channel, enabled: true, expiresAt, candidate, artifacts });
+    const payload = validateMacV2Payload({ schemaVersion: 2, minimumClientVersion, protocol: "ao-mac-differential-v2", repository: MAC_V2_REPOSITORY, channel, enabled: true, issuedAt, expiresAt, candidate, artifacts });
     const envelope = { payload, signature: { keyId, value: sign(null, Buffer.from(macV2Canonical(payload)), privateKey).toString("base64") } };
     const destination = join(dir, MAC_V2_METADATA);
     if (existsSync(destination)) throw new Error("Existing v2 metadata");
     created.push(destination);
     writeFileSync(destination, `${JSON.stringify(envelope, null, 2)}\n`, { flag: "wx" });
-    verifyMacV2Assets({ allow: true, dir, candidate, channel, trustedKeys: { [keyId]: createPublicKey(privateKey).export({ type: "spki", format: "pem" }).toString() } });
+    verifyMacV2Assets({ allow: true, dir, candidate, channel, trustedKeys: { [keyId]: {
+      publicKey: createPublicKey(privateKey).export({ type: "spki", format: "pem" }).toString(), validFrom: issuedAt, validUntil: expiresAt,
+    } } });
     return envelope;
   } catch (error) {
     for (const file of created) rmSync(file, { force: true });

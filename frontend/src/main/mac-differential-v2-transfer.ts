@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 import {
   MAC_V2_METADATA, MAC_V2_MAX_METADATA, macV2Digest, macV2ReleaseURL,
-  verifyMacV2Envelope, type MacV2File,
+  verifyMacV2Envelope, type MacV2Artifact, type MacV2File, type MacV2TrustedKey,
 } from "./mac-differential-v2-protocol";
 
 // Cleanup failure must never be converted into a replacement download.
@@ -25,7 +25,7 @@ export interface MacV2TransferOptions {
   target: MacV2File;
   baselinePath: string;
   destination: string;
-  trustedKeys: Readonly<Record<string, string>>;
+  trustedKeys: Readonly<Record<string, MacV2TrustedKey>>;
   fetch: typeof globalThis.fetch;
   signal: AbortSignal;
   onProgress?: (progress: { total: number; transferred: number; percent: number; bytesPerSecond: number; delta: number }) => void;
@@ -119,10 +119,10 @@ async function verifiedMap(options: MacV2TransferOptions, file: MacV2File): Prom
   return bytes;
 }
 
-/** Reconstruct only. The caller owns the single full fallback after this settles. */
-export async function reconstructMacV2(options: MacV2TransferOptions): Promise<void> {
-  if (options.capability !== "mac-differential-v2" || options.enabled !== true || options.channel !== "nightly" || !Object.keys(options.trustedKeys).length ||
-      resolve(options.baselinePath) === resolve(options.destination)) throw new Error("Ineligible v2 attempt");
+export async function authorizeMacV2Target(options: MacV2TransferOptions): Promise<MacV2Artifact> {
+  if (options.capability !== "mac-differential-v2" || options.enabled !== true || options.channel !== "nightly" || !Object.keys(options.trustedKeys).length) {
+    throw new Error("Ineligible v2 attempt");
+  }
   const metadataURL = macV2ReleaseURL(`v${options.candidateVersion}`, MAC_V2_METADATA);
   const metadata = verifyMacV2Envelope(await fetchBytes(options, metadataURL, MAC_V2_MAX_METADATA), options.trustedKeys);
   if (semver.valid(options.installedVersion) !== options.installedVersion ||
@@ -131,6 +131,24 @@ export async function reconstructMacV2(options: MacV2TransferOptions): Promise<v
   const artifact = metadata.artifacts.find(entry => entry.arch === options.arch && entry.zip.url === options.target.url);
   if (!artifact || artifact.zip.size !== options.target.size || artifact.zip.sha512 !== options.target.sha512 ||
       artifact.baseline.version !== options.installedVersion) throw new Error("Mismatched v2 artifact/baseline");
+  return artifact;
+}
+
+export async function verifyMacV2LocalFile(filePath: string, expected: MacV2File, signal: AbortSignal): Promise<void> {
+  let handle: FileHandle | undefined;
+  try {
+    handle = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const actual = await digest(handle, signal);
+    if (actual.size !== expected.size || actual.sha512 !== expected.sha512) throw new Error("Mismatched v2 cached candidate bytes");
+  } finally {
+    if (handle) await handle.close();
+  }
+}
+
+/** Reconstruct only. The caller owns the single full fallback after this settles. */
+export async function reconstructMacV2(options: MacV2TransferOptions): Promise<void> {
+  if (resolve(options.baselinePath) === resolve(options.destination)) throw new Error("Ineligible v2 attempt");
+  const artifact = await authorizeMacV2Target(options);
   let baseline: FileHandle | undefined;
   let output: FileHandle | undefined;
   let completed = false;

@@ -82,7 +82,7 @@ a ZIP for electron-updater. The ZIP and `latest-mac.yml` must remain available:
 electron-updater cannot install an update from a DMG. Nightly and preview
 channels omit the first-install DMG.
 
-## Isolated macOS differential v2 groundwork
+## Isolated macOS differential v2
 
 Current AO uses full-ZIP macOS updates. It explicitly sets
 `disableDifferentialDownload = true` before checks. The local rollout stop is
@@ -107,9 +107,12 @@ is never invoked. Current AO remains on the stock full-only path.
 
 See [the v2 protocol and acceptance contract](mac-differential-v2.md) for exact
 schema, naming, signing, generation/verification, rollback and runtime limits.
-The feature stays disabled and PR #4906 stays draft until real packaged macOS
-acceptance proves reconstruction, fallback and native handoff. No conductor
-mutation, publication or native-installation acceptance is claimed here.
+The production client reauthorizes marked final-cache hits against a fresh signed
+manifest and byte-verifies them before handoff. Cancellation remains terminal
+through the protected downloaded-event boundary immediately before Squirrel.
+The feature stays locally disabled until real packaged macOS acceptance and the
+private conductor inventory, signing, draft-redownload, and rollback gates are
+complete. No public repository workflow publishes or activates v2 assets.
 
 ## Incident rule
 

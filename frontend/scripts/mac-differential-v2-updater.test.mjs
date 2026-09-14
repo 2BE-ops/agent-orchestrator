@@ -45,7 +45,7 @@ class FullExecutor extends HttpExecutor {
   }
 }
 
-async function runCase(fault = "none", { arch = "arm64", progress = true, disabled = false, legacy = false, attempts = 1 } = {}) {
+async function runCase(fault = "none", { arch = "arm64", progress = true, disabled = false, legacy = false, attempts = 1, reuseCache = false, secondAttemptFault } = {}) {
   const f = await macV2Fixture(); dirs.push(f.dir);
   const cache = join(f.dir, "cache"); mkdirSync(cache);
   const input = f.inputs.find(entry => entry.arch === arch);
@@ -164,13 +164,18 @@ async function runCase(fault = "none", { arch = "arm64", progress = true, disabl
   updater.app = { version: "1.0.0" };
   updater.currentVersion = new semver.SemVer(fault === "installed-prerelease" ? "1.0.0-rc.1" : "1.0.0");
   updater.channel = fault === "ineligible" ? "latest" : "nightly";
+  updater.autoInstallOnAppQuit = true;
   updater.logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
   updater.downloadedUpdateHelper = new DownloadedUpdateHelper(cache);
   updater.httpExecutor = new FullExecutor();
   updater.httpExecutor.base = base;
   updater.httpExecutor.sentinelPath = join(cache, "sentinel");
   updater.httpExecutor.onFull = () => { fullStarted = true; };
-  updater.updateDownloaded = async (_file, event) => { handoffs.push(readFileSync(event.downloadedFile)); };
+  updater.updateDownloaded = async (_file, event) => {
+    if (fault === "cancel-native-handoff") token.cancel();
+    updater.dispatchUpdateDownloaded(event);
+    if (updater.autoInstallOnAppQuit) handoffs.push(readFileSync(event.downloadedFile));
+  };
   if (progress) updater.on("download-progress", info => {
     if (fullStarted && !updater.httpExecutor.inFullProgress) laterWork++;
     observations.push(info);
@@ -216,10 +221,18 @@ async function runCase(fault = "none", { arch = "arm64", progress = true, disabl
   try {
     for (let attempt = 0; attempt < attempts; attempt++) {
       if (attempt) {
-        // Reuse this updater/executor in the same process, with a valid baseline
-        // and no staged target so the next manual attempt exercises transfer.
-        await updater.downloadedUpdateHelper.clear();
-        copyFileSync(input.baseline.zipPath, join(cache, "update.zip"));
+        if (secondAttemptFault === "denied") {
+          metadata.payload.enabled = false;
+          metadata.signature.value = sign(null, Buffer.from(macV2Canonical(metadata.payload)), f.privateKey).toString("base64");
+        }
+        if (secondAttemptFault === "corrupt-cache") writeFileSync(updater.downloadedUpdateHelper.file, "corrupt cached candidate");
+        if (secondAttemptFault === "missing-cache") rmSync(updater.downloadedUpdateHelper.file);
+        if (!reuseCache) {
+          // Reuse this updater/executor in the same process, with a valid baseline
+          // and no staged target so the next manual attempt exercises transfer.
+          await updater.downloadedUpdateHelper.clear();
+          copyFileSync(input.baseline.zipPath, join(cache, "update.zip"));
+        }
       }
       fullStarted = false;
       await updater.doDownloadUpdate({ updateInfoAndProvider: { info: { version: "2.0.0", files: [file.info] }, provider },
@@ -305,6 +318,28 @@ describe("real MacUpdater with isolated v2 transfer", () => {
     expect(result.handoffs).toHaveLength(3);
     expect(result.handoffs.every(bytes => bytes.equals(result.target))).toBe(true);
   });
+  it("reauthorizes a byte-verified final cache hit before a second native handoff", async () => {
+    const result = await runCase("none", { attempts: 2, reuseCache: true });
+    expect(result.error).toBeUndefined();
+    expect(fullGETs(result)).toHaveLength(0);
+    expect(result.requests.filter(request => request.name === MAC_V2_METADATA)).toHaveLength(3);
+    expect(result.handoffs).toHaveLength(2);
+    expect(result.handoffs.every(bytes => bytes.equals(result.target))).toBe(true);
+  });
+  it("cleans a denied final cache hit before one full fallback", async () => {
+    const result = await runCase("none", { attempts: 2, reuseCache: true, secondAttemptFault: "denied" });
+    expect(result.error).toBeUndefined();
+    expect(fullGETs(result)).toHaveLength(1);
+    expect(result.handoffs).toHaveLength(2);
+    expect(result.handoffs.every(bytes => bytes.equals(result.target))).toBe(true);
+  });
+  it.each(["corrupt-cache", "missing-cache"])("cleans a %s candidate before one full fallback", async secondAttemptFault => {
+    const result = await runCase("none", { attempts: 2, reuseCache: true, secondAttemptFault });
+    expect(result.error).toBeUndefined();
+    expect(fullGETs(result)).toHaveLength(1);
+    expect(result.handoffs).toHaveLength(2);
+    expect(result.handoffs.every(bytes => bytes.equals(result.target))).toBe(true);
+  });
   it("handles HTTP 416 without a progress subscriber", async () => {
     const result = await runCase("416-body", { progress: false });
     expect(result.error).toBeUndefined();
@@ -344,6 +379,13 @@ describe("real MacUpdater with isolated v2 transfer", () => {
     const result = await runCase("cancel");
     expect(result.error).toBeDefined();
     expect(fullGETs(result)).toHaveLength(0);
+    expect(result.handoffs).toHaveLength(0);
+  });
+  it("keeps cancellation terminal at the protected native handoff boundary", async () => {
+    const result = await runCase("cancel-native-handoff");
+    expect(result.error?.message).toMatch(/cancel/i);
+    expect(fullGETs(result)).toHaveLength(0);
+    expect(result.promotions).toBe(1);
     expect(result.handoffs).toHaveLength(0);
   });
   it("leaves old MacUpdater clients on full ZIPs even with v2 assets on the same release", async () => {

@@ -32,8 +32,11 @@ export async function macV2Fixture(arches = ["arm64", "x64"]) {
     inputs.push({ arch, zipPath, baseline: { identity: baseline, zipPath: oldPath } });
   }
   const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-  const trustedKeys = { test: publicKey.export({ type: "spki", format: "pem" }).toString() };
-  const envelope = await generateMacV2Assets({ minimumClientVersion: "1.0.0", allow: true, dir, candidate, channel: "nightly", inputs, keyId: "test", privateKey, expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString() });
+  const issuedAt = new Date(Date.now() - 60_000).toISOString();
+  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+  const trustedKeys = { test: { publicKey: publicKey.export({ type: "spki", format: "pem" }).toString(),
+    validFrom: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() } };
+  const envelope = await generateMacV2Assets({ minimumClientVersion: "1.0.0", allow: true, dir, candidate, channel: "nightly", inputs, keyId: "test", privateKey, issuedAt, expiresAt });
   return { dir, inputs, candidate, baseline, envelope, trustedKeys, privateKey,
     target: arch => readFileSync(inputs.find(input => input.arch === arch).zipPath) };
 }
