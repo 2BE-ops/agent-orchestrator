@@ -170,16 +170,6 @@ func (m *codexAccountManager) activateFromCredentialLocked(ctx context.Context, 
 			return notCommitted(ports.ErrCodexGlobalAccountChanged)
 		}
 	}
-	restorePrevious := func() error {
-		current, currentErr := readOpaqueCredential(globalPath)
-		if currentErr != nil || !bytes.Equal(current, targetCredential) {
-			return ports.ErrCodexGlobalAccountChanged
-		}
-		if previousErr == nil {
-			return writeGlobalCredentialSettled(globalPath, previousCredential)
-		}
-		return removeGlobalCredentialSettled(globalPath)
-	}
 	if err := writeGlobalCredentialSettled(globalPath, targetCredential); err != nil {
 		return domain.CodexActiveAccount{}, err
 	}
@@ -196,13 +186,11 @@ func (m *codexAccountManager) activateFromCredentialLocked(ctx context.Context, 
 		current = m.active
 	}
 	m.mu.Unlock()
-	active, outcome, err := m.commitActivePointer(ctx, accountID, current, now)
+	active, _, err := m.commitActivePointer(ctx, accountID, current, now)
 	if err != nil {
-		if outcome == activePointerUnchanged {
-			if restoreErr := restorePrevious(); restoreErr != nil {
-				return domain.CodexActiveAccount{}, restoreErr
-			}
-		}
+		// The global credential already changed. Leave it in place so the durable
+		// switch can finish the pointer update locally; rolling it back here made
+		// a healthy device account look like an ambiguous recovery.
 		return domain.CodexActiveAccount{}, err
 	}
 	m.mu.Lock()

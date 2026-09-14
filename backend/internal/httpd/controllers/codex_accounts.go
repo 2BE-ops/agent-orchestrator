@@ -32,7 +32,6 @@ type CodexAccountService interface {
 	VerifyCodexAccountLogin(context.Context, string) (domain.CodexAccountLoginOperation, error)
 	CancelCodexAccountLogin(context.Context, string) (domain.CodexAccountLoginOperation, error)
 	StartCodexAccountSwitch(context.Context, ports.CodexAccountSwitchConfig) (domain.CodexAccountSwitch, error)
-	RecoverCodexAccountSwitch(context.Context, string) (domain.CodexAccountSwitch, error)
 }
 
 // CodexAccountsController exposes cached accounts, login, switching, and events.
@@ -50,7 +49,6 @@ func (c *CodexAccountsController) Register(r chi.Router) {
 	r.Post("/agents/codex/accounts/login-operations/{operationId}/verify", c.verifyLogin)
 	r.Post("/agents/codex/accounts/login-operations/{operationId}/cancel", c.cancelLogin)
 	r.Post("/agents/codex/account-switches", c.startSwitch)
-	r.Post("/agents/codex/account-switches/{switchId}/recover", c.recoverSwitch)
 }
 
 func (c *CodexAccountsController) consumeResetCredit(w http.ResponseWriter, r *http.Request) {
@@ -100,23 +98,8 @@ func (c *CodexAccountsController) startSwitch(w http.ResponseWriter, r *http.Req
 	envelope.WriteJSON(w, http.StatusAccepted, newCodexSwitchResponse(result))
 }
 
-func (c *CodexAccountsController) recoverSwitch(w http.ResponseWriter, r *http.Request) {
-	if c.Svc == nil {
-		apispec.NotImplemented(w, r, "POST", "/api/v1/agents/codex/account-switches/{switchId}/recover")
-		return
-	}
-	result, err := c.Svc.RecoverCodexAccountSwitch(r.Context(), strings.TrimSpace(chi.URLParam(r, "switchId")))
-	if err != nil {
-		writeCodexAccountSwitchError(w, r, err)
-		return
-	}
-	envelope.WriteJSON(w, http.StatusOK, newCodexSwitchResponse(result))
-}
-
 func writeCodexAccountSwitchError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, ports.ErrCodexAccountSwitchNotFound):
-		envelope.WriteAPIError(w, r, http.StatusNotFound, "not_found", "CODEX_ACCOUNT_SWITCH_NOT_FOUND", "Codex account switch not found", nil)
 	case errors.Is(err, ports.ErrCodexAccountAlreadyActive):
 		envelope.WriteAPIError(w, r, http.StatusConflict, "conflict", "CODEX_ACCOUNT_ALREADY_ACTIVE", "This Codex account is already active", nil)
 	case errors.Is(err, ports.ErrCodexAccountRevisionConflict):

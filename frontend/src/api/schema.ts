@@ -158,23 +158,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/agents/codex/account-switches/{switchId}/recover": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Retry recovery for one Codex account switch */
-        post: operations["recoverCodexAccountSwitch"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/agents/codex/accounts": {
         parameters: {
             query?: never;
@@ -2743,7 +2726,6 @@ export interface components {
             usageSummary?: components["schemas"]["CodexAccountUsageSummaryResponse"];
         };
         CodexAccountSwitchResponse: {
-            canRecover: boolean;
             /** Format: date-time */
             completedAt?: null | string;
             /** Format: date-time */
@@ -5009,47 +4991,6 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["APIError"];
-                };
-            };
-        };
-    };
-    recoverCodexAccountSwitch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Durable Codex account switch identifier. */
-                switchId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CodexAccountSwitchResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["APIError"];
-                };
-            };
-            /** @description Conflict */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };

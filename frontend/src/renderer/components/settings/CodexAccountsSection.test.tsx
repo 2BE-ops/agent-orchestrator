@@ -231,7 +231,7 @@ it("removes the local reconciliation error silently when it recovers", async () 
 	expect(screen.getByText("In use")).toBeInTheDocument();
 });
 
-it("lets the user retry when the Codex account needs attention", async () => {
+it("does not offer a retry for a permanently blocked device check", async () => {
 	const blocked = {
 		...accountResponse,
 		deviceReconciliation: {
@@ -242,38 +242,10 @@ it("lets the user retry when the Codex account needs attention", async () => {
 		},
 	};
 	getMock.mockResolvedValue({ data: blocked });
-	postMock.mockImplementation((path: string, request?: { body?: { forceDeviceReconciliation?: boolean } }) => path === "/api/v1/agents/codex/accounts/ensure" && request?.body?.forceDeviceReconciliation
-		? Promise.resolve({ data: accountResponse })
-		: Promise.resolve({ data: blocked }));
 	renderSection();
 
 	expect((await screen.findAllByText("Couldn’t refresh the Codex account.")).length).toBeGreaterThan(0);
-	fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-	await waitFor(() => expect(postMock).toHaveBeenCalledWith(
-		"/api/v1/agents/codex/accounts/ensure",
-		{ body: { accountIds: [], includeUsage: false, forceDeviceReconciliation: true } },
-	));
-	expect(await screen.findByText("In use")).toBeInTheDocument();
-});
-
-it("shows recovery as an action instead of indefinite switch progress", async () => {
-	const recoveryResponse = {
-		...accountResponse,
-		currentSwitch: {
-			id: "33333333-3333-4333-8333-333333333333",
-			phase: "recovery_required",
-			failureCode: "recovery_required",
-			canRecover: true,
-		},
-	};
-	getMock.mockResolvedValue({ data: recoveryResponse });
-	postMock.mockResolvedValue({ data: recoveryResponse });
-
-	renderSection();
-	expect(await screen.findByRole("button", { name: "Continue recovery" })).toBeInTheDocument();
-	expect(screen.getByRole("button", { name: "Add account" })).toBeDisabled();
-	expect(screen.getByRole("button", { name: "Switch account" })).toBeDisabled();
-	expect(screen.getAllByText("Couldn't finish switching accounts.").length).toBeGreaterThan(0);
+	expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
 });
 
 it("keeps a visible live success outcome when an observed switch disappears on its target", async () => {
@@ -283,7 +255,6 @@ it("keeps a visible live success outcome when an observed switch disappears on i
 			id: "33333333-3333-4333-8333-333333333333",
 			phase: "activating_target",
 			failureCode: undefined,
-			canRecover: false,
 			sourceAccountId: activeAccount.id,
 			sourceKind: "managed",
 			targetAccountId: inactiveAccount.id,
@@ -319,14 +290,13 @@ it("keeps a visible live success outcome when an observed switch disappears on i
 	));
 });
 
-it("reports when a failed switch safely restores the previous account", async () => {
+it("reports when a failed switch leaves the previous account unchanged", async () => {
 	const switchingResponse = {
 		...accountResponse,
 		currentSwitch: {
 			id: "33333333-3333-4333-8333-333333333333",
 			phase: "activating_target",
 			failureCode: "activation_failed",
-			canRecover: false,
 			sourceAccountId: activeAccount.id,
 			sourceKind: "managed",
 			targetAccountId: inactiveAccount.id,
@@ -744,6 +714,8 @@ it("logs out a signed-in account while retaining its card", async () => {
 	fireEvent.click(await screen.findByRole("button", { name: "Log out" }));
 	const dialog = await screen.findByRole("dialog");
 	expect(dialog).toHaveTextContent("Log out of this Codex account?");
+	expect(dialog).toHaveTextContent("active@example.com is currently in use.");
+	expect(dialog).toHaveTextContent("Logging out will also sign Codex out on this device.");
 	fireEvent.click(within(dialog).getByRole("button", { name: "Log out" }));
 	await waitFor(() => expect(postMock).toHaveBeenCalledWith(
 		"/api/v1/agents/codex/accounts/{accountId}/logout",
@@ -752,6 +724,22 @@ it("logs out a signed-in account while retaining its card", async () => {
 	const row = container.querySelector(`[data-account-id="${activeAccount.id}"]`) as HTMLElement;
 	await waitFor(() => expect(within(row).getByText("Signed out")).toBeInTheDocument());
 	expect(within(row).getByRole("button", { name: "Sign in again" })).toBeEnabled();
+});
+
+it("explains that logging out an inactive account leaves the device account unchanged", async () => {
+	postMock.mockImplementation((path: string) => {
+		if (path === "/api/v1/agents/codex/accounts/ensure") return Promise.resolve({ data: accountResponse });
+		if (path === "/api/v1/agents/codex/accounts/{accountId}/logout") return Promise.resolve({ data: accountResponse });
+		return Promise.resolve({ data: {} });
+	});
+	const { container } = renderSection();
+	await screen.findByText("other@example.com");
+	fireEvent.click(container.querySelector(`[data-account-id="${inactiveAccount.id}"] button`) as HTMLButtonElement);
+	fireEvent.click(await screen.findByRole("button", { name: "Log out" }));
+
+	const dialog = await screen.findByRole("dialog");
+	expect(dialog).toHaveTextContent("Logging out of other@example.com will remove its saved sign-in from AO.");
+	expect(dialog).toHaveTextContent("The Codex account in use on this device will not change.");
 });
 
 it("deletes a signed-out account after confirmation", async () => {
@@ -841,7 +829,7 @@ it("explains an invalid sign-in and deletes it after local logout", async () => 
 });
 
 it("starts a global switch with the displayed account revision", async () => {
-	const switchOperation = { id: "switch-1", phase: "requested", failureCode: null, canRecover: false };
+	const switchOperation = { id: "switch-1", phase: "requested", failureCode: null };
 	vi.stubGlobal("crypto", { randomUUID: () => "idempotency-1" });
 	postMock.mockImplementation((path: string) => {
 		if (path === "/api/v1/agents/codex/accounts/ensure") return Promise.resolve({ data: accountResponse });

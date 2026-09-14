@@ -1382,11 +1382,6 @@ type StartCodexAccountSwitchRequest struct {
 	IdempotencyKey          string `json:"idempotencyKey" minLength:"1"`
 }
 
-// CodexAccountSwitchIDParam describes the durable switch path parameter.
-type CodexAccountSwitchIDParam struct {
-	SwitchID string `path:"switchId" description:"Durable Codex account switch identifier."`
-}
-
 // CodexAccountSwitchPhase is the retained public switch lifecycle.
 type CodexAccountSwitchPhase string
 
@@ -1398,7 +1393,6 @@ type CodexAccountSwitchResponse struct {
 	TargetAccountID        string                  `json:"targetAccountId"`
 	Phase                  CodexAccountSwitchPhase `json:"phase" enum:"requested,checkpointing_source,activating_target,recovery_required,completed,failed"`
 	FailureCode            string                  `json:"failureCode,omitempty"`
-	CanRecover             bool                    `json:"canRecover"`
 	CredentialsCommittedAt *time.Time              `json:"credentialsCommittedAt,omitempty"`
 	CreatedAt              time.Time               `json:"createdAt"`
 	UpdatedAt              time.Time               `json:"updatedAt"`

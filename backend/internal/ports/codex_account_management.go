@@ -12,8 +12,6 @@ var (
 	ErrCodexAccountSwitchInProgress = errors.New("codex account switch already in progress")
 	// ErrCodexAccountAlreadyActive rejects selecting the current account.
 	ErrCodexAccountAlreadyActive = errors.New("codex account is already active")
-	// ErrCodexAccountSwitchNotFound means the durable operation does not exist.
-	ErrCodexAccountSwitchNotFound = errors.New("codex account switch not found")
 	// ErrCodexAccountRevisionConflict reports a stale active-account revision.
 	ErrCodexAccountRevisionConflict = errors.New("codex account revision conflict")
 	// ErrCodexAccountSwitchIdempotencyConflict rejects reused mismatched keys.
@@ -56,9 +54,8 @@ type CodexAccountCredentialManager interface {
 	CurrentCodexActiveAccount() domain.CodexActiveAccount
 	CurrentCodexAccountSwitchSource() domain.CodexAccountSwitchSource
 	PrepareCodexAccountForSwitch(context.Context, string) error
-	ConfirmCodexAccountSwitchTarget(context.Context, string, string) error
+	ConfirmCodexAccountSwitchTarget(context.Context, string) error
 	CheckpointAndActivateCodexAccount(context.Context, domain.CodexAccountSwitchSourceKind, string, string, int64) (domain.CodexActiveAccount, error)
-	RestoreCodexAccountCredential(context.Context, string, domain.CodexAccountSwitchSourceKind, string, string) error
 	CleanupCodexAccountSwitch(context.Context, string) error
 }
 

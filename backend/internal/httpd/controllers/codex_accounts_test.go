@@ -86,10 +86,6 @@ func (f *fakeCodexAccounts) StartCodexAccountSwitch(_ context.Context, cfg ports
 	f.switchConfig = cfg
 	return f.switchResult, f.switchErr
 }
-func (f *fakeCodexAccounts) RecoverCodexAccountSwitch(context.Context, string) (domain.CodexAccountSwitch, error) {
-	return f.switchResult, nil
-}
-
 func codexAccountsFixture() agentsvc.CodexAccounts {
 	supported := domain.CodexCapabilityObservation{State: domain.CodexCapabilitySupported, ReasonCode: "supported", Reason: "available"}
 	remaining := 95.0

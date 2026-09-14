@@ -127,7 +127,7 @@ func newCodexSwitchResponse(input domain.CodexAccountSwitch) CodexAccountSwitchR
 	return CodexAccountSwitchResponse{
 		ID: input.ID, SourceKind: string(input.SourceKind), SourceAccountID: input.SourceAccountID, TargetAccountID: input.TargetAccountID,
 		Phase: CodexAccountSwitchPhase(input.Phase), FailureCode: input.FailureCode,
-		CanRecover: input.CanRecover, CredentialsCommittedAt: input.CredentialsCommittedAt,
-		CreatedAt: input.CreatedAt, UpdatedAt: input.UpdatedAt, CompletedAt: input.CompletedAt,
+		CredentialsCommittedAt: input.CredentialsCommittedAt,
+		CreatedAt:              input.CreatedAt, UpdatedAt: input.UpdatedAt, CompletedAt: input.CompletedAt,
 	}
 }

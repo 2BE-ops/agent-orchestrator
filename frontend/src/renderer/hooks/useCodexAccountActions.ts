@@ -10,7 +10,6 @@ import {
 	logoutCodexAccount,
 	openCodexAccountLoginTerminal,
 	openCodexAccountReauthenticationTerminal,
-	recoverCodexAccountSwitch,
 	startCodexAccountSwitch,
 	verifyCodexAccountLogin,
 	type CodexAccount,
@@ -28,7 +27,6 @@ export function useCodexAccountActions(queryClient: QueryClient) {
 	const [error, setError] = useState<string | null>(null);
 	const [loginPending, setLoginPending] = useState(false);
 	const [loginOperationPending, setLoginOperationPending] = useState(false);
-	const [recoverPending, setRecoverPending] = useState(false);
 	const [authenticationRetryAccountId, setAuthenticationRetryAccountId] = useState<string | null>(null);
 	const [deviceRefreshPending, setDeviceRefreshPending] = useState(false);
 	const verifyingRef = useRef<string | null>(null);
@@ -180,20 +178,6 @@ export function useCodexAccountActions(queryClient: QueryClient) {
 		}
 	}, [t, writeCurrent]);
 
-	const recoverSwitch = useCallback(async (switchId: string) => {
-		setError(null);
-		setRecoverPending(true);
-		try {
-			const nextSwitch = await recoverCodexAccountSwitch(switchId);
-			writeCurrent((snapshot) => ({ ...snapshot, currentSwitch: nextSwitch }));
-		} catch (cause) {
-			setError(errorMessage(cause, t("settings.codexAccounts.switchRecoveryFailed")));
-			throw cause;
-		} finally {
-			setRecoverPending(false);
-		}
-	}, [t, writeCurrent]);
-
 	const resetAccount = useCallback(async (account: CodexAccount, idempotencyKey: string) => {
 		setError(null);
 		try { writeCodexAccounts(queryClient, await consumeCodexAccountResetCredit(account.id, idempotencyKey), "replace"); }
@@ -221,7 +205,6 @@ export function useCodexAccountActions(queryClient: QueryClient) {
 		error,
 		loginPending,
 		loginOperationPending,
-		recoverPending,
 		authenticationRetryAccountId,
 		deviceRefreshPending,
 		beginLogin,
@@ -232,7 +215,6 @@ export function useCodexAccountActions(queryClient: QueryClient) {
 		retryAuthentication,
 		retryDeviceRefresh,
 		switchAccount,
-		recoverSwitch,
 		resetAccount,
 		logoutAccount,
 		deleteAccount,

@@ -162,7 +162,6 @@ export const codexAccountReasonCodes = Object.keys(reasonKeys) as Array<keyof ty
 
 export type CodexAccountMessageKey = (typeof reasonKeys)[keyof typeof reasonKeys]
 	| "settings.codexAccounts.switch.requested"
-	| "settings.codexAccounts.switch.recovery_required"
 	| "settings.codexAccounts.switch.completed"
 	| "settings.codexAccounts.switch.failed"
 	| "settings.codexAccounts.switch.unknown";
@@ -176,19 +175,15 @@ export type CodexSwitchDisplay = {
 	tone: "muted" | "warning" | "error";
 	busy: boolean;
 	mutationBlocked: boolean;
-	canRecover: boolean;
 };
 
 export function codexSwitchDisplay(switchState: CodexAccountSwitch): CodexSwitchDisplay {
 	const phase = switchState.phase;
-	const canRecover = switchState.canRecover && phase === "recovery_required";
-	const terminal = phase === "completed" || phase === "failed" || phase === "recovery_required";
+	const terminal = phase === "completed" || phase === "failed";
 	const busy = !terminal;
 	let key: CodexAccountMessageKey;
 	if (busy) {
 		key = "settings.codexAccounts.switch.requested";
-	} else if (canRecover) {
-		key = "settings.codexAccounts.switch.recovery_required";
 	} else if (phase === "completed") {
 		key = "settings.codexAccounts.switch.completed";
 	} else if (phase === "failed") {
@@ -198,9 +193,8 @@ export function codexSwitchDisplay(switchState: CodexAccountSwitch): CodexSwitch
 	}
 	return {
 		key,
-		tone: phase === "failed" ? "error" : phase === "recovery_required" ? "warning" : "muted",
+		tone: phase === "failed" ? "error" : "muted",
 		busy,
 		mutationBlocked: phase !== "completed" && phase !== "failed",
-		canRecover,
 	};
 }

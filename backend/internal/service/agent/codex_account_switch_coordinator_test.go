@@ -58,7 +58,7 @@ func (f *coordinatorCredentialFake) PrepareCodexAccountForSwitch(_ context.Conte
 	f.call("prepare-target:" + id)
 	return nil
 }
-func (f *coordinatorCredentialFake) ConfirmCodexAccountSwitchTarget(_ context.Context, _ string, id string) error {
+func (f *coordinatorCredentialFake) ConfirmCodexAccountSwitchTarget(_ context.Context, id string) error {
 	f.call("confirm-target:" + id)
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -77,13 +77,6 @@ func (f *coordinatorCredentialFake) CheckpointAndActivateCodexAccount(_ context.
 	active := f.active
 	f.mu.Unlock()
 	return active, nil
-}
-func (f *coordinatorCredentialFake) RestoreCodexAccountCredential(_ context.Context, _ string, _ domain.CodexAccountSwitchSourceKind, source, _ string) error {
-	f.call("restore:" + source)
-	f.mu.Lock()
-	f.active.AccountID = source
-	f.mu.Unlock()
-	return nil
 }
 func (f *coordinatorCredentialFake) CleanupCodexAccountSwitch(context.Context, string) error {
 	f.call("cleanup")
@@ -247,7 +240,7 @@ func TestCodexAccountSwitchCoordinatorActivatesSavedAccountWhenDeviceCredentialI
 	}
 }
 
-func TestCodexAccountSwitchCoordinatorRollsBackActivationFailure(t *testing.T) {
+func TestCodexAccountSwitchCoordinatorSettlesActivationFailureWithoutRollback(t *testing.T) {
 	credentials := &coordinatorCredentialFake{
 		active: domain.CodexActiveAccount{AccountID: "source", Revision: 1}, activateErr: errors.New("activate failed"),
 	}
@@ -266,7 +259,51 @@ func TestCodexAccountSwitchCoordinatorRollsBackActivationFailure(t *testing.T) {
 	credentials.mu.Lock()
 	calls := append([]string(nil), credentials.calls...)
 	credentials.mu.Unlock()
-	if !slices.Contains(calls, "confirm-target:target") || !slices.Contains(calls, "restore:source") {
-		t.Fatalf("rollback calls = %v", calls)
+	if !slices.Contains(calls, "confirm-target:target") {
+		t.Fatalf("settlement calls = %v, want local target confirmation", calls)
+	}
+	for _, call := range calls {
+		if strings.HasPrefix(call, "restore:") {
+			t.Fatalf("settlement tried to restore a stale source credential: %v", calls)
+		}
+	}
+}
+
+func TestCodexAccountSwitchCoordinatorAdoptsExternalDeviceAccountInsteadOfWaitingForRecovery(t *testing.T) {
+	fixture := newAPIKeySwitchFixture(t)
+	externalCredential := testAPIKeyCredential("external-api-key")
+	if err := writeGlobalCredentialAtomic(fixture.manager.globalCredentialPath(), externalCredential); err != nil {
+		t.Fatal(err)
+	}
+	fixture.manager.catalog.newID = func() string { return "f47ac10b-58cc-4372-a567-0e02b2c3d479" }
+	store := &coordinatorSwitchStoreFake{record: domain.CodexAccountSwitch{
+		ID: "6f8dfc76-8db4-4621-8974-c480093e0d55", SourceKind: domain.CodexAccountSwitchSourceManaged,
+		SourceAccountID: fixture.source.Snapshot.ID, TargetAccountID: fixture.target.Snapshot.ID,
+		ExpectedAccountRevision: 1, Phase: domain.CodexAccountSwitchRecoveryRequired,
+	}}
+	coordinator := newCodexAccountSwitchCoordinator(context.Background(), fixture.service, store, codexops.NewGate(), time.Now, nil)
+
+	if err := coordinator.ReconcileCodexAccountSwitches(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	waitCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := coordinator.Wait(waitCtx); err != nil {
+		t.Fatal(err)
+	}
+
+	store.mu.Lock()
+	settled := store.record
+	store.mu.Unlock()
+	if settled.Phase != domain.CodexAccountSwitchFailed || settled.FailureCode != "legacy_switch_interrupted" {
+		t.Fatalf("switch = (%q,%q), want terminal superseded switch", settled.Phase, settled.FailureCode)
+	}
+	active := fixture.service.CurrentCodexActiveAccount()
+	if active.AccountID == fixture.source.Snapshot.ID || active.AccountID == fixture.target.Snapshot.ID || active.AccountID == "" {
+		t.Fatalf("external device account was not adopted: %#v", active)
+	}
+	installed, err := readOpaqueCredential(fixture.manager.globalCredentialPath())
+	if err != nil || !slices.Equal(installed, externalCredential) {
+		t.Fatalf("external device credential changed: %q, %v", installed, err)
 	}
 }

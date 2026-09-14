@@ -953,7 +953,7 @@ func TestLogoutAdoptsActivePointerCommitReportedAsError(t *testing.T) {
 		t.Fatalf("logout rejected a confirmed pointer commit: %v", err)
 	}
 	if _, err := os.Stat(manager.globalCredentialPath()); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("device credential restored after pointer commit: %v", err)
+		t.Fatalf("device credential remained after confirmed logout: %v", err)
 	}
 	if state.active.AccountID != "" || manager.activeAccountID() != "" {
 		t.Fatalf("active pointer = %#v, manager=%q", state.active, manager.activeAccountID())
@@ -1935,107 +1935,6 @@ func TestCheckpointRejectsExternalAPIKeySourceReplacement(t *testing.T) {
 	}
 }
 
-func TestSwitchFromDeviceOnlySourceRestoresPrivateCheckpoint(t *testing.T) {
-	fixture := newAPIKeySwitchFixture(t)
-	switchID := "6f8dfc76-8db4-4621-8974-c480093e0d55"
-	deviceCredential := []byte("external-device-credential")
-	if err := writeGlobalCredentialAtomic(fixture.manager.globalCredentialPath(), deviceCredential); err != nil {
-		t.Fatal(err)
-	}
-	fixture.manager.factory = &fakeCodexAccountFactory{open: func(account ports.CodexAccountContext) (ports.CodexAccountClient, error) {
-		return &fakeCodexAccountClient{read: ports.CodexAccountObservation{Authentication: domain.AgentAuthenticationAuthorized, Method: domain.CodexAuthMethodAPIKey}}, nil
-	}}
-
-	active, err := fixture.service.CheckpointAndActivateCodexAccount(context.Background(), domain.CodexAccountSwitchSourceDevice, switchID, fixture.target.Snapshot.ID, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if active.AccountID != fixture.target.Snapshot.ID || active.Revision != 2 {
-		t.Fatalf("activated account = %#v", active)
-	}
-	checkpoint, err := readOpaqueCredential(filepath.Join(fixture.manager.switchStagingRoot, switchID, "source-auth.json"))
-	if err != nil || !bytes.Equal(checkpoint, deviceCredential) {
-		t.Fatalf("device checkpoint = %q, err=%v", checkpoint, err)
-	}
-	if err := fixture.service.RestoreCodexAccountCredential(context.Background(), switchID, domain.CodexAccountSwitchSourceDevice, "", fixture.target.Snapshot.ID); err != nil {
-		t.Fatal(err)
-	}
-	restored, err := readOpaqueCredential(fixture.manager.globalCredentialPath())
-	if err != nil || !bytes.Equal(restored, deviceCredential) {
-		t.Fatalf("restored device credential = %q, err=%v", restored, err)
-	}
-	if fixture.manager.active.AccountID != "" || fixture.manager.active.Revision != 3 {
-		t.Fatalf("restored device-only state = active %#v", fixture.manager.active)
-	}
-	if err := fixture.service.CleanupCodexAccountSwitch(context.Background(), switchID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(fixture.manager.switchStagingRoot, switchID)); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("terminal switch checkpoint remains: %v", err)
-	}
-}
-
-func TestSwitchFromNoDeviceCredentialCanRollbackToNoActiveAccount(t *testing.T) {
-	root := t.TempDir()
-	globalHome := filepath.Join(root, "global-codex")
-	if err := ensurePrivateDirectory(globalHome); err != nil {
-		t.Fatal(err)
-	}
-	state := &fakeCodexAccountStateStore{}
-	manager := newCodexAccountManager(context.Background(), filepath.Join(root, "accounts"), filepath.Join(root, "pending"), filepath.Join(root, "staging"), globalHome, nil, state, nil)
-	manager.catalog.newID = func() string { return testAccountID }
-	target := commitTestAccount(t, manager.catalog, manager.pendingRoot, "b60a377d-da68-4a61-86f2-f31f04c571f2", ports.CodexAccountObservation{Authentication: domain.AgentAuthenticationAuthorized, Method: domain.CodexAuthMethodAPIKey})
-	if err := writePrivateFileAtomic(filepath.Join(target.Home, codexCredentialFilename), testAPIKeyCredential("target-credential")); err != nil {
-		t.Fatal(err)
-	}
-	manager.factory = &fakeCodexAccountFactory{open: func(ports.CodexAccountContext) (ports.CodexAccountClient, error) {
-		return &fakeCodexAccountClient{read: ports.CodexAccountObservation{Authentication: domain.AgentAuthenticationAuthorized, Method: domain.CodexAuthMethodAPIKey}}, nil
-	}}
-	service := &Service{codexAccounts: manager, readiness: newReadinessCoordinator(readinessCoordinatorConfig{})}
-	switchID := "6f8dfc76-8db4-4621-8974-c480093e0d55"
-
-	active, err := service.CheckpointAndActivateCodexAccount(context.Background(), domain.CodexAccountSwitchSourceNone, switchID, target.Snapshot.ID, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if active.AccountID != target.Snapshot.ID || active.Revision != 1 {
-		t.Fatalf("activated account = %#v", active)
-	}
-	if err := service.RestoreCodexAccountCredential(context.Background(), switchID, domain.CodexAccountSwitchSourceNone, "", target.Snapshot.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(manager.globalCredentialPath()); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("rollback did not restore missing credential: %v", err)
-	}
-	if manager.active.AccountID != "" || manager.active.Revision != 2 || manager.deviceCredentialPresent {
-		t.Fatalf("rollback did not restore no-active state: %#v", manager.active)
-	}
-}
-
-func TestDeviceOnlyRollbackNeverOverwritesExternalCredential(t *testing.T) {
-	fixture := newAPIKeySwitchFixture(t)
-	switchID := "6f8dfc76-8db4-4621-8974-c480093e0d55"
-	if err := writeGlobalCredentialAtomic(fixture.manager.globalCredentialPath(), []byte("device-source")); err != nil {
-		t.Fatal(err)
-	}
-	fixture.manager.factory = &fakeCodexAccountFactory{open: func(ports.CodexAccountContext) (ports.CodexAccountClient, error) {
-		return &fakeCodexAccountClient{read: ports.CodexAccountObservation{Authentication: domain.AgentAuthenticationAuthorized, Method: domain.CodexAuthMethodAPIKey}}, nil
-	}}
-	if _, err := fixture.service.CheckpointAndActivateCodexAccount(context.Background(), domain.CodexAccountSwitchSourceDevice, switchID, fixture.target.Snapshot.ID, 1); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeGlobalCredentialAtomic(fixture.manager.globalCredentialPath(), []byte("third-party-external")); err != nil {
-		t.Fatal(err)
-	}
-	if err := fixture.service.RestoreCodexAccountCredential(context.Background(), switchID, domain.CodexAccountSwitchSourceDevice, "", fixture.target.Snapshot.ID); !errors.Is(err, ports.ErrCodexGlobalAccountChanged) {
-		t.Fatalf("rollback error = %v, want external-change protection", err)
-	}
-	current, err := readOpaqueCredential(fixture.manager.globalCredentialPath())
-	if err != nil || string(current) != "third-party-external" {
-		t.Fatalf("external credential was overwritten: %q, %v", current, err)
-	}
-}
-
 func TestActivationRejectsExternalAuthorizedAPIKeyReplacement(t *testing.T) {
 	fixture := newAPIKeySwitchFixture(t)
 	if err := writeGlobalCredentialAtomic(fixture.manager.globalCredentialPath(), testAPIKeyCredential("external-activation-api-key")); err != nil {
@@ -2052,17 +1951,10 @@ func TestActivationRejectsExternalAuthorizedAPIKeyReplacement(t *testing.T) {
 
 func TestConfirmCodexAccountSwitchTargetRejectsExternalAPIKeyReplacement(t *testing.T) {
 	fixture := newAPIKeySwitchFixture(t)
-	switchID := "6f8dfc76-8db4-4621-8974-c480093e0d55"
-	if err := ensurePrivateDirectory(filepath.Join(fixture.manager.switchStagingRoot, switchID)); err != nil {
-		t.Fatal(err)
-	}
-	if err := writePrivateFileAtomic(filepath.Join(fixture.manager.switchStagingRoot, switchID, "target-auth.json"), testAPIKeyCredential("target")); err != nil {
-		t.Fatal(err)
-	}
 	if err := writeGlobalCredentialAtomic(fixture.manager.globalCredentialPath(), testAPIKeyCredential("external")); err != nil {
 		t.Fatal(err)
 	}
-	err := fixture.service.ConfirmCodexAccountSwitchTarget(context.Background(), switchID, fixture.target.Snapshot.ID)
+	err := fixture.service.ConfirmCodexAccountSwitchTarget(context.Background(), fixture.target.Snapshot.ID)
 	if err == nil {
 		t.Fatal("confirmation accepted an externally replaced API key")
 	}
@@ -2074,21 +1966,14 @@ func TestConfirmCodexAccountSwitchTargetRejectsExternalAPIKeyReplacement(t *test
 
 func TestConfirmCodexAccountSwitchTargetAdoptsDeviceTargetAfterPointerLag(t *testing.T) {
 	fixture := newAPIKeySwitchFixture(t)
-	switchID := "6f8dfc76-8db4-4621-8974-c480093e0d55"
 	targetCredential := testAPIKeyCredential("target-api-key")
-	if err := ensurePrivateDirectory(filepath.Join(fixture.manager.switchStagingRoot, switchID)); err != nil {
-		t.Fatal(err)
-	}
-	if err := writePrivateFileAtomic(filepath.Join(fixture.manager.switchStagingRoot, switchID, "target-auth.json"), targetCredential); err != nil {
-		t.Fatal(err)
-	}
 	if err := writePrivateFileAtomic(filepath.Join(fixture.target.Home, codexCredentialFilename), targetCredential); err != nil {
 		t.Fatal(err)
 	}
 	if err := writeGlobalCredentialAtomic(fixture.manager.globalCredentialPath(), targetCredential); err != nil {
 		t.Fatal(err)
 	}
-	if err := fixture.service.ConfirmCodexAccountSwitchTarget(context.Background(), switchID, fixture.target.Snapshot.ID); err != nil {
+	if err := fixture.service.ConfirmCodexAccountSwitchTarget(context.Background(), fixture.target.Snapshot.ID); err != nil {
 		t.Fatal(err)
 	}
 	if fixture.manager.active.AccountID != fixture.target.Snapshot.ID || fixture.manager.active.Revision != 2 {
@@ -2096,29 +1981,6 @@ func TestConfirmCodexAccountSwitchTargetAdoptsDeviceTargetAfterPointerLag(t *tes
 	}
 	if fixture.manager.deviceAccountID != fixture.target.Snapshot.ID || !fixture.manager.reconciliation.ActiveAccountVerified {
 		t.Fatalf("device association was not adopted: account=%q reconciliation=%#v", fixture.manager.deviceAccountID, fixture.manager.reconciliation)
-	}
-}
-
-func TestRestoreCodexAccountCredentialRejectsExternalAPIKeyReplacement(t *testing.T) {
-	fixture := newAPIKeySwitchFixture(t)
-	switchID := "6f8dfc76-8db4-4621-8974-c480093e0d55"
-	if _, err := fixture.service.CheckpointAndActivateCodexAccount(context.Background(), domain.CodexAccountSwitchSourceManaged, switchID, fixture.target.Snapshot.ID, 1); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeGlobalCredentialAtomic(fixture.manager.globalCredentialPath(), testAPIKeyCredential("external-api-key")); err != nil {
-		t.Fatal(err)
-	}
-	err := fixture.service.RestoreCodexAccountCredential(context.Background(), switchID, domain.CodexAccountSwitchSourceManaged, fixture.source.Snapshot.ID, fixture.target.Snapshot.ID)
-	if err == nil {
-		t.Fatal("restore accepted an externally replaced API key")
-	}
-	sourceCredential, readErr := readOpaqueCredential(filepath.Join(fixture.source.Home, codexCredentialFilename))
-	if readErr != nil || !bytes.Equal(sourceCredential, testAPIKeyCredential("source-api-key")) {
-		t.Fatalf("source slot overwritten: %q, err=%v", sourceCredential, readErr)
-	}
-	globalCredential, readErr := readOpaqueCredential(fixture.manager.globalCredentialPath())
-	if readErr != nil || !bytes.Equal(globalCredential, testAPIKeyCredential("external-api-key")) {
-		t.Fatalf("external global credential overwritten: %q, err=%v", globalCredential, readErr)
 	}
 }
 

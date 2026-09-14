@@ -88,12 +88,6 @@ export async function startCodexAccountSwitch(targetAccountId: string, expectedA
 	return data as CodexAccountSwitch;
 }
 
-export async function recoverCodexAccountSwitch(switchId: string): Promise<CodexAccountSwitch> {
-	const { data, error } = await apiClient.POST("/api/v1/agents/codex/account-switches/{switchId}/recover", { params: { path: { switchId } } });
-	if (error) throw new Error(apiErrorMessage(error));
-	return data as CodexAccountSwitch;
-}
-
 export const codexAccountsQueryOptions = {
 	queryKey: codexAccountsQueryKey,
 	queryFn: async ({ client }: { client: QueryClient }) => {

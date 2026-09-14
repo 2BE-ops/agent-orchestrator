@@ -17,6 +17,8 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 )
 
+const codexDeviceReconciliationAutomaticAttempts = 3
+
 // Account-store initialization covers AO-owned local state only. Device-global
 // discovery is deliberately a separate, repeatable operation below.
 func (m *codexAccountManager) waitAccountStore(ctx context.Context) error {
@@ -119,8 +121,8 @@ func (m *codexAccountManager) initializeAccountStore() error {
 	if err := cleanupPendingCredentialHomes(m.pendingRoot); err != nil {
 		return accountStoreStorageFailure(err)
 	}
-	// Durable switches may keep a private rollback checkpoint here across a
-	// daemon restart. The switch coordinator removes terminal operation data.
+	// Durable switches keep their private target snapshot here across a daemon
+	// restart. The switch coordinator removes terminal operation data.
 	if err := ensurePrivateDirectory(m.switchStagingRoot); err != nil {
 		return accountStoreStorageFailure(err)
 	}
@@ -281,7 +283,11 @@ func (m *codexAccountManager) runGlobalReconciliation(call *accountReconcileCall
 			delay = time.Second << min(m.reconcileFailures-1, 5)
 			next := now.Add(delay)
 			m.reconciliation.NextRetryAt = timePointer(next)
-			schedule = !m.reconcileScheduled
+			// Make the first three local attempts automatic (immediate, +1s,
+			// +2s). After that the UI becomes actionable instead of retrying
+			// forever in the background. A manual retry remains available only
+			// for failures classified as transient.
+			schedule = m.reconcileFailures < codexDeviceReconciliationAutomaticAttempts && !m.reconcileScheduled
 			if schedule {
 				m.reconcileScheduled = true
 			}

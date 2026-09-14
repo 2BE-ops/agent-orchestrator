@@ -33,7 +33,8 @@ const (
 	CodexAccountSwitchCheckpointCredential CodexAccountSwitchPhase = "checkpointing_source"
 	// CodexAccountSwitchActivatingAccount stages the selected target credential.
 	CodexAccountSwitchActivatingAccount CodexAccountSwitchPhase = "activating_target"
-	// CodexAccountSwitchRecoveryRequired requires exact recorded recovery work.
+	// CodexAccountSwitchRecoveryRequired is retained only to settle journals
+	// written by older builds. New switches never enter this phase.
 	CodexAccountSwitchRecoveryRequired CodexAccountSwitchPhase = "recovery_required"
 	// CodexAccountSwitchCompleted means target activation succeeded.
 	CodexAccountSwitchCompleted CodexAccountSwitchPhase = "completed"
@@ -54,7 +55,6 @@ type CodexAccountSwitch struct {
 	TargetAccountID        string                       `json:"targetAccountId"`
 	Phase                  CodexAccountSwitchPhase      `json:"phase"`
 	FailureCode            string                       `json:"failureCode,omitempty"`
-	CanRecover             bool                         `json:"canRecover"`
 	CredentialsCommittedAt *time.Time                   `json:"credentialsCommittedAt,omitempty"`
 	CreatedAt              time.Time                    `json:"createdAt"`
 	UpdatedAt              time.Time                    `json:"updatedAt"`

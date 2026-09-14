@@ -413,39 +413,6 @@ paths:
       summary: Start a global AO Codex account switch
       tags:
       - agents
-  /api/v1/agents/codex/account-switches/{switchId}/recover:
-    post:
-      operationId: recoverCodexAccountSwitch
-      parameters:
-      - description: Durable Codex account switch identifier.
-        in: path
-        name: switchId
-        required: true
-        schema:
-          description: Durable Codex account switch identifier.
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CodexAccountSwitchResponse'
-          description: OK
-        "404":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APIError'
-          description: Not Found
-        "409":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APIError'
-          description: Conflict
-      summary: Retry recovery for one Codex account switch
-      tags:
-      - agents
   /api/v1/agents/codex/accounts:
     get:
       operationId: getCodexAccounts
@@ -7861,8 +7828,6 @@ components:
       type: object
     CodexAccountSwitchResponse:
       properties:
-        canRecover:
-          type: boolean
         completedAt:
           format: date-time
           type:
@@ -7907,7 +7872,6 @@ components:
       - sourceKind
       - targetAccountId
       - phase
-      - canRecover
       - createdAt
       - updatedAt
       type: object
