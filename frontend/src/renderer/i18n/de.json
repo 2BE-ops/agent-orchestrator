@@ -2025,7 +2025,6 @@
 	"importSearch.loading": "Wird geladen…",
 	"importSearch.empty": "Keine passenden Sitzungen gefunden.",
 	"importSearch.more": "Mehr laden",
-	"importSearch.indexing": "Verläufe werden indexiert ({{count}} geprüft)…",
 	"importSearch.partial": "Einige Verläufe konnten nicht indexiert werden. Verfügbare Ergebnisse werden angezeigt.",
 	"importSearch.import": "Sitzung importieren",
 	"importSearch.addProject": "Projekt hinzufügen und Sitzung importieren",

@@ -2025,7 +2025,6 @@
 	"importSearch.loading": "読み込み中…",
 	"importSearch.empty": "一致するセッションがありません。",
 	"importSearch.more": "さらに読み込む",
-	"importSearch.indexing": "履歴を索引中（{{count}} 件を確認）…",
 	"importSearch.partial": "一部の履歴を索引できませんでした。利用可能な結果を表示しています。",
 	"importSearch.import": "セッションをインポート",
 	"importSearch.addProject": "プロジェクトを追加してセッションをインポート",

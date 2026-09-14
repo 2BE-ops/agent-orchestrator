@@ -2058,7 +2058,6 @@
 	"importSearch.loading": "Cargando…",
 	"importSearch.empty": "No se encontraron sesiones coincidentes.",
 	"importSearch.more": "Cargar más",
-	"importSearch.indexing": "Indexando historiales ({{count}} examinados)…",
 	"importSearch.partial": "No se pudieron indexar algunos historiales. Se muestran los resultados disponibles.",
 	"importSearch.import": "Importar sesión",
 	"importSearch.addProject": "Añadir proyecto e importar sesión",

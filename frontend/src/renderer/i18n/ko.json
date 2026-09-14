@@ -2025,7 +2025,6 @@
 	"importSearch.loading": "불러오는 중…",
 	"importSearch.empty": "일치하는 세션이 없습니다.",
 	"importSearch.more": "더 불러오기",
-	"importSearch.indexing": "기록 색인 중 ({{count}}개 확인)…",
 	"importSearch.partial": "일부 기록을 색인하지 못했습니다. 사용 가능한 결과를 표시합니다.",
 	"importSearch.import": "세션 가져오기",
 	"importSearch.addProject": "프로젝트 추가 및 세션 가져오기",

@@ -2020,7 +2020,6 @@
 	"importSearch.loading": "Loading…",
 	"importSearch.empty": "No matching sessions found.",
 	"importSearch.more": "Load more",
-	"importSearch.indexing": "Indexing histories ({{count}} scanned)…",
 	"importSearch.partial": "Some histories could not be indexed. Available results are shown.",
 	"importSearch.import": "Import session",
 	"importSearch.addProject": "Add project & import session",

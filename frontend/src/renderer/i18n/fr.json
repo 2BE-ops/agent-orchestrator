@@ -2058,7 +2058,6 @@
 	"importSearch.loading": "Chargement…",
 	"importSearch.empty": "Aucune session correspondante.",
 	"importSearch.more": "Charger plus",
-	"importSearch.indexing": "Indexation des historiques ({{count}} analysés)…",
 	"importSearch.partial": "Certains historiques n’ont pas pu être indexés. Les résultats disponibles sont affichés.",
 	"importSearch.import": "Importer la session",
 	"importSearch.addProject": "Ajouter le projet et importer la session",
