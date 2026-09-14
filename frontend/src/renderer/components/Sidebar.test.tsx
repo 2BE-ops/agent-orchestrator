@@ -526,6 +526,15 @@ describe("Sidebar", () => {
 		expect(content).not.toContainElement(screen.getByText("Projects"));
 	});
 
+	it("navigates home when the Agent Orchestrator brand is clicked", async () => {
+		const user = userEvent.setup();
+		renderSidebar();
+
+		await user.click(screen.getByRole("button", { name: "Agent Orchestrator" }));
+
+		expect(navigateMock).toHaveBeenCalledWith({ to: "/" });
+	});
+
 	it("opens project settings instead of spawning when no orchestrator agent is configured", async () => {
 		const user = userEvent.setup();
 		renderSidebar({ workspaces: [{ ...workspace, orchestratorAgent: undefined }] });

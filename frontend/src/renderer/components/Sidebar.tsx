@@ -696,11 +696,14 @@ export function Sidebar({
 			<SidebarHeader className="gap-0 p-0 px-3 pt-2 group-data-[collapsible=icon]:px-1.5 group-data-[collapsible=icon]:pt-2">
 				{/* Brand (project-sidebar__brand); in the icon rail it becomes the old
             36px board button wrapping the 22px accent mark. */}
-				<div
+				<button
+					aria-label="Agent Orchestrator"
 					className={cn(
-						"group/brand flex shrink-0 items-center gap-1.5 rounded-md px-0.5 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-1 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:pb-2",
+						"group/brand flex shrink-0 items-center gap-1.5 rounded-md px-0.5 text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-1 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:pb-2",
 						commandPaletteEnabled ? "pb-2" : "pb-3",
 					)}
+					onClick={selection.goHome}
+					type="button"
 				>
 					<span
 						className={cn(
@@ -728,7 +731,7 @@ export function Sidebar({
 							{t("shell.nightly")}
 						</span>
 					)}
-				</div>
+				</button>
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<button
