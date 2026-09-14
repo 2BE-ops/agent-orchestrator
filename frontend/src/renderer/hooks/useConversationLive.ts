@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { components } from "../../api/schema";
 import { getApiBaseUrl, hasTrustedApiBaseUrl, subscribeApiBaseUrl } from "../lib/api-client";
-import { computeSseRetryDelayMs } from "../lib/sse-backoff";
 import type { ConversationMessage, ConversationSnapshot } from "../types/conversation";
 
 type LiveFrame = components["schemas"]["ConversationLiveResponse"];
@@ -13,7 +12,6 @@ const MAX_TEXT = 1024 * 1024;
 // only observations after that snapshot's checkpoint, including on reconnect.
 export function mergeConversationLiveFrame(previous: LiveFrame | undefined, frame: LiveFrame): LiveFrame {
 	const continuous = previous && previous.generation === frame.generation &&
-		previous.branchId === frame.branchId && previous.conversationId === frame.conversationId &&
 		frame.afterSequence <= previous.sequence;
 	if (continuous && frame.sequence < previous.sequence) return previous;
 	let events = continuous
@@ -33,8 +31,7 @@ export function mergeConversationLiveFrame(previous: LiveFrame | undefined, fram
 
 export function conversationLiveNeedsSnapshot(snapshot: ConversationSnapshot | undefined, live: LiveFrame | undefined): boolean {
 	if (!snapshot || !live) return false;
-	if (snapshot.liveGeneration !== live.generation || snapshot.conversationId !== live.conversationId ||
-		(snapshot.activeBranchId ?? "") !== live.branchId ||
+	if (snapshot.liveGeneration !== live.generation ||
 		(snapshot.liveSequence ?? 0) < Math.max(live.afterSequence, live.resetSequence)) return true;
 	const affectedItems = new Set(live.events.map((event) => event.providerItemId));
 	const affectedTurns = new Set(live.events.filter((event) => event.kind === "turn.completed" && event.providerTurnId).map((event) => event.providerTurnId));
@@ -79,7 +76,7 @@ export function applyConversationLive(snapshot: ConversationSnapshot | undefined
 				turnId: event.providerTurnId ? snapshot.turns.find((turn) => turn.providerTurnId === event.providerTurnId)?.id : undefined,
 				// Provisional rows follow durable rows until SQLite assigns their sequence.
 				sequence: snapshot.latestSequence + event.sequence, revision: 0,
-				role: "assistant", origin: "provider", createdAt: event.createdAt,
+				role: "assistant", origin: "provider", createdAt: new Date().toISOString(),
 			}),
 			text: event.kind === "message.completed" ? (event.text ?? "") : (current?.text ?? "") + (event.delta ?? ""),
 			streaming: event.kind !== "message.completed",
@@ -105,46 +102,34 @@ export function useConversationLive(sessionId: string | undefined, snapshot: Con
 	useEffect(() => {
 		if (!sessionId || typeof EventSource === "undefined") return;
 		let source: EventSource | undefined;
-		let timer: ReturnType<typeof setTimeout> | undefined;
 		let disposed = false;
-		let attempts = 0;
 		const refresh = () => void queryClient.invalidateQueries({ queryKey: ["conversation", sessionId] });
 		const connect = () => {
 			if (disposed || !hasTrustedApiBaseUrl()) return;
-			try {
-				const current = new EventSource(`${getApiBaseUrl()}/api/v1/sessions/${encodeURIComponent(sessionId)}/conversation/events`);
-				source = current;
-				current.onopen = () => {
-					if (disposed || source !== current) return;
-					attempts = 0;
-					refresh();
-				};
-				current.addEventListener("conversation_text", (event) => {
-					if (disposed || source !== current) return;
-					try {
-						const frame = JSON.parse((event as MessageEvent).data) as LiveFrame;
-						if (!Array.isArray(frame.events) || typeof frame.generation !== "string" ||
-							!Number.isSafeInteger(frame.sequence) || !Number.isSafeInteger(frame.afterSequence)) return;
-						setReceived((previous) => ({ sessionId, frame: mergeConversationLiveFrame(
-							previous?.sessionId === sessionId ? previous.frame : undefined, frame,
-						) }));
-					} catch { /* An invalid transient frame cannot change durable history. */ }
-				});
-				current.onerror = () => {
-					if (disposed || source !== current) return;
-					current.close();
-					source = undefined;
-					refresh();
-					timer = setTimeout(connect, computeSseRetryDelayMs(++attempts));
-				};
-			} catch {
-				timer = setTimeout(connect, computeSseRetryDelayMs(++attempts));
-			}
+			const current = new EventSource(`${getApiBaseUrl()}/api/v1/sessions/${encodeURIComponent(sessionId)}/conversation/events`);
+			source = current;
+			current.onopen = () => {
+				if (disposed || source !== current) return;
+				refresh();
+			};
+			current.addEventListener("conversation_text", (event) => {
+				if (disposed || source !== current) return;
+				try {
+					const frame = JSON.parse((event as MessageEvent).data) as LiveFrame;
+					if (!Array.isArray(frame.events) || typeof frame.generation !== "string" ||
+						!Number.isSafeInteger(frame.sequence) || !Number.isSafeInteger(frame.afterSequence)) return;
+					setReceived((previous) => ({ sessionId, frame: mergeConversationLiveFrame(
+						previous?.sessionId === sessionId ? previous.frame : undefined, frame,
+					) }));
+				} catch { /* An invalid transient frame cannot change durable history. */ }
+			});
+			current.onerror = () => {
+				if (!disposed && source === current) refresh();
+			};
 		};
 		const unsubscribe = subscribeApiBaseUrl(() => {
 			source?.close();
 			source = undefined;
-			clearTimeout(timer);
 			setReceived(undefined);
 			void queryClient.cancelQueries({ queryKey: ["conversation", sessionId] }).then(refresh);
 			connect();
@@ -153,7 +138,6 @@ export function useConversationLive(sessionId: string | undefined, snapshot: Con
 		return () => {
 			disposed = true;
 			unsubscribe();
-			clearTimeout(timer);
 			source?.close();
 		};
 	}, [sessionId, queryClient]);
@@ -176,7 +160,6 @@ export function useConversationLive(sessionId: string | undefined, snapshot: Con
 		// Query state surfaces request failures; retries require new progress.
 		void refresh().catch(() => {});
 		return () => { disposed = true; };
-	}, [needsSnapshot, sessionId, live?.generation, live?.branchId, live?.conversationId,
-		live?.afterSequence, live?.resetSequence, snapshot, queryClient]);
+	}, [needsSnapshot, sessionId, live?.generation, live?.afterSequence, live?.resetSequence, snapshot, queryClient]);
 	return applyConversationLive(snapshot, live);
 }

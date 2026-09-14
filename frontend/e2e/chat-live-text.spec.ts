@@ -48,9 +48,9 @@ test("@P0 chat text remains visible while saved-history requests wait", async ({
 	await blocked;
 	await page.evaluate(() => {
 		(window as unknown as { sendLiveText: (frame: unknown) => void }).sendLiveText({
-			generation: "generation", conversationId: "conversation", branchId: "branch", afterSequence: 0, resetSequence: 0, sequence: 2,
-			events: ["This text arrived ", "before saving finished."].map((delta, index) => ({
-				sequence: index + 1, kind: "message.delta", providerItemId: "reply", providerTurnId: "provider-turn", delta, createdAt: "2026-09-10T00:00:01Z",
+				generation: "generation", afterSequence: 0, resetSequence: 0, sequence: 2,
+				events: ["This text arrived ", "before saving finished."].map((delta, index) => ({
+					sequence: index + 1, kind: "message.delta", providerItemId: "reply", providerTurnId: "provider-turn", delta,
 			})),
 		});
 	});

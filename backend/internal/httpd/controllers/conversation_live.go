@@ -43,8 +43,7 @@ func (c *ConversationsController) streamLive(w http.ResponseWriter, r *http.Requ
 	writeFrame := func() error {
 		frame := sub.Snapshot(after)
 		out := ConversationLiveResponse{
-			Generation: frame.Generation, ConversationID: frame.ConversationID, BranchID: frame.BranchID,
-			AfterSequence: frame.AfterSequence, Sequence: frame.Sequence,
+			Generation: frame.Generation, AfterSequence: frame.AfterSequence, Sequence: frame.Sequence,
 			ResetSequence: frame.ResetSequence,
 			Events:        make([]ConversationLiveEventResponse, 0, len(frame.Events)),
 		}
@@ -52,7 +51,6 @@ func (c *ConversationsController) streamLive(w http.ResponseWriter, r *http.Requ
 			out.Events = append(out.Events, ConversationLiveEventResponse{
 				Sequence: event.Sequence, Kind: string(event.Kind), ProviderItemID: event.ProviderItemID,
 				ProviderTurnID: event.ProviderTurnID, Delta: event.Delta, Text: event.Text,
-				CreatedAt: event.CreatedAt.UTC().Format(time.RFC3339Nano),
 			})
 		}
 		payload, err := json.Marshal(out)

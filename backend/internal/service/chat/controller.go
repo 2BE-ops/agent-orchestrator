@@ -373,10 +373,7 @@ func (c *Controller) restoreLiveTurnOwnership(turns []domain.ConversationTurn) s
 // notification from racing ahead of the older turns it follows.
 func (c *Controller) start() {
 	c.projectionGate = make(controllerGate, 1)
-	c.live = &liveJournal{
-		generation: c.generation, conversationID: c.conversation.ID,
-		branchID: c.conversation.ActiveBranchID, subscribers: make(map[*LiveSubscription]struct{}),
-	}
+	c.live = &liveJournal{generation: c.generation, subscribers: make(map[*LiveSubscription]struct{})}
 	go c.project()
 	if c.harness != domain.HarnessCodex {
 		go c.readRateLimits()
@@ -2189,7 +2186,7 @@ func (c *Controller) Wait() { <-c.stopped }
 func (c *Controller) project() {
 	defer close(c.stopped)
 	defer c.live.close()
-	events := make(chan sequencedChatEvent, liveQueueSize)
+	events := make(chan sequencedChatEvent, liveMaxEvents)
 	receiveCtx, stopReceiving := context.WithCancel(context.Background())
 	defer stopReceiving()
 	receivedAll := make(chan struct{})

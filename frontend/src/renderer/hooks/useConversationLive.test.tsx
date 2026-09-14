@@ -22,9 +22,9 @@ const snapshot: ConversationSnapshot = {
 		revision: 1, role: "assistant", origin: "provider", text: "Existing ", streaming: true, createdAt: "2026-09-10T00:00:00Z" }],
 };
 function frame(deltas = ["live ", "text"]): Frame {
-	return { generation: "generation", conversationId: "conversation", branchId: "branch", afterSequence: 0, resetSequence: 0,
+	return { generation: "generation", afterSequence: 0, resetSequence: 0,
 		sequence: deltas.length, events: deltas.map((delta, index) => ({ sequence: index + 1, kind: "message.delta",
-			providerItemId: "reply", providerTurnId: "provider-turn", delta, createdAt: "2026-09-10T00:00:01Z" })) };
+			providerItemId: "reply", providerTurnId: "provider-turn", delta })) };
 }
 
 describe("live text reconciliation", () => {
@@ -69,14 +69,14 @@ describe("live text reconciliation", () => {
 	});
 	it("honors final text corrections and completion without a final message snapshot", () => {
 		const complete = frame();
-		complete.events.push({ sequence: 3, kind: "message.completed", providerItemId: "reply", text: "Corrected answer", createdAt: "now" });
+		complete.events.push({ sequence: 3, kind: "message.completed", providerItemId: "reply", text: "Corrected answer" });
 		expect(applyConversationLive(snapshot, complete)?.items[0]).toMatchObject({ text: "Corrected answer", streaming: false });
 		complete.events.pop();
-		complete.events.push({ sequence: 3, kind: "turn.completed", providerTurnId: "provider-turn", createdAt: "now" });
+		complete.events.push({ sequence: 3, kind: "turn.completed", providerTurnId: "provider-turn" });
 		expect(applyConversationLive(snapshot, complete)?.items[0]).toMatchObject({ text: "Existing live text", streaming: false });
 	});
-	it("refuses unknown prefixes, old controller generations, and other branches", () => {
-		for (const live of [{ ...frame(), afterSequence: 1 }, { ...frame(), generation: "retired" }, { ...frame(), branchId: "other" }]) {
+	it("refuses unknown prefixes and old controller generations", () => {
+		for (const live of [{ ...frame(), afterSequence: 1 }, { ...frame(), generation: "retired" }]) {
 			expect(applyConversationLive(snapshot, live)).toBe(snapshot);
 		}
 	});

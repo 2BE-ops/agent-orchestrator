@@ -3055,7 +3055,6 @@ export interface components {
             mimeType: string;
         };
         ConversationLiveEventResponse: {
-            createdAt: string;
             delta?: string;
             /** @enum {string} */
             kind: "message.delta" | "message.completed" | "turn.completed";
@@ -3068,8 +3067,6 @@ export interface components {
         ConversationLiveResponse: {
             /** Format: int64 */
             afterSequence: number;
-            branchId: string;
-            conversationId: string;
             events: components["schemas"]["ConversationLiveEventResponse"][];
             generation: string;
             /** Format: int64 */

@@ -189,7 +189,7 @@ func TestConversationLiveStreamPrecedesPersistenceAndReconcilesSnapshot(t *testi
 	}
 	reader := bufio.NewReader(resp.Body)
 	initial := readConversationLiveFrame(t, reader)
-	if initial.Generation == "" || initial.ConversationID == "" || initial.BranchID == "" || initial.Sequence != 0 || initial.AfterSequence != 0 || initial.Events == nil || len(initial.Events) != 0 {
+	if initial.Generation == "" || initial.Sequence != 0 || initial.AfterSequence != 0 || initial.Events == nil || len(initial.Events) != 0 {
 		t.Fatalf("initial frame = %+v", initial)
 	}
 	turn, err := svc.Send(ctx, "live-1", ports.ChatUserMessage{Text: "reply", ClientMessageID: "live-request", Origin: domain.MessageOriginHuman})
@@ -208,15 +208,12 @@ func TestConversationLiveStreamPrecedesPersistenceAndReconcilesSnapshot(t *testi
 	var last controllers.ConversationLiveResponse
 	for text != "hello world" {
 		last = readConversationLiveFrame(t, reader)
-		if last.Generation != initial.Generation || last.ConversationID != initial.ConversationID || last.BranchID != initial.BranchID {
+		if last.Generation != initial.Generation {
 			t.Fatalf("stream identity changed: %+v", last)
 		}
 		for _, event := range last.Events {
 			if event.Kind != "message.delta" || event.ProviderItemID != "live-message" || event.ProviderTurnID != turn.ProviderTurnID || event.Sequence <= last.AfterSequence {
 				t.Fatalf("delta frame = %+v", last)
-			}
-			if _, err := time.Parse(time.RFC3339Nano, event.CreatedAt); err != nil {
-				t.Fatalf("createdAt = %q", event.CreatedAt)
 			}
 			text += event.Delta
 		}

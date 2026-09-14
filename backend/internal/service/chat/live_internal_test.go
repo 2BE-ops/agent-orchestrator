@@ -5,7 +5,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
@@ -18,7 +17,7 @@ func TestLiveJournalBoundsAndReconnect(t *testing.T) {
 		"oversized":   strings.Repeat("a", liveMaxBytes+1),
 	} {
 		t.Run(name, func(t *testing.T) {
-			journal := &liveJournal{generation: "generation", conversationID: "conversation", branchID: "branch", subscribers: make(map[*LiveSubscription]struct{})}
+			journal := &liveJournal{generation: "generation", subscribers: make(map[*LiveSubscription]struct{})}
 			sub := journal.subscribe()
 			defer sub.Close()
 			count := 3
@@ -26,20 +25,20 @@ func TestLiveJournalBoundsAndReconnect(t *testing.T) {
 				count = liveMaxEvents + 1
 			}
 			for range count {
-				journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageDelta, ProviderItemID: "item", Delta: text}, time.Time{})
+				journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageDelta, ProviderItemID: "item", Delta: text})
 			}
 			frame := sub.Snapshot(0)
 			if frame.AfterSequence == 0 || frame.Sequence != int64(count) || len(frame.Events) > liveMaxEvents || journal.bytes > liveMaxBytes {
 				t.Fatalf("unbounded journal or missing gap: floor=%d, sequence=%d, events=%d, bytes=%d", frame.AfterSequence, frame.Sequence, len(frame.Events), journal.bytes)
 			}
-			if frame.Generation != "generation" || frame.ConversationID != "conversation" || frame.BranchID != "branch" {
+			if frame.Generation != "generation" {
 				t.Fatalf("lost journal identity: %+v", frame)
 			}
 			// Reconnecting reads only newer observations, including after the
 			// journal evicted a prefix; already-consumed text is never repeated.
 			reconnected := journal.subscribe()
 			defer reconnected.Close()
-			journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageDelta, ProviderItemID: "item", Delta: "tail"}, time.Time{})
+			journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageDelta, ProviderItemID: "item", Delta: "tail"})
 			next := reconnected.Snapshot(frame.Sequence)
 			if next.AfterSequence != frame.Sequence || len(next.Events) != 1 || next.Events[0].Delta != "tail" {
 				t.Fatalf("reconnect repeated text: %+v", next)
@@ -51,9 +50,9 @@ func TestLiveJournalBoundsAndReconnect(t *testing.T) {
 func TestLiveJournalSkipsNativeDeltaAndClosesSubscribers(t *testing.T) {
 	journal := &liveJournal{subscribers: make(map[*LiveSubscription]struct{})}
 	sub := journal.subscribe()
-	journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageDelta, ProviderItemID: "item", ProviderEventID: "duplicate", Delta: "do not preview"}, time.Time{})
-	journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageCompleted, ProviderItemID: "item", ProviderEventID: "old-completion", Text: "do not replace newer text"}, time.Time{})
-	journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageCompleted, ProviderItemID: "item", Text: "final"}, time.Time{})
+	journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageDelta, ProviderItemID: "item", ProviderEventID: "duplicate", Delta: "do not preview"})
+	journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageCompleted, ProviderItemID: "item", ProviderEventID: "old-completion", Text: "do not replace newer text"})
+	journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageCompleted, ProviderItemID: "item", Text: "final"})
 	frame := sub.Snapshot(0)
 	if frame.Sequence != 3 || frame.AfterSequence != 2 || len(frame.Events) != 1 || frame.Events[0].Text != "final" {
 		t.Fatalf("native delta was previewed or source cursor skipped: %+v", frame)
@@ -75,9 +74,9 @@ func TestLiveJournalRequiresReplayedPrefixBeforeFreshIdentifiedText(t *testing.T
 	journal := &liveJournal{subscribers: make(map[*LiveSubscription]struct{})}
 	sub := journal.subscribe()
 	defer sub.Close()
-	journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageDelta, ProviderItemID: "item", Delta: "a"}, time.Time{})
-	journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageDelta, ProviderItemID: "item", ProviderEventID: "replayed", Delta: "b"}, time.Time{})
-	journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageDelta, ProviderItemID: "item", ProviderEventID: "fresh", ProviderEventFresh: true, Delta: "c"}, time.Time{})
+	journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageDelta, ProviderItemID: "item", Delta: "a"})
+	journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageDelta, ProviderItemID: "item", ProviderEventID: "replayed", Delta: "b"})
+	journal.observe(ports.ChatEvent{Kind: ports.ChatEventMessageDelta, ProviderItemID: "item", ProviderEventID: "fresh", ProviderEventFresh: true, Delta: "c"})
 	frame := sub.Snapshot(0)
 	if frame.AfterSequence != 2 || frame.Sequence != 3 || len(frame.Events) != 1 || frame.Events[0].Delta != "c" {
 		t.Fatalf("fresh preview lacks replay checkpoint barrier: %+v", frame)

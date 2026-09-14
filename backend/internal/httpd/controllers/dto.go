@@ -2290,13 +2290,11 @@ type ConversationSnapshotResponse struct {
 // ConversationLiveResponse carries transient text observations, never durable CDC.
 // A gap after AfterSequence requires a fresh conversation snapshot.
 type ConversationLiveResponse struct {
-	Generation     string                          `json:"generation"`
-	ConversationID string                          `json:"conversationId"`
-	BranchID       string                          `json:"branchId"`
-	AfterSequence  int64                           `json:"afterSequence"`
-	ResetSequence  int64                           `json:"resetSequence"`
-	Sequence       int64                           `json:"sequence"`
-	Events         []ConversationLiveEventResponse `json:"events"`
+	Generation    string                          `json:"generation"`
+	AfterSequence int64                           `json:"afterSequence"`
+	ResetSequence int64                           `json:"resetSequence"`
+	Sequence      int64                           `json:"sequence"`
+	Events        []ConversationLiveEventResponse `json:"events"`
 }
 
 // ConversationLiveEventResponse is one provider text observation in a live frame.
@@ -2307,7 +2305,6 @@ type ConversationLiveEventResponse struct {
 	ProviderTurnID string `json:"providerTurnId,omitempty"`
 	Delta          string `json:"delta,omitempty"`
 	Text           string `json:"text,omitempty"`
-	CreatedAt      string `json:"createdAt"`
 }
 
 // ConversationBranchMaterializationResponse describes the fidelity of the

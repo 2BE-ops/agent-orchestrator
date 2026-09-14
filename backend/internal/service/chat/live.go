@@ -3,7 +3,6 @@ package chat
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
@@ -12,7 +11,6 @@ import (
 const (
 	liveMaxEvents = 4096
 	liveMaxBytes  = 1024 * 1024
-	liveQueueSize = 4096
 )
 
 // LiveEvent is transient text observed before its durable projection. Its
@@ -24,17 +22,14 @@ type LiveEvent struct {
 	ProviderTurnID string
 	Delta          string
 	Text           string
-	CreatedAt      time.Time
 }
 
 // LiveFrame contains observations after AfterSequence. A gap between the
 // client's cursor and AfterSequence requires a fresh durable snapshot.
 type LiveFrame struct {
-	Generation     string
-	ConversationID string
-	BranchID       string
-	AfterSequence  int64
-	Sequence       int64
+	Generation    string
+	AfterSequence int64
+	Sequence      int64
 	// ResetSequence identifies the last failed/rejected projection. Clients
 	// refresh their durable checkpoint so failed previews cannot linger.
 	ResetSequence int64
@@ -47,17 +42,15 @@ type sequencedChatEvent struct {
 }
 
 type liveJournal struct {
-	mu             sync.Mutex
-	generation     string
-	conversationID string
-	branchID       string
-	sequence       int64
-	resetSequence  int64
-	floor          int64
-	bytes          int
-	events         []LiveEvent
-	subscribers    map[*LiveSubscription]struct{}
-	closed         bool
+	mu            sync.Mutex
+	generation    string
+	sequence      int64
+	resetSequence int64
+	floor         int64
+	bytes         int
+	events        []LiveEvent
+	subscribers   map[*LiveSubscription]struct{}
+	closed        bool
 }
 
 // LiveSubscription reads a controller's bounded in-memory journal. Changed is
@@ -106,8 +99,7 @@ func (s *LiveSubscription) Snapshot(after int64) LiveFrame {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	frame := LiveFrame{
-		Generation: j.generation, ConversationID: j.conversationID,
-		BranchID: j.branchID, AfterSequence: max(after, j.floor), Sequence: j.sequence,
+		Generation: j.generation, AfterSequence: max(after, j.floor), Sequence: j.sequence,
 		ResetSequence: j.resetSequence,
 	}
 	for _, event := range j.events {
@@ -129,7 +121,7 @@ func (s *LiveSubscription) Close() {
 	}
 }
 
-func (j *liveJournal) observe(event ports.ChatEvent, now time.Time) sequencedChatEvent {
+func (j *liveJournal) observe(event ports.ChatEvent) sequencedChatEvent {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	j.sequence++
@@ -144,7 +136,7 @@ func (j *liveJournal) observe(event ports.ChatEvent, now time.Time) sequencedCha
 	if preview {
 		live := LiveEvent{
 			Sequence: j.sequence, Kind: event.Kind, ProviderItemID: event.ProviderItemID,
-			ProviderTurnID: event.ProviderTurnID, Delta: event.Delta, Text: event.Text, CreatedAt: now,
+			ProviderTurnID: event.ProviderTurnID, Delta: event.Delta, Text: event.Text,
 		}
 		j.events = append(j.events, live)
 		j.bytes += liveEventBytes(live)
@@ -215,7 +207,7 @@ func (c *Controller) receiveLive(ctx context.Context, events chan<- sequencedCha
 			if !open {
 				return
 			}
-			received := c.live.observe(event, c.now())
+			received := c.live.observe(event)
 			select {
 			case events <- received:
 			case <-ctx.Done():

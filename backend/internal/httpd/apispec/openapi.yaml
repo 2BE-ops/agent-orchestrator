@@ -8748,8 +8748,6 @@ components:
       type: object
     ConversationLiveEventResponse:
       properties:
-        createdAt:
-          type: string
         delta:
           type: string
         kind:
@@ -8770,17 +8768,12 @@ components:
       required:
       - sequence
       - kind
-      - createdAt
       type: object
     ConversationLiveResponse:
       properties:
         afterSequence:
           format: int64
           type: integer
-        branchId:
-          type: string
-        conversationId:
-          type: string
         events:
           items:
             $ref: '#/components/schemas/ConversationLiveEventResponse'
@@ -8795,8 +8788,6 @@ components:
           type: integer
       required:
       - generation
-      - conversationId
-      - branchId
       - afterSequence
       - resetSequence
       - sequence
