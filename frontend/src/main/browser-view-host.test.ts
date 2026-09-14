@@ -20,7 +20,10 @@ import {
 	NEW_SESSION_SHORTCUT_CHANNEL,
 	NEW_SHELL_TERMINAL_SHORTCUT_CHANNEL,
 } from "../shared/shortcuts";
-import type { BrowserAnnotationDraft } from "../shared/browser-annotations";
+import type {
+	BrowserAnnotationDraft,
+	BrowserAnnotationSession,
+} from "../shared/browser-annotations";
 import { parseAgentBrowserJSON } from "./agent-browser-runtime";
 
 vi.mock("electron", async (importOriginal) => {
@@ -86,18 +89,62 @@ type EventHandler = (event: { sender: { id: number; getZoomFactor?: () => number
 
 function annotationDraft(url = "http://localhost:4173/"): BrowserAnnotationDraft {
 	return {
-		instruction: "Keep this text after refresh",
-		selection: {
-			kind: "element",
+		kind: "comment",
+		body: "Keep this text after refresh",
+		target: {
 			context: {
 				url,
 				tag: "button",
 				classes: [],
 				selector: "button#save",
 				size: { width: 80, height: 30 },
+				rect: { x: 10, y: 20, width: 80, height: 30 },
 				computedStyle: {},
 			},
 		},
+		adjustments: [],
+	};
+}
+
+function annotationSession(url = "http://localhost:4173/"): BrowserAnnotationSession {
+	return {
+		version: 1,
+		page: { url, title: "Preview" },
+		annotations: [],
+		draft: annotationDraft(url),
+		screenshots: [],
+	};
+}
+
+function submittedAnnotationSession(
+	url = "http://localhost:5173/",
+	comments: Array<{ body: string; selector: string }> = [{ body: "Make this button blue.", selector: "button" }],
+): BrowserAnnotationSession {
+	const timestamp = "2026-06-15T00:00:00Z";
+	return {
+		version: 1,
+		page: { url, title: "Preview" },
+		annotations: comments.map((comment, index) => ({
+			id: `annotation-${index + 1}`,
+			number: index + 1,
+			kind: "comment",
+			body: comment.body,
+			target: {
+				context: {
+					url,
+					tag: "button",
+					classes: [],
+					selector: comment.selector,
+					size: { width: 80, height: 30 },
+					rect: { x: 10, y: 20 + index * 40, width: 80, height: 30 },
+					computedStyle: {},
+				},
+			},
+			adjustments: [],
+			createdAt: timestamp,
+			updatedAt: timestamp,
+		})),
+		screenshots: [],
 	};
 }
 
@@ -2703,8 +2750,8 @@ describe("browser annotation IPC", () => {
 		await invoke("browser:ensure", "sess-1");
 		await invoke("browser:navigate", { viewId: "1:sess-1", url: "http://localhost:4173/" });
 		await invoke("browser:annotation:setMode", { viewId: "1:sess-1", enabled: true });
-		const draft = annotationDraft();
-		send("browser:annotation:draft", 99, draft);
+		const session = annotationSession();
+		send("browser:annotation:state", 99, session);
 		webContents.send.mockClear();
 		webContents.focus.mockClear();
 
@@ -2717,7 +2764,7 @@ describe("browser annotation IPC", () => {
 			channel: "browser:annotation:canceled",
 			payload: expect.anything(),
 		});
-		expect(webContents.send).toHaveBeenCalledWith("browser:annotation:setMode", { enabled: true, draft });
+		expect(webContents.send).toHaveBeenCalledWith("browser:annotation:setMode", { enabled: true, session });
 		expect(webContents.focus).toHaveBeenCalledOnce();
 	});
 
@@ -2742,15 +2789,15 @@ describe("browser annotation IPC", () => {
 		await invoke("browser:ensure", "sess-1");
 		await invoke("browser:navigate", { viewId: "1:sess-1", url: "http://localhost:4173/" });
 		await invoke("browser:annotation:setMode", { viewId: "1:sess-1", enabled: true });
-		const draft = annotationDraft();
-		send("browser:annotation:draft", 99, draft);
+		const session = annotationSession();
+		send("browser:annotation:state", 99, session);
 		webContents.send.mockClear();
 
 		await invoke("browser:navigate", { viewId: "1:sess-1", url: "http://localhost:4173/" });
 		webContentsListeners.get("did-stop-loading")?.();
 
 		expect(sent).not.toContainEqual({ channel: "browser:annotation:canceled", payload: expect.anything() });
-		expect(webContents.send).toHaveBeenCalledWith("browser:annotation:setMode", { enabled: true, draft });
+		expect(webContents.send).toHaveBeenCalledWith("browser:annotation:setMode", { enabled: true, session });
 	});
 
 	it("cancels a draft when a page-driven main-frame navigation targets another document", async () => {
@@ -2758,7 +2805,7 @@ describe("browser annotation IPC", () => {
 		await invoke("browser:ensure", "sess-1");
 		await invoke("browser:navigate", { viewId: "1:sess-1", url: "http://localhost:4173/" });
 		await invoke("browser:annotation:setMode", { viewId: "1:sess-1", enabled: true });
-		send("browser:annotation:draft", 99, annotationDraft());
+		send("browser:annotation:state", 99, annotationSession());
 		webContents.send.mockClear();
 
 		webContentsListeners.get("will-navigate")?.(
@@ -2782,7 +2829,7 @@ describe("browser annotation IPC", () => {
 		await invoke("browser:ensure", "sess-1");
 		await invoke("browser:navigate", { viewId: "1:sess-1", url: "http://localhost:4173/" });
 		await invoke("browser:annotation:setMode", { viewId: "1:sess-1", enabled: true });
-		send("browser:annotation:draft", 99, annotationDraft());
+		send("browser:annotation:state", 99, annotationSession());
 
 		await invoke("browser:stop", "1:sess-1");
 
@@ -2792,7 +2839,7 @@ describe("browser annotation IPC", () => {
 		});
 
 		await invoke("browser:annotation:setMode", { viewId: "1:sess-1", enabled: true });
-		send("browser:annotation:draft", 99, annotationDraft());
+		send("browser:annotation:state", 99, annotationSession());
 		webContentsListeners.get("did-fail-load")?.(
 			{} as never,
 			-105 as never,
@@ -2809,8 +2856,8 @@ describe("browser annotation IPC", () => {
 		await invoke("browser:ensure", "sess-1");
 		await invoke("browser:navigate", { viewId: "1:sess-1", url: "http://localhost:4173/" });
 		await invoke("browser:annotation:setMode", { viewId: "1:sess-1", enabled: true });
-		const draft = annotationDraft();
-		send("browser:annotation:draft", 99, draft);
+		const session = annotationSession();
+		send("browser:annotation:state", 99, session);
 		webContents.send.mockClear();
 
 		webContentsListeners.get("did-fail-load")?.(
@@ -2823,37 +2870,21 @@ describe("browser annotation IPC", () => {
 		webContentsListeners.get("did-stop-loading")?.();
 
 		expect(sent).not.toContainEqual({ channel: "browser:annotation:canceled", payload: expect.anything() });
-		expect(webContents.send).toHaveBeenCalledWith("browser:annotation:setMode", { enabled: true, draft });
+		expect(webContents.send).toHaveBeenCalledWith("browser:annotation:setMode", { enabled: true, session });
 	});
 
 	it("forwards a single-element preview annotation submission to the renderer-owned view", async () => {
 		const { invoke, invokeFromTab, sent } = setupHost();
 		await invoke("browser:ensure", "sess-1");
+		const session = submittedAnnotationSession();
 
-		await invokeFromTab("browser:annotation:submit", 99, {
-			instruction: "Make this button blue.",
-			selection: {
-				kind: "element",
-				context: {
-					url: "http://localhost:5173/",
-					tag: "button",
-					classes: [],
-					selector: "button",
-					size: { width: 80, height: 30 },
-					computedStyle: {},
-				},
-			},
-		});
+		await invokeFromTab("browser:annotation:submit", 99, { session });
 
 		expect(sent).toContainEqual({
 			channel: "browser:annotation:submitted",
 			payload: expect.objectContaining({
 				viewId: "1:sess-1",
-				instruction: "Make this button blue.",
-				selection: expect.objectContaining({
-					kind: "element",
-					context: expect.objectContaining({ selector: "button" }),
-				}),
+				session,
 				snapshot: {
 					mimeType: "image/png",
 					data: Buffer.from("png-snapshot").toString("base64"),
@@ -2874,20 +2905,7 @@ describe("browser annotation IPC", () => {
 			resize,
 		});
 
-		await invokeFromTab("browser:annotation:submit", 99, {
-			instruction: "Make this button blue.",
-			selection: {
-				kind: "element",
-				context: {
-					url: "http://localhost:5173/",
-					tag: "button",
-					classes: [],
-					selector: "button",
-					size: { width: 80, height: 30 },
-					computedStyle: {},
-				},
-			},
-		});
+		await invokeFromTab("browser:annotation:submit", 99, { session: submittedAnnotationSession() });
 
 		expect(resize).toHaveBeenCalledWith({ width: 1568 });
 		expect(sent).toContainEqual({
@@ -2905,20 +2923,7 @@ describe("browser annotation IPC", () => {
 		// timeout branch, proving a hung capturePage() cannot block the send.
 		webContents.capturePage.mockReturnValueOnce(new Promise(() => undefined));
 
-		await invokeFromTab("browser:annotation:submit", 99, {
-			instruction: "Make this button blue.",
-			selection: {
-				kind: "element",
-				context: {
-					url: "http://localhost:5173/",
-					tag: "button",
-					classes: [],
-					selector: "button",
-					size: { width: 80, height: 30 },
-					computedStyle: {},
-				},
-			},
-		});
+		await invokeFromTab("browser:annotation:submit", 99, { session: submittedAnnotationSession() });
 
 		const forwarded = sent.find((entry) => entry.channel === "browser:annotation:submitted");
 		expect(forwarded).toBeDefined();
@@ -2935,18 +2940,7 @@ describe("browser annotation IPC", () => {
 		webContents.capturePage.mockReturnValueOnce(capture);
 
 		const submit = invokeFromTab("browser:annotation:submit", 99, {
-			instruction: "Make this button blue.",
-			selection: {
-				kind: "element",
-				context: {
-					url: "http://localhost:5173/",
-					tag: "button",
-					classes: [],
-					selector: "button",
-					size: { width: 80, height: 30 },
-					computedStyle: {},
-				},
-			},
+			session: submittedAnnotationSession(),
 		}) as Promise<void>;
 		await new Promise<void>((resolve) => setImmediate(resolve));
 		host.destroy("1:sess-1");
@@ -2962,99 +2956,57 @@ describe("browser annotation IPC", () => {
 		expect(sent.some((entry) => entry.channel === "browser:annotation:submitted")).toBe(false);
 	});
 
-	it("forwards a multi-element preview annotation submission to the renderer-owned view", async () => {
+	it("forwards a multi-comment annotation session to the renderer-owned view", async () => {
 		const { invoke, invokeFromTab, sent } = setupHost();
 		await invoke("browser:ensure", "sess-1");
+		const session = submittedAnnotationSession("http://localhost:5173/", [
+			{ body: "Align this with the next button.", selector: "button#a" },
+			{ body: "Use this button as the alignment reference.", selector: "button#b" },
+		]);
 
-		await invokeFromTab("browser:annotation:submit", 99, {
-			instruction: "Align these two.",
-			selection: {
-				kind: "elements",
-				contexts: [
-					{
-						url: "http://localhost:5173/",
-						tag: "button",
-						classes: [],
-						selector: "button#a",
-						size: { width: 80, height: 30 },
-						computedStyle: {},
-					},
-					{
-						url: "http://localhost:5173/",
-						tag: "button",
-						classes: [],
-						selector: "button#b",
-						size: { width: 80, height: 30 },
-						computedStyle: {},
-					},
-				],
-			},
-		});
+		await invokeFromTab("browser:annotation:submit", 99, { session });
 
 		expect(sent).toContainEqual({
 			channel: "browser:annotation:submitted",
 			payload: expect.objectContaining({
 				viewId: "1:sess-1",
-				instruction: "Align these two.",
-				selection: expect.objectContaining({
-					kind: "elements",
-					contexts: [
-						expect.objectContaining({ selector: "button#a" }),
-						expect.objectContaining({ selector: "button#b" }),
-					],
-				}),
+				session,
 			}),
 		});
 	});
 
-	it("ignores a malformed annotation selection instead of forwarding it", async () => {
+	it("ignores a malformed annotation session instead of forwarding it", async () => {
 		const { invoke, invokeFromTab, sent } = setupHost();
 		await invoke("browser:ensure", "sess-1");
 
 		await invokeFromTab("browser:annotation:submit", 99, {
-			instruction: "Make this button blue.",
-			selection: { kind: "elements", contexts: [] },
+			session: { version: 1, page: { url: "http://localhost:5173/" }, annotations: "invalid", screenshots: [] },
 		});
 
 		expect(sent.some((entry) => entry.channel === "browser:annotation:submitted")).toBe(false);
 	});
 
-	it("ignores a single-element selection whose context is missing required fields", async () => {
+	it("ignores an annotation whose context is missing required fields", async () => {
 		const { invoke, invokeFromTab, sent } = setupHost();
 		await invoke("browser:ensure", "sess-1");
+		const session = submittedAnnotationSession();
+		(session.annotations[0]!.target.context as { url?: string }).url = undefined;
 
-		await invokeFromTab("browser:annotation:submit", 99, {
-			instruction: "Make this button blue.",
-			selection: {
-				kind: "element",
-				context: { tag: "button" },
-			},
-		});
+		await invokeFromTab("browser:annotation:submit", 99, { session });
 
 		expect(sent.some((entry) => entry.channel === "browser:annotation:submitted")).toBe(false);
 	});
 
-	it("ignores a multi-element selection containing a malformed context entry", async () => {
+	it("ignores a multi-comment session containing a malformed annotation", async () => {
 		const { invoke, invokeFromTab, sent } = setupHost();
 		await invoke("browser:ensure", "sess-1");
+		const session = submittedAnnotationSession("http://localhost:5173/", [
+			{ body: "First", selector: "button#a" },
+			{ body: "Second", selector: "button#b" },
+		]);
+		(session.annotations as unknown[])[1] = null;
 
-		await invokeFromTab("browser:annotation:submit", 99, {
-			instruction: "Align these two.",
-			selection: {
-				kind: "elements",
-				contexts: [
-					{
-						url: "http://localhost/",
-						tag: "button",
-						classes: [],
-						selector: "button",
-						size: { width: 1, height: 1 },
-						computedStyle: {},
-					},
-					null,
-				],
-			},
-		});
+		await invokeFromTab("browser:annotation:submit", 99, { session });
 
 		expect(sent.some((entry) => entry.channel === "browser:annotation:submitted")).toBe(false);
 	});
