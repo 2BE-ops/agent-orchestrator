@@ -47,8 +47,12 @@ func TestCancelSelectedQueuedTurnPreservesActiveTurnAndSiblingQueue(t *testing.T
 	if states["active work"] != domain.TurnStateRunning {
 		t.Errorf("active turn = %q, want running", states["active work"])
 	}
-	if states["cancel me"] != domain.TurnStateInterrupted {
-		t.Errorf("selected turn = %q, want interrupted", states["cancel me"])
+	cancelledTurn, err := h.st.TurnByID(ctx, cancelled.ID)
+	if err != nil || cancelledTurn.State != domain.TurnStateCancelled {
+		t.Errorf("selected turn = %v, %v, want cancelled", cancelledTurn, err)
+	}
+	if _, visible := states["cancel me"]; visible {
+		t.Error("cancelled queue message remained in visible transcript")
 	}
 	if states["keep me"] != domain.TurnStateQueued {
 		t.Errorf("sibling turn = %q, want queued", states["keep me"])

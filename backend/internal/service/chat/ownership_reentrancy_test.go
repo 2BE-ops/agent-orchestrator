@@ -238,7 +238,7 @@ func (s *writerPreferenceStore) NextQueuedTurn(
 func TestEditMessageNewBranchDoesNotReacquireOwnedProjectLease(t *testing.T) {
 	st := openStore(t)
 	ownedStore := newWriterPreferenceStore(st)
-	h, _, _ := newEditHarnessWithStore(t, st, ownedStore, domain.KindOrchestrator, false)
+	h, _, _ := newEditHarnessWithOwnedStore(t, st, ownedStore, domain.KindOrchestrator, false, func(r chatsvc.SnapshotReader) chatsvc.SnapshotReader { return r }, nil)
 	ctx := context.Background()
 	first := completeTurn(t, h, "first", "provider-turn-1")
 	h.awaitSnapshot(t, func(snapshot store.ConversationSnapshot) bool {
@@ -256,7 +256,7 @@ func TestEditMessageNewBranchDoesNotReacquireOwnedProjectLease(t *testing.T) {
 func TestEditMessageActiveBranchRetryDoesNotReacquireOwnedProjectLease(t *testing.T) {
 	st := openStore(t)
 	ownedStore := newWriterPreferenceStore(st)
-	h, _, driver := newEditHarnessWithStore(t, st, ownedStore, domain.KindOrchestrator, true)
+	h, _, driver := newEditHarnessWithOwnedStore(t, st, ownedStore, domain.KindOrchestrator, true, func(r chatsvc.SnapshotReader) chatsvc.SnapshotReader { return r }, nil)
 	ctx := context.Background()
 	completeTurn(t, h, "first", "provider-turn-1")
 	h.awaitSnapshot(t, func(snapshot store.ConversationSnapshot) bool {
@@ -296,7 +296,7 @@ func TestEditMessageActiveBranchRetryDoesNotReacquireOwnedProjectLease(t *testin
 func TestEditMessageRefusedRetryRestoresBranchWithoutReacquiringOwnedProjectLease(t *testing.T) {
 	st := openStore(t)
 	ownedStore := newWriterPreferenceStore(st)
-	h, _, _ := newEditHarnessWithStore(t, st, ownedStore, domain.KindOrchestrator, false)
+	h, _, _ := newEditHarnessWithOwnedStore(t, st, ownedStore, domain.KindOrchestrator, false, func(r chatsvc.SnapshotReader) chatsvc.SnapshotReader { return r }, nil)
 	ctx := context.Background()
 	completeTurn(t, h, "first", "provider-turn-1")
 	h.awaitSnapshot(t, func(snapshot store.ConversationSnapshot) bool {

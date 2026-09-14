@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
+	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite/gen"
 )
 
@@ -26,8 +27,11 @@ type Store struct {
 	qr      *gen.Queries // bound to the reader pool
 	writeMu *contextMutex
 
-	projectConversationMu    sync.Mutex
-	projectConversationLocks map[domain.ProjectID]*sync.RWMutex
+	projectConversationMu           sync.Mutex
+	projectConversationLocks        map[domain.ProjectID]*sync.RWMutex
+	agentSwitchFailureEventMetadata *domain.AgentSwitchEventMetadata
+	agentSwitchFailureEventEncoder  ports.AgentSwitchFailureEventEncoder
+	agentSwitchFailureCommit        func(*sql.Tx) error
 }
 
 type contextMutex struct {
@@ -112,6 +116,7 @@ func NewStore(writeDB, readDB *sql.DB) *Store {
 		qr:                       gen.New(readDB),
 		writeMu:                  newContextMutex(),
 		projectConversationLocks: make(map[domain.ProjectID]*sync.RWMutex),
+		agentSwitchFailureCommit: func(tx *sql.Tx) error { return tx.Commit() },
 	}
 }
 
@@ -127,8 +132,14 @@ func (s *Store) Close() error {
 // inTx runs fn inside a single write transaction on the writer connection,
 // rolling back on error. The caller must already hold writeMu.
 func (s *Store) inTx(ctx context.Context, what string, fn func(*gen.Queries) error) error {
+	return s.inTxDB(ctx, what, func(q *gen.Queries, _ gen.DBTX) error { return fn(q) })
+}
+
+// inTxDB is the raw-database variant used by handwritten transactional stores
+// while their sqlc artifacts are intentionally regenerated in a later slice.
+func (s *Store) inTxDB(ctx context.Context, what string, fn func(*gen.Queries, gen.DBTX) error) error {
 	if q, ok := ctx.Value(conversationProjectionTxKey{}).(*gen.Queries); ok && q != nil {
-		if err := fn(q); err != nil {
+		if err := fn(q, nil); err != nil {
 			return fmt.Errorf("%s: %w", what, err)
 		}
 		return nil
@@ -138,7 +149,7 @@ func (s *Store) inTx(ctx context.Context, what string, fn func(*gen.Queries) err
 		return fmt.Errorf("begin %s: %w", what, err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	if err := fn(s.qw.WithTx(tx)); err != nil {
+	if err := fn(s.qw.WithTx(tx), tx); err != nil {
 		return fmt.Errorf("%s: %w", what, err)
 	}
 	return tx.Commit()
