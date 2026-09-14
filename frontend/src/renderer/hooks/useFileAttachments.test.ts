@@ -1078,4 +1078,54 @@ describe("useFileAttachments", () => {
 		);
 		expect(result.current.error).toMatch(/total under/i);
 	});
+
+	it("discards a pending file read when its draft is cleared", async () => {
+		const readers: FileReader[] = [];
+		const read = vi.spyOn(FileReader.prototype, "readAsDataURL").mockImplementation(function (this: FileReader) {
+			readers.push(this);
+		});
+		try {
+			const { result } = renderHook(() => useFileAttachments());
+			let pending!: Promise<void>;
+			act(() => {
+				pending = result.current.addFiles([file("discarded.png", 8, "image/png")]);
+			});
+			expect(result.current.hasPendingReads()).toBe(true);
+			act(() => result.current.clear());
+			expect(result.current.hasPendingReads()).toBe(false);
+			await act(async () => {
+				Object.defineProperty(readers[0], "result", { value: "data:image/png;base64,AQ==" });
+				readers[0].dispatchEvent(new ProgressEvent("load"));
+				await pending;
+			});
+			expect(result.current.attachments).toEqual([]);
+			expect(await result.current.toSettledPayload()).toEqual([]);
+		} finally {
+			read.mockRestore();
+		}
+	});
+	it("rejects an awaiting delivery after confirmed discard without cancelling later files", async () => {
+		const sessionId = "discard-awaiting-delivery";
+		let finish!: () => void;
+		let staged: FileAttachment[] = [];
+		const prepare = vi.fn((attachments: FileAttachment[]) => new Promise<FileAttachment[]>((resolve) => {
+			staged = attachments;
+			finish = () => resolve(attachments.map((attachment) => ({ ...attachment, stagedPath: `.ao/attachments/${attachment.name}` })));
+		}));
+		const { result } = renderHook(() => useFileAttachments({ initialKey: sessionId, prepareAttachments: prepare }));
+		let adding!: Promise<void>;
+		act(() => { adding = result.current.addFiles([file("discarded.txt")]); });
+		await waitFor(() => expect(prepare).toHaveBeenCalledOnce());
+		const delivery = result.current.toSettledPayload().then(() => "sent", (error: Error) => error.message);
+		act(() => discardCapturedPendingFileAttachments(capturePendingFileAttachmentsForSession(sessionId)));
+		await act(async () => { finish(); await adding; });
+		expect(await delivery).toMatch(/discarded before delivery/);
+		expect(result.current.attachments).toEqual([]);
+		expect(staged).toHaveLength(1);
+		prepare.mockImplementation(async (attachments) => attachments.map((attachment) => ({ ...attachment, stagedPath: `.ao/attachments/${attachment.name}` })));
+		await act(async () => { await result.current.addFiles([file("later.txt")]); });
+		expect(await result.current.toSettledPayload()).toMatchObject([{ name: "later.txt" }]);
+		purgeFileAttachmentsForSession(sessionId);
+	});
+
 });

@@ -105,6 +105,26 @@ func (s *Service) Steer(
 	return controller.Steer(ctx, msg)
 }
 
+// RecoverSteer reads only the durable receipt. A missing controller or a changed
+// interface cannot turn an earlier accepted/uncertain delivery into a rejection.
+func (s *Service) RecoverSteer(ctx context.Context, id domain.SessionID, clientMessageID string) (SteerResult, error) {
+	if clientMessageID == "" {
+		return SteerResult{}, ErrSteerDeliveryUncertain
+	}
+	conversation, err := s.store.ConversationForSession(ctx, id)
+	if err != nil {
+		return SteerResult{}, fmt.Errorf("%w: load conversation: %w", ErrSteerDeliveryUncertain, err)
+	}
+	delivery, found, err := s.store.SteerDelivery(ctx, conversation.ID, clientMessageID)
+	if err != nil {
+		return SteerResult{}, fmt.Errorf("%w: load receipt: %w", ErrSteerDeliveryUncertain, err)
+	}
+	if !found {
+		return SteerResult{}, ErrSteerDeliveryUncertain
+	}
+	return replaySteerDelivery(delivery, delivery.RequestJSON)
+}
+
 // PromoteQueuedTurn delivers one already queued turn into the active turn. The
 // daemon reads the queued content; callers identify it but cannot replace it.
 func (s *Service) PromoteQueuedTurn(
@@ -394,25 +414,16 @@ func (c *Controller) Steer(ctx context.Context, msg ports.ChatUserMessage) (Stee
 }
 
 type steerDeliveryRequest struct {
-	Text     string                       `json:"text"`
-	Content  []ports.ChatContent          `json:"content,omitempty"`
-	Origin   domain.MessageOrigin         `json:"origin"`
-	Settings steerDeliveryRequestSettings `json:"settings"`
-}
-
-// Explicit JSON names freeze the durable request identity independently of the
-// provider port's Go field names. A later refactor must not turn a safe retry into
-// an idempotency conflict after an app upgrade.
-type steerDeliveryRequestSettings struct {
-	Model    string               `json:"model,omitempty"`
-	Effort   string               `json:"effort,omitempty"`
-	Approval ports.PermissionMode `json:"approval,omitempty"`
+	Text     string                  `json:"text"`
+	Content  []ports.ChatContent     `json:"content,omitempty"`
+	Origin   domain.MessageOrigin    `json:"origin"`
+	Settings deliveryRequestSettings `json:"settings"`
 }
 
 func encodeSteerDeliveryRequest(msg ports.ChatUserMessage) (string, error) {
 	encoded, err := json.Marshal(steerDeliveryRequest{
 		Text: msg.Text, Content: msg.Content, Origin: normalizeOrigin(msg.Origin),
-		Settings: steerDeliveryRequestSettings{
+		Settings: deliveryRequestSettings{
 			Model: msg.Settings.Model, Effort: msg.Settings.Effort, Approval: msg.Settings.Approval,
 		},
 	})

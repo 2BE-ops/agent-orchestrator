@@ -1,3 +1,4 @@
+import { useChatDraftTranslation } from "../../lib/chat-draft-messages";
 /**
  * The Chat composer.
  *
@@ -7,7 +8,7 @@
  * A message typed mid-turn is held by the daemon and sent when the turn ends,
  * because the agent is one conversation and cannot run a second turn alongside
  * the first. The placeholder says so rather than leaving the user to guess where
- * their text went, and the queued message stays visible in the timeline.
+ * their text went, and the queued message stays visible only in the dock.
  *
  * The model, reasoning effort and approval controls belong here rather than in
  * settings because the provider takes all three per turn: choosing one changes the
@@ -28,28 +29,30 @@
 
 import {
 	cloneElement,
-	isValidElement,
 	useCallback,
 	useEffect,
 	useId,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
 	useSyncExternalStore,
+	isValidElement,
+	memo,
 	type ClipboardEvent,
 	type DragEvent,
 	type FormEvent,
 	type KeyboardEvent,
+	type ReactElement,
 	type ReactNode,
 } from "react";
-import { ArrowUp, Command, CornerDownLeft, Loader2, Plus, Square, X } from "lucide-react";
-import { useTranslation } from "react-i18next";
+import { ArrowUp, Loader2, Plus, Square, X } from "lucide-react";
 import { Button } from "../ui/button";
-import {
-	EMPTY_COMPOSER_CONTENT,
-	type ComposerDraftContent,
-} from "../../lib/composer-content";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { useTranslation } from "react-i18next";
+import { EMPTY_COMPOSER_CONTENT, type ComposerDraftContent } from "../../lib/composer-content";
 import { cn } from "../../lib/utils";
+import { apiErrorCode, apiErrorMessage, getApiBaseUrl } from "../../lib/api-client";
 import { ComposerSuggestMenu } from "./ComposerSuggestMenu";
 import {
 	ComposerEditor,
@@ -62,6 +65,7 @@ import {
 	isSupportedImageAttachment,
 	useFileAttachments,
 	type FileAttachment,
+	MAX_ATTACHMENTS,
 	type FileAttachmentPayload,
 } from "../../hooks/useFileAttachments";
 import { File } from "lucide-react";
@@ -71,11 +75,14 @@ import {
 	beginChatComposerMutation,
 	cancelChatComposerMutation,
 	chatDraftScopeKey,
+	chatQueuedAttachmentScopeKey,
 	clearAcceptedChatComposer,
 	clearRejectedChatComposerDelivery,
 	clearUncertainChatComposerDelivery,
 	finishChatComposerMutation,
 	getChatComposerMutation,
+	isChatComposerMutationCurrent,
+	loadChatSessionDraft,
 	markChatComposerDeliveryAccepted,
 	prepareChatComposerDelivery,
 	readChatSessionDraft,
@@ -86,10 +93,28 @@ import {
 	type ChatDraftAttachment,
 	type ChatComposerDelivery,
 	type ChatDraftScope,
+	type ChatDraftRetainedAttachment,
 	type DraftClearResult,
 } from "../../lib/chat-drafts";
+import { attachmentURL, IMAGE_ATTACHMENT_PATH } from "./messageAttachments";
 import { setChatDraftBoundary } from "../../lib/chat-draft-boundary";
 
+// These responses precede AppendUserMessage. Provider/transport errors can
+// follow durable acceptance and must keep the original delivery ID for recovery.
+const DEFINITIVE_SEND_REJECTIONS = new Set([
+	"INVALID_BODY",
+	"CHAT_MESSAGE_EMPTY",
+	"INVALID_RESOURCE",
+	"UNSUPPORTED_ATTACHMENT_TYPE",
+	"INVALID_ATTACHMENT_DATA",
+	"ATTACHMENT_TOO_LARGE",
+	"TOO_MANY_ATTACHMENTS",
+	"ATTACHMENTS_TOO_LARGE",
+	"SESSION_NOT_FOUND",
+	"SESSION_MODE_MISMATCH",
+	"CHAT_CONTROLLER_NOT_READY",
+	"CHAT_INTERFACE_TRANSITION",
+]);
 export interface WorkspaceFileCatalog {
 	paths: string[];
 	truncated: boolean;
@@ -134,12 +159,13 @@ function attachmentDeliveryLabel(
 	attachment: FileAttachment,
 	canStage: boolean,
 	nativeImages: boolean,
+	canRestoreNative: boolean,
 ): string {
 	if (attachment.status === "reading") return "Reading…";
 	if (attachment.status === "failed") return "Read failed · retry or remove";
 	const deliversNativeImage =
 		nativeImages &&
-		attachment.data !== undefined &&
+		(attachment.data !== undefined || (canRestoreNative && Boolean(attachment.stagedPath))) &&
 		isSupportedImageAttachment(attachment.mimeType);
 	const hasWorktreePath = Boolean(attachment.stagedPath);
 	if (hasWorktreePath && deliversNativeImage) return "Worktree path + native image";
@@ -153,18 +179,21 @@ function attachmentDeliveryLabel(
 function restoredDeliveryNotice(delivery: ChatComposerDelivery | undefined): string | null {
 	if (!delivery) return null;
 	if (delivery.state === "accepted") {
-		return "Message was accepted, but its local draft still needs to be cleared.";
+		return "chat.draft.acceptedMessage";
 	}
 	return delivery.kind === "steer"
-		? "AO can’t determine whether the agent may already have received this guidance before Chat restarted. Retry safely with the same delivery ID, or abandon recovery to edit it. Sending it again after abandonment may duplicate it."
-		: "Message delivery wasn’t confirmed before Chat restarted. Retry safely to reuse the same delivery ID.";
+		? "chat.draft.steerRestart"
+		: "chat.draft.sendRestart";
 }
+/** A retained server-owned attachment; image bytes stay in durable storage. */
+export type StoredComposerAttachment = ChatDraftRetainedAttachment & { dataUrl?: string };
 
-export function ChatComposer({
+export const ChatComposer = memo(function ChatComposer({
 	onSend,
 	busy,
 	willQueue,
 	disabled,
+	disabledPlaceholder,
 	settings,
 	approval,
 	skills = [],
@@ -174,9 +203,18 @@ export function ChatComposer({
 	onSteer,
 	onInterrupt,
 	canSteer,
+	sendPending,
 	steerPending,
 	steerRefusal,
 	draftSeed,
+	editingQueuedTurnId,
+	onCancelQueuedEdit,
+	onQueuedDraftChange,
+	queuedDraftScope,
+	onQueuedAttachmentsChange,
+	onQueuedRetainedAttachmentsChange,
+	savingQueuedEditPending,
+	queuedEditRecovery,
 	commandError,
 	attachedTop = false,
 	queuedDock,
@@ -194,6 +232,7 @@ export function ChatComposer({
 		text: string,
 		attachments?: FileAttachmentPayload[],
 		clientMessageId?: string,
+		retainedContent?: number[],
 	) => void | Promise<unknown>;
 	settings?: ReactNode;
 	/** A provider decision that temporarily replaces ordinary message entry. */
@@ -203,6 +242,8 @@ export function ChatComposer({
 	/** The agent is mid-turn, so this message is held until the turn ends. */
 	willQueue?: boolean;
 	disabled?: boolean;
+	/** Explains why message entry is temporarily blocked. */
+	disabledPlaceholder?: string;
 	/** The provider's skills. Empty leaves `/` an ordinary character. */
 	skills?: ChatSkill[];
 	/** Live worktree paths and their load/refresh state for `@` completion. */
@@ -219,16 +260,29 @@ export function ChatComposer({
 	 * Deliver this text into the turn already running. Absent means the harness
 	 * cannot steer and the choice is never offered.
 	 */
-	onSteer?: (text: string, clientMessageId?: string) => Promise<ChatSteerOutcome | void>;
+	onSteer?: (text: string, attachments?: FileAttachmentPayload[], clientMessageId?: string, recoverOnly?: boolean) => Promise<ChatSteerOutcome | void>;
 	/** Stop the turn already running when there is no draft to send. */
 	onInterrupt?: () => void;
 	/** A turn is actually running, so there is something to steer into. */
 	canSteer?: boolean;
+	/** A send mutation is in flight for this session. */
+	sendPending?: boolean;
 	steerPending?: boolean;
 	/** Why the last steer was refused. */
 	steerRefusal?: string;
 	/** A selected history message to load into the composer as a new draft. */
-	draftSeed?: { id: string; text: string };
+	draftSeed?: { id: string; text: string; attachments?: StoredComposerAttachment[]; stagedAttachments?: ChatDraftAttachment[] };
+	/** A queued turn being edited in the composer instead of the dock. */
+	editingQueuedTurnId?: string;
+	onCancelQueuedEdit?: () => void;
+	onQueuedDraftChange?: (text: string) => void;
+	queuedDraftScope?: ChatDraftScope;
+	onQueuedAttachmentsChange?: (attachments: ChatDraftAttachment[]) => boolean;
+	onQueuedRetainedAttachmentsChange?: (attachments: ChatDraftRetainedAttachment[]) => void;
+	/** The queued edit mutation is in flight for the turn being edited. */
+	savingQueuedEditPending?: boolean;
+	/** Keep the exact queued edit immutable until its saved delivery ID is reconciled. */
+	queuedEditRecovery?: boolean;
 	/** A failed send, approval, interrupt, or settings mutation. */
 	commandError?: string;
 	/** A queued-message dock owns the shared rounded top edge. */
@@ -254,6 +308,7 @@ export function ChatComposer({
 	/** Client ids already present in daemon-authoritative conversation history. */
 	acceptedClientMessageIds?: ReadonlySet<string>;
 }) {
+	const translateDraft = useChatDraftTranslation();
 	const draftScope = useMemo<ChatDraftScope | undefined>(
 		() =>
 			draftSessionId
@@ -265,6 +320,12 @@ export function ChatComposer({
 		[draftSessionId, draftSessionIncarnation],
 	);
 	const draftScopeKey = draftScope ? chatDraftScopeKey(draftScope) : undefined;
+	const attachmentScopeKey = queuedDraftScope
+		? chatQueuedAttachmentScopeKey(queuedDraftScope, draftSeed?.id ?? "undefined")
+		: draftScopeKey;
+	const boundarySessionId = draftSessionId ?? queuedDraftScope?.sessionId;
+	const [retainedAttachments, setRetainedAttachments] = useState<StoredComposerAttachment[]>(draftSeed?.attachments ?? []);
+	const visibleRetainedAttachments = editingQueuedTurnId ? retainedAttachments : [];
 	const { t } = useTranslation();
 	const [hasText, setHasText] = useState(false);
 	const hasTextRef = useRef(false);
@@ -298,10 +359,10 @@ export function ChatComposer({
 			? readChatSessionDraft(draftScope).composer.delivery
 			: undefined,
 	);
+	const [steerNextRequest, setSteerNextRequest] = useState(0);
 	// The DOM event is the source of truth while React catches up with the draft
 	// transition. This keeps Enter-after-fast-typing from observing stale state.
 	const contentRef = useRef<ComposerDraftContent>(EMPTY_COMPOSER_CONTENT);
-	const submitInFlight = useRef<Promise<void> | null>(null);
 	/**
 	 * What Enter does while the agent is working.
 	 *
@@ -313,7 +374,12 @@ export function ChatComposer({
 	const editor = useRef<ComposerEditorHandle>(null);
 	const filePicker = useRef<HTMLInputElement>(null);
 	const retryPendingIdsRef = useRef<Set<string>>(new Set());
+	const submitInFlight = useRef<Promise<void> | null>(null);
+	// Disabling the active editor can move focus to the document body. Remember
+	// keyboard-origin submissions so focus can return once the editor is enabled.
+	const restoreFocusAfterSubmission = useRef(false);
 	const menuId = useId();
+	const hadQueuedDockRef = useRef(Boolean(queuedDock));
 	const previousTrigger = useRef<ComposerTrigger | undefined>(undefined);
 	const triggerRef = useRef<ComposerTrigger | undefined>(undefined);
 	const automaticDeliveryRecoveryAttempted = useRef<string | undefined>(undefined);
@@ -338,9 +404,10 @@ export function ChatComposer({
 	);
 	const [appliedAcceptanceSequence, setAppliedAcceptanceSequence] = useState(0);
 	const composerRevision = useRef(persistedDraft?.composer.revision ?? 0);
-	const restoredAttachments = useMemo<FileAttachment[]>(
-		() => restoreFileAttachments(persistedDraft?.composer.attachments ?? []),
-		[persistedDraft],
+	const synchronouslyClearedDeliveryRevision = useRef<number | undefined>(undefined);
+	const restoredAttachments = useMemo(
+		() => restoreFileAttachments(persistedDraft?.composer.attachments ?? draftSeed?.stagedAttachments ?? []),
+		[persistedDraft, draftSeed?.stagedAttachments],
 	);
 	const readPersistedAttachments = useCallback(
 		() =>
@@ -351,30 +418,22 @@ export function ChatComposer({
 	);
 	const persistAttachments = useCallback(
 		(attachments: FileAttachment[]) => {
-			if (!draftScope) return true;
-			const result = writeChatAttachments(
-				draftScope,
-				attachments.flatMap((attachment) =>
-					attachment.stagedPath
-						? [{
-								id: attachment.id,
-								path: attachment.stagedPath,
-								name: attachment.name,
-								mimeType: attachment.mimeType,
-								bytes: attachment.bytes,
-							}]
-						: [],
-				),
-			);
+			const descriptors = attachments.flatMap((attachment) => attachment.stagedPath
+				? [{ id: attachment.id, path: attachment.stagedPath, name: attachment.name, mimeType: attachment.mimeType, bytes: attachment.bytes }]
+				: []);
+			if (!draftScope) {
+				return onQueuedAttachmentsChange?.(descriptors) ?? true;
+			}
+			const result = writeChatAttachments(draftScope, descriptors);
 			composerRevision.current = result.draft.composer.revision;
 			setAttachmentDraftPersistenceError(
 				result.ok
 					? null
-					: "Draft couldn’t be saved. Keep this chat open or copy it before leaving.",
+					: "chat.draft.saveFailed",
 			);
 			return result.ok;
 		},
-		[draftScope],
+		[draftScope, onQueuedAttachmentsChange],
 	);
 	const prepareAttachments = useCallback(
 		async (attachments: FileAttachment[]): Promise<FileAttachment[]> => {
@@ -397,6 +456,7 @@ export function ChatComposer({
 	useEffect(() => {
 		if (restoredSessionId.current === draftScopeKey) return;
 		restoredSessionId.current = draftScopeKey;
+		synchronouslyClearedDeliveryRevision.current = undefined;
 		const currentDraft = draftScope ? readChatSessionDraft(draftScope) : undefined;
 		composerRevision.current = currentDraft?.composer.revision ?? 0;
 		setDurableDelivery(currentDraft?.composer.delivery);
@@ -409,12 +469,12 @@ export function ChatComposer({
 	}, [draftScope, draftScopeKey]);
 	const fileAttachments = useFileAttachments({
 		initialAttachments: restoredAttachments,
-		initialKey: draftScopeKey,
-		readPersistedAttachments,
+		initialKey: attachmentScopeKey,
+		readPersistedAttachments: draftScope ? readPersistedAttachments : undefined,
 		prepareAttachments: onStageAttachments ? prepareAttachments : undefined,
 		onAttachmentsChange: persistAttachments,
 	});
-	const canAttach = Boolean(onStageAttachments || nativeImages);
+	const canAttach = Boolean(onStageAttachments || nativeImages) && !queuedEditRecovery;
 	const canStageAttachments = Boolean(onStageAttachments);
 
 	const slashCommands = useMemo<ChatSkill[]>(() => {
@@ -450,8 +510,10 @@ export function ChatComposer({
 	// index from the previous list can point past the end of this one.
 	const activeIndex = Math.min(highlighted, suggestions.length - 1);
 
-	const staged = fileAttachments.attachments.length > 0;
+	const staged = fileAttachments.attachments.length > 0 || visibleRetainedAttachments.length > 0;
+	const controlsDisabled = Boolean(disabled || submitting);
 	const hasDraft = hasText || staged;
+	const savingQueuedEdit = Boolean(editingQueuedTurnId);
 	const acceptedMutationWaiting = Boolean(
 		composerMutation.accepted &&
 			composerMutation.accepted.sequence > appliedAcceptanceSequence,
@@ -464,6 +526,7 @@ export function ChatComposer({
 			(!busy || durableDelivery.state === "accepted") &&
 			!disabled &&
 			!steerPending &&
+		!savingQueuedEditPending &&
 			!submitting &&
 			!composerMutation.pending,
 	);
@@ -476,28 +539,35 @@ export function ChatComposer({
 	);
 	const canSend =
 		(hasText || staged) &&
-		!busy &&
+		(savingQueuedEdit || !busy) &&
 		!disabled &&
 		!steerPending &&
+		!savingQueuedEditPending &&
 		!draftMutationPending &&
 		!acceptedClearFailed &&
 		!durableDelivery;
 	const sendActionEnabled = canSend || canRecoverDelivery;
-	const sendActionLabel = durableDelivery
+	const sendActionLabel = translateDraft(durableDelivery
 		? durableDelivery.state === "accepted"
-			? "Finish clearing accepted message"
-			: "Retry message safely"
-		: "Send message";
-	const canStopTurn = Boolean(willQueue && onInterrupt && !disabled && !hasDraft);
-	// Steering delivers text only, so a draft carrying files cannot take that
-	// path. Treating it as unavailable — rather than steering the text and
-	// dropping the files, or refusing on an empty body with attachments staged —
-	// keeps the armed state something the composer can actually honour.
-	const canSteerDraft = Boolean(canSteer && onSteer) && !staged;
+			? "chat.draft.clearMessage"
+			: "chat.draft.retryMessage"
+		: queuedEditRecovery ? "chat.draft.retryEdit" : "Send message");
+	const canStopTurn = Boolean(
+		willQueue && onInterrupt && !controlsDisabled && !hasDraft && !savingQueuedEdit,
+	);
+	// Cmd/Ctrl+Enter remains an intentionally quiet power-user path for steering
+	// the current draft into the running turn. The visible hint stays queue-only.
+	const canSteerDraft = Boolean(canSteer && onSteer) && !savingQueuedEdit;
+	const canSteerNext =
+		Boolean(canSteer && onSteer) &&
+		!controlsDisabled &&
+		!hasDraft &&
+		!savingQueuedEdit &&
+		Boolean(queuedDock);
 	const sendHint = menuOpen
 		? "Enter to insert"
-		: willQueue && canSteerDraft
-			? "⏎ queue · ⌘⏎ steer"
+		: savingQueuedEdit
+			? "⏎ save edit"
 			: willQueue
 				? "⏎ queue"
 				: "Enter to send";
@@ -508,32 +578,40 @@ export function ChatComposer({
 		fileAttachments.hasUndurableAttachments && !fileAttachments.preparing;
 
 	useEffect(() => {
-		if (!draftSessionId) return;
+		if (!boundarySessionId) return;
+		const deliveryWasSynchronouslyCleared = Boolean(
+			durableDelivery &&
+				synchronouslyClearedDeliveryRevision.current === durableDelivery.revision,
+		);
 		setChatDraftBoundary(
-			draftSessionId,
+			boundarySessionId,
 			"composer",
 			[
-				...(draftPersistenceError || attachmentPersistenceAtRisk
+				...((draftPersistenceError || attachmentPersistenceAtRisk) && !deliveryWasSynchronouslyCleared
 					? (["persistence-failed"] as const)
 					: []),
-				...(durableDelivery ? (["pending-delivery"] as const) : []),
+
 				...(fileAttachments.preparing ? (["pending-attachments"] as const) : []),
 			],
 		);
-	}, [
-		attachmentPersistenceAtRisk,
-		draftPersistenceError,
-		draftSessionId,
-		durableDelivery,
-		fileAttachments.preparing,
-	]);
+	}, [draftPersistenceError, attachmentPersistenceAtRisk, boundarySessionId, durableDelivery, fileAttachments.preparing]);
 
 	useEffect(
 		() => () => {
-			if (draftSessionId) setChatDraftBoundary(draftSessionId, "composer", undefined);
+			if (boundarySessionId) setChatDraftBoundary(boundarySessionId, "composer", undefined);
 		},
-		[draftSessionId],
+		[boundarySessionId],
 	);
+	const queuedDockWithSteer = isValidElement<{
+		canSteerNext?: boolean;
+		steerNextRequest?: number;
+		disabled?: boolean;
+	}>(queuedDock)
+		? cloneElement(
+				queuedDock,
+				{ canSteerNext, steerNextRequest, disabled: submitting || queuedDock.props.disabled },
+			)
+		: queuedDock;
 
 	const focusEditor = useCallback(() => {
 		if (!autoFocus || disabled) return;
@@ -543,6 +621,17 @@ export function ChatComposer({
 	useEffect(() => {
 		focusEditor();
 	}, [autoFocusKey, focusEditor]);
+
+	const hasQueuedDock = Boolean(queuedDock);
+	const restoreFocusAfterQueueAppears =
+		hasQueuedDock &&
+		!hadQueuedDockRef.current &&
+		typeof document !== "undefined" &&
+		document.activeElement?.getAttribute("aria-label") === "Message the agent";
+	useLayoutEffect(() => {
+		hadQueuedDockRef.current = hasQueuedDock;
+		if (restoreFocusAfterQueueAppears) editor.current?.focus();
+	}, [hasQueuedDock, restoreFocusAfterQueueAppears]);
 
 	useEffect(() => {
 		if (!autoFocus) return;
@@ -579,10 +668,10 @@ export function ChatComposer({
 			setDurableDelivery(result.draft.composer.delivery);
 			if (!result.ok) {
 				setDeliveryRecoveryNotice(
-					"Message was accepted, but its local draft still needs to be cleared.",
+					"chat.draft.acceptedMessage",
 				);
 				setTextDraftPersistenceError(
-					"Message was accepted, but its local draft couldn’t be cleared. Retry clearing before leaving; AO will not send it again.",
+					"chat.draft.clearMessageFailed",
 				);
 				return false;
 			}
@@ -605,6 +694,13 @@ export function ChatComposer({
 				return true;
 			}
 			const result = clearAcceptedChatComposer(draftScope, acceptedRevision);
+			// A successful durable clear can synchronously trigger a replacement
+			// surface before React applies the acceptance receipt. Release the route
+			// boundary first so cleared UI never exposes stale unsafe-draft state.
+			if (result.ok && result.cleared && draftSessionId) {
+				synchronouslyClearedDeliveryRevision.current = acceptedRevision;
+				setChatDraftBoundary(draftSessionId, "composer", undefined);
+			}
 			if (mutationToken) {
 				finishChatComposerMutation(
 					draftScope,
@@ -616,7 +712,13 @@ export function ChatComposer({
 			}
 			return applyAcceptedDraftResult(result);
 		},
-		[applyAcceptedDraftResult, clearEditorView, draftScope, fileAttachments],
+		[
+			applyAcceptedDraftResult,
+			clearEditorView,
+			draftScope,
+			draftSessionId,
+			fileAttachments,
+		],
 	);
 
 	const acceptAndClearDurableDelivery = useCallback(
@@ -631,15 +733,10 @@ export function ChatComposer({
 				if (mutationToken) cancelChatComposerMutation(draftScope, mutationToken);
 				setDurableDelivery(delivery);
 				setTextDraftPersistenceError(
-					"Message acceptance couldn’t be recorded locally. Retry safely to reconcile it with the same delivery ID.",
+					"chat.draft.recordMessageFailed",
 				);
 				return false;
 			}
-			const acceptedDelivery = accepted.draft.composer.delivery ?? {
-				...delivery,
-				state: "accepted" as const,
-			};
-			setDurableDelivery(acceptedDelivery);
 			return clearAcceptedDraft(delivery.revision, mutationToken);
 		},
 		[clearAcceptedDraft, draftScope],
@@ -655,7 +752,7 @@ export function ChatComposer({
 		setDurableDelivery(result.draft.composer.delivery);
 		if (!result.ok) {
 			setTextDraftPersistenceError(
-				"Recovery couldn’t be abandoned because its local record could not be cleared. Nothing will be resent automatically.",
+				"chat.draft.abandonFailed",
 			);
 			return;
 		}
@@ -663,7 +760,7 @@ export function ChatComposer({
 		setTextDraftPersistenceError(null);
 		setDeliveryRecoveryNotice(null);
 		setSteerOutcomeNotice(
-			"Recovery was abandoned. The earlier guidance may already have been delivered; sending this draft now may duplicate it.",
+			"chat.draft.abandonedSteer",
 		);
 	}, [draftScope, durableDelivery]);
 
@@ -713,7 +810,7 @@ export function ChatComposer({
 			restoredSeedKey.current = undefined;
 			return;
 		}
-		const seedKey = JSON.stringify([draftSeedId, committedSeedContent]);
+		const seedKey = editingQueuedTurnId ? draftSeedId : JSON.stringify([draftSeedId, committedSeedContent]);
 		if (restoredSeedKey.current === seedKey) return;
 		restoredSeedKey.current = seedKey;
 		contentRef.current = committedSeedContent;
@@ -735,23 +832,41 @@ export function ChatComposer({
 			setTextDraftPersistenceError(
 				result.ok
 					? null
-					: "Draft couldn’t be saved. Keep this chat open or copy it before leaving.",
+					: "chat.draft.saveFailed",
 			);
 		}
-	}, [draftScope, draftSeed, draftSeedId, fileAttachments.reconcilePersistedAttachments]);
+	}, [
+		draftScope,
+		draftSeed,
+		draftSeedId,
+		editingQueuedTurnId,
+		fileAttachments.reconcilePersistedAttachments,
+	]);
 
 	useEffect(() => {
 		if (!durableDelivery || !draftScope) return;
+		// The live send owns completion until its receipt has been applied.
+		if (composerMutation.pending || composerMutation.accepted) return;
+		// A replacement can commit after another surface cleared its rendered seed.
+		const current = loadChatSessionDraft(draftScope);
+		// A failed read cannot prove that the delivery was cleared.
+		const delivery = current.ok ? current.draft.composer.delivery : durableDelivery;
+		if (!delivery || delivery.clientMessageId !== durableDelivery.clientMessageId) {
+			setDurableDelivery(delivery);
+			return;
+		}
 		const observedSteer =
-			durableDelivery.kind === "steer" &&
-			acceptedClientMessageIds?.has(durableDelivery.clientMessageId);
-		if (durableDelivery.state !== "accepted" && !observedSteer) return;
-		if (automaticDeliveryRecoveryAttempted.current === durableDelivery.clientMessageId) return;
-		automaticDeliveryRecoveryAttempted.current = durableDelivery.clientMessageId;
-		acceptAndClearDurableDelivery(durableDelivery);
+			delivery.kind === "steer" &&
+			acceptedClientMessageIds?.has(delivery.clientMessageId);
+		if (delivery.state !== "accepted" && !observedSteer) return;
+		if (automaticDeliveryRecoveryAttempted.current === delivery.clientMessageId) return;
+		automaticDeliveryRecoveryAttempted.current = delivery.clientMessageId;
+		acceptAndClearDurableDelivery(delivery);
 	}, [
 		acceptAndClearDurableDelivery,
 		acceptedClientMessageIds,
+		composerMutation.pending,
+		composerMutation.accepted,
 		draftScope,
 		durableDelivery,
 	]);
@@ -765,9 +880,19 @@ export function ChatComposer({
 		editor.current?.replaceContent(contentRef.current);
 	}, [approvalActive]);
 
+	const previousEditingQueuedTurnIdRef = useRef(editingQueuedTurnId);
+	useEffect(() => {
+		const previous = previousEditingQueuedTurnIdRef.current;
+		previousEditingQueuedTurnIdRef.current = editingQueuedTurnId;
+		if (previous && !editingQueuedTurnId) {
+			clearEditorView();
+		}
+	}, [clearEditorView, editingQueuedTurnId]);
+
 	const onEditorChange = useCallback((snapshot: ComposerEditorSnapshot) => {
 		const content = { text: snapshot.text, tokens: snapshot.tokens };
 		contentRef.current = content;
+		onQueuedDraftChange?.(snapshot.text);
 		if (draftScope) {
 			const result = writeChatComposerContent(draftScope, content);
 			composerRevision.current = result.draft.composer.revision;
@@ -778,7 +903,7 @@ export function ChatComposer({
 				setTextDraftPersistenceError(
 					result.ok
 						? null
-						: "Draft couldn’t be saved. Keep this chat open or copy it before leaving.",
+						: "chat.draft.saveFailed",
 				);
 			}
 		}
@@ -805,7 +930,7 @@ export function ChatComposer({
 			dismissedKeyRef.current = null;
 			setDismissedKey(null);
 		}
-	}, [draftScope]);
+	}, [draftScope, onQueuedDraftChange]);
 
 	const pick = useCallback((value: string) => {
 		const currentTrigger = triggerRef.current;
@@ -837,6 +962,16 @@ export function ChatComposer({
 		if (!hasLongerPrefix) pick(exact.name);
 	}, [dismissedKey, isComposing, pick, slashCommands, trigger]);
 
+	useLayoutEffect(() => {
+		if (submitting || !restoreFocusAfterSubmission.current) return;
+		restoreFocusAfterSubmission.current = false;
+		if (typeof document === "undefined") return;
+		const active = document.activeElement;
+		// Restore focus only when disabling the editor caused the blur. Do not steal
+		// focus if the user deliberately moved to another control while awaiting.
+		if (active === document.body || active === null) editor.current?.focus();
+	}, [submitting]);
+
 	const completeFromEditor = useCallback(
 		(snapshot: ComposerEditorSnapshot, key: "Enter" | "Tab"): string | undefined => {
 			const currentTrigger = snapshot.trigger;
@@ -855,47 +990,52 @@ export function ChatComposer({
 		[onCompact, suggestionsFor],
 	);
 
-	async function submit(event?: FormEvent, forceSteer?: boolean) {
+	function submit(event?: FormEvent, forceSteer?: boolean): Promise<void> {
 		event?.preventDefault();
 		// React cannot publish the next busy prop until after this event returns. A
 		// second Enter in that gap joins the accepted submission instead of opening a
 		// second transport whose local admission rejection would look like a real
 		// provider failure.
 		if (submitInFlight.current) return submitInFlight.current;
+		restoreFocusAfterSubmission.current =
+			typeof document !== "undefined" &&
+			document.activeElement?.getAttribute("aria-label") === "Message the agent";
+		setSubmitting(true);
 		const pending = performSubmit(forceSteer);
 		submitInFlight.current = pending;
 		const release = () => {
-			if (submitInFlight.current === pending) submitInFlight.current = null;
+			if (submitInFlight.current !== pending) return;
+			submitInFlight.current = null;
+			setSubmitting(false);
 		};
 		void pending.then(release, release);
 		return pending;
 	}
 
 	async function performSubmit(forceSteer?: boolean) {
+		// Own the scoped draft before file reading or staging can yield. A replacement
+		// surface observes this reservation and cannot edit underneath this send.
+		const mutationToken = draftScope && !savingQueuedEdit
+			? beginChatComposerMutation(draftScope)
+			: undefined;
+		if (draftScope && !savingQueuedEdit && !mutationToken) return;
+		try {
+			await performClaimedSubmit(forceSteer, mutationToken);
+		} finally {
+			if (draftScope && mutationToken) cancelChatComposerMutation(draftScope, mutationToken);
+		}
+	}
+
+	async function performClaimedSubmit(forceSteer?: boolean, mutationToken?: ChatDraftMutationToken) {
 		const currentContent = contentRef.current;
 		const currentText = currentContent.text;
+		const body = currentText.trim();
 		const recoveringDelivery = durableDelivery;
-		const canSubmitNow =
-			((currentText.trim().length > 0 || staged) || Boolean(recoveringDelivery)) &&
-			(!busy || recoveringDelivery?.state === "accepted") &&
-			!disabled &&
-			!steerPending &&
-			!submitting &&
-			!composerMutation.pending &&
-			(!draftMutationPending || Boolean(recoveringDelivery)) &&
-			(Boolean(recoveringDelivery) ||
-				getChatComposerMutation(draftScope ?? "").accepted?.result.ok !== false);
-		if (!canSubmitNow) return;
+		const sendNativeImages = recoveringDelivery?.nativeImages ?? Boolean(nativeImages);
 		setSendError(null);
 		setSteerOutcomeNotice(null);
 
-		const shouldSteer = forceSteer ?? false;
-		const body = currentText.trim();
-
-		if (!recoveringDelivery && body === "/compact" && onCompact) {
-			const mutationToken = draftScope
-				? beginChatComposerMutation(draftScope)
-				: undefined;
+		if (!recoveringDelivery && !savingQueuedEdit && body === "/compact" && onCompact) {
 			if (draftScope && !mutationToken) return;
 			let mutationFinished = false;
 			setSubmitting(true);
@@ -928,80 +1068,132 @@ export function ChatComposer({
 			return;
 		}
 
-		const attachmentSignature = staged ? fileAttachments.signature() : "";
-		let settledPayloads = fileAttachments.toPayload();
-		if (!recoveringDelivery && staged) {
-			setSubmitting(true);
-			try {
-				// The selected revision owns the whole send boundary. Readers and durable
-				// staging finish before any text or native bytes can reach the provider.
-				settledPayloads = await fileAttachments.toSettledPayload();
-			} catch (error) {
-				setSendError(
-					error instanceof Error
-						? error.message
-						: "Some files couldn't be read. Retry or remove them before sending.",
-				);
-				setSubmitting(false);
-				return;
-			}
-			if (fileAttachments.signature() !== attachmentSignature) {
-				setSendError("Attachments changed before delivery. Review the draft and send again.");
-				setSubmitting(false);
-				return;
-			}
+		let attachmentPayloads: FileAttachmentPayload[];
+		try {
+			attachmentPayloads = await fileAttachments.toSettledPayload();
+		} catch (error) {
+			setSendError(error instanceof Error ? error.message : "Some files could not be read. Retry or remove them before sending.");
+			return;
 		}
-		const settledAttachments = fileAttachments.currentAttachments();
-		const acceptedPaths = settledAttachments.flatMap((attachment) =>
-			attachment.stagedPath ? [attachment.stagedPath] : [],
-		);
-		const nativePayloads = nativeImages
-			? settledPayloads.filter((attachment) => isSupportedImageAttachment(attachment.mimeType))
+		// A replacement hook can still have staging work owned by the old surface.
+		if (fileAttachments.hasPendingReads()) return;
+		const settledAttachments = fileAttachments.getAttachments();
+		const settledPaths = settledAttachments.flatMap((attachment) =>
+			attachment.stagedPath ? [attachment.stagedPath] : []);
+		const hasAttachments = settledAttachments.length > 0 || visibleRetainedAttachments.length > 0;
+		const canSubmitNow =
+			(body.length > 0 || hasAttachments || Boolean(recoveringDelivery)) &&
+			(!busy || savingQueuedEdit || recoveringDelivery?.state === "accepted") &&
+			!disabled && !steerPending && !savingQueuedEditPending &&
+			!composerMutation.pending &&
+			(!draftMutationPending || Boolean(recoveringDelivery)) &&
+			(Boolean(recoveringDelivery) ||
+				getChatComposerMutation(draftScope ?? "").accepted?.result.ok !== false);
+		if (!canSubmitNow) {
+			if (busy && !disabled && !recoveringDelivery && !savingQueuedEdit) {
+				setSendError("Still sending the previous message. Try again in a moment.");
+			}
+			return;
+		}
+		if (settledPaths.length !== settledAttachments.length && !onStageAttachments && (!nativeImages || settledAttachments.some((attachment) => !isSupportedImageAttachment(attachment.mimeType)))) {
+			setSendError("This agent can receive attached images natively, but not other file types. Remove unsupported files before sending.");
+			return;
+		}
+		if (settledPaths.length !== settledAttachments.length && !onStageAttachments && draftScope) {
+			setSendError("These native-only attachments cannot be recovered safely after a restart. Attach them in a session with worktree staging.");
+			return;
+		}
+		if (hasAttachments && onStageAttachments && settledPaths.length !== settledAttachments.length) {
+			setSendError("chat.draft.filesUnavailable");
+			return;
+		}
+		const shouldSteer = Boolean(forceSteer && !savingQueuedEdit);
+		const message = withAttachmentReferences(body, [
+			...visibleRetainedAttachments.flatMap((attachment) => attachment.path ? [attachment.path] : []),
+			...settledPaths,
+		]);
+		// Ordinary delivery reserves its exact draft before these staged reads await.
+		// Queue editors use their existing owner/revision CAS before mutation.
+		const attachmentScope = queuedDraftScope ?? draftScope;
+		let nativePayloads = sendNativeImages
+			? attachmentPayloads.filter((attachment) => isSupportedImageAttachment(attachment.mimeType))
 			: [];
-		if (
-			!recoveringDelivery &&
-			staged &&
-			!onStageAttachments &&
-			nativePayloads.length !== settledPayloads.length
-		) {
-			setSendError(
-				"This agent can receive attached images natively, but not other file types. Remove unsupported files before sending.",
-			);
-			setSubmitting(false);
-			return;
-		}
-		if (!recoveringDelivery && draftScope && staged && !onStageAttachments) {
-			setSendError(
-				"These native-only attachments cannot be recovered safely after a restart. Attach them in a session with worktree staging.",
-			);
-			setSubmitting(false);
-			return;
-		}
-
-		if (!draftScope) {
-			setSubmitting(true);
+		const restoreNativePayloads = async (): Promise<boolean> => {
+			if (!attachmentScope || !sendNativeImages || recoveringDelivery?.kind === "steer" || recoveringDelivery?.state === "accepted") return true;
+			const restored: FileAttachmentPayload[] = [];
 			try {
+				for (const attachment of settledAttachments) {
+					if (!isSupportedImageAttachment(attachment.mimeType)) continue;
+					if (attachment.data) {
+						restored.push({ mimeType: attachment.mimeType, data: attachment.data, name: attachment.name });
+						continue;
+					}
+					if (!attachment.stagedPath) throw new Error("Missing staged attachment");
+					const response = await fetch(attachmentURL(getApiBaseUrl(), attachmentScope.sessionId, attachment.stagedPath));
+					if (!response.ok) throw new Error("Could not read staged attachment");
+					const blob = await response.blob();
+					const data = await new Promise<string>((resolve, reject) => {
+						const reader = new FileReader();
+						reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+						reader.onerror = () => reject(new Error("Could not read staged attachment"));
+						reader.readAsDataURL(blob);
+					});
+					restored.push({ mimeType: attachment.mimeType, data, name: attachment.name });
+				}
+				nativePayloads = restored;
+				return true;
+			} catch {
+				setSendError("chat.draft.readAttachmentFailed");
+				return false;
+			}
+		};
+		if ((!draftScope || savingQueuedEdit) && !await restoreNativePayloads()) return;
+
+		if (savingQueuedEdit && nativePayloads.length + visibleRetainedAttachments.filter((item) => item.contentType === "image").length > MAX_ATTACHMENTS) {
+			setSendError(`You can attach up to ${MAX_ATTACHMENTS} images.`);
+			return;
+		}
+		if (!draftScope || savingQueuedEdit) {
+			setSubmitting(true);
+			// A plain-text send has a local timeline echo — clear the editor immediately
+			// so the user sees one acknowledgement rather than their draft stranded until
+			// the daemon round-trip completes. Attachments retain the retry path.
+			const clearForLocalEcho = !shouldSteer && !savingQueuedEdit && nativePayloads.length === 0;
+			try {
+				if (clearForLocalEcho) clearEditorView();
 				if (shouldSteer && onSteer) {
-					if (body === "") return;
-					await onSteer(body);
-				} else if (staged) {
-					if (onStageAttachments && acceptedPaths.length !== settledAttachments.length) {
-						setSendError("The files are not durably available. Nothing was sent.");
+					const outcome = nativePayloads.length > 0
+						? await onSteer(message, nativePayloads)
+						: await onSteer(message);
+					if (outcome?.status === "not-accepted") {
+						setSteerOutcomeNotice(outcome.reason);
 						return;
 					}
-					const message = withAttachmentReferences(body, acceptedPaths);
-					if (nativePayloads.length > 0) await onSend(message, nativePayloads);
-					else await onSend(message);
+				} else if (savingQueuedEdit) {
+					await onSend(message, nativePayloads.length ? nativePayloads : undefined, undefined,
+						visibleRetainedAttachments.flatMap((item) => item.contentIndex === undefined ? [] : [item.contentIndex]));
+					// The parent leaves this editor only after proving durable cleanup.
+					return;
+				} else if (nativePayloads.length > 0) {
+					await onSend(message, nativePayloads);
 				} else {
-					await onSend(body);
+					await onSend(message);
 				}
-				clearEditorView();
+				if (!clearForLocalEcho) clearEditorView();
 				fileAttachments.clear();
-			} catch {
+			} catch (error) {
+				if (clearForLocalEcho) {
+					contentRef.current = currentContent;
+					hasTextRef.current = currentText.trim().length > 0;
+					setHasText(hasTextRef.current);
+					editor.current?.replaceContent(currentContent);
+				}
 				setSendError(
-					staged
-						? "Message not sent. Your draft and attachments were kept so you can retry."
-						: "Message not sent. Your draft was kept so you can retry.",
+					savingQueuedEdit
+						? apiErrorMessage(error, "chat.draft.queueSaveFailed")
+						: staged
+						? "chat.draft.sendAttachmentsFailed"
+						: "chat.draft.sendFailed",
 				);
 			} finally {
 				setSubmitting(false);
@@ -1009,18 +1201,12 @@ export function ChatComposer({
 			return;
 		}
 
-		if (!recoveringDelivery && staged && acceptedPaths.length !== settledAttachments.length) {
-			setSendError("The files are not durably available. Nothing was sent.");
-			setSubmitting(false);
-			return;
-		}
 		const requestText = recoveringDelivery
 			? recoveringDelivery.requestText
-			: shouldSteer
-				? body
-				: withAttachmentReferences(body, acceptedPaths);
+			: message;
 		const prepared = prepareChatComposerDelivery(draftScope, {
 			kind: recoveringDelivery?.kind ?? (shouldSteer ? "steer" : "send"),
+			nativeImages: sendNativeImages,
 			composerContent: currentContent,
 			attachments: settledAttachments.flatMap((attachment) =>
 				attachment.stagedPath
@@ -1038,19 +1224,20 @@ export function ChatComposer({
 		});
 		if (!prepared.ok) {
 			setTextDraftPersistenceError(
-				"This exact draft and its recovery ID couldn’t be saved locally. Nothing was sent. Restore local storage and try again.",
+				"chat.draft.prepareFailed",
 			);
 			setSubmitting(false);
 			return;
 		}
 		const delivery = prepared.mutation;
+		synchronouslyClearedDeliveryRevision.current = undefined;
 		setDeliveryUncertain(false);
 		composerRevision.current = prepared.draft.composer.revision;
 		setDurableDelivery(delivery);
 		setTextDraftPersistenceError(null);
 		setDeliveryRecoveryNotice(
 			delivery.state === "accepted"
-				? "Message was accepted, but its local draft still needs to be cleared."
+				? "chat.draft.acceptedMessage"
 				: null,
 		);
 		if (delivery.state === "accepted") {
@@ -1059,17 +1246,14 @@ export function ChatComposer({
 			return;
 		}
 
-		setSubmitting(true);
-		const mutationToken = beginChatComposerMutation(draftScope);
-		if (!mutationToken) {
-			setSubmitting(false);
-			return;
-		}
+		if (!mutationToken) return;
 		let mutationFinished = false;
 		try {
+			if (!await restoreNativePayloads()) return;
+			if (!isChatComposerMutationCurrent(draftScope, mutationToken)) return;
 			if (delivery.kind === "steer") {
 				if (!onSteer) throw new Error("Steering is unavailable");
-				const outcome = await onSteer(delivery.requestText, delivery.clientMessageId);
+				const outcome = await onSteer(delivery.requestText, prepared.recovered || nativePayloads.length === 0 ? undefined : nativePayloads, delivery.clientMessageId, prepared.recovered);
 				if (outcome?.status === "not-accepted") {
 					const cleared = clearRejectedChatComposerDelivery(
 						draftScope,
@@ -1084,36 +1268,44 @@ export function ChatComposer({
 						setSteerOutcomeNotice(outcome.reason);
 					} else {
 						setTextDraftPersistenceError(
-							"The steer was refused, but its local recovery record couldn’t be cleared. Nothing will be resent automatically.",
+							"chat.draft.clearRefusedSteerFailed",
 						);
 					}
 					return;
 				}
 			} else {
-				const deliveryNativePayloads = prepared.recovered ? [] : nativePayloads;
-				try {
-					await onSend(
-						delivery.requestText,
-						deliveryNativePayloads.length > 0 ? deliveryNativePayloads : undefined,
-						delivery.clientMessageId,
-					);
-				} finally {
-					// A durable retry can promise only the staged path: native bytes are
-					// intentionally not journaled. Drop the fresh payload after its first
-					// attempt so an uncertain retry's chip describes what will be resent.
-					fileAttachments.releaseStagedPayloadData();
-				}
+				await onSend(
+					delivery.requestText,
+					sendNativeImages && nativePayloads.length > 0 ? nativePayloads : undefined,
+					delivery.clientMessageId,
+				);
 			}
 			acceptAndClearDurableDelivery(delivery, mutationToken);
 			mutationFinished = true;
 			setDismissedKey(null);
 			setHighlighted(0);
-		} catch {
+		} catch (error) {
+			// Refusal of a retry says nothing about a previous attempt whose response
+			// was lost. Only an initial, definitively unaccepted send can be edited.
+			if (
+				delivery.kind === "send" && !prepared.recovered &&
+				DEFINITIVE_SEND_REJECTIONS.has(apiErrorCode(error) ?? "")
+			) {
+				const cleared = clearRejectedChatComposerDelivery(
+					draftScope, delivery.clientMessageId, delivery.revision,
+				);
+				setDurableDelivery(cleared.draft.composer.delivery);
+				setDeliveryUncertain(false);
+				setDeliveryRecoveryNotice(null);
+				setTextDraftPersistenceError(cleared.ok ? null : "chat.draft.saveFailed");
+				setSendError(apiErrorMessage(error));
+				return;
+			}
 			setDeliveryUncertain(true);
 			setDeliveryRecoveryNotice(
 				delivery.kind === "steer"
-					? "AO can’t determine whether the agent may already have received this guidance. Retry safely with the same delivery ID, or abandon recovery to edit it. Sending it again after abandonment may duplicate it."
-					: "Message delivery wasn’t confirmed. Retry safely to reuse the same delivery ID; your draft remains locked until it is reconciled.",
+					? "chat.draft.steerUncertain"
+					: "chat.draft.sendUncertain",
 			);
 		} finally {
 			if (!mutationFinished) cancelChatComposerMutation(draftScope, mutationToken);
@@ -1126,18 +1318,41 @@ export function ChatComposer({
 		event: globalThis.KeyboardEvent,
 	): boolean {
 		contentRef.current = { text: snapshot.text, tokens: snapshot.tokens };
-		const wantsSteer = (event.metaKey || event.ctrlKey) && canSteerDraft;
-		void submit(undefined, wantsSteer);
-		return true;
+		return handleEnterKey(event);
 	}
+
+	const handleEnterKey = useCallback(
+		(event: globalThis.KeyboardEvent): boolean => {
+			const liveSnapshot = editor.current?.getSnapshot();
+			if (liveSnapshot) contentRef.current = { text: liveSnapshot.text, tokens: liveSnapshot.tokens };
+			const liveTrigger = liveSnapshot?.trigger;
+			const liveSuggestions = suggestionsFor(liveTrigger);
+			if (liveSuggestions.length > 0) {
+				if (contentRef.current.text.trim() === "/compact" && onCompact) {
+					void submit();
+					return true;
+				}
+				triggerRef.current = liveTrigger;
+				const chosen = liveSuggestions[Math.min(highlightedRef.current, liveSuggestions.length - 1)];
+				if (chosen) pick(chosen.value);
+				return true;
+			}
+
+			if (canSteerNext && !contentRef.current.text.trim() && !fileAttachments.hasPendingReads()) {
+				setSteerNextRequest((request) => request + 1);
+				return true;
+			}
+			const wantsSteer = (event.metaKey || event.ctrlKey) && canSteerDraft;
+			void submit(undefined, wantsSteer);
+			return true;
+		},
+		[canSteerDraft, canSteerNext, fileAttachments, onCompact, pick, suggestionsFor],
+	);
 
 	function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
 		if (event.nativeEvent.isComposing) return;
-		if (event.key === "Enter" && event.shiftKey) return;
-		// Read Lexical directly here. A fast typist can press Enter before React has
-		// rendered the state update for the last character, while the editor state is
-		// already current. Using the rendered `menuOpen` in that window sent the draft
-		// instead of accepting the visible completion.
+		// Enter is handled in Lexical before a newline is inserted; this handler is
+		// only for menu navigation and escape while a completion menu is open.
 		const liveSnapshot = editor.current?.getSnapshot();
 		if (liveSnapshot) {
 			contentRef.current = { text: liveSnapshot.text, tokens: liveSnapshot.tokens };
@@ -1145,16 +1360,6 @@ export function ChatComposer({
 		const liveTrigger = liveSnapshot?.trigger;
 		const liveSuggestions = suggestionsFor(liveTrigger);
 		if (liveSuggestions.length > 0) {
-			// `/compact` takes no arguments. Once its exact name is present, Enter
-			// executes it directly instead of merely accepting the highlighted row and
-			// requiring a second Enter on the inserted trailing space.
-			if (event.key === "Enter" && contentRef.current.text.trim() === "/compact" && onCompact) {
-				event.preventDefault();
-				void submit();
-				return;
-			}
-			// Only these keys are taken while the menu is open. Everything else falls
-			// through to the editor, which is what keeps typing from being swallowed.
 			if (event.key === "ArrowDown" || event.key === "ArrowUp") {
 				event.preventDefault();
 				const next = moveHighlight(
@@ -1166,17 +1371,8 @@ export function ChatComposer({
 				setHighlighted(next);
 				return;
 			}
-			if (event.key === "Enter" || event.key === "Tab") {
-				event.preventDefault();
-				triggerRef.current = liveTrigger;
-				const chosen = liveSuggestions[Math.min(highlightedRef.current, liveSuggestions.length - 1)];
-				if (chosen) pick(chosen.value);
-				return;
-			}
 			if (event.key === "Escape") {
 				event.preventDefault();
-				// Stopped here so Escape closes the menu rather than travelling on to
-				// whatever surface is hosting the composer.
 				event.stopPropagation();
 				dismissedKeyRef.current = liveTrigger?.key ?? null;
 				setDismissedKey(dismissedKeyRef.current);
@@ -1184,16 +1380,14 @@ export function ChatComposer({
 			}
 		}
 
-		// Enter queues; Shift+Enter makes a newline; Cmd/Ctrl+Enter steers.
-		if (event.key !== "Enter") return;
-		if (event.shiftKey) return;
-		event.preventDefault();
-		const wantsSteer = (event.metaKey || event.ctrlKey) && canSteerDraft;
-		void submit(undefined, wantsSteer);
+		if (event.key === "Escape" && editingQueuedTurnId && onCancelQueuedEdit && !queuedEditRecovery && !submitInFlight.current) {
+			event.preventDefault();
+			onCancelQueuedEdit();
+		}
 	}
 
 	function onPaste(event: ClipboardEvent<HTMLDivElement>) {
-		if (!canAttach || fileAttachments.preparing || draftMutationPending) return;
+		if (!canAttach || fileAttachments.preparing || draftMutationPending || submitInFlight.current) return;
 		const clipboard = event.clipboardData;
 		const files = Array.from(clipboard?.files ?? []);
 		if (files.length === 0) return;
@@ -1206,7 +1400,7 @@ export function ChatComposer({
 
 	function onDrop(event: DragEvent<HTMLFormElement>) {
 		setDragging(false);
-		if (!canAttach || fileAttachments.preparing || draftMutationPending) return;
+		if (!canAttach || fileAttachments.preparing || draftMutationPending || submitInFlight.current) return;
 		const files = Array.from(event.dataTransfer?.files ?? []);
 		if (files.length === 0) return;
 		event.preventDefault();
@@ -1214,10 +1408,16 @@ export function ChatComposer({
 		void fileAttachments.addFiles(files);
 	}
 
-	const [metaHeld, setMetaHeld] = useState(false);
+	// Keep the hidden Cmd/Ctrl steering shortcut available for the send-button path
+	// without rerendering the composer for every modifier key event.
+	const modifierHeldRef = useRef(false);
 	useEffect(() => {
-		const onKey = (e: globalThis.KeyboardEvent) => setMetaHeld(e.metaKey || e.ctrlKey);
-		const onBlur = () => setMetaHeld(false);
+		const onKey = (event: globalThis.KeyboardEvent) => {
+			modifierHeldRef.current = event.metaKey || event.ctrlKey;
+		};
+		const onBlur = () => {
+			modifierHeldRef.current = false;
+		};
 		window.addEventListener("keydown", onKey);
 		window.addEventListener("keyup", onKey);
 		window.addEventListener("blur", onBlur);
@@ -1227,7 +1427,6 @@ export function ChatComposer({
 			window.removeEventListener("blur", onBlur);
 		};
 	}, []);
-	const activeDelivery = metaHeld && canSteerDraft ? "steer" : "queue";
 
 	const attachmentError =
 		retryPendingError ??
@@ -1235,47 +1434,48 @@ export function ChatComposer({
 		draftPersistenceError ??
 		deliveryRecoveryNotice ??
 		sendError ??
+		(fileAttachments.attachments.some((file) => !file.data && !file.stagedPath && !file.status)
+			? "chat.draft.filesUnavailable" : null) ??
 		commandError;
-	const deliveryChoice =
-		canSteer && onSteer ? (
-			<DeliveryChoice value={activeDelivery} disabled={steerPending || submitting} />
-		) : null;
-	const settingsNode =
-		settings && deliveryChoice && isValidElement(settings)
-			? cloneElement(settings, undefined, deliveryChoice)
-			: settings;
+	const withQueueStack = (form: ReactElement) =>
+		(
+			<div className="relative mx-auto flex w-full max-w-3xl flex-col">
+				{queuedDock ? (
+				<div
+					className="cursor-chat-composer-queue queue-dock-enter relative z-10 mx-auto mb-2 w-[calc(100%-2rem)]"
+					data-testid="queued-composer-dock"
+				>
+					{queuedDockWithSteer}
+				</div>
+				) : null}
+				{form}
+			</div>
+		);
 
 	if (approval) {
-		return (
-			<>
-				{queuedDock}
-				<form
-					onSubmit={(event) => event.preventDefault()}
-					data-attached-top={attachedTop || undefined}
-					className="cursor-chat-composer relative flex flex-col gap-1.5 border border-border-strong px-3 py-3 transition-[background,border-color,box-shadow]"
-				>
-					{approval}
-					{commandError ? (
-						<p role="alert" className="px-1.5 text-[11px] leading-snug text-destructive">
-							{commandError}
-						</p>
-					) : null}
-				</form>
-			</>
+		return withQueueStack(
+			<form
+				onSubmit={(event) => event.preventDefault()}
+				data-attached-top={attachedTop && !queuedDock ? true : undefined}
+				className="cursor-chat-composer relative flex flex-col gap-1.5 border px-3 py-3"
+			>
+				{approval}
+				{commandError ? (
+					<p role="alert" className="px-1.5 text-[11px] leading-snug text-destructive">
+						{commandError}
+					</p>
+				) : null}
+			</form>,
 		);
 	}
 
-	return (
-		<>
-			{queuedDock}
-			<form
-				// Clicking send while Cmd/Ctrl is held has to mean what the indicator
-				// beside it says. Reading the same armed state the chip paints keeps the
-				// pointer and keyboard paths from disagreeing about where the message goes.
-				onSubmit={(event) => void submit(event, activeDelivery === "steer")}
-				aria-busy={submitting || undefined}
+	return withQueueStack(
+		<form
+			// Cmd/Ctrl steering remains available as a quiet power-user action.
+			onSubmit={(event) => void submit(event, modifierHeldRef.current && canSteerDraft)}
+			aria-busy={submitting || undefined}
 				onDragOver={(event) => {
-					if (!canAttach) return;
+					if (!canAttach || submitInFlight.current) return;
 					event.preventDefault();
 					setDragging(true);
 				}}
@@ -1285,8 +1485,9 @@ export function ChatComposer({
 				// on one surface, so they are declared together in CSS rather than half
 				// here and half there.
 				data-dragging={dragging || undefined}
-				data-attached-top={attachedTop || undefined}
+				data-attached-top={attachedTop && !queuedDock ? true : undefined}
 				onClick={(e) => {
+					if (controlsDisabled) return;
 					if (
 						e.target === e.currentTarget ||
 						!(e.target as HTMLElement).closest("button, a, [role='option'], ul")
@@ -1294,7 +1495,7 @@ export function ChatComposer({
 						editor.current?.focus();
 					}
 				}}
-				className="cursor-chat-composer relative flex cursor-text flex-col gap-1.5 border px-3 pt-3 pb-3 transition-[background,border-color,box-shadow]"
+				className="cursor-chat-composer relative flex cursor-text flex-col gap-1.5 border px-3 pt-3 pb-3"
 			>
 				{menuOpen && trigger ? (
 					<ComposerSuggestMenu
@@ -1307,15 +1508,32 @@ export function ChatComposer({
 					/>
 				) : null}
 
+				{editingQueuedTurnId ? (
+					<div className="flex items-center justify-between text-xs text-muted-foreground">
+						<span>Editing queued message</span>
+						<button
+							type="button"
+							disabled={controlsDisabled || queuedEditRecovery}
+							onClick={onCancelQueuedEdit}
+							className="rounded px-1.5 py-0.5 hover:text-foreground focus-visible:outline focus-visible:outline-ring"
+						>
+							Cancel edit
+						</button>
+					</div>
+				) : null}
 				{staged ? (
 					<ul className="flex flex-wrap gap-1.5" aria-label="Attached files">
-						{fileAttachments.attachments.map((file) => (
+						{[...visibleRetainedAttachments, ...fileAttachments.attachments].map((file) => {
+							const path = "stagedPath" in file ? file.stagedPath : "path" in file ? file.path : undefined;
+							const preview = file.dataUrl ?? (path && IMAGE_ATTACHMENT_PATH.test(path)
+								? attachmentURL(getApiBaseUrl(), boundarySessionId ?? "", path) : undefined);
+							return (
 							<li
 								key={file.id}
 								className="flex items-center gap-1.5 rounded border border-border bg-background py-0.5 pl-0.5 pr-1"
 							>
-								{file.dataUrl ? (
-									<img src={file.dataUrl} alt="" className="size-6 rounded-sm object-cover" />
+								{preview ? (
+									<img src={preview} alt="" className="size-6 rounded-sm object-cover" />
 								) : (
 									<div className="flex size-6 items-center justify-center rounded-sm bg-surface">
 										<File aria-hidden="true" className="size-3.5 text-muted-foreground" />
@@ -1331,10 +1549,12 @@ export function ChatComposer({
 										aria-atomic="true"
 										className="truncate text-[10px] leading-tight text-muted-foreground"
 									>
-										{attachmentDeliveryLabel(file, canStageAttachments, Boolean(nativeImages))}
+										{"mimeType" in file && "bytes" in file
+										? attachmentDeliveryLabel(file, canStageAttachments, durableDelivery?.nativeImages ?? Boolean(nativeImages), Boolean(queuedDraftScope ?? draftScope))
+										: file.contentType === "image" ? "Retained native image" : path ? "Worktree path · agent must read" : "Retained attachment"}
 									</span>
 								</div>
-								{file.status === "failed" ? (
+								{"status" in file && file.status === "failed" ? (
 									<button
 										type="button"
 										disabled={disabled || draftMutationPending}
@@ -1359,36 +1579,38 @@ export function ChatComposer({
 								<button
 									type="button"
 									onClick={() => {
-										retryPendingIdsRef.current.delete(file.id);
-										if (retryPendingIdsRef.current.size === 0) setRetryPendingError(null);
-										setSendError(null);
-										fileAttachments.remove(file.id);
+									if (submitInFlight.current) return;
+									retryPendingIdsRef.current.delete(file.id);
+									if (retryPendingIdsRef.current.size === 0) setRetryPendingError(null);
+									setSendError(null);
+									if (visibleRetainedAttachments.some((attachment) => attachment.id === file.id)) {
+										const next = retainedAttachments.filter((attachment) => attachment.id !== file.id);
+										setRetainedAttachments(next);
+										onQueuedRetainedAttachmentsChange?.(next);
+									} else fileAttachments.remove(file.id);
 									}}
-									disabled={
-										disabled ||
-										draftMutationPending ||
-										(fileAttachments.preparing && file.status !== "failed")
-									}
+									disabled={controlsDisabled || queuedEditRecovery || draftMutationPending || fileAttachments.preparing}
 									aria-label={`Remove ${file.name}`}
 									className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-50"
 								>
 									<X aria-hidden="true" className="size-3" />
 								</button>
 							</li>
-						))}
+							);
+						})}
 					</ul>
 				) : null}
 
 				<ComposerEditor
 					ref={editor}
-					disabled={disabled || draftMutationPending}
+					disabled={controlsDisabled || queuedEditRecovery || draftMutationPending}
 					label="Message the agent"
 					placeholder={
-						disabled
+						disabledPlaceholder ?? (disabled
 							? "The controller is not connected"
 							: willQueue
 								? "Agent is working — this sends when it finishes"
-								: "Message the agent…"
+								: "Message the agent…")
 					}
 					menuOpen={menuOpen}
 					menuId={menuId}
@@ -1428,7 +1650,7 @@ export function ChatComposer({
 
 				{attachmentError ? (
 					<p role="alert" className="px-1.5 text-[11px] leading-snug text-destructive">
-						{attachmentError}
+						{translateDraft(attachmentError)}
 					</p>
 				) : null}
 				{canAbandonUncertainSteer ? (
@@ -1439,7 +1661,7 @@ export function ChatComposer({
 							size="sm"
 							onClick={abandonUncertainSteer}
 						>
-							Abandon recovery
+							{translateDraft("chat.draft.abandon")}
 						</Button>
 					</div>
 				) : null}
@@ -1455,7 +1677,7 @@ export function ChatComposer({
 			    in a moment" applies. */}
 				{steerRefusal ?? steerOutcomeNotice ? (
 					<p role="status" className="px-1.5 text-[11px] leading-snug text-warning">
-						{steerRefusal ?? steerOutcomeNotice}
+						{translateDraft(steerRefusal ?? steerOutcomeNotice)}
 					</p>
 				) : null}
 
@@ -1468,113 +1690,70 @@ export function ChatComposer({
 									type="file"
 									multiple
 									hidden
+									disabled={controlsDisabled}
 									onChange={(event) => {
-										if (!disabled && !draftMutationPending && !fileAttachments.preparing) {
+										if (!disabled && !submitInFlight.current && !draftMutationPending && !fileAttachments.preparing) {
 											void fileAttachments.addFiles(Array.from(event.target.files ?? []));
 										}
 										// Cleared so picking the same file twice still fires a change.
 										event.target.value = "";
 									}}
 								/>
-								<Button
-									type="button"
-									variant="ghost"
-									size="icon-sm"
-									disabled={disabled || draftMutationPending || fileAttachments.preparing}
-									onClick={() => filePicker.current?.click()}
-									aria-label="Attach a file"
-									title="Attach a file"
-									className="size-7 shrink-0 rounded-full p-0 text-muted-foreground hover:bg-white/5! hover:text-foreground"
-								>
-									<Plus aria-hidden="true" className="size-3.5 text-muted-foreground" />
-								</Button>
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<span className="inline-flex">
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon-sm"
+												disabled={controlsDisabled || queuedEditRecovery || draftMutationPending || fileAttachments.preparing}
+												onClick={() => filePicker.current?.click()}
+												aria-label="Attach a file"
+												className="size-7 shrink-0 rounded-full p-0 text-muted-foreground hover:bg-white/5! hover:text-foreground"
+											>
+												<Plus aria-hidden="true" className="size-3.5 text-muted-foreground" />
+											</Button>
+										</span>
+									</TooltipTrigger>
+									<TooltipContent side="bottom">Attach a file</TooltipContent>
+								</Tooltip>
 							</>
 						) : null}
-						{settingsNode}
-						{!settings && deliveryChoice}
+						{settings}
 					</div>
 
 					<div role="group" aria-label="Send message controls" className="flex h-7 shrink-0 items-center">
-						<Button
-							type={canStopTurn ? "button" : "submit"}
-							variant="ghost"
-							size="icon-sm"
-							disabled={canStopTurn ? false : !sendActionEnabled}
-							onClick={canStopTurn ? onInterrupt : undefined}
-							aria-label={canStopTurn ? "Stop turn" : sendActionLabel}
-							// The destination Enter is armed with used to be spelled out beside
-							// the button. The row reads better without a line of prose in it, but
-							// the fact is not decoration, so it moves onto the control it
-							// describes rather than being dropped.
-							title={canStopTurn ? "Stop turn" : durableDelivery ? sendActionLabel : sendHint}
-							className={cn(
-								"size-7 rounded-full border-transparent focus-visible:ring-ring/40",
-								canStopTurn || sendActionEnabled
-									? "bg-foreground text-background hover:bg-foreground/90 hover:text-background dark:hover:bg-foreground/90 dark:hover:text-background"
-									: "bg-primary text-primary-foreground",
-							)}
-						>
-							{canStopTurn ? (
-								<Square aria-hidden="true" className="size-2.5 fill-current" />
-							) : steerPending || submitting ? (
-								<Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
-							) : (
-								<ArrowUp aria-hidden="true" className="size-3.5" />
-							)}
-						</Button>
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<span className="inline-flex">
+									<Button
+										type={canStopTurn ? "button" : "submit"}
+										variant="ghost"
+										size="icon-sm"
+										disabled={canStopTurn ? false : !sendActionEnabled}
+										onClick={canStopTurn ? onInterrupt : undefined}
+										aria-label={canStopTurn ? "Stop turn" : sendActionLabel}
+										className={cn(
+											"size-7 rounded-full border-transparent focus-visible:ring-ring/40",
+											canStopTurn || sendActionEnabled
+												? "bg-foreground text-background hover:bg-foreground/90 hover:text-background dark:hover:bg-foreground/90 dark:hover:text-background"
+												: "bg-primary text-primary-foreground",
+										)}
+									>
+										{canStopTurn ? (
+											<Square aria-hidden="true" className="size-2.5 fill-current" />
+										) : submitting || steerPending || savingQueuedEditPending || sendPending ? (
+											<Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
+										) : (
+											<ArrowUp aria-hidden="true" className="size-3.5" />
+										)}
+									</Button>
+								</span>
+							</TooltipTrigger>
+							<TooltipContent side="bottom">{canStopTurn ? "Stop turn" : durableDelivery ? sendActionLabel : sendHint}</TooltipContent>
+						</Tooltip>
 					</div>
 				</div>
-			</form>
-		</>
+			</form>,
 	);
-}
-
-/**
- * Where the next message goes while the agent is working.
- *
- * Two words rather than a switch, because the difference is not a preference — it is
- * two different things happening to what the user typed. Steering joins the turn in
- * flight: the agent keeps its context, its reasoning and the command it has running,
- * and decides for itself what to abandon. Queueing waits for the turn to end and
- * then starts a new one from a cold start. For someone who has just realized they
- * asked for the wrong thing, that is the whole difference, so both are named and the
- * active choice is exposed visually and through `aria-pressed`.
- */
-export function DeliveryChoice({ value, disabled }: { value: "steer" | "queue"; disabled?: boolean }) {
-	return (
-		// A group, not a status: these chips label what each keystroke will do,
-		// they are not a live region announcing an event. `status` also made this
-		// shadow the steer refusal below, which is the real one.
-		<div
-			role="group"
-			aria-label="Where this message goes while the agent is working"
-			className="flex h-7 shrink-0 items-center gap-1"
-		>
-			<span
-				className={cn(
-					"inline-flex h-7 items-center gap-1.5 rounded-lg px-3 text-sm leading-none transition-colors",
-					disabled && "opacity-50",
-					value === "queue" ? "bg-white/5 text-foreground" : "text-muted-foreground",
-				)}
-			>
-				<span className="inline-flex items-center gap-0.5 text-muted-foreground">
-					<CornerDownLeft aria-hidden="true" className="size-3" />
-				</span>
-				Queue
-			</span>
-			<span
-				className={cn(
-					"inline-flex h-7 items-center gap-1.5 rounded-lg px-3 text-sm leading-none transition-colors",
-					disabled && "opacity-50",
-					value === "steer" ? "bg-white/5 text-foreground" : "text-muted-foreground",
-				)}
-			>
-				<span className="inline-flex items-center gap-1 text-muted-foreground">
-					<Command aria-hidden="true" className="size-2.5" />
-					<CornerDownLeft aria-hidden="true" className="size-3" />
-				</span>
-				Steer
-			</span>
-		</div>
-	);
-}
+});

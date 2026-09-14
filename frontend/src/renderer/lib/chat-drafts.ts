@@ -57,11 +57,42 @@ export interface ChatDraftInlineEdit {
 	turnId: string;
 	text: string;
 	content: ConversationContentSummary[];
+	/** True when the edit replays portable history instead of using a native fork. */
+	reconstructedContext?: boolean;
+}
+
+export interface ChatDraftQueuedEdit {
+	/** Original request mode, independent of current controller capabilities. */
+	nativeImages?: boolean;
+	/** Stable daemon receipt key for the exact pending save. */
+	clientMessageId?: string;
+	/** Stable for one editing attempt, including remounts and staged reads. */
+	ownerId?: string;
+	revision: string;
+	turnId: string;
+	text: string;
+	/** Daemon message revision, held fixed across retries of this edit. */
+	expectedRevision?: number;
+	attachments?: ChatDraftRetainedAttachment[];
+	stagedAttachments?: ChatDraftAttachment[];
+	/** The daemon may have saved this exact edit before the response was lost. */
+	saving?: boolean;
+}
+
+/** Server-owned content selected for retention; never stores attachment bytes. */
+export interface ChatDraftRetainedAttachment {
+	id: string;
+	name: string;
+	path?: string;
+	contentIndex?: number;
+	contentType?: string;
 }
 
 export type ChatDraftDeliveryState = "dispatching" | "accepted";
 
 export interface ChatComposerDelivery {
+	/** Original request mode, kept across capability changes during recovery. */
+	nativeImages?: boolean;
 	kind: "send" | "steer";
 	state: ChatDraftDeliveryState;
 	/** Exact composer revision this delivery was created from. */
@@ -97,6 +128,7 @@ export interface ChatSessionDraft {
 		/** Durable delivery journal. Present until acceptance is durably cleared. */
 		delivery?: ChatComposerDelivery;
 	};
+	queuedEdit?: ChatDraftQueuedEdit;
 	inlineEdit?: ChatDraftInlineEdit;
 	/** Durable delivery journal for an inline branch edit. */
 	inlineEditDelivery?: ChatInlineEditDelivery;
@@ -115,6 +147,7 @@ export type DraftDeliveryResult<Mutation> =
 	| { ok: false; recovered: boolean; draft: ChatSessionDraft; mutation?: Mutation };
 
 export interface PrepareChatComposerDeliveryInput {
+	nativeImages?: boolean;
 	kind: ChatComposerDelivery["kind"];
 	composerContent: ComposerDraftContent;
 	attachments: ChatDraftAttachment[];
@@ -164,11 +197,15 @@ export function chatDraftScopeKey(scope: ChatDraftScopeInput): string {
 	return JSON.stringify([identity.sessionId, identity.incarnation]);
 }
 
+export function chatQueuedAttachmentScopeKey(scope: ChatDraftScope, editorId: string): string {
+	return JSON.stringify([scope.sessionId, scope.incarnation, `queue:${editorId}`]);
+}
+
 export function chatDraftScopeSessionId(key: string): string | undefined {
 	try {
 		const parsed: unknown = JSON.parse(key);
 		return Array.isArray(parsed) &&
-			parsed.length === 2 &&
+			(parsed.length === 2 || (parsed.length === 3 && typeof parsed[2] === "string" && parsed[2].startsWith("queue:"))) &&
 			typeof parsed[0] === "string" &&
 			typeof parsed[1] === "string"
 			? parsed[0]
@@ -254,6 +291,14 @@ export function getChatComposerMutation(
 	const runtime = draftRuntimes.get(draftRuntimeKey(scope));
 	if (!runtime) return EMPTY_COMPOSER_MUTATION;
 	return runtime.composer;
+}
+
+/** Async preparation may outlive authoritative replacement of this session. */
+export function isChatComposerMutationCurrent(
+	scope: ChatDraftScopeInput,
+	token: ChatDraftMutationToken,
+): boolean {
+	return draftRuntimes.get(draftRuntimeKey(scope))?.composerToken === token;
 }
 
 export function getChatInlineEditMutation(
@@ -642,7 +687,7 @@ function isAttachment(value: unknown): value is ChatDraftAttachment {
 		typeof attachment.id === "string" &&
 		attachment.id.length > 0 &&
 		typeof attachment.path === "string" &&
-		attachment.path.startsWith(".ao/attachments/") &&
+		(attachment.path === "" || attachment.path.startsWith(".ao/attachments/")) &&
 		typeof attachment.name === "string" &&
 		typeof attachment.mimeType === "string" &&
 		typeof attachment.bytes === "number" &&
@@ -657,11 +702,13 @@ function isInlineEdit(value: unknown): value is ChatDraftInlineEdit {
 	return (
 		typeof edit.revision === "string" &&
 		edit.revision.length > 0 &&
-		typeof edit.turnId === "string" &&
-		edit.turnId.length > 0 &&
-		typeof edit.text === "string" &&
-		Array.isArray(edit.content) &&
-		edit.content.every(isContentSummary)
+			typeof edit.turnId === "string" &&
+			edit.turnId.length > 0 &&
+			typeof edit.text === "string" &&
+			(edit.reconstructedContext === undefined ||
+				typeof edit.reconstructedContext === "boolean") &&
+			Array.isArray(edit.content) &&
+			edit.content.every(isContentSummary)
 	);
 }
 
@@ -680,7 +727,8 @@ function isComposerDelivery(value: unknown): value is ChatComposerDelivery {
 		delivery.revision >= 0 &&
 		typeof delivery.clientMessageId === "string" &&
 		delivery.clientMessageId.length > 0 &&
-		typeof delivery.requestText === "string"
+		typeof delivery.requestText === "string" &&
+		(!("nativeImages" in delivery) || typeof delivery.nativeImages === "boolean")
 	);
 }
 
@@ -700,7 +748,7 @@ function isInlineEditDelivery(value: unknown): value is ChatInlineEditDelivery {
 	);
 }
 
-function inlineEditRevision(): string {
+function draftEditRevision(): string {
 	if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
 	return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -712,23 +760,38 @@ function decodeChatSessionDraft(
 	if (!value || typeof value !== "object") return undefined;
 	const draft = value as Partial<ChatSessionDraft> & { schemaVersion?: unknown };
 	const composer = draft.composer as Partial<ChatSessionDraft["composer"]> | undefined;
-	if (
-		(draft.schemaVersion !== CHAT_DRAFT_SCHEMA_VERSION && draft.schemaVersion !== 2) ||
-		draft.sessionId !== scope.sessionId ||
-		draft.incarnation !== scope.incarnation ||
-		!composer ||
-		typeof composer.revision !== "number" ||
-		!Number.isInteger(composer.revision) ||
-		composer.revision < 0 ||
-		typeof composer.text !== "string" ||
-		!Array.isArray(composer.attachments) ||
-		!composer.attachments.every(isAttachment) ||
-		(composer.delivery !== undefined && !isComposerDelivery(composer.delivery)) ||
-		(draft.inlineEdit !== undefined && !isInlineEdit(draft.inlineEdit)) ||
-		(draft.inlineEditDelivery !== undefined && !isInlineEditDelivery(draft.inlineEditDelivery))
-	) {
-		return undefined;
-	}
+	const valid = (
+		(draft.schemaVersion === CHAT_DRAFT_SCHEMA_VERSION || draft.schemaVersion === 2) &&
+		draft.sessionId === scope.sessionId &&
+		draft.incarnation === scope.incarnation &&
+		Boolean(composer) &&
+		typeof composer?.revision === "number" &&
+		Number.isInteger(composer.revision) &&
+		composer.revision >= 0 &&
+		typeof composer.text === "string" &&
+		Array.isArray(composer.attachments) &&
+		composer.attachments.every(isAttachment) &&
+		(composer.delivery === undefined || isComposerDelivery(composer.delivery)) &&
+		(draft.queuedEdit === undefined || (draft.queuedEdit !== null &&
+			typeof draft.queuedEdit.revision === "string" && draft.queuedEdit.revision.length > 0 &&
+			typeof draft.queuedEdit.turnId === "string" && draft.queuedEdit.turnId.length > 0 &&
+			typeof draft.queuedEdit.text === "string" &&
+			(draft.queuedEdit.nativeImages === undefined || typeof draft.queuedEdit.nativeImages === "boolean") &&
+			(draft.queuedEdit.clientMessageId === undefined || typeof draft.queuedEdit.clientMessageId === "string") &&
+			(draft.queuedEdit.ownerId === undefined || typeof draft.queuedEdit.ownerId === "string") &&
+			(draft.queuedEdit.expectedRevision === undefined || (Number.isSafeInteger(draft.queuedEdit.expectedRevision) && draft.queuedEdit.expectedRevision >= 0)) &&
+			(draft.queuedEdit.stagedAttachments === undefined || (Array.isArray(draft.queuedEdit.stagedAttachments) && draft.queuedEdit.stagedAttachments.every(isAttachment))) &&
+			(draft.queuedEdit.attachments === undefined || (Array.isArray(draft.queuedEdit.attachments) && draft.queuedEdit.attachments.every((item) =>
+				item !== null && typeof item === "object" && typeof item.id === "string" && typeof item.name === "string" &&
+				(item.path === undefined || typeof item.path === "string") &&
+				(item.contentIndex === undefined || (Number.isSafeInteger(item.contentIndex) && item.contentIndex >= 0)) &&
+				(item.contentType === undefined || typeof item.contentType === "string")))) &&
+			(draft.queuedEdit.saving === undefined || typeof draft.queuedEdit.saving === "boolean")
+		)) &&
+		(draft.inlineEdit === undefined || isInlineEdit(draft.inlineEdit)) &&
+		(draft.inlineEditDelivery === undefined || isInlineEditDelivery(draft.inlineEditDelivery))
+	);
+	if (!valid || !composer || typeof composer.revision !== "number" || typeof composer.text !== "string" || !composer.attachments) return undefined;
 	const content = normalizeComposerDraftContent({
 		text: composer.text,
 		tokens: draft.schemaVersion === CHAT_DRAFT_SCHEMA_VERSION ? composer.tokens : [],
@@ -744,6 +807,7 @@ function decodeChatSessionDraft(
 			attachments: composer.attachments,
 			...(composer.delivery ? { delivery: composer.delivery } : {}),
 		},
+		...(draft.queuedEdit ? { queuedEdit: draft.queuedEdit } : {}),
 		...(draft.inlineEdit ? { inlineEdit: draft.inlineEdit } : {}),
 		...(draft.inlineEditDelivery
 			? { inlineEditDelivery: draft.inlineEditDelivery }
@@ -753,7 +817,10 @@ function decodeChatSessionDraft(
 
 type DraftReadResult = { ok: true; draft: ChatSessionDraft } | { ok: false; draft: ChatSessionDraft };
 
-function loadChatSessionDraft(scopeInput: ChatDraftScopeInput, storage: DraftStorage | undefined): DraftReadResult {
+export function loadChatSessionDraft(
+	scopeInput: ChatDraftScopeInput,
+	storage: DraftStorage | undefined = rendererStorage(),
+): DraftReadResult {
 	const scope = normalizeScope(scopeInput);
 	const empty = emptyDraft(scope);
 	if (!scope.sessionId || !scope.incarnation || !storage) return { ok: false, draft: empty };
@@ -803,6 +870,7 @@ function hasContent(draft: ChatSessionDraft): boolean {
 		draft.composer.tokens.length > 0 ||
 		draft.composer.attachments.length > 0 ||
 		Boolean(draft.composer.delivery) ||
+		Boolean(draft.queuedEdit) ||
 		Boolean(draft.inlineEdit) ||
 		Boolean(draft.inlineEditDelivery)
 	);
@@ -930,6 +998,7 @@ export function prepareChatComposerDelivery(
 		? loaded.draft.composer.revision
 		: loaded.draft.composer.revision + 1;
 	const mutation: ChatComposerDelivery = {
+		...(input.nativeImages === undefined ? {} : { nativeImages: input.nativeImages }),
 		kind: input.kind,
 		state: "dispatching",
 		revision,
@@ -984,8 +1053,8 @@ export function markChatComposerDeliveryAccepted(
 }
 
 /**
- * Remove a definitively refused steer journal without consuming its text. The
- * daemon proved that this guidance was not accepted, so the same composer
+ * Remove a definitively refused delivery journal without consuming its text. The
+ * daemon proved that this first attempt was not accepted, so the same composer
  * revision becomes an ordinary editable draft again.
  */
 export function clearRejectedChatComposerDelivery(
@@ -999,7 +1068,7 @@ export function clearRejectedChatComposerDelivery(
 	if (
 		!loaded.ok ||
 		!delivery ||
-		delivery.kind !== "steer" ||
+		delivery.state !== "dispatching" ||
 		delivery.clientMessageId !== clientMessageId ||
 		delivery.revision !== revision
 	) {
@@ -1079,16 +1148,18 @@ export function prepareChatInlineEditDelivery(
 	}
 	const current = loaded.draft.inlineEdit;
 	const exact =
-		current?.turnId === input.turnId &&
-		current.text === input.text &&
-		JSON.stringify(current.content) === JSON.stringify(input.content);
+			current?.turnId === input.turnId &&
+			current.text === input.text &&
+			current.reconstructedContext === input.reconstructedContext &&
+			JSON.stringify(current.content) === JSON.stringify(input.content);
 	const inlineEdit: ChatDraftInlineEdit = exact
 		? current
 		: {
-				turnId: input.turnId,
-				text: input.text,
-				content: input.content,
-				revision: inlineEditRevision(),
+					turnId: input.turnId,
+					text: input.text,
+					content: input.content,
+					reconstructedContext: input.reconstructedContext,
+					revision: draftEditRevision(),
 			};
 	const mutation: ChatInlineEditDelivery = {
 		kind: "inline-edit",
@@ -1257,6 +1328,29 @@ export function writeChatAttachments(
 	return result;
 }
 
+/** Queue edits are independent from both the ordinary prompt and history edits. */
+export function writeChatQueuedEdit(
+	scope: ChatDraftScopeInput,
+	edit: Omit<ChatDraftQueuedEdit, "revision"> | undefined,
+	expectedRevision?: string,
+	storage: DraftStorage | undefined = rendererStorage(),
+	previousUnprovenWrite?: { revisions: (string | undefined)[] },
+): DraftWriteResult & { attempted?: { revisions: (string | undefined)[] } } {
+	const loaded = loadChatSessionDraft(scope, storage);
+	if (!loaded.ok || (expectedRevision !== undefined && loaded.draft.queuedEdit?.revision !== expectedRevision &&
+		(!previousUnprovenWrite || !previousUnprovenWrite.revisions.includes(loaded.draft.queuedEdit?.revision)))) {
+		return { ok: false, draft: loaded.draft };
+	}
+	const next = { ...loaded.draft };
+	if (edit) next.queuedEdit = { ...edit, revision: draftEditRevision() };
+	else delete next.queuedEdit;
+	const result = persistDraftProven(next, storage);
+	// A write can commit before its readback fails. Permit a later attempt to
+	// recognize only the loaded or attempted revision, never another editor's
+	// changes. Retain both in case the write itself failed before changing storage.
+	return { ...result, attempted: { revisions: [loaded.draft.queuedEdit?.revision, next.queuedEdit?.revision] } };
+}
+
 export function writeChatInlineEdit(
 	scope: ChatDraftScopeInput,
 	inlineEdit: ChatDraftInlineEditInput | undefined,
@@ -1269,7 +1363,7 @@ export function writeChatInlineEdit(
 			if (inlineEdit) {
 				next.inlineEdit = {
 					...inlineEdit,
-					revision: inlineEditRevision(),
+					revision: draftEditRevision(),
 				};
 			} else delete next.inlineEdit;
 			return next;

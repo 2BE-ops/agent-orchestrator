@@ -71,6 +71,7 @@ type SharedAttachmentEntry = {
 	pending: Map<symbol, Set<string>>;
 	settlement?: { promise: Promise<void>; resolve: () => void };
 	generation: number;
+	cancellationRevision: number;
 	revision: number;
 	persistedRevision: number;
 	listeners: Map<symbol, (update: SharedAttachmentUpdate) => void>;
@@ -129,6 +130,7 @@ function sharedEntry(key: string): SharedAttachmentEntry {
 		entry = {
 			pending: new Map(),
 			generation: 0,
+			cancellationRevision: 0,
 			revision: 0,
 			persistedRevision: 0,
 			listeners: new Map(),
@@ -443,6 +445,7 @@ export function discardPendingFileAttachments(key: string): void {
 	const entry = sharedAttachmentEntries.get(key);
 	if (!entry) return;
 	entry.generation += 1;
+	entry.cancellationRevision += 1;
 	discardSharedAttachmentTokens(entry, [...entry.pending.keys()]);
 	notifySharedAttachmentEntry(key, {
 		attachments: entry.attachments ?? [],
@@ -566,6 +569,7 @@ export function discardCapturedPendingFileAttachments(
 		const discardedUnpersisted = discardCapturedUnpersistedAttachments(entry, captured);
 		const confirmedRemovals = confirmCapturedAttachmentRemovals(entry, captured);
 		if (!discardedPending && !discardedUnpersisted && !confirmedRemovals) continue;
+		entry.cancellationRevision += 1;
 		notifySharedAttachmentEntry(captured.key, {
 			attachments: entry.attachments ?? [],
 			...(discardedUnpersisted ? { error: null } : {}),
@@ -588,18 +592,25 @@ export function discardPendingFileAttachmentsForSession(sessionId: string): void
  * durable worktree bytes are intentionally outside this registry and untouched.
  */
 export function purgeFileAttachmentsForSession(sessionId: string): void {
-	for (const [key, entry] of [...sharedAttachmentEntries]) {
-		if (!attachmentKeyBelongsToSession(key, sessionId)) continue;
-		entry.generation += 1;
-		entry.pending.clear();
-		settleSharedAttachmentWork(entry);
-		entry.sources.clear();
-		entry.descriptorWorkTokens.clear();
-		entry.persistedDescriptorVersions.clear();
-		entry.removalTombstones.clear();
-		notifySharedAttachmentEntry(key, { attachments: [], error: null });
-		if (entry.listeners.size === 0) sharedAttachmentEntries.delete(key);
+	for (const key of [...sharedAttachmentEntries.keys()]) {
+		if (attachmentKeyBelongsToSession(key, sessionId)) purgeFileAttachments(key);
 	}
+}
+
+/** Retire one completed owner without touching other drafts or staged bytes. */
+export function purgeFileAttachments(key: string): void {
+	const entry = sharedAttachmentEntries.get(key);
+	if (!entry) return;
+	entry.generation += 1;
+	entry.cancellationRevision += 1;
+	entry.pending.clear();
+	settleSharedAttachmentWork(entry);
+	entry.sources.clear();
+	entry.descriptorWorkTokens.clear();
+	entry.persistedDescriptorVersions.clear();
+	entry.removalTombstones.clear();
+	notifySharedAttachmentEntry(key, { attachments: [], error: null });
+	if (entry.listeners.size === 0) sharedAttachmentEntries.delete(key);
 }
 
 // Client-side mirror of the backend image-preview allowlist. Non-image files can
@@ -662,6 +673,7 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 	const [preparing, setPreparing] = useState(() => sharedAttachmentPending(initialKey));
 	const attachmentsRef = useRef<FileAttachment[]>(restoreInitial(initialAttachments));
 	const initialKeyRef = useRef(initialKey);
+	const generationRef = useRef(0);
 	const listenerTokenRef = useRef(Symbol("file-attachment-listener"));
 	const renderedSharedRevisionRef = useRef({
 		key: initialKey,
@@ -733,6 +745,7 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 
 	useEffect(() => {
 		if (initialKeyRef.current === initialKey) return;
+		generationRef.current++;
 		initialKeyRef.current = initialKey;
 		const restored = restoreInitial(initialAttachments);
 		attachmentsRef.current = restored;
@@ -777,9 +790,11 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 
 	const readAttachment = useCallback(
 		(id: string, file: File, sharedWork?: SharedAttachmentWork): Promise<void> => {
+			const generation = generationRef.current;
 			let pending: Promise<void>;
 			pending = readFileAsBase64(file)
 				.then((result) => {
+					if (generationRef.current !== generation) return;
 					if (
 						initialKey &&
 						sharedWork &&
@@ -796,6 +811,7 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 					}));
 				})
 				.catch(() => {
+					if (generationRef.current !== generation) return;
 					if (
 						initialKey &&
 						sharedWork &&
@@ -823,9 +839,11 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 	const stageReadyAttachments = useCallback(
 		(ids?: ReadonlySet<string>, sharedWork?: SharedAttachmentWork): Promise<void> => {
 			if (!prepareAttachments) return Promise.resolve();
+			const generation = generationRef.current;
 			const shared = initialKey ? sharedEntry(initialKey) : undefined;
 			const queue = shared?.stagingQueue ?? stagingQueueRef.current;
 			const run = queue.then(async () => {
+				if (generationRef.current !== generation) return;
 				if (initialKey && sharedWork && !sharedAttachmentWorkIsCurrent(initialKey, sharedWork)) return;
 				// Select work only after earlier staging settles. A retry can otherwise
 				// overlap its original add and stage the same attachment twice.
@@ -838,6 +856,7 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 				);
 				if (ready.length === 0) return;
 				const prepared = await prepareAttachments(ready);
+				if (generationRef.current !== generation) return;
 				if (initialKey && sharedWork && !sharedAttachmentWorkIsCurrent(initialKey, sharedWork)) return;
 				if (prepared.length !== ready.length) {
 					throw new Error("Attachment staging returned an incomplete result");
@@ -866,7 +885,8 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 		[commitAttachments, initialKey, prepareAttachments],
 	);
 
-	const processFiles = useCallback(async (files: File[], sharedWork?: SharedAttachmentWork) => {
+	const processFiles = useCallback(async (files: File[], generation: number, sharedWork?: SharedAttachmentWork) => {
+		if (generationRef.current !== generation) return;
 		if (initialKey && sharedWork && !sharedAttachmentWorkIsCurrent(initialKey, sharedWork)) return;
 		// Filter out directories - they have type "" and size 0 in most browsers
 		const validFiles = files.filter((file) => {
@@ -945,6 +965,7 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 		await Promise.all(
 			fresh.map(({ attachment, file }) => readAttachment(attachment.id, file, sharedWork)),
 		);
+		if (generationRef.current !== generation) return;
 		if (initialKey && sharedWork && !sharedAttachmentWorkIsCurrent(initialKey, sharedWork)) return;
 		try {
 			await stageReadyAttachments(
@@ -952,7 +973,8 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 				sharedWork,
 			);
 		} catch {
-			if (initialKey && sharedWork && !sharedAttachmentWorkIsCurrent(initialKey, sharedWork)) return;
+			if (generationRef.current !== generation) return;
+		if (initialKey && sharedWork && !sharedAttachmentWorkIsCurrent(initialKey, sharedWork)) return;
 			commitError("Files couldn’t be saved. Retry sending to save them again.");
 		}
 	}, [commitAttachments, commitError, initialKey, readAttachment, stageReadyAttachments]);
@@ -964,6 +986,7 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 		const batch = Array.from(files);
 		if (batch.length === 0) return Promise.resolve();
 		const sharedKey = initialKey;
+		const generation = generationRef.current;
 		const sharedWork = sharedKey ? beginSharedAttachmentWork(sharedKey) : undefined;
 		queuedAddsRef.current += 1;
 		setPreparing(true);
@@ -972,10 +995,11 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 		// current queue, otherwise callers cannot observe the pending read immediately.
 		const run =
 			queuedAddsRef.current === 1
-				? processFiles(batch, sharedWork)
-				: addQueueRef.current.then(() => processFiles(batch, sharedWork));
+				? processFiles(batch, generation, sharedWork)
+				: addQueueRef.current.then(() => processFiles(batch, generation, sharedWork));
 		const settled = run
 			.catch(() => {
+				if (generationRef.current !== generation) return;
 				commitError("Some files couldn’t be prepared and were skipped.");
 			})
 			.finally(() => {
@@ -1063,6 +1087,7 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 	}, [commitAttachments, commitError, initialKey]);
 
 	const clear = useCallback(() => {
+		generationRef.current++;
 		sourceFilesRef.current.clear();
 		pendingReadsRef.current.clear();
 		if (initialKey) sharedEntry(initialKey).sources.clear();
@@ -1113,6 +1138,14 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 	);
 
 	const toSettledPayload = useCallback(async (): Promise<FileAttachmentPayload[]> => {
+		const generation = generationRef.current;
+		const entry = initialKey ? sharedAttachmentEntries.get(initialKey) : undefined;
+		const cancellationRevision = entry?.cancellationRevision;
+		const assertStillOwned = () => {
+			if (generationRef.current !== generation || entry?.cancellationRevision !== cancellationRevision) {
+				throw new Error("Attachments were discarded before delivery. Review the draft and send again.");
+			}
+		};
 		if (initialKey) await waitForSharedAttachmentWork(initialKey);
 		while (queuedAddsRef.current > 0) {
 			const queued = addQueueRef.current;
@@ -1127,6 +1160,7 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 			await Promise.allSettled(pending);
 			if (pendingRetriesRef.current.size === 0) break;
 		}
+		assertStillOwned();
 		const currentBeforeStage = attachmentsRef.current;
 		if (currentBeforeStage.some(({ status }) => status === "failed")) {
 			throw new Error("Some files couldn't be read. Retry or remove them before sending.");
@@ -1201,6 +1235,7 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 		if (prepareAttachments && attachmentsRef.current.some(({ stagedPath }) => !stagedPath)) {
 			throw new Error("The files are not durably available. Nothing was sent.");
 		}
+		assertStillOwned();
 		return payloadsFor(attachmentsRef.current);
 	}, [
 		commitAttachments,
@@ -1239,6 +1274,9 @@ export function useFileAttachments(options: FileAttachmentOptions = {}) {
 		clear,
 		reconcilePersistedAttachments,
 		releaseStagedPayloadData,
+		getAttachments: currentAttachments,
+		attachmentSignature: signature,
+		hasPendingReads: () => pendingReadsRef.current.size > 0 || sharedAttachmentPending(initialKey),
 		toPayload,
 		toSettledPayload,
 		hasAttachments,

@@ -35,6 +35,8 @@ export type DashboardPR = {
 export type DashboardSession = {
 	id: string;
 	projectId: string;
+	/** Opaque daemon runtime handle used only for terminal mux operations. */
+	terminalHandleId?: string;
 	status: string | null;
 	attentionLevel?: AttentionLevel | string | null;
 	activity?: string | null;
@@ -70,6 +72,8 @@ export type DashboardSession = {
 export type OrchestratorLink = {
 	id: string;
 	projectId: string;
+	/** Opaque daemon runtime handle used only for terminal mux operations. */
+	terminalHandleId?: string;
 	projectName: string;
 	status?: string | null;
 	activity?: string | null;
@@ -112,7 +116,11 @@ export type SessionsResponse = {
 	stats: DashboardStats;
 	// Returned here so callers don't fetch /projects a second time — getSessions
 	// already needs it to label orchestrators.
-	projects: ProjectInfo[];
+	//
+	// Null when the /projects request itself failed, which is NOT the same fact
+	// as an empty list: the board judges a saved project filter against this, so
+	// folding a failure into [] told it every project was gone (#5058 review).
+	projects: ProjectInfo[] | null;
 };
 
 // ---- Wire types (this repo's Go daemon, /api/v1/*) --------------------------
@@ -136,6 +144,7 @@ type WirePR = {
 type WireSession = {
 	id: string;
 	projectId: string;
+	terminalHandleId?: string;
 	issueId?: string;
 	kind?: string; // worker | orchestrator
 	harness?: string;
@@ -213,6 +222,7 @@ function mapSession(s: WireSession): DashboardSession {
 	return {
 		id: s.id,
 		projectId: s.projectId,
+		terminalHandleId: s.terminalHandleId,
 		status: s.status ?? null,
 		activity: activityString(s.activity),
 		harness: s.harness ?? null,
@@ -238,6 +248,7 @@ function mapOrchestrator(s: WireSession, projectName: string): OrchestratorLink 
 	return {
 		id: s.id,
 		projectId: s.projectId,
+		terminalHandleId: s.terminalHandleId,
 		projectName,
 		status: s.status ?? null,
 		activity: activityString(s.activity),
@@ -370,13 +381,17 @@ export async function getSessions(cfg: ServerConfig, _projectId?: string): Promi
 	// code, fail with 429 before the new password was ever checked. Probing first
 	// caps a bad-credential tick at a single failed attempt.
 	const sessRes = await req(cfg, `${API}/sessions`);
+	// A failed /projects is reported as null rather than [] so a caller can tell
+	// "this daemon has no projects" from "we could not ask". It stays caught: an
+	// older daemon, or one blip on that one route, must not knock the board
+	// offline when /sessions answered fine.
 	const [orchRes, projects] = await Promise.all([
 		req(cfg, `${API}/orchestrators`),
-		getProjects(cfg).catch(() => [] as ProjectInfo[]),
+		getProjects(cfg).catch(() => null),
 	]);
 	const sessData = await sessRes.json();
 	const orchData = await orchRes.json();
-	const nameOf = new Map(projects.map((p) => [p.id, p.name]));
+	const nameOf = new Map((projects ?? []).map((p) => [p.id, p.name]));
 
 	const rawSessions: WireSession[] = Array.isArray(sessData?.sessions) ? sessData.sessions : [];
 	const rawOrchestrators: WireSession[] = Array.isArray(orchData?.sessions) ? orchData.sessions : [];
