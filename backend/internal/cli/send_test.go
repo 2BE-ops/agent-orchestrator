@@ -112,7 +112,7 @@ func TestSend_SteerActiveTurnUsesProviderSteeringWithoutQueueing(t *testing.T) {
 	if len(paths) != 1 || paths[0] != "/api/v1/sessions/demo-1/conversation/steer" {
 		t.Fatalf("paths = %v, want one steer request", paths)
 	}
-	var req steerAPIRequest
+	var req conversationMessageAPIRequest
 	if err := json.Unmarshal([]byte(bodies[0]), &req); err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +272,7 @@ func TestSend_SteerProviderFailureDoesNotQueue(t *testing.T) {
 
 func TestSend_SteerUncertainExposesHandleForRecovery(t *testing.T) {
 	cfg := setConfigEnv(t)
-	var req steerAPIRequest
+	var req conversationMessageAPIRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/internal/") {
 			w.WriteHeader(http.StatusNoContent)
@@ -302,7 +302,7 @@ func TestSend_SteerUncertainExposesHandleForRecovery(t *testing.T) {
 
 func TestSend_SteerRecoverOnlyReusesHandleWithoutMessage(t *testing.T) {
 	cfg := setConfigEnv(t)
-	var req steerAPIRequest
+	var req conversationMessageAPIRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/internal/") {
 			w.WriteHeader(http.StatusNoContent)

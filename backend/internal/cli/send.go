@@ -29,7 +29,7 @@ type sendAPIRequest struct {
 
 // The steering DTOs mirror the daemon conversation API without coupling the
 // thin CLI to the HTTP controller package.
-type steerAPIRequest struct {
+type conversationMessageAPIRequest struct {
 	Text            string `json:"text"`
 	ClientMessageID string `json:"clientMessageId"`
 	RecoverOnly     bool   `json:"recoverOnly,omitempty"`
@@ -37,11 +37,6 @@ type steerAPIRequest struct {
 
 type steerAPIResponse struct {
 	ProviderTurnID string `json:"providerTurnId"`
-}
-
-type chatSendAPIRequest struct {
-	Text            string `json:"text"`
-	ClientMessageID string `json:"clientMessageId"`
 }
 
 type chatSendAPIResponse struct {
@@ -114,7 +109,7 @@ func (c *commandContext) steerMessage(
 		clientMessageID = uuid.NewString()
 	}
 	var steered steerAPIResponse
-	err := c.postJSON(ctx, sessionPath+"/conversation/steer", steerAPIRequest{
+	err := c.postJSON(ctx, sessionPath+"/conversation/steer", conversationMessageAPIRequest{
 		Text: message, ClientMessageID: clientMessageID, RecoverOnly: recoverOnly,
 	}, &steered)
 	if err == nil {
@@ -147,7 +142,7 @@ func (c *commandContext) steerMessage(
 	}
 
 	var sent chatSendAPIResponse
-	if err := c.postJSON(ctx, sessionPath+"/conversation/messages", chatSendAPIRequest{
+	if err := c.postJSON(ctx, sessionPath+"/conversation/messages", conversationMessageAPIRequest{
 		Text: message, ClientMessageID: clientMessageID,
 	}, &sent); err != nil {
 		return err
