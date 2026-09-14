@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { agentSwitchesQueryKey } from "../../hooks/useAgentSwitches";
-import type { ChatConfigOption, ConversationSnapshot } from "../../types/conversation";
+import type { ChatConfigOption, ConversationMessage, ConversationSnapshot } from "../../types/conversation";
 import type { AgentSwitchSummary, WorkspaceSession } from "../../types/workspace";
 import { useUiStore } from "../../stores/ui-store";
 import { workspaceQueryKey } from "../../hooks/useWorkspaceQuery";
@@ -462,6 +462,86 @@ describe("SessionChatSurface link routing", () => {
 				<SessionChatSurface session={session} onOpenLinkInBrowser={openInBrowser} />
 			</Wrapper>,
 		);
+		expect(openInBrowser).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not reopen an old assistant link when an unrelated snapshot field changes", async () => {
+		const localSession = { ...session, id: "session-link-baseline" };
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+		});
+		const openInBrowser = vi.fn().mockResolvedValue(undefined);
+		const oldAssistant = {
+			kind: "message",
+			id: "assistant-old",
+			sequence: 1,
+			revision: 1,
+			role: "assistant",
+			origin: "provider",
+			text: "Old result: https://example.com/old",
+			streaming: false,
+			createdAt: "2026-08-08T00:00:01Z",
+		} satisfies ConversationMessage;
+		const currentUser = {
+			kind: "message",
+			id: "user-current",
+			sequence: 2,
+			revision: 1,
+			role: "user",
+			origin: "user",
+			text: "Create a new result",
+			streaming: false,
+			createdAt: "2026-08-08T00:00:02Z",
+		} satisfies ConversationMessage;
+		conversationState.snapshot = {
+			capabilities: [],
+			items: [oldAssistant, currentUser],
+			latestSequence: 2,
+		};
+		const view = render(
+			<Wrapper client={queryClient}>
+				<SessionChatSurface session={localSession} onOpenLinkInBrowser={openInBrowser} />
+			</Wrapper>,
+		);
+
+		conversationState.snapshot = {
+			capabilities: ["config_options"],
+			items: [oldAssistant, currentUser],
+			latestSequence: 2,
+		};
+		view.rerender(
+			<Wrapper client={queryClient}>
+				<SessionChatSurface session={localSession} onOpenLinkInBrowser={openInBrowser} />
+			</Wrapper>,
+		);
+		expect(openInBrowser).not.toHaveBeenCalled();
+
+		conversationState.snapshot = {
+			capabilities: ["config_options"],
+			items: [
+				oldAssistant,
+				currentUser,
+				{
+					kind: "message",
+					id: "assistant-current",
+					sequence: 3,
+					revision: 1,
+					role: "assistant",
+					origin: "provider",
+					text: "New result: https://example.com/new",
+					streaming: false,
+					createdAt: "2026-08-08T00:00:03Z",
+				},
+			],
+			latestSequence: 3,
+		};
+		view.rerender(
+			<Wrapper client={queryClient}>
+				<SessionChatSurface session={localSession} onOpenLinkInBrowser={openInBrowser} />
+			</Wrapper>,
+		);
+
+		await waitFor(() => expect(openInBrowser).toHaveBeenCalledWith("https://example.com/new"));
 		expect(openInBrowser).toHaveBeenCalledTimes(1);
 	});
 
