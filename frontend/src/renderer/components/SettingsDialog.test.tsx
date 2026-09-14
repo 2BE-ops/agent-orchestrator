@@ -93,7 +93,7 @@ describe("SettingsDialog", () => {
 		renderSettingsDialog();
 
 		await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
-		await userEvent.click(screen.getByRole("button", { name: "Agents" }));
+		await userEvent.click(screen.getByRole("button", { name: "Harness" }));
 		expect(postMock).toHaveBeenCalledTimes(1);
 	});
 

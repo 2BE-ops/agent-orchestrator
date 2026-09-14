@@ -245,7 +245,6 @@ func TestDelegateEndpointDoesNotDependOnCodexDeviceReconciliation(t *testing.T) 
 		CodexSwitchStagingRoot: filepath.Join(root, "staging"),
 		CodexGlobalHome:        globalHome,
 		CodexAccounts:          factory,
-		CodexAccountState:      store,
 		CodexOperationGate:     gate,
 		Clock:                  func() time.Time { return time.Unix(now.Load(), 0) },
 	})
