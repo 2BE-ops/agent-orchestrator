@@ -1,7 +1,7 @@
 -- +goose Up
-CREATE INDEX sessions_import_conversation ON sessions(harness, provider_conversation_id) WHERE is_terminated = 0;
-CREATE INDEX sessions_import_agent ON sessions(harness, agent_session_id) WHERE is_terminated = 0;
+CREATE INDEX IF NOT EXISTS sessions_import_conversation ON sessions(harness, provider_conversation_id) WHERE is_terminated = 0;
+CREATE INDEX IF NOT EXISTS sessions_import_agent ON sessions(harness, agent_session_id) WHERE is_terminated = 0;
 
 -- +goose Down
-DROP INDEX sessions_import_agent;
-DROP INDEX sessions_import_conversation;
+DROP INDEX IF EXISTS sessions_import_agent;
+DROP INDEX IF EXISTS sessions_import_conversation;

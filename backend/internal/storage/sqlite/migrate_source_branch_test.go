@@ -70,3 +70,47 @@ func TestMigratePreviewSourceBranchPreservesMainMigrations(t *testing.T) {
 		})
 	}
 }
+
+func TestMigratePreviewImportIndexesReplaysCheckpointMigrations(t *testing.T) {
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "ao.db")+pragmas)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	upTo(t, db, 140)
+	if _, err := db.Exec(`
+ALTER TABLE sessions ADD COLUMN source_branch TEXT NOT NULL DEFAULT '';
+CREATE INDEX idx_sessions_source_branch ON sessions(source_branch) WHERE source_branch <> '';
+CREATE INDEX sessions_import_conversation ON sessions(harness, provider_conversation_id) WHERE is_terminated = 0;
+CREATE INDEX sessions_import_agent ON sessions(harness, agent_session_id) WHERE is_terminated = 0;
+INSERT INTO goose_db_version(version_id,is_applied) VALUES(141,1),(142,1);
+`); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 2; i++ {
+		if err := migrate(db); err != nil {
+			t.Fatalf("migration attempt %d: %v", i, err)
+		}
+	}
+
+	var checkpointColumns int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name IN (
+		'conversation_checkpoint_state',
+		'conversation_checkpoint_generation',
+		'conversation_checkpoint_native_id',
+		'conversation_checkpoint_unsettled'
+	)`).Scan(&checkpointColumns); err != nil {
+		t.Fatal(err)
+	}
+	if checkpointColumns != 4 {
+		t.Fatalf("checkpoint columns=%d", checkpointColumns)
+	}
+	var importIndexes int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name IN ('sessions_import_conversation','sessions_import_agent')`).Scan(&importIndexes); err != nil {
+		t.Fatal(err)
+	}
+	if importIndexes != 2 {
+		t.Fatalf("import indexes=%d", importIndexes)
+	}
+}
