@@ -1,3 +1,4 @@
+import { AppLink } from "./AppLink";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "@tanstack/react-router";
@@ -42,6 +43,7 @@ import { workspaceQueryKey } from "../hooks/useWorkspaceQuery";
 import { captureRendererEvent } from "../lib/telemetry";
 import { formatTimeCompact } from "../lib/format-time";
 import { AgentAvatar } from "./AgentAvatar";
+import { OrchestratorChildrenSection } from "./OrchestratorChildrenSection";
 import { ProductExternalLink } from "./ProductExternalLink";
 import {
 	sessionScmSummaryQueryKey,
@@ -53,10 +55,10 @@ import { useSessionWorkspaceFilesChangedCount } from "../hooks/useSessionWorkspa
 import { useSessionBrowserLink } from "../hooks/useSessionBrowserLink";
 import { clearTerminateSessionState, useTerminateSession } from "../hooks/useTerminateSession";
 import { formatEstimatedCost, type EstimatedCost } from "../lib/format-cost";
-import { prBrowserUrl, prCardPresentation, prNounKeys, sessionPRDisplaySummaries } from "../lib/pr-display";
+import { prBrowserUrl, prCanMerge, prCardPresentation, prNounKeys, sessionPRDisplaySummaries } from "../lib/pr-display";
 import { formatTokenCount } from "../lib/format-token-count";
 import type { WorkspaceSession, WorkspaceSummary } from "../types/workspace";
-import { findProjectOrchestrator, sortedPRs } from "../types/workspace";
+import { findProjectOrchestrator, sortedPRs, STANDALONE_WORKSPACE_ID } from "../types/workspace";
 import { getAgentActivityView, getSessionTimelinePillView } from "../lib/session-presentation";
 import { aoBridge } from "../lib/bridge";
 import { BrowserPanelView, type BrowserAnnotationQueueModel } from "./BrowserPanel";
@@ -141,7 +143,7 @@ const prStateLabelKeys: Record<SessionPRSummary["state"], MessageKey> = {
 /**
  * Tabbed inspector rail beside the terminal (Summary · Reviews · Browser · Files).
  */
-export function SessionInspector({
+export const SessionInspector = memo(function SessionInspector({
 	session,
 	onOpenReviewerTerminal,
 	browserPoppedOut = false,
@@ -246,7 +248,7 @@ export function SessionInspector({
 			/>
 		</div>
 	);
-}
+});
 
 function reviewsTabVisible(session: WorkspaceSession | undefined): boolean {
 	if (!session) return true;
@@ -285,6 +287,10 @@ const SummaryView = memo(function SummaryView({
 	const prSummaries = sessionPRDisplaySummaries(session, query.data);
 	const prSectionTitle = prSummaries.length > 1 ? t("inspector.pullRequests", { count: prSummaries.length }) : t("inspector.pullRequest");
 	const hasPRs = prSummaries.length > 0;
+	// Cloud orchestrators list the workers they spawned; local orchestrators
+	// have no parent/child model and every other session has no children.
+	const showWorkers =
+		session.kind === "orchestrator" && (session.cloud !== undefined || usePreviewData);
 	return (
 		<SessionInspectorSummaryView
 			activity={
@@ -313,6 +319,7 @@ const SummaryView = memo(function SummaryView({
 				</div>
 			}
 			pullRequestTitle={prSectionTitle}
+			workers={showWorkers ? <OrchestratorChildrenSection session={session} /> : undefined}
 			usage={
 				showUsageError ? (
 					<Section title={t("inspector.usage.title")}>
@@ -1090,6 +1097,7 @@ function SessionControls({ session }: { session: WorkspaceSession }) {
 	});
 	const policyError = policy.error instanceof Error ? policy.error.message : null;
 	const canTerminateNow = session.status === "merged";
+	const isStandaloneSession = session.workspaceId === STANDALONE_WORKSPACE_ID;
 
 	const confirmTermination = () => {
 		const workspaces = queryClient.getQueryData<WorkspaceSummary[]>(workspaceQueryKey) ?? [];
@@ -1103,42 +1111,54 @@ function SessionControls({ session }: { session: WorkspaceSession }) {
 			});
 			return;
 		}
+		if (session.workspaceId === STANDALONE_WORKSPACE_ID) {
+			void navigate({ to: "/" });
+			return;
+		}
 		void navigate({ to: "/projects/$projectId", params: { projectId: session.workspaceId } });
 	};
 
 	if (session.isTerminated === true) return null;
+
+	const terminateAction = (
+		<div className="flex items-center justify-between gap-3 py-1">
+			<span className="min-w-0 text-xs font-medium text-settings-label">{t("inspector.terminateShort")}</span>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<span className="inline-flex">
+						<SessionTerminationPopover
+							onConfirm={confirmTermination}
+							onOpenChange={setConfirmOpen}
+							open={confirmOpen}
+							session={session}
+							trigger={
+								<button
+									aria-label={t("inspector.terminate")}
+									className="inline-flex size-control-md items-center justify-center rounded-sm text-passive transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+									onClick={() => clearTerminateSessionState(queryClient, session.id)}
+									type="button"
+								>
+									<Trash2 className="size-icon-sm" aria-hidden="true" />
+								</button>
+							}
+						/>
+					</span>
+				</TooltipTrigger>
+				<TooltipContent side="bottom">{t("inspector.terminate")}</TooltipContent>
+			</Tooltip>
+		</div>
+	);
+
+	if (isStandaloneSession) {
+		return <Section title={t("inspector.sessionControls")}>{terminateAction}</Section>;
+	}
 
 	return (
 		<Section title={t("inspector.sessionControls")}>
 			<AutoInjectCIPolicyControl session={session} />
 			<AutoInjectReviewPolicyControl session={session} />
 			{session.kind === "orchestrator" ? null : canTerminateNow ? (
-				<div className="flex items-center justify-between gap-3 py-1">
-					<span className="min-w-0 text-xs font-medium text-settings-label">{t("inspector.terminateShort")}</span>
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<span className="inline-flex">
-								<SessionTerminationPopover
-									onConfirm={confirmTermination}
-									onOpenChange={setConfirmOpen}
-									open={confirmOpen}
-									session={session}
-									trigger={
-										<button
-											aria-label={t("inspector.terminate")}
-											className="inline-flex size-control-md items-center justify-center rounded-sm text-passive transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-											onClick={() => clearTerminateSessionState(queryClient, session.id)}
-											type="button"
-										>
-											<Trash2 className="size-icon-sm" aria-hidden="true" />
-										</button>
-									}
-								/>
-							</span>
-						</TooltipTrigger>
-						<TooltipContent side="bottom">{t("inspector.terminate")}</TooltipContent>
-					</Tooltip>
-				</div>
+				terminateAction
 			) : (
 				<>
 					<InspectorPolicyRow
@@ -1189,12 +1209,7 @@ function PRSummaryCard({
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const presentation = prCardPresentation(pr);
-	const canMerge =
-		pr.state === "open" &&
-		pr.ci.state === "passing" &&
-		pr.review.decision === "approved" &&
-		pr.mergeability.state === "mergeable" &&
-		Boolean(pr.url && pr.headSha);
+	const canMerge = prCanMerge(pr) && Boolean(pr.url && pr.headSha);
 	const mergePr = useMutation({
 		mutationFn: async () => {
 			if (usePreviewData) return;
@@ -1352,7 +1367,7 @@ function ActivityTimeline({ prs, session }: { prs: SessionPRSummary[]; session: 
 
 function PRTimelineLink({ pr, verb }: { pr: SessionPRSummary; verb: string }) {
 	return (
-		<a
+		<AppLink
 			aria-label={`${verb} PR #${pr.number}`}
 			className="inline-flex min-w-0 items-center gap-1 rounded-xs text-foreground underline-offset-2 transition-colors hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/50"
 			href={prBrowserUrl(pr)}
@@ -1362,7 +1377,7 @@ function PRTimelineLink({ pr, verb }: { pr: SessionPRSummary; verb: string }) {
 			<span>{verb} </span>
 			<b>PR #{pr.number}</b>
 			<ArrowUpRight aria-hidden="true" className="size-icon-2xs shrink-0" strokeWidth={2} />
-		</a>
+		</AppLink>
 	);
 }
 
@@ -2028,9 +2043,9 @@ function renderReviewMarkdown(body: string) {
 		<ReactMarkdown
 			components={{
 				a: ({ href, children }) => (
-					<a href={href} target="_blank" rel="noopener noreferrer">
+					<AppLink href={href} target="_blank" rel="noopener noreferrer">
 						{children}
-					</a>
+					</AppLink>
 				),
 			}}
 			remarkPlugins={[remarkGfm]}
