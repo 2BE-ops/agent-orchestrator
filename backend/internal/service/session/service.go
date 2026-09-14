@@ -919,6 +919,7 @@ func (s *Service) TeardownProject(ctx context.Context, project domain.ProjectID)
 
 // List returns sessions as enriched display models after applying API filters.
 func (s *Service) List(ctx context.Context, filter ListFilter) ([]domain.Session, error) {
+	recoveryRevision := s.statusRecoveryRevision()
 	recs, err := s.listRecords(ctx, filter.ProjectID)
 	if err != nil {
 		return nil, err
@@ -958,7 +959,19 @@ func (s *Service) List(ctx context.Context, filter ListFilter) ([]domain.Session
 		}
 		out = append(out, sess)
 	}
+	if s.statusRecoveryRevision() != recoveryRevision {
+		for i := range out {
+			out[i].StatusReadiness = "checking"
+		}
+	}
 	return out, nil
+}
+
+func (s *Service) statusRecoveryRevision() uint64 {
+	if recovery, ok := s.manager.(interface{ StatusRecoveryRevision() uint64 }); ok {
+		return recovery.StatusRecoveryRevision()
+	}
+	return 0
 }
 
 func (s *Service) listRecords(ctx context.Context, project domain.ProjectID) ([]domain.SessionRecord, error) {
@@ -992,6 +1005,7 @@ func matchesSessionFilter(rec domain.SessionRecord, filter ListFilter) bool {
 // Get returns one session as an enriched display model, or an apierr.NotFound
 // (SESSION_NOT_FOUND) if it is absent.
 func (s *Service) Get(ctx context.Context, id domain.SessionID) (domain.Session, error) {
+	recoveryRevision := s.statusRecoveryRevision()
 	rec, ok, err := s.store.GetSession(ctx, id)
 	if err != nil {
 		return domain.Session{}, fmt.Errorf("get %s: %w", id, err)
@@ -1010,6 +1024,9 @@ func (s *Service) Get(ctx context.Context, id domain.SessionID) (domain.Session,
 	if ok {
 		sess.ActiveAgentSwitch = &activeSwitch
 	}
+	if s.statusRecoveryRevision() != recoveryRevision {
+		sess.StatusReadiness = "checking"
+	}
 	return sess, nil
 }
 
@@ -1021,8 +1038,15 @@ func (s *Service) toSessionWithFacts(rec domain.SessionRecord, prs []domain.PRFa
 	// period and have the card contradict its own status.
 	now := s.now()
 	presentation := deriveKanbanPresentation(rec, prs, runs, now, s.harnessSignals(rec.Harness))
+	readiness := "ready"
+	if recovery, ok := s.manager.(interface {
+		SessionStatusReadiness(domain.SessionRecord) string
+	}); ok {
+		readiness = recovery.SessionStatusReadiness(rec)
+	}
 	return domain.Session{
-		SessionRecord: rec,
+		SessionRecord:   rec,
+		StatusReadiness: readiness,
 		ChatProviderPreserved: rec.Mode == domain.SessionModeChat && !rec.IsTerminated &&
 			s.chatProviderPreserved != nil && s.chatProviderPreserved(rec.ID),
 		Status:           deriveStatus(rec, prs, now, s.harnessSignals(rec.Harness)),

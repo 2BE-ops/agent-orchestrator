@@ -40,10 +40,9 @@ WHERE id = ?;
 -- name: UpdateBrowserCapabilityVerifier :execrows
 -- Rotate only the browser credential for the exact controller owner observed by
 -- the launcher. This must not replay a stale SessionRecord over newer lifecycle,
--- activity, termination, or provider ownership facts.
+-- activity, termination, provider ownership, or user-visible recency facts.
 UPDATE sessions SET
-    browser_capability_verifier = sqlc.arg(browser_capability_verifier),
-    updated_at = MAX(updated_at, sqlc.arg(updated_at))
+    browser_capability_verifier = sqlc.arg(browser_capability_verifier)
 WHERE id = sqlc.arg(id)
   AND harness = sqlc.arg(expected_harness)
   AND session_mode = sqlc.arg(expected_session_mode)
@@ -79,8 +78,9 @@ WHERE id = sqlc.arg(id)
 -- A Chat controller claims ownership before its event goroutine starts. Provider
 -- projections compare against this value in the same transaction as their write,
 -- so an older controller cannot mutate a session after a replacement takes over.
+-- Ownership changes are not activity and must not advance the board's recency.
 UPDATE sessions
-SET controller_generation = ?, updated_at = ?
+SET controller_generation = ?
 WHERE id = ? AND session_mode = 'chat';
 
 -- name: ActivateConversationBranchSession :execrows

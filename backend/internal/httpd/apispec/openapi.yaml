@@ -8434,6 +8434,12 @@ components:
           - terminated
           - no_signal
           type: string
+        statusReadiness:
+          enum:
+          - checking
+          - ready
+          - unavailable
+          type: string
         terminalGeneration:
           type: string
         terminalHandleId:
@@ -8456,6 +8462,7 @@ components:
       - createdAt
       - updatedAt
       - isPinned
+      - statusReadiness
       - chatProviderPreserved
       - status
       - kanbanColumn
