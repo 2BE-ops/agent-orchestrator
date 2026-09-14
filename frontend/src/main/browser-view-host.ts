@@ -363,7 +363,7 @@ type BrowserEntry = {
 	ready: Promise<void>;
 	state: BrowserNavState;
 	annotationEnabled: boolean;
-	annotationSessions: Map<string, BrowserAnnotationSession>;
+	annotationSessions: Map<string, { session: BrowserAnnotationSession; token: string }>;
 	annotationTheme?: BrowserAnnotationModeInput["theme"];
 	networkCapture?: BrowserNetworkCapture;
 	favicon?: string;
@@ -1834,7 +1834,7 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 	const updateAnnotationState = (event: IpcMainEvent, annotationSession: BrowserAnnotationSession | undefined): void => {
 		const entry = tabsByWebContentsId.get(event.sender.id);
 		if (!entry || !isValidAnnotationSession(annotationSession)) return;
-		entry.annotationSessions.set(annotationPageKey(annotationSession.page.url), annotationSession);
+		storeAnnotationSession(entry, annotationSession);
 		pushAnnotationState(options, entry, annotationSession);
 	};
 
@@ -1847,7 +1847,7 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 		if (!viewId || !entry || !payload || !isValidAnnotationSession(payload.session)) return;
 		const browserSession = entries.get(viewId);
 		if (!browserSession || browserSession.profileSwitching || browserSession.tabs.get(entry.tabId) !== entry) return;
-		entry.annotationSessions.set(annotationPageKey(payload.session.page.url), payload.session);
+		const { pageKey, token: sessionToken } = storeAnnotationSession(entry, payload.session);
 		await withBrowserOperation(browserSession, async () => {
 			entry.annotationEnabled = false;
 			// Captured now, before returning: the preload only tears down the
@@ -1864,6 +1864,9 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 			}
 			const forwarded: BrowserAnnotationSubmitPayload = {
 				viewId,
+				tabId: entry.tabId,
+				pageKey,
+				sessionToken,
 				session: payload.session,
 				...(snapshot ? { snapshot } : {}),
 			};
@@ -1909,9 +1912,13 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 		if (!isRendererOwned(event, input.viewId)) return;
 		const browserSession = entries.get(input.viewId);
 		if (!browserSession) return;
-		const entry = activeEntry(browserSession);
+		const entry = browserSession.tabs.get(input.tabId);
+		if (!entry) return;
+		const stored = entry.annotationSessions.get(input.pageKey);
+		if (!stored || stored.token !== input.sessionToken) return;
 		entry.annotationEnabled = false;
-		if (input.success) entry.annotationSessions.delete(annotationPageKey(entry.view.webContents.getURL()));
+		if (input.success) entry.annotationSessions.delete(input.pageKey);
+		if (activeEntry(browserSession) !== entry) return;
 		entry.view.webContents.send("browser:annotation:setMode", {
 			enabled: false,
 			...(annotationSessionFor(entry) ? { session: annotationSessionFor(entry) } : {}),
@@ -2920,7 +2927,17 @@ function annotationPageKey(url: string): string {
 }
 
 function annotationSessionFor(entry: BrowserEntry): BrowserAnnotationSession | undefined {
-	return entry.annotationSessions.get(annotationPageKey(entry.view.webContents.getURL()));
+	return entry.annotationSessions.get(annotationPageKey(entry.view.webContents.getURL()))?.session;
+}
+
+function storeAnnotationSession(
+	entry: BrowserEntry,
+	session: BrowserAnnotationSession,
+): { pageKey: string; token: string } {
+	const pageKey = annotationPageKey(session.page.url);
+	const token = randomUUID();
+	entry.annotationSessions.set(pageKey, { session, token });
+	return { pageKey, token };
 }
 
 function pushAnnotationState(

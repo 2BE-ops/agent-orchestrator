@@ -127,6 +127,9 @@ function annotationPayload(
 	const now = "2026-06-15T00:00:00Z";
 	return {
 		viewId: "42:sess-1",
+		tabId: "t1",
+		pageKey: "http://localhost:5173/",
+		sessionToken: "annotation-session-1",
 		session: {
 			version: 1,
 			page: { url: "http://localhost:5173/", title: "Preview" },

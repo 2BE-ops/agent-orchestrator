@@ -248,7 +248,13 @@ export function useBrowserAnnotationQueue({
 				}
 				sent = true;
 				stagedScreenshotPathsRef.current.delete(payload);
-				await window.ao?.browser.completeAnnotation?.({ viewId: payload.viewId, success: true });
+				await window.ao?.browser.completeAnnotation?.({
+					viewId: payload.viewId,
+					tabId: payload.tabId,
+					pageKey: payload.pageKey,
+					sessionToken: payload.sessionToken,
+					success: true,
+				});
 			} catch (error) {
 				failureMessage = apiErrorMessage(error, appI18n.t("browser.unableSendAnnotation"));
 			} finally {

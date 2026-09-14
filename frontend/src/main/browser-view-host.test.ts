@@ -23,6 +23,7 @@ import {
 import type {
 	BrowserAnnotationDraft,
 	BrowserAnnotationSession,
+	BrowserAnnotationSubmitPayload,
 } from "../shared/browser-annotations";
 import { parseAgentBrowserJSON } from "./agent-browser-runtime";
 
@@ -597,6 +598,7 @@ function setupTabHost(
 			loadURL: ReturnType<typeof vi.fn>;
 			openDevTools: ReturnType<typeof vi.fn>;
 			closeDevTools: ReturnType<typeof vi.fn>;
+			send: ReturnType<typeof vi.fn>;
 			openWindow: (url: string) => void;
 			close: ReturnType<typeof vi.fn>;
 			emitConsoleMessage: (level: number, message: string, line?: number, sourceId?: string) => void;
@@ -678,7 +680,7 @@ function setupTabHost(
 			}),
 			on: (event: string, listener: (...args: never[]) => void) => listeners.set(event, listener),
 			reload: () => undefined,
-			send: () => undefined,
+			send: vi.fn(),
 			setWindowOpenHandler: (
 				handler: (details: { url: string }) => {
 					action: string;
@@ -781,9 +783,26 @@ function setupTabHost(
 	});
 	const invoke = (channel: string, ...args: unknown[]) =>
 		handlers.get(channel)!({ sender: { id: 1 } }, ...args) as Promise<unknown>;
+	const invokeFromTab = (channel: string, senderId: number, ...args: unknown[]) =>
+		handlers.get(channel)!({ sender: { id: senderId } }, ...args) as Promise<unknown>;
 	const emit = (channel: string, ...args: unknown[]) =>
 		eventHandlers.get(channel)!({ sender: { id: 1, getZoomFactor: () => 1 } }, ...args);
-	return { activeTargets, constructorOptions, debuggerCommands, emit, failNavigationTo, host, invoke, runtime, sent, views };
+	const sendFromTab = (channel: string, senderId: number, ...args: unknown[]) =>
+		eventHandlers.get(channel)!({ sender: { id: senderId } }, ...args);
+	return {
+		activeTargets,
+		constructorOptions,
+		debuggerCommands,
+		emit,
+		failNavigationTo,
+		host,
+		invoke,
+		invokeFromTab,
+		runtime,
+		sendFromTab,
+		sent,
+		views,
+	};
 }
 
 function fakeBrowserProfileStore(profile: BrowserProfile, bindings: Record<string, string>): BrowserProfileStore {
@@ -2890,6 +2909,55 @@ describe("browser annotation IPC", () => {
 					data: Buffer.from("png-snapshot").toString("base64"),
 				},
 			}),
+		});
+	});
+
+	it("completes only the submitted tab and page session when another annotated tab becomes active", async () => {
+		const { invoke, invokeFromTab, sendFromTab, sent, views } = setupTabHost();
+		const ensured = (await invoke("browser:ensure", "sess-1")) as BrowserNavState;
+		await invoke("browser:navigate", { viewId: ensured.viewId, url: "https://a.example.test/" });
+		const sessionA = submittedAnnotationSession("https://a.example.test/");
+		sendFromTab("browser:annotation:state", views[0]!.webContents.id, sessionA);
+
+		await invokeFromTab("browser:annotation:submit", views[0]!.webContents.id, { session: sessionA });
+		const submitted = sent.find(({ channel }) => channel === "browser:annotation:submitted")
+			?.payload as BrowserAnnotationSubmitPayload;
+		expect(submitted).toMatchObject({
+			viewId: ensured.viewId,
+			tabId: "t1",
+			pageKey: "https://a.example.test/",
+			session: sessionA,
+		});
+		expect(submitted.sessionToken).toEqual(expect.any(String));
+
+		await invoke("browser:openTab", { viewId: ensured.viewId, url: "https://b.example.test/" });
+		const sessionB = submittedAnnotationSession("https://b.example.test/");
+		sendFromTab("browser:annotation:state", views[1]!.webContents.id, sessionB);
+		await invoke("browser:annotation:setMode", { viewId: ensured.viewId, enabled: true });
+		views[1]!.webContents.send.mockClear();
+		sent.length = 0;
+
+		await invoke("browser:annotation:complete", {
+			viewId: submitted.viewId,
+			tabId: submitted.tabId,
+			pageKey: submitted.pageKey,
+			sessionToken: submitted.sessionToken,
+			success: true,
+		});
+
+		expect(views[1]!.webContents.send).not.toHaveBeenCalled();
+		views[1]!.listeners.get("did-stop-loading")?.();
+		expect(sent).toContainEqual({
+			channel: "browser:annotation:state",
+			payload: { viewId: ensured.viewId, count: 1, screenshotCount: 0, hasDraft: false },
+		});
+
+		sent.length = 0;
+		await invoke("browser:selectTab", { viewId: ensured.viewId, tabId: "t1" });
+		views[0]!.listeners.get("did-stop-loading")?.();
+		expect(sent).toContainEqual({
+			channel: "browser:annotation:state",
+			payload: { viewId: ensured.viewId, count: 0, screenshotCount: 0, hasDraft: false },
 		});
 	});
 

@@ -6,6 +6,8 @@ import {
 	formatBrowserAnnotationMessage,
 	parseBrowserAnnotationMessage,
 	type BrowserAnnotationContext,
+	type BrowserAnnotationSession,
+	type BrowserAnnotationSubmitPayload,
 } from "./browser-annotations";
 
 function context(overrides: Partial<BrowserAnnotationContext> = {}): BrowserAnnotationContext {
@@ -22,6 +24,16 @@ function context(overrides: Partial<BrowserAnnotationContext> = {}): BrowserAnno
 		ariaLabel: "Save profile",
 		computedStyle: {},
 		...overrides,
+	};
+}
+
+function submitPayload(session: BrowserAnnotationSession): BrowserAnnotationSubmitPayload {
+	return {
+		viewId: "42:sess-1",
+		tabId: "t1",
+		pageKey: session.page.url,
+		sessionToken: "annotation-session-1",
+		session,
 	};
 }
 
@@ -63,7 +75,7 @@ describe("formatBrowserAnnotationMessage", () => {
 			updatedAt: "2026-09-10T12:00:00.000Z",
 		});
 
-		const message = formatBrowserAnnotationMessage({ viewId: "42:sess-1", session });
+		const message = formatBrowserAnnotationMessage(submitPayload(session));
 
 		expect(message).toMatch(/^<browser_annotations>\n/);
 		expect(message).toContain("Browser feedback");
@@ -89,7 +101,7 @@ describe("formatBrowserAnnotationMessage", () => {
 			updatedAt: "2026-09-10T12:00:00.000Z",
 		});
 
-		const message = formatBrowserAnnotationMessage({ viewId: "42:sess-1", session }, { screenshotPaths: [".ao/attachments/example.png"] });
+		const message = formatBrowserAnnotationMessage(submitPayload(session), { screenshotPaths: [".ao/attachments/example.png"] });
 
 		expect(message).toContain("Comment: Why is this disabled?");
 		expect(message).toContain("Address the feedback below according to its wording");
@@ -110,7 +122,7 @@ describe("formatBrowserAnnotationMessage", () => {
 			updatedAt: "2026-09-10T12:00:00.000Z",
 		});
 
-		const message = formatBrowserAnnotationMessage({ viewId: "42:sess-1", session });
+		const message = formatBrowserAnnotationMessage(submitPayload(session));
 
 		expect(message).not.toContain("Comment:");
 		expect(message).not.toContain("(empty)");
@@ -133,10 +145,7 @@ describe("formatBrowserAnnotationMessage", () => {
 		});
 
 		const parsed = parseBrowserAnnotationMessage(
-			formatBrowserAnnotationMessage(
-				{ viewId: "42:sess-1", session },
-				{ screenshotPaths: [".ao/attachments/example.png"] },
-			),
+			formatBrowserAnnotationMessage(submitPayload(session), { screenshotPaths: [".ao/attachments/example.png"] }),
 		);
 
 		expect(parsed).toEqual({
@@ -170,7 +179,7 @@ describe("formatBrowserAnnotationMessage", () => {
 			});
 		}
 
-		const message = formatBrowserAnnotationMessage({ viewId: "42:sess-1", session });
+		const message = formatBrowserAnnotationMessage(submitPayload(session));
 
 		expect(message.length).toBeLessThanOrEqual(MAX_BROWSER_ANNOTATION_MESSAGE_LENGTH);
 		expect(message).toContain("[truncated]");

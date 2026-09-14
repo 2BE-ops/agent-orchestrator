@@ -142,6 +142,9 @@ export type BrowserAnnotationPageSubmitPayload = { session: BrowserAnnotationSes
 export type BrowserAnnotationSnapshot = { mimeType: string; data: string };
 export type BrowserAnnotationSubmitPayload = BrowserAnnotationPageSubmitPayload & {
 	viewId: string;
+	tabId: string;
+	pageKey: string;
+	sessionToken: string;
 	snapshot?: BrowserAnnotationSnapshot;
 };
 export type BrowserAnnotationStatePayload = {
@@ -150,7 +153,13 @@ export type BrowserAnnotationStatePayload = {
 	screenshotCount: number;
 	hasDraft: boolean;
 };
-export type BrowserAnnotationCompleteInput = { viewId: string; success: boolean };
+export type BrowserAnnotationCompleteInput = {
+	viewId: string;
+	tabId: string;
+	pageKey: string;
+	sessionToken: string;
+	success: boolean;
+};
 export type BrowserAnnotationDiscardInput = { viewId: string };
 export type BrowserAnnotationActionInput = {
 	viewId: string;
