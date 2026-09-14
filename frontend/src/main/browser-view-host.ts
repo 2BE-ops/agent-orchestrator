@@ -2782,14 +2782,35 @@ async function fetchFaviconFromSession(tabSession: Session, url: string): Promis
 		if (!response.ok) return undefined;
 		const buffer = await readBoundedResponseBody(response, MAX_FAVICON_BYTES);
 		if (!buffer || buffer.byteLength === 0) return undefined;
-		const image = nativeImage.createFromBuffer(buffer);
-		if (image.isEmpty()) return undefined;
-		return image.resize({ width: FAVICON_SIZE, height: FAVICON_SIZE, quality: "good" }).toDataURL();
+		try {
+			const image = nativeImage.createFromBuffer(buffer);
+			if (!image.isEmpty()) {
+				return image.resize({ width: FAVICON_SIZE, height: FAVICON_SIZE, quality: "good" }).toDataURL();
+			}
+		} catch {
+			// Fall through to the validated ICO path below. Test environments and
+			// some Electron platforms throw rather than returning an empty image.
+		}
+		// nativeImage does not decode ICO buffers on every platform (notably
+		// macOS), while Chromium's <img> decoder does. Preserve a bounded,
+		// structurally valid ICO as local image data rather than falling back to
+		// a direct renderer request that would escape the selected profile.
+		if (isIcoBuffer(buffer)) return `data:image/x-icon;base64,${buffer.toString("base64")}`;
+		return undefined;
 	} catch {
 		return undefined;
 	} finally {
 		clearTimeout(timeout);
 	}
+}
+
+function isIcoBuffer(buffer: Buffer): boolean {
+	return (
+		buffer.byteLength >= 6 &&
+		buffer.readUInt16LE(0) === 0 &&
+		buffer.readUInt16LE(2) === 1 &&
+		buffer.readUInt16LE(4) > 0
+	);
 }
 
 async function readBoundedResponseBody(response: Response, maxBytes: number): Promise<Buffer | undefined> {

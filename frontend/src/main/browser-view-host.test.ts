@@ -1387,6 +1387,27 @@ describe("browser profile partitions and replacement", () => {
 		const named = setupTabHost(fakeBrowserProfileStore(profile, { "worker-1": profile.id }));
 		const namedNav = (await named.invoke("browser:ensure", "worker-1")) as BrowserNavState;
 		const fetch = named.views[0]!.webContents.session.fetch;
+		const ico = new Uint8Array([0, 0, 1, 0, 1, 0]);
+		let icoDelivered = false;
+		fetch.mockResolvedValueOnce({
+			ok: true,
+			headers: new Headers({ "content-length": String(ico.byteLength), "content-type": "image/x-icon" }),
+			body: {
+				getReader: () => ({
+					read: vi.fn(async () => {
+						if (icoDelivered) return { done: true, value: undefined };
+						icoDelivered = true;
+						return { done: false, value: ico };
+					}),
+					cancel: vi.fn(async () => undefined),
+					releaseLock: vi.fn(),
+				}),
+			},
+		} as unknown as Response);
+		await expect(named.invoke("browser:history:favicon", {
+			viewId: namedNav.viewId,
+			url: "https://uses-ico.example/icon",
+		})).resolves.toBe("data:image/x-icon;base64,AAABAAEA");
 
 		const responseCancel = vi.fn(async () => undefined);
 		fetch.mockResolvedValueOnce({
