@@ -22,17 +22,46 @@ type Store interface {
 	PutProjectSummary(ctx context.Context, summary domain.ProjectSummary) error
 }
 
+// ReportOutputFact is an opaque output reference from a persisted worker report.
+type ReportOutputFact struct {
+	Kind      string
+	Reference string
+	Label     string
+}
+
+// ReportFact is the delivery-independent subset of a persisted worker report.
+type ReportFact struct {
+	ID          string
+	SessionID   domain.SessionID
+	State       string
+	Note        string
+	Message     string
+	Outputs     []ReportOutputFact
+	CreatedAt   time.Time
+	RepeatCount int64
+}
+
+// ReportReader returns persisted reports in creation and id order without mutating delivery state.
+type ReportReader interface {
+	ListProject(context.Context, domain.ProjectID) ([]ReportFact, error)
+}
+
 // Service builds and persists project summary projections.
 type Service struct {
 	store     Store
 	generator NarrativeGenerator
+	reports   ReportReader
 	clock     func() time.Time
 	locks     sync.Map
 }
 
 // New constructs a project summary service.
-func New(store Store, generator NarrativeGenerator) *Service {
-	return &Service{store: store, generator: generator, clock: time.Now}
+func New(store Store, generator NarrativeGenerator, reports ...ReportReader) *Service {
+	service := &Service{store: store, generator: generator, clock: time.Now}
+	if len(reports) > 0 {
+		service.reports = reports[0]
+	}
+	return service
 }
 
 // Get reads the current projection and regenerates it when requested or missing.
@@ -67,7 +96,14 @@ func (s *Service) Get(ctx context.Context, projectID domain.ProjectID, refresh b
 	if err != nil {
 		return domain.ProjectSummary{}, err
 	}
-	next := project(projectID, workers, prs, s.clock())
+	var reports []ReportFact
+	if s.reports != nil {
+		reports, err = s.reports.ListProject(ctx, projectID)
+		if err != nil {
+			return domain.ProjectSummary{}, fmt.Errorf("list project reports: %w", err)
+		}
+	}
+	next := project(projectID, workers, prs, reports, s.clock())
 	current, ok, err := s.store.GetProjectSummary(ctx, projectID)
 	if err != nil {
 		return domain.ProjectSummary{}, err
@@ -131,7 +167,7 @@ func preserveAttention(previous, observed []domain.ProjectAttentionItem) []domai
 	return result
 }
 
-func project(projectID domain.ProjectID, workers []domain.SessionRecord, prs map[domain.SessionID][]domain.PRFacts, at time.Time) domain.ProjectSummary {
+func project(projectID domain.ProjectID, workers []domain.SessionRecord, prs map[domain.SessionID][]domain.PRFacts, reports []ReportFact, at time.Time) domain.ProjectSummary {
 	sort.Slice(workers, func(i, j int) bool { return workers[i].ID < workers[j].ID })
 	h := sha256.New()
 	result := domain.ProjectSummary{ProjectID: projectID, GeneratedAt: at, NeedsAttention: []domain.ProjectAttentionItem{}, Outputs: []domain.ProjectSummaryOutput{}}
@@ -166,8 +202,33 @@ func project(projectID domain.ProjectID, workers []domain.SessionRecord, prs map
 			result.Outputs = append(result.Outputs, domain.ProjectSummaryOutput{SessionID: worker.ID, SessionName: displayName(worker), Kind: "pull_request", URL: pr.URL, Number: pr.Number, State: state})
 		}
 	}
+	for _, report := range reports {
+		_, _ = fmt.Fprintf(h, "%s|%s|%s|%s|%s|%d;", report.ID, report.SessionID, report.State, report.Note, report.Message, report.RepeatCount)
+		if report.State == "needs_input" {
+			question := strings.TrimSpace(report.Note)
+			if question == "" {
+				question = strings.TrimSpace(report.Message)
+			}
+			if question != "" {
+				result.NeedsAttention = append(result.NeedsAttention, domain.ProjectAttentionItem{SessionID: report.SessionID, SessionName: workerName(workers, report.SessionID), Question: question})
+			}
+		}
+		for _, output := range report.Outputs {
+			_, _ = fmt.Fprintf(h, "%s|%s|%s;", output.Kind, output.Reference, output.Label)
+			result.Outputs = append(result.Outputs, domain.ProjectSummaryOutput{SessionID: report.SessionID, SessionName: workerName(workers, report.SessionID), Kind: output.Kind, Reference: output.Reference, Label: output.Label})
+		}
+	}
 	result.SourceWatermark = hex.EncodeToString(h.Sum(nil))
 	return result
+}
+
+func workerName(workers []domain.SessionRecord, id domain.SessionID) string {
+	for _, worker := range workers {
+		if worker.ID == id {
+			return displayName(worker)
+		}
+	}
+	return string(id)
 }
 
 func displayName(session domain.SessionRecord) string {

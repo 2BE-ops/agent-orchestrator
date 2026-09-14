@@ -27,8 +27,10 @@ type ProjectAttentionItem struct {
 type ProjectSummaryOutput struct {
 	SessionID   SessionID `json:"sessionId"`
 	SessionName string    `json:"sessionName"`
-	Kind        string    `json:"kind" enum:"pull_request"`
-	URL         string    `json:"url"`
-	Number      int       `json:"number"`
-	State       string    `json:"state"`
+	Kind        string    `json:"kind"`
+	Reference   string    `json:"reference,omitempty"`
+	Label       string    `json:"label,omitempty"`
+	URL         string    `json:"url,omitempty"`
+	Number      int       `json:"number,omitempty"`
+	State       string    `json:"state,omitempty"`
 }

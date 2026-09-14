@@ -3747,13 +3747,14 @@ export interface components {
             sessionPrefix: string;
         };
         ProjectSummaryOutput: {
-            /** @enum {string} */
-            kind: "pull_request";
-            number: number;
+            kind: string;
+            label?: string;
+            number?: number;
+            reference?: string;
             sessionId: string;
             sessionName: string;
-            state: string;
-            url: string;
+            state?: string;
+            url?: string;
         };
         ProjectSummaryResponse: {
             summary: components["schemas"]["ProjectSummaryView"];

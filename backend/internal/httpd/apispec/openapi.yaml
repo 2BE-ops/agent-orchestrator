@@ -10569,11 +10569,13 @@ components:
     ProjectSummaryOutput:
       properties:
         kind:
-          enum:
-          - pull_request
+          type: string
+        label:
           type: string
         number:
           type: integer
+        reference:
+          type: string
         sessionId:
           type: string
         sessionName:
@@ -10586,9 +10588,6 @@ components:
       - sessionId
       - sessionName
       - kind
-      - url
-      - number
-      - state
       type: object
     ProjectSummaryResponse:
       properties:

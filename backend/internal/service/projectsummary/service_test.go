@@ -40,6 +40,16 @@ type fakeGenerator struct {
 	calls  int
 }
 
+type fakeReportReader struct {
+	reports []ReportFact
+	calls   int
+}
+
+func (f *fakeReportReader) ListProject(context.Context, domain.ProjectID) ([]ReportFact, error) {
+	f.calls++
+	return f.reports, nil
+}
+
 func (f *fakeGenerator) Update(context.Context, GenerationRequest) (string, error) {
 	f.calls++
 	return f.result, f.err
@@ -110,5 +120,29 @@ func TestAttentionPersistsWhenWorkerAdvancesWithoutResolutionEvidence(t *testing
 	store.sessions[1].UpdatedAt = base.Add(time.Minute)
 	if got, _ := svc.Get(context.Background(), "demo", true); len(got.NeedsAttention) != 1 {
 		t.Fatalf("attention = %d, want preserved", len(got.NeedsAttention))
+	}
+}
+
+func TestRefreshConsumesReadOnlyReportFactsAndOutputs(t *testing.T) {
+	base := time.Date(2026, 9, 14, 8, 0, 0, 0, time.UTC)
+	store := &fakeStore{sessions: []domain.SessionRecord{{ID: "orchestrator", ProjectID: "demo", Kind: domain.KindOrchestrator, Harness: domain.HarnessCodex}, {ID: "worker", ProjectID: "demo", Kind: domain.KindWorker, DisplayName: "Worker", Activity: domain.Activity{State: domain.ActivityActive}, UpdatedAt: base}}, prs: map[domain.SessionID][]domain.PRFacts{}}
+	reports := &fakeReportReader{reports: []ReportFact{{ID: "rpt-1", SessionID: "worker", State: "needs_input", Note: "Choose the API shape.", CreatedAt: base, RepeatCount: 1, Outputs: []ReportOutputFact{{Kind: "artifact", Reference: "opaque-output", Label: "Design"}}}}}
+	generator := &fakeGenerator{result: "The API decision is pending."}
+	svc := New(store, generator, reports)
+	first, err := svc.Get(context.Background(), "demo", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reports.calls != 1 || len(first.NeedsAttention) != 1 || len(first.Outputs) != 1 || first.Outputs[0].Reference != "opaque-output" {
+		t.Fatalf("summary did not consume report projection: %#v", first)
+	}
+	watermark := first.SourceWatermark
+	reports.reports[0].Note = "Choose the final API shape."
+	second, err := svc.Get(context.Background(), "demo", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.SourceWatermark == watermark || generator.calls != 2 {
+		t.Fatalf("report change did not regenerate: watermark=%q calls=%d", second.SourceWatermark, generator.calls)
 	}
 }
