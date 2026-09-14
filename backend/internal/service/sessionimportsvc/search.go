@@ -199,7 +199,6 @@ func (s *Service) refreshSearch() {
 			if !ok {
 				return nil
 			}
-			value.RepositoryCommonDir = gitCommonDir(value.CWD)
 			err = state.index.Put(state.ctx, root, path, info.Size(), info.ModTime().UnixNano(), generation, value)
 			if err == nil {
 				state.mu.Lock()
@@ -335,7 +334,6 @@ func (s *Service) selected(ctx context.Context, id string) (sessionimport.Import
 		if !ok || fresh.NativeSessionID != r.Session.NativeSessionID {
 			return sessionimport.ImportableSession{}, ErrImportSessionNotFound
 		}
-		fresh.RepositoryCommonDir = r.Session.RepositoryCommonDir
 		if fresh.Provider == domain.HarnessCodex {
 			key := string(src.Provider()) + "\x00" + root
 			if err := s.refreshTitles(ctx, source, key); err != nil {
@@ -406,7 +404,6 @@ func (s *Service) destination(ctx context.Context, id string, target sessionimpo
 	}
 	common := gitCommonDir(cwd)
 	if _, err := os.Stat(cwd); err != nil {
-		common = target.RepositoryCommonDir
 		return standalone("This conversation will be imported under Ad hoc agents because its original working directory is missing.")
 	}
 	if common == "" {
