@@ -1,15 +1,15 @@
+import { appI18n } from "../i18n/instance";
 import {
-	CHAT_DRAFT_BOUNDARY_COPY,
 	parseChatDraftBoundaryKinds,
 	type ChatDraftBoundaryKind,
+	type ChatDraftDialogCopy,
 } from "../../shared/chat-draft-risk";
 
 export {
-	CHAT_DRAFT_BOUNDARY_COPY,
 	type ChatDraftBoundaryKind,
 } from "../../shared/chat-draft-risk";
 
-export type ChatDraftBoundarySource = "composer" | "inline-edit";
+export type ChatDraftBoundarySource = "composer" | "inline-edit" | "queued-edit";
 
 const EMPTY_BOUNDARIES: readonly ChatDraftBoundaryKind[] = Object.freeze([]);
 const boundaries = new Map<
@@ -94,16 +94,37 @@ export function subscribeChatDraftBoundaries(listener: () => void): () => void {
 
 export function confirmDiscardChatDraft(
 	kind: ChatDraftBoundaryKind,
-	confirm: (message: string) => boolean = (message) => window.confirm(message),
+	confirm: (message: string) => boolean,
 ): boolean {
 	return confirmDiscardChatDrafts([kind], confirm);
 }
 
+export function chatDraftDiscardWarning(
+	kinds: Iterable<ChatDraftBoundaryKind>,
+): string | undefined {
+	const warnings = [...new Set(kinds)].map(chatDraftBoundaryCopy);
+	if (warnings.length === 0) return undefined;
+	return `${warnings.join("\n\n")}\n\n${appI18n.t("chat.draftDiscard.question")}`;
+}
+
 export function confirmDiscardChatDrafts(
 	kinds: Iterable<ChatDraftBoundaryKind>,
-	confirm: (message: string) => boolean = (message) => window.confirm(message),
+	confirm: (message: string) => boolean,
 ): boolean {
-	const warnings = [...new Set(kinds)].map((kind) => CHAT_DRAFT_BOUNDARY_COPY[kind]);
-	if (warnings.length === 0) return true;
-	return confirm(`${warnings.join("\n\n")}\n\nLeave this chat anyway?`);
+	const warning = chatDraftDiscardWarning(kinds);
+	return warning ? confirm(warning) : true;
+}
+
+export function chatDraftBoundaryCopy(kind: ChatDraftBoundaryKind): string {
+	return appI18n.t(kind === "persistence-failed" ? "chat.draftDiscard.persistenceFailed" : "chat.draftDiscard.pendingAttachments");
+}
+
+export function chatDraftDialogCopy(kinds: Iterable<ChatDraftBoundaryKind>): ChatDraftDialogCopy {
+	return {
+		title: appI18n.t("chat.draftDiscard.nativeTitle"),
+		message: appI18n.t("chat.draftDiscard.nativeMessage"),
+		detail: [...new Set(kinds)].map(chatDraftBoundaryCopy).join("\n\n"),
+		stay: appI18n.t("chat.draftDiscard.stay"),
+		leave: appI18n.t("chat.draftDiscard.leaveAnyway"),
+	};
 }

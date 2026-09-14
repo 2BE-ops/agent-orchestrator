@@ -409,6 +409,7 @@ const EditorBridge = forwardRef<
 					$replaceEditorContent(EMPTY_COMPOSER_CONTENT);
 					editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
 				}, {
+					discrete: true,
 					tag: PROGRAMMATIC_TEXT_UPDATE_TAG,
 				});
 			},
@@ -433,6 +434,7 @@ const EditorBridge = forwardRef<
 							applyPendingRestoreSelection();
 						});
 					},
+					discrete: true,
 					tag: PROGRAMMATIC_TEXT_UPDATE_TAG,
 				});
 			},
@@ -482,7 +484,11 @@ const EditorBridge = forwardRef<
 		};
 		const removeEnter = editor.registerCommand(
 			KEY_ENTER_COMMAND,
-			(event) => complete(event, "Enter"),
+			(event) => {
+				if (event?.isComposing || event?.shiftKey || editor.isComposing()) return false;
+				if (complete(event, "Enter")) return true;
+				return false;
+			},
 			COMMAND_PRIORITY_HIGH,
 		);
 		const removeTab = editor.registerCommand(

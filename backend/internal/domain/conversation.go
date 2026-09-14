@@ -56,12 +56,15 @@ const (
 	TurnStateRecovered   TurnState = "recovered"
 	TurnStateInterrupted TurnState = "interrupted"
 	TurnStateFailed      TurnState = "failed"
+	// TurnStateCancelled marks a queued turn the user withdrew from the dock
+	// before dispatch. Stop and handoff still settle the queue as interrupted.
+	TurnStateCancelled TurnState = "cancelled"
 )
 
 // Terminal reports whether no further work is expected on the turn.
 func (s TurnState) Terminal() bool {
 	switch s {
-	case TurnStateCompleted, TurnStateRecovered, TurnStateInterrupted, TurnStateFailed:
+	case TurnStateCompleted, TurnStateRecovered, TurnStateInterrupted, TurnStateFailed, TurnStateCancelled:
 		return true
 	default:
 		return false
@@ -200,20 +203,51 @@ type ConversationRecord struct {
 	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
+// ConversationBranchStrategy records how a provider branch was materialized.
+// Native branches preserve provider-owned history; approximate branches seed a
+// fresh provider session with bounded AO-owned textual context.
+type ConversationBranchStrategy string
+
+const (
+	// ConversationBranchStrategyNative preserves the provider's exact history.
+	ConversationBranchStrategyNative ConversationBranchStrategy = "native"
+	// ConversationBranchStrategyApproximateContext starts a fresh provider
+	// session from bounded AO-owned context.
+	ConversationBranchStrategyApproximateContext ConversationBranchStrategy = "approximate_context"
+)
+
+// NormalizeConversationBranchStrategy keeps pre-strategy rows compatible. Only
+// the empty legacy value means native; unknown nonempty values are preserved so
+// a newer materialization strategy is never misreported as exact history.
+func NormalizeConversationBranchStrategy(strategy ConversationBranchStrategy) ConversationBranchStrategy {
+	if strategy == "" {
+		return ConversationBranchStrategyNative
+	}
+	return strategy
+}
+
 // ConversationBranch is one durable provider-thread lineage node.
 type ConversationBranch struct {
 	ID                     string    `json:"id"`
 	ConversationID         string    `json:"conversationId"`
 	SessionID              SessionID `json:"sessionId"`
 	ProviderConversationID string    `json:"-"`
-	// ProviderScopeID is the root created for one provider ownership epoch. Agent
-	// switches start a new scope while keeping older AO history visible.
+	ParentBranchID         string    `json:"parentBranchId,omitempty"`
+	ForkAfterTurnID        string    `json:"forkAfterTurnId,omitempty"`
+	ReplacedTurnID         string    `json:"replacedTurnId,omitempty"`
+	ReplacementTurnID      string    `json:"replacementTurnId,omitempty"`
+	ForkAfterSequence      int64     `json:"-"`
+	// Strategy distinguishes native anchored forks from approximate user-context
+	// branches.
+	Strategy             ConversationBranchStrategy `json:"strategy,omitempty"`
+	ReplayCutoffSequence int64                      `json:"-"`
+	ReplayTruncated      bool                       `json:"replayTruncated,omitempty"`
+	// ProviderBindingID identifies the durable adapter/configuration epoch that
+	// can reopen this branch. It is deliberately separate from ProviderScopeID:
+	// approximate siblings own different opaque-id namespaces while remaining
+	// reopenable by the same provider binding.
+	ProviderBindingID string    `json:"-"`
 	ProviderScopeID   string    `json:"-"`
-	ParentBranchID    string    `json:"parentBranchId,omitempty"`
-	ForkAfterTurnID   string    `json:"forkAfterTurnId,omitempty"`
-	ReplacedTurnID    string    `json:"replacedTurnId,omitempty"`
-	ReplacementTurnID string    `json:"replacementTurnId,omitempty"`
-	ForkAfterSequence int64     `json:"-"`
 	Active            bool      `json:"active"`
 	CreatedAt         time.Time `json:"createdAt"`
 }
@@ -238,6 +272,8 @@ type ConversationEditAnchor struct {
 	ReplacedTurnID              string
 	PreviousProviderTurnID      string
 	ForkAfterSequence           int64
+	ReplayFloorSequence         int64
+	HasPriorContext             bool
 	OriginalDeliveryContentJSON string
 	RetryActiveBranch           bool
 }
@@ -433,6 +469,9 @@ type ConversationSettings struct {
 	ReasoningEffort string `json:"reasoningEffort,omitempty"`
 	// ApprovalMode is AO's permission vocabulary, applied per turn.
 	ApprovalMode PermissionMode `json:"approvalMode,omitempty"`
+	// OpenCodeMode is the provider-owned mode explicitly selected through ACP.
+	// It is separate from approval policy and restored before accepting turns.
+	OpenCodeMode string `json:"openCodeMode,omitempty"`
 }
 
 // ConversationTurn is one user or automation request plus the agent work it
@@ -619,6 +658,79 @@ type ConversationActivity struct {
 	StreamedTextTruncated bool `json:"streamedTextTruncated,omitempty"`
 }
 
+// ErrNoConversation reports that a session has no conversation row yet. It is not
+// a failure: a Chat session has no conversation until its controller first
+// starts, and a reader should show an empty conversation rather than an error.
+var ErrNoConversation = errors.New("session has no conversation")
+
+// ErrNoQueuedTurn reports that nothing is waiting to be sent. Draining an empty
+// queue is the normal case, not an error.
+var ErrNoQueuedTurn = errors.New("no queued turn")
+
+// ErrNoConversationTurn reports a turn id that is not in the conversation it was
+// named against. It lives here rather than in the storage layer so a controller and
+// an HTTP handler can both recognize it without importing SQLite.
+var ErrNoConversationTurn = errors.New("conversation turn not found")
+
+// ErrNoConversationBranch reports a branch id outside the named conversation.
+var ErrNoConversationBranch = errors.New("conversation branch not found")
+
+// ConversationQueuedEditDelivery identifies one exact queued-message mutation.
+// Only its digest is stored; uploaded image bytes remain with the message.
+type ConversationQueuedEditDelivery struct {
+	ClientMessageID string
+	RequestHash     string
+}
+
+// ConversationEditDelivery is AO's durable answer to one caller-owned inline
+// edit handle. A reservation with ProviderWorkStarted set cannot be dispatched
+// again without proof of its outcome. Earlier reservations can resume safely.
+// Accepted and rejected results replay across branch changes and daemon restarts.
+type ConversationEditDelivery struct {
+	ConversationID      string
+	ClientMessageID     string
+	RequestJSON         string
+	ProviderWorkStarted bool
+	State               ConversationEditDeliveryState
+	SourceBranchID      string
+	ActiveBranchID      string
+	Turn                ConversationTurn
+	RejectionKind       ConversationEditRejectionKind
+	RejectionMessage    string
+	CreatedAt           time.Time
+	SettledAt           *time.Time
+}
+
+// ConversationEditDeliveryState records whether a reserved edit was accepted
+// or definitively rejected.
+type ConversationEditDeliveryState string
+
+// Conversation edit delivery states.
+const (
+	ConversationEditReserved ConversationEditDeliveryState = "reserved"
+	ConversationEditAccepted ConversationEditDeliveryState = "accepted"
+	ConversationEditRejected ConversationEditDeliveryState = "rejected"
+)
+
+// ConversationEditRejectionKind reconstructs errors.Is behavior for definitive
+// edit failures after the controller that observed them no longer exists.
+type ConversationEditRejectionKind string
+
+// Conversation edit rejection kinds.
+const (
+	ConversationEditRejectedInvalid             ConversationEditRejectionKind = "invalid_turn"
+	ConversationEditRejectedMissingTurn         ConversationEditRejectionKind = "missing_turn"
+	ConversationEditRejectedUnsupported         ConversationEditRejectionKind = "unsupported"
+	ConversationEditRejectedBusy                ConversationEditRejectionKind = "busy"
+	ConversationEditRejectedInterfaceTransition ConversationEditRejectionKind = "interface_transition"
+	ConversationEditRejectedByProvider          ConversationEditRejectionKind = "provider_refused"
+	// ConversationEditRejectedProviderFailure records a generic local preparation
+	// failure when AO can prove provider dispatch never occurred. It also replays
+	// reservations settled by older builds that treated generic provider/transport
+	// errors as definitive.
+	ConversationEditRejectedProviderFailure ConversationEditRejectionKind = "provider_failure"
+)
+
 // ConversationSteerDelivery is AO's durable answer to one idempotent steer.
 // Reserved is deliberately terminal from an automatic-retry perspective: once
 // provider I/O may have begun, only a recorded accepted or rejected result can
@@ -661,66 +773,3 @@ const (
 	ConversationSteerRejectedByProvider          ConversationSteerRejectionKind = "provider_refused"
 	ConversationSteerRejectedInterfaceTransition ConversationSteerRejectionKind = "interface_transition"
 )
-
-// ConversationEditDelivery is AO's durable answer to one caller-owned inline
-// edit handle. Reserved means provider delivery may have happened and therefore
-// cannot be attempted automatically again. Accepted and rejected are replayable
-// across active-lineage changes and daemon restarts.
-type ConversationEditDelivery struct {
-	ConversationID   string
-	ClientMessageID  string
-	RequestJSON      string
-	State            ConversationEditDeliveryState
-	SourceBranchID   string
-	ActiveBranchID   string
-	Turn             ConversationTurn
-	RejectionKind    ConversationEditRejectionKind
-	RejectionMessage string
-	CreatedAt        time.Time
-	SettledAt        *time.Time
-}
-
-// ConversationEditDeliveryState records whether a reserved edit was accepted
-// or definitively rejected.
-type ConversationEditDeliveryState string
-
-// Conversation edit delivery states.
-const (
-	ConversationEditReserved ConversationEditDeliveryState = "reserved"
-	ConversationEditAccepted ConversationEditDeliveryState = "accepted"
-	ConversationEditRejected ConversationEditDeliveryState = "rejected"
-)
-
-// ConversationEditRejectionKind reconstructs errors.Is behavior for definitive
-// edit failures after the controller that observed them no longer exists.
-type ConversationEditRejectionKind string
-
-// Conversation edit rejection kinds.
-const (
-	ConversationEditRejectedInvalid             ConversationEditRejectionKind = "invalid_turn"
-	ConversationEditRejectedUnsupported         ConversationEditRejectionKind = "unsupported"
-	ConversationEditRejectedBusy                ConversationEditRejectionKind = "busy"
-	ConversationEditRejectedInterfaceTransition ConversationEditRejectionKind = "interface_transition"
-	ConversationEditRejectedByProvider          ConversationEditRejectionKind = "provider_refused"
-	// ConversationEditRejectedProviderFailure is retained only to replay
-	// reservations settled by builds that treated a generic provider/transport
-	// error as definitive.
-	ConversationEditRejectedProviderFailure ConversationEditRejectionKind = "provider_failure"
-)
-
-// ErrNoConversation reports that a session has no conversation row yet. It is not
-// a failure: a Chat session has no conversation until its controller first
-// starts, and a reader should show an empty conversation rather than an error.
-var ErrNoConversation = errors.New("session has no conversation")
-
-// ErrNoQueuedTurn reports that nothing is waiting to be sent. Draining an empty
-// queue is the normal case, not an error.
-var ErrNoQueuedTurn = errors.New("no queued turn")
-
-// ErrNoConversationTurn reports a turn id that is not in the conversation it was
-// named against. It lives here rather than in the storage layer so a controller and
-// an HTTP handler can both recognize it without importing SQLite.
-var ErrNoConversationTurn = errors.New("conversation turn not found")
-
-// ErrNoConversationBranch reports a branch id outside the named conversation.
-var ErrNoConversationBranch = errors.New("conversation branch not found")
