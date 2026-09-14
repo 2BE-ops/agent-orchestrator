@@ -443,26 +443,6 @@ export const useUiStore = create<UiState>((set, get) => ({
 			delete visibleTerminalKindBySession[sessionId];
 			return { visibleTerminalKindBySession };
 		}),
-	setProjectRestarting: (projectId, restarting) =>
-		set((state) => {
-			const restartingProjectIds = new Set(state.restartingProjectIds);
-			if (restarting) {
-				restartingProjectIds.add(projectId);
-			} else {
-				restartingProjectIds.delete(projectId);
-			}
-			return { restartingProjectIds };
-		}),
-	setOrchestratorReplacementError: (projectId, message) =>
-		set((state) => {
-			const orchestratorReplacementErrors = { ...state.orchestratorReplacementErrors };
-			if (message) {
-				orchestratorReplacementErrors[projectId] = message;
-			} else {
-				delete orchestratorReplacementErrors[projectId];
-			}
-			return { orchestratorReplacementErrors };
-		}),
 }));
 
 export function useResolvedTheme(): Theme {

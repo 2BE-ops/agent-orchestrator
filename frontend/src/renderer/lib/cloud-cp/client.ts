@@ -170,6 +170,10 @@ export interface CloudCpClient {
 		options?: CloudCpRequestOptions,
 	): Promise<CloudCpTerminalTicketResponse>;
 
+	getAvailableAgents(
+		orgId: string,
+		options?: CloudCpRequestOptions,
+	): Promise<CloudCpAvailableAgentsResponse>;
 	listProviderConnections(
 		orgId: string,
 		options?: CloudCpRequestOptions,
@@ -413,6 +417,8 @@ export function createCloudCpClient(options: CloudCpClientOptions): CloudCpClien
 				signal: o?.signal,
 			}),
 
+		getAvailableAgents: (orgId, o) =>
+			requestJson("GET", `/orgs/${seg(orgId)}/agents/available`, { signal: o?.signal }),
 		listProviderConnections: (orgId, o) =>
 			requestJson("GET", `/orgs/${seg(orgId)}/provider-connections`, { signal: o?.signal }),
 		listUserProviderConnections: (o) => requestJson("GET", "/me/providers", { signal: o?.signal }),

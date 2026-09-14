@@ -1964,9 +1964,6 @@ func (m *Manager) retireWorkspaceProjectForReplacement(ctx context.Context, rec 
 	if err := m.lcm.MarkTerminated(ctx, rec.ID); err != nil {
 		return fmt.Errorf("retire replacement %s: mark terminated: %w", rec.ID, err)
 	}
-	if err := m.lcm.MarkTerminated(ctx, rec.ID); err != nil {
-		return fmt.Errorf("retire replacement %s: mark terminated: %w", id, err)
-	}
 	return nil
 }
 

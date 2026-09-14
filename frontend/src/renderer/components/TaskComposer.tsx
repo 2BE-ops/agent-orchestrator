@@ -22,6 +22,7 @@ import { type FileAttachmentPayload, useFileAttachments } from "../hooks/useFile
 import { useSettings } from "../hooks/useSettings";
 import { useCloudCp } from "../hooks/useCloudCp";
 import { useCloudOrg } from "../hooks/useCloudOrg";
+import { useProviderConnections } from "../hooks/useProviderConnections";
 import { useSandboxProviderStore } from "../stores/sandbox-provider-store";
 import { cloudSessionsQueryKey, useCloudProjectsQuery } from "../hooks/useWorkspaceQuery";
 import {

@@ -683,22 +683,6 @@ function ShellLayout() {
 		[navigate, queryClient, setOrchestratorReplacementError, setProjectRestarting],
 	);
 
-	const restartOrchestrator = useCallback(
-		async (projectId: string) => {
-			await restartProjectOrchestrator({
-				projectId,
-				queryClient,
-				navigate,
-				setProjectRestarting,
-				setOrchestratorReplacementError,
-				onError: (error) => {
-					captureOrchestratorReplacementFailure(error, projectId);
-				},
-			});
-		},
-		[navigate, queryClient, setOrchestratorReplacementError, setProjectRestarting],
-	);
-
 	useEffect(() => {
 		applyDocumentTheme(resolvedTheme);
 	}, [resolvedTheme]);

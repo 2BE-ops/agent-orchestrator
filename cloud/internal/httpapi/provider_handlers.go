@@ -16,6 +16,8 @@ const defaultAgentConnectionLabel = "default"
 
 const githubPATProvider = "github"
 
+var validAgentsList = []string{"claude-code", "codex", "cursor"}
+
 type providerConnectionStore interface {
 	ListProviderConnections(
 		context.Context,
