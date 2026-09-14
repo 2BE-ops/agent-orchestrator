@@ -51,6 +51,11 @@ type chatSendAPIResponse struct {
 	Duplicate      bool   `json:"duplicate"`
 }
 
+type promoteQueuedTurnAPIResponse struct {
+	SourceTurnID   string `json:"sourceTurnId"`
+	ProviderTurnID string `json:"providerTurnId"`
+}
+
 func newSendCommand(ctx *commandContext) *cobra.Command {
 	var opts sendOptions
 	cmd := &cobra.Command{
@@ -146,6 +151,23 @@ func (c *commandContext) steerMessage(
 		Text: message, ClientMessageID: clientMessageID,
 	}, &sent); err != nil {
 		return err
+	}
+	if sent.State == "queued" {
+		if sent.TurnID == "" {
+			return errors.New("daemon returned a queued Chat turn without a turn id")
+		}
+		var promoted promoteQueuedTurnAPIResponse
+		if err := c.postJSON(ctx,
+			sessionPath+"/conversation/turns/"+url.PathEscape(sent.TurnID)+"/steer",
+			nil,
+			&promoted,
+		); err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintf(c.deps.Out,
+			"A turn started during fallback. Queued message %s was steered into active turn %s; agent action is not confirmed.\n",
+			promoted.SourceTurnID, promoted.ProviderTurnID)
+		return nil
 	}
 	if sent.Duplicate {
 		_, _ = fmt.Fprintln(c.deps.Out, "Message was already accepted; delivery state is unchanged.")

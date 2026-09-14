@@ -172,6 +172,52 @@ func TestSend_SteerIdleStartsOneNormalChatTurn(t *testing.T) {
 	}
 }
 
+func TestSend_SteerIdlePromotesFallbackQueuedByStateChangeRace(t *testing.T) {
+	t.Setenv("AO_SESSION_ID", "")
+	cfg := setConfigEnv(t)
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/internal/") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/sessions/demo-1/conversation/steer":
+			w.WriteHeader(http.StatusConflict)
+			_, _ = io.WriteString(w, `{"error":"conflict","code":"CHAT_NO_ACTIVE_TURN","message":"idle"}`)
+		case "/api/v1/sessions/demo-1/conversation/messages":
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = io.WriteString(w, `{"turnId":"queued-2","state":"queued","duplicate":false}`)
+		case "/api/v1/sessions/demo-1/conversation/turns/queued-2/steer":
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = io.WriteString(w, `{"sourceTurnId":"queued-2","providerTurnId":"provider-running"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	writeRunFileFor(t, cfg, srv)
+
+	out, errOut, err := executeCLI(t, Deps{ProcessAlive: func(int) bool { return true }},
+		"send", "--session", "demo-1", "--steer", "--message", "race correction")
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr=%s", err, errOut)
+	}
+	wantPaths := []string{
+		"/api/v1/sessions/demo-1/conversation/steer",
+		"/api/v1/sessions/demo-1/conversation/messages",
+		"/api/v1/sessions/demo-1/conversation/turns/queued-2/steer",
+	}
+	if strings.Join(paths, ",") != strings.Join(wantPaths, ",") {
+		t.Fatalf("paths = %v, want %v", paths, wantPaths)
+	}
+	if !strings.Contains(out, "Queued message queued-2 was steered into active turn provider-running") {
+		t.Fatalf("output = %q", out)
+	}
+}
+
 func TestSend_SteerUnsupportedDoesNotSilentlyQueue(t *testing.T) {
 	cfg := setConfigEnv(t)
 	var calls int
