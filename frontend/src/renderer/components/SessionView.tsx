@@ -2161,7 +2161,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 				</div>
 			) : isOrchestrator ? (
 				<div className="session-pinned-actions" data-testid="orchestrator-pinned-actions" style={noDragStyle}>
-					<TopbarButton aria-label={projectSummaryOpen ? "Close project summary" : "Open project summary"} aria-pressed={projectSummaryOpen} onClick={() => setProjectSummaryOpen((open) => !open)} variant="icon">
+					<TopbarButton aria-label={projectSummaryOpen ? t("projectSummary.close") : t("projectSummary.open")} aria-pressed={projectSummaryOpen} onClick={() => setProjectSummaryOpen((open) => !open)} variant="icon">
 						<PanelRight className="size-icon-md" aria-hidden="true" />
 						{projectSummaryAttention > 0 ? <span className="min-w-4 rounded-full bg-warning px-1 font-mono text-[9px] leading-4 text-warning-foreground">{projectSummaryAttention}</span> : null}
 					</TopbarButton>
