@@ -133,7 +133,7 @@ FROM sessions WHERE id = ?
 
 type GetSessionRow struct {
 	ID                               domain.SessionID
-	ProjectID                        domain.ProjectID
+	ProjectID                        *domain.ProjectID
 	Num                              int64
 	IssueID                          domain.IssueID
 	Kind                             domain.SessionKind
@@ -264,7 +264,7 @@ INSERT INTO sessions (
 
 type InsertSessionParams struct {
 	ID                               domain.SessionID
-	ProjectID                        domain.ProjectID
+	ProjectID                        *domain.ProjectID
 	Num                              int64
 	IssueID                          domain.IssueID
 	Kind                             domain.SessionKind
@@ -389,7 +389,7 @@ FROM sessions ORDER BY project_id, num
 
 type ListAllSessionsRow struct {
 	ID                               domain.SessionID
-	ProjectID                        domain.ProjectID
+	ProjectID                        *domain.ProjectID
 	Num                              int64
 	IssueID                          domain.IssueID
 	Kind                             domain.SessionKind
@@ -529,12 +529,12 @@ SELECT id, project_id, num, issue_id, kind, harness,
     conversation_checkpoint_state, conversation_checkpoint_generation, conversation_checkpoint_native_id,
     conversation_checkpoint_unsettled, conversation_checkpoint_turn_id, native_checkpoint_evidence,
     native_transcript_path, auto_inject_review, auto_inject_ci, auto_review_enabled, model, session_permissions
-FROM sessions WHERE project_id = ? ORDER BY num
+FROM sessions WHERE project_id IS ? ORDER BY num
 `
 
 type ListSessionsByProjectRow struct {
 	ID                               domain.SessionID
-	ProjectID                        domain.ProjectID
+	ProjectID                        *domain.ProjectID
 	Num                              int64
 	IssueID                          domain.IssueID
 	Kind                             domain.SessionKind
@@ -586,7 +586,7 @@ type ListSessionsByProjectRow struct {
 	SessionPermissions               string
 }
 
-func (q *Queries) ListSessionsByProject(ctx context.Context, projectID domain.ProjectID) ([]ListSessionsByProjectRow, error) {
+func (q *Queries) ListSessionsByProject(ctx context.Context, projectID *domain.ProjectID) ([]ListSessionsByProjectRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSessionsByProject, projectID)
 	if err != nil {
 		return nil, err
@@ -665,8 +665,19 @@ const nextSessionNum = `-- name: NextSessionNum :one
 SELECT COALESCE(MAX(num), 0) + 1 AS next FROM sessions WHERE project_id = ?
 `
 
-func (q *Queries) NextSessionNum(ctx context.Context, projectID domain.ProjectID) (int64, error) {
+func (q *Queries) NextSessionNum(ctx context.Context, projectID *domain.ProjectID) (int64, error) {
 	row := q.db.QueryRowContext(ctx, nextSessionNum, projectID)
+	var next int64
+	err := row.Scan(&next)
+	return next, err
+}
+
+const nextStandaloneSessionNum = `-- name: NextStandaloneSessionNum :one
+SELECT COALESCE(MAX(num), 0) + 1 AS next FROM sessions WHERE project_id IS NULL
+`
+
+func (q *Queries) NextStandaloneSessionNum(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, nextStandaloneSessionNum)
 	var next int64
 	err := row.Scan(&next)
 	return next, err
@@ -793,6 +804,17 @@ func (q *Queries) RestoreSessionControllerEpoch(ctx context.Context, arg Restore
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const sessionIDExists = `-- name: SessionIDExists :one
+SELECT COUNT(*) > 0 FROM sessions WHERE id = ?
+`
+
+func (q *Queries) SessionIDExists(ctx context.Context, id domain.SessionID) (bool, error) {
+	row := q.db.QueryRowContext(ctx, sessionIDExists, id)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const sessionIsSeed = `-- name: SessionIsSeed :one

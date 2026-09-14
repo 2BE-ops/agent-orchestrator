@@ -60,9 +60,9 @@ func TestMigrateCheckpointProvenance(t *testing.T) {
 		}
 	})
 
-	t.Run("from_populated_main_139", func(t *testing.T) {
+	t.Run("from_populated_main_140", func(t *testing.T) {
 		// The original remains at 109 after the clone's upgrade. Advancing it
-		// to main proves 140–142 upgrade an actual pre-PR populated database.
+		// to main proves 141–145 upgrade an actual pre-PR populated database.
 		var sourceVersion int
 		if err := db.QueryRow(`SELECT MAX(version_id) FROM goose_db_version WHERE is_applied = 1`).Scan(&sourceVersion); err != nil {
 			t.Fatal(err)
@@ -70,7 +70,7 @@ func TestMigrateCheckpointProvenance(t *testing.T) {
 		if sourceVersion != 109 {
 			t.Fatalf("clone upgrade mutated source version to %d, want 109", sourceVersion)
 		}
-		upTo(t, db, 139)
+		upTo(t, db, 140)
 		if _, err := db.Exec(`INSERT INTO projects (id, path, registered_at)
 		VALUES ('checkpoint-upgrade', '/repos/checkpoint-upgrade', CURRENT_TIMESTAMP);
 		INSERT INTO sessions (id, project_id, num, activity_last_at, created_at, updated_at,
@@ -84,7 +84,7 @@ func TestMigrateCheckpointProvenance(t *testing.T) {
 		}
 		var applied, checkpointColumns, historyPolicyColumns int
 		if err := db.QueryRow(`SELECT COUNT(*) FROM goose_db_version
-		WHERE version_id IN (140, 141, 142) AND is_applied = 1`).Scan(&applied); err != nil {
+		WHERE version_id BETWEEN 141 AND 145 AND is_applied = 1`).Scan(&applied); err != nil {
 			t.Fatal(err)
 		}
 		if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('sessions')
@@ -95,8 +95,8 @@ func TestMigrateCheckpointProvenance(t *testing.T) {
 		WHERE name = 'history_policy'`).Scan(&historyPolicyColumns); err != nil {
 			t.Fatal(err)
 		}
-		if applied != 3 || checkpointColumns != 5 || historyPolicyColumns != 1 {
-			t.Fatalf("upgraded schema: migrations=%d checkpoints=%d policy=%d, want 3/5/1",
+		if applied != 5 || checkpointColumns != 5 || historyPolicyColumns != 1 {
+			t.Fatalf("upgraded schema: migrations=%d checkpoints=%d policy=%d, want 5/5/1",
 				applied, checkpointColumns, historyPolicyColumns)
 		}
 		var prompt, assistant, state, generation, nativeID, turnID string
