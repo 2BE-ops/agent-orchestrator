@@ -189,9 +189,9 @@ if (typeof window !== "undefined") {
 				canGoForward: false,
 				isLoading: false,
 			}),
-			setBounds: () => undefined,
-			setOverlayOpen: () => undefined,
-			navigate: async ({ viewId }: { viewId: string }) => ({
+		setBounds: () => undefined,
+		setOverlayOpen: () => undefined,
+		navigate: async ({ viewId }: { viewId: string }) => ({
 				viewId,
 				url: "",
 				title: "",
@@ -324,6 +324,7 @@ if (typeof window !== "undefined") {
 			returnHome: async () => undefined,
 			download: async () => undefined,
 			install: async () => undefined,
+			isPostUpdateRelaunch: async () => false,
 			onStatus: () => () => undefined,
 		onTelemetry: () => () => undefined,
 		},
