@@ -1,3 +1,4 @@
+import { AppLink } from "../AppLink";
 /**
  * Timeline entries for the Chat surface.
  *
@@ -473,7 +474,10 @@ export function HumanMessage({
 	onEditStart,
 	onEditDraftChange,
 	onEditCancel,
+	onEditAbandonRecovery,
 	editPending = false,
+	editSendBlocked = false,
+	editRecoveryLabel,
 	editBusy = false,
 	editError,
 	branchPoint,
@@ -497,7 +501,10 @@ export function HumanMessage({
 	onEditStart?: () => void;
 	onEditDraftChange?: (text: string) => void;
 	onEditCancel?: () => void;
+	onEditAbandonRecovery?: () => void;
 	editPending?: boolean;
+	editSendBlocked?: boolean;
+	editRecoveryLabel?: string;
 	editBusy?: boolean;
 	editError?: string;
 	branchPoint?: ConversationBranchPoint;
@@ -515,11 +522,15 @@ export function HumanMessage({
 					text={editText ?? message.text}
 					content={message.content ?? []}
 					pending={editPending}
+					locked={Boolean(editRecoveryLabel)}
+					recoveryLabel={editRecoveryLabel}
+					sendBlocked={editSendBlocked}
 					busy={editBusy}
 					reconstructedContext={editReconstructedContext}
 					error={editError}
 					onDraftChange={onEditDraftChange}
 					onCancel={() => onEditCancel?.()}
+					onAbandonRecovery={onEditAbandonRecovery}
 					onSend={(text) => {
 						if (!message.turnId || !onEdit) return;
 						return onEdit(message.turnId, text);
@@ -1930,7 +1941,7 @@ const trailingProviderUrlPunctuation = /[),.;!?}\]]+$/u;
 
 function ProviderErrorLink({ href }: { href: string }) {
 	return (
-		<a
+		<AppLink
 			href={href}
 			target="_blank"
 			rel="noreferrer noopener"
@@ -1941,7 +1952,7 @@ function ProviderErrorLink({ href }: { href: string }) {
 			className="text-markdown-link underline decoration-markdown-link/45 underline-offset-2 transition-colors hover:text-markdown-link-hover hover:decoration-markdown-link-hover/75"
 		>
 			{href}
-		</a>
+		</AppLink>
 	);
 }
 
