@@ -595,14 +595,14 @@ func (c *blockingRateLimitConversation) ReadRateLimits(ctx context.Context) (por
 func TestStartupRateLimitReadCannotPublishAfterProjectRebind(t *testing.T) {
 	provider := newBlockingRateLimitConversation()
 	var ownedStore *writerPreferenceStore
-	h := newHarnessWithConversationAndStoreKind(
+	h := newHarnessWithConversationAndStoreOptions(
 		t,
 		provider,
 		func(st *sqlite.Store) chatsvc.Store {
 			ownedStore = newWriterPreferenceStore(st)
 			return ownedStore
 		},
-		domain.KindOrchestrator,
+		domain.KindOrchestrator, domain.HarnessClaudeCode,
 	)
 	t.Cleanup(func() {
 		closeGate(provider.release)

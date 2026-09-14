@@ -1812,12 +1812,15 @@ func (s *Store) ReleaseQueuedTurnsForInterrupt(
 
 // CancelQueuedTurnsForInterrupt settles exactly the confirmed, fenced scope.
 // Newly queued work has no reservation and cannot be swept into this mutation.
+// keepReservation retains the dispatch fence until an accepted Stop receives its
+// primary terminal event, including after a controller reconnect.
 func (s *Store) CancelQueuedTurnsForInterrupt(
 	ctx context.Context,
 	conversationID string,
 	turnIDs []string,
 	reservationID string,
 	now time.Time,
+	keepReservation bool,
 ) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -1836,6 +1839,9 @@ func (s *Store) CancelQueuedTurnsForInterrupt(
 			if updated != 1 {
 				return fmt.Errorf("turn %s lost interrupt reservation", turnID)
 			}
+		}
+		if keepReservation {
+			return nil
 		}
 		updated, err := q.ReleaseConversationInterruptReservation(ctx,
 			gen.ReleaseConversationInterruptReservationParams{

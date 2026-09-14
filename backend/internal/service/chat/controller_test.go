@@ -5365,14 +5365,20 @@ func TestInterruptDurableFallbackReconcilesAfterDispatchedRequestCancellation(t 
 		!errors.Is(interruptErr, ports.ErrChatInterruptDeliveryUncertain) {
 		t.Fatalf("Interrupt error = %v, want cancelled delivery-uncertain result", interruptErr)
 	}
-	if err := h.svc.CancelQueuedTurn(ctx, testSession, cancelProbe.ID); err != nil {
-		t.Fatalf("queue command remained blocked behind cancelled request context: %v", err)
+	if err := h.svc.CancelQueuedTurn(ctx, testSession, cancelProbe.ID); !errors.Is(err, chatsvc.ErrInterruptPending) {
+		t.Fatalf("queue command before the provider outcome settled = %v, want pending Stop", err)
 	}
 
 	conv.emit(ports.ChatEvent{
 		Kind: ports.ChatEventTurnCompleted, ProviderTurnID: "provider-stale",
 		TurnState: domain.TurnStateCompleted,
 	})
+	h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool {
+		return turnStateByText(t, s)["after uncertain Stop"] == domain.TurnStateRunning
+	})
+	if err := h.svc.CancelQueuedTurn(ctx, testSession, cancelProbe.ID); err != nil {
+		t.Fatalf("queue command remained blocked after the provider outcome settled: %v", err)
+	}
 	snapshot := h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool {
 		states := turnStateByText(t, s)
 		return len(s.Turns) == 4 && s.Turns[0].ProviderTurnID == "provider-stale" &&

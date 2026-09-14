@@ -893,7 +893,7 @@ func TestInterruptQueueReservationIsAtomicExactAndAllowsAnEmptyScope(t *testing.
 		t.Fatalf("empty Stop scope did not fence later promotion: %v", err)
 	}
 	if err := s.CancelQueuedTurnsForInterrupt(
-		ctx, conversation, nil, "empty-stop", histClock,
+		ctx, conversation, nil, "empty-stop", histClock, false,
 	); err != nil {
 		t.Fatalf("finish empty queue reservation: %v", err)
 	}
@@ -959,7 +959,7 @@ func TestInterruptQueueReservationIsAtomicExactAndAllowsAnEmptyScope(t *testing.
 	}
 
 	if err := s.CancelQueuedTurnsForInterrupt(
-		ctx, conversation, []string{"stop-1", "stop-2"}, "stop-token", histClock.Add(4*time.Minute),
+		ctx, conversation, []string{"stop-1", "stop-2"}, "stop-token", histClock.Add(4*time.Minute), false,
 	); err != nil {
 		t.Fatalf("cancel exact Stop queue: %v", err)
 	}

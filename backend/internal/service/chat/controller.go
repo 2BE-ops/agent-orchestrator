@@ -66,7 +66,7 @@ type Store interface {
 	ListQueuedTurns(ctx context.Context, conversationID string) ([]domain.QueuedTurn, error)
 	ReserveQueuedTurnsForInterrupt(ctx context.Context, conversationID string, expectedTurnIDs []string, reservationID string) (bool, error)
 	ReleaseQueuedTurnsForInterrupt(ctx context.Context, conversationID string, turnIDs []string, reservationID string) error
-	CancelQueuedTurnsForInterrupt(ctx context.Context, conversationID string, turnIDs []string, reservationID string, now time.Time) error
+	CancelQueuedTurnsForInterrupt(ctx context.Context, conversationID string, turnIDs []string, reservationID string, now time.Time, keepReservation bool) error
 	PendingInterrupt(ctx context.Context, conversationID string, sessionID domain.SessionID) (string, []string, error)
 
 	SetConversationSettings(ctx context.Context, conversationID string, settings domain.ConversationSettings, now time.Time) error
@@ -2258,10 +2258,11 @@ func (c *Controller) finishInterruptQueueLocked(ctx context.Context, interrupted
 	if reservationID == "" {
 		return nil
 	}
+	keepReservation := interrupted && c.busy()
 	var err error
 	if interrupted {
 		err = c.store.CancelQueuedTurnsForInterrupt(
-			ctx, c.conversation.ID, turnIDs, reservationID, c.now(),
+			ctx, c.conversation.ID, turnIDs, reservationID, c.now(), keepReservation,
 		)
 	} else {
 		err = c.store.ReleaseQueuedTurnsForInterrupt(
@@ -2270,6 +2271,14 @@ func (c *Controller) finishInterruptQueueLocked(ctx context.Context, interrupted
 	}
 	if err != nil {
 		return err
+	}
+	if keepReservation {
+		// Stop has settled its confirmed rows, but the provider's original turn
+		// has not ended. Keep the durable fence across reconnect until its primary
+		// terminal event releases surviving post-Stop work.
+		c.interruptQueuedTurnIDs = nil
+		c.recoveringInterrupt = true
+		return nil
 	}
 	c.interruptReservationID = ""
 	c.interruptQueuedTurnIDs = nil
