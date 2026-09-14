@@ -244,7 +244,11 @@ describe("macOS differential update policy", () => {
     });
     updaterEvents.get("update-downloaded")?.({ version: "1.2.3" });
 
-    expect(statusMessages().at(-2)?.payload).toMatchObject({
+    expect(
+      statusMessages()
+        .map(message => message.payload)
+        .findLast(payload => payload.state === "downloading"),
+    ).toMatchObject({
       state: "downloading",
       transferred: 250,
       total: 1000,
