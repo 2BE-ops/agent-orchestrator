@@ -766,7 +766,10 @@ export function BrowserPanelView({
 	const suggestionsOpen = urlEditing && historySuggestions.length > 0;
 	const browserAddressBar = (
 		<form
-			className="browser-panel__address-bar min-w-0 flex-1"
+			className={cn(
+				"browser-panel__address-bar min-w-0 flex-1",
+				urlEditing && "browser-panel__address-bar--editing",
+			)}
 			data-testid="browser-address-bar"
 			onSubmit={submit}
 		>
@@ -823,7 +826,7 @@ export function BrowserPanelView({
 					aria-label={t("browser.urlSuggestions")}
 					className={cn(
 						SETTINGS_MENU_SURFACE,
-						"w-[min(28rem,calc(100vw-1rem))] overflow-hidden p-1",
+						"browser-panel__history-suggestions p-1",
 					)}
 					data-browser-native-overlay="true"
 					id={historyMenuId}

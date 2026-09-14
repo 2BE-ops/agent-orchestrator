@@ -297,8 +297,11 @@ describe("BrowserPanel", () => {
 		]);
 		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut={false} session={session} />);
 		const input = screen.getByRole("textbox", { name: /browser url/i });
+		const addressBar = screen.getByTestId("browser-address-bar");
+		expect(addressBar).not.toHaveClass("browser-panel__address-bar--editing");
 
 		await userEvent.type(input, "git");
+		expect(addressBar).toHaveClass("browser-panel__address-bar--editing");
 
 		await waitFor(() => expect(window.ao!.browser.historySuggestions).toHaveBeenCalledWith({
 			viewId: "42:sess-1",
@@ -312,6 +315,7 @@ describe("BrowserPanel", () => {
 		await userEvent.click(screen.getByRole("option"));
 		expect(hookState.navigate).toHaveBeenCalledWith("https://github.com/openai");
 		expect(input).not.toHaveFocus();
+		expect(addressBar).not.toHaveClass("browser-panel__address-bar--editing");
 		expect(screen.queryByRole("listbox", { name: "Address suggestions" })).not.toBeInTheDocument();
 	});
 
