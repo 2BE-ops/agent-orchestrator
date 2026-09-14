@@ -13,6 +13,7 @@ type ProjectSummary struct {
 	Outputs          []ProjectSummaryOutput `json:"outputs"`
 	SourceWatermark  string                 `json:"sourceWatermark"`
 	GeneratedAt      time.Time              `json:"generatedAt"`
+	GenerationError  string                 `json:"generationError,omitempty"`
 }
 
 // ProjectAttentionItem is a worker question that needs a user decision.

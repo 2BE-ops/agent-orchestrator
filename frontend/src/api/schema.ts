@@ -3763,6 +3763,7 @@ export interface components {
             completedWorkers: number;
             /** Format: date-time */
             generatedAt: string;
+            generationError?: string;
             narrative: string;
             needsAttention: components["schemas"]["ProjectAttentionItem"][];
             outputs: components["schemas"]["ProjectSummaryOutput"][];

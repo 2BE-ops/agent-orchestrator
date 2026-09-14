@@ -10606,6 +10606,8 @@ components:
         generatedAt:
           format: date-time
           type: string
+        generationError:
+          type: string
         narrative:
           type: string
         needsAttention:

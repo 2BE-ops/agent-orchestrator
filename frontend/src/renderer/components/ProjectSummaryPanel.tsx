@@ -26,6 +26,7 @@ export function ProjectSummaryPanel({ onClose, orchestrator }: { onClose: () => 
 			</header>
 			<div className="min-h-0 flex-1 overflow-y-auto p-4">
 				{summary.isLoading ? <p className="text-sm text-passive">Preparing the latest briefing...</p> : summary.isError || !data ? <p role="alert" className="text-sm text-destructive">Could not load the project summary.</p> : <>
+					{data.generationError ? <p role="alert" className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">Could not update the briefing. Showing the last good summary. {data.generationError}</p> : null}
 					<p className="text-[15px] leading-6 text-foreground">{data.narrative}</p>
 					<p className="mt-2 text-[11px] text-passive">Updated {new Date(data.generatedAt).toLocaleString()}</p>
 					<div className="mt-5 grid grid-cols-3 gap-2" aria-label="Project counts">

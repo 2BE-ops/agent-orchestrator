@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
@@ -23,16 +24,25 @@ type Store interface {
 
 // Service builds and persists project summary projections.
 type Service struct {
-	store Store
-	clock func() time.Time
+	store     Store
+	generator NarrativeGenerator
+	clock     func() time.Time
+	locks     sync.Map
 }
 
 // New constructs a project summary service.
-func New(store Store) *Service { return &Service{store: store, clock: time.Now} }
+func New(store Store, generator NarrativeGenerator) *Service {
+	return &Service{store: store, generator: generator, clock: time.Now}
+}
 
 // Get reads the current projection and regenerates it when requested or missing.
 func (s *Service) Get(ctx context.Context, projectID domain.ProjectID, refresh bool) (domain.ProjectSummary, error) {
-	if _, ok, err := s.store.GetProject(ctx, string(projectID)); err != nil {
+	lock, _ := s.locks.LoadOrStore(projectID, &sync.Mutex{})
+	lock.(*sync.Mutex).Lock()
+	defer lock.(*sync.Mutex).Unlock()
+
+	projectRecord, ok, err := s.store.GetProject(ctx, string(projectID))
+	if err != nil {
 		return domain.ProjectSummary{}, err
 	} else if !ok {
 		return domain.ProjectSummary{}, fmt.Errorf("project %s not found", projectID)
@@ -66,12 +76,39 @@ func (s *Service) Get(ctx context.Context, projectID domain.ProjectID, refresh b
 	}
 	if ok {
 		next.NeedsAttention = preserveAttention(current.NeedsAttention, next.NeedsAttention)
-		next.Narrative = narrative(next)
 	}
+	harness := projectRecord.Config.Orchestrator.Harness
+	model := projectRecord.Config.Orchestrator.AgentConfig.Model
+	for _, session := range sessions {
+		if session.Kind == domain.KindOrchestrator && !session.IsTerminated {
+			harness = session.Harness
+			break
+		}
+	}
+	if model == "" {
+		model = projectRecord.Config.AgentConfig.Model
+	}
+	if s.generator == nil {
+		return failedGeneration(current, ok, "project summary generator is unavailable"), nil
+	}
+	narrative, err := s.generator.Update(ctx, GenerationRequest{Harness: harness, Model: model, WorkspacePath: projectRecord.Path, Existing: current.Narrative, Facts: next})
+	if err != nil {
+		return failedGeneration(current, ok, err.Error()), nil
+	}
+	next.Narrative = narrative
 	if err := s.store.PutProjectSummary(ctx, next); err != nil {
 		return domain.ProjectSummary{}, err
 	}
 	return next, nil
+}
+
+func failedGeneration(current domain.ProjectSummary, exists bool, message string) domain.ProjectSummary {
+	if !exists {
+		current.NeedsAttention = []domain.ProjectAttentionItem{}
+		current.Outputs = []domain.ProjectSummaryOutput{}
+	}
+	current.GenerationError = message
+	return current
 }
 
 func preserveAttention(previous, observed []domain.ProjectAttentionItem) []domain.ProjectAttentionItem {
@@ -126,7 +163,6 @@ func project(projectID domain.ProjectID, workers []domain.SessionRecord, prs map
 		}
 	}
 	result.SourceWatermark = hex.EncodeToString(h.Sum(nil))
-	result.Narrative = narrative(result)
 	return result
 }
 
@@ -135,27 +171,4 @@ func displayName(session domain.SessionRecord) string {
 		return session.DisplayName
 	}
 	return string(session.ID)
-}
-func narrative(summary domain.ProjectSummary) string {
-	if summary.ActiveWorkers == 0 && summary.CompletedWorkers == 0 {
-		return "No worker activity has been recorded for this project yet."
-	}
-	parts := []string{fmt.Sprintf("%d worker%s active", summary.ActiveWorkers, plural(summary.ActiveWorkers))}
-	if summary.CompletedWorkers > 0 {
-		parts = append(parts, fmt.Sprintf("%d completed", summary.CompletedWorkers))
-	}
-	if len(summary.Outputs) > 0 {
-		parts = append(parts, fmt.Sprintf("%d pull request%s tracked", len(summary.Outputs), plural(len(summary.Outputs))))
-	}
-	text := strings.Join(parts, ", ") + "."
-	if len(summary.NeedsAttention) > 0 {
-		text += fmt.Sprintf(" %d decision%s need your input.", len(summary.NeedsAttention), plural(len(summary.NeedsAttention)))
-	}
-	return text
-}
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
 }

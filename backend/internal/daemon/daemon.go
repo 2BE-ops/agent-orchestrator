@@ -738,7 +738,7 @@ func Run() error {
 
 	srv, err := httpd.NewWithDeps(cfg, log, termMgr, httpd.APIDeps{
 		Projects:           projectSvc,
-		ProjectSummaries:   projectsummarysvc.New(store),
+		ProjectSummaries:   projectsummarysvc.New(store, projectsummarysvc.NewCLIGenerator(agents, agentSvc)),
 		HostID:             hostIdentity.HostID,
 		Endpoints:          bs,
 		Agents:             agentSvc,
