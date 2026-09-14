@@ -23,7 +23,7 @@ func (s *Store) GetProjectSummary(ctx context.Context, projectID domain.ProjectI
 	if err := json.Unmarshal([]byte(projection), &summary); err != nil {
 		return domain.ProjectSummary{}, false, fmt.Errorf("decode project summary %s: %w", projectID, err)
 	}
-	summary.ProjectID, summary.Narrative = projectID, summary.Narrative
+	summary.ProjectID = projectID
 	return summary, true, nil
 }
 

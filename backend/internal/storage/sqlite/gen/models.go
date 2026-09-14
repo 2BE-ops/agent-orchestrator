@@ -514,6 +514,14 @@ type Project struct {
 	Kind          string
 }
 
+type ProjectSummary struct {
+	ProjectID       string
+	SourceWatermark string
+	Narrative       string
+	ProjectionJson  string
+	GeneratedAt     time.Time
+}
+
 type Review struct {
 	ID                    string
 	SessionID             domain.SessionID

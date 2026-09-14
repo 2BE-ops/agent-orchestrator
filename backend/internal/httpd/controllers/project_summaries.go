@@ -11,12 +11,15 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/httpd/envelope"
 )
 
+// ProjectSummaryService produces and reads durable project briefings.
 type ProjectSummaryService interface {
 	Get(context.Context, domain.ProjectID, bool) (domain.ProjectSummary, error)
 }
 
+// ProjectSummariesController serves the project summary read and refresh routes.
 type ProjectSummariesController struct{ Svc ProjectSummaryService }
 
+// Register mounts project summary routes.
 func (c *ProjectSummariesController) Register(r chi.Router) {
 	r.Get("/projects/{id}/summary", c.get)
 	r.Post("/projects/{id}/summary/refresh", c.refresh)

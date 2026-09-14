@@ -12,6 +12,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 )
 
+// Store supplies the durable facts and projection used by the summary service.
 type Store interface {
 	GetProject(ctx context.Context, id string) (domain.ProjectRecord, bool, error)
 	ListSessions(ctx context.Context, project domain.ProjectID) ([]domain.SessionRecord, error)
@@ -71,7 +72,7 @@ func project(projectID domain.ProjectID, workers []domain.SessionRecord, prs map
 	h := sha256.New()
 	result := domain.ProjectSummary{ProjectID: projectID, GeneratedAt: at, NeedsAttention: []domain.ProjectAttentionItem{}, Outputs: []domain.ProjectSummaryOutput{}}
 	for _, worker := range workers {
-		fmt.Fprintf(h, "%s|%s|%t|%s|%s;", worker.ID, worker.Activity.State, worker.IsTerminated, worker.UpdatedAt.UTC(), worker.DisplayName)
+		_, _ = fmt.Fprintf(h, "%s|%s|%t|%s|%s;", worker.ID, worker.Activity.State, worker.IsTerminated, worker.UpdatedAt.UTC(), worker.DisplayName)
 		if worker.IsTerminated {
 			result.CompletedWorkers++
 		} else {
@@ -87,7 +88,7 @@ func project(projectID domain.ProjectID, workers []domain.SessionRecord, prs map
 		rows := append([]domain.PRFacts(nil), prs[worker.ID]...)
 		sort.Slice(rows, func(i, j int) bool { return rows[i].URL < rows[j].URL })
 		for _, pr := range rows {
-			fmt.Fprintf(h, "%s|%s|%s|%s;", pr.URL, pr.CI, pr.Review, pr.UpdatedAt.UTC())
+			_, _ = fmt.Fprintf(h, "%s|%s|%s|%s;", pr.URL, pr.CI, pr.Review, pr.UpdatedAt.UTC())
 			state := "Open"
 			if pr.Merged {
 				state = "Merged"

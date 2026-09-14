@@ -74,6 +74,7 @@ type ProjectResponse struct {
 	Project projectsvc.Project `json:"project"`
 }
 
+// ProjectSummaryResponse is the response envelope for project summary routes.
 type ProjectSummaryResponse struct {
 	Summary domain.ProjectSummary `json:"summary"`
 }
