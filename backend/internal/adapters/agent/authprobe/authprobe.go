@@ -34,16 +34,31 @@ func CLIStatusWithTimeout(ctx context.Context, binary string, commands [][]strin
 	if len(commands) == 0 {
 		return ports.AgentAuthStatusUnknown, nil
 	}
-	for _, args := range commands {
-		status, err := commandStatus(ctx, binary, args, timeout)
-		if err != nil {
-			return ports.AgentAuthStatusUnknown, err
+	// Run probes in parallel to avoid blocking on multiple 3s timeouts sequentially.
+	type result struct {
+		status ports.AgentAuthStatus
+		err    error
+		index  int
+	}
+	resultsChan := make(chan result, len(commands))
+	for i, args := range commands {
+		go func(idx int, cmdArgs []string) {
+			status, err := commandStatus(ctx, binary, cmdArgs, timeout)
+			resultsChan <- result{status, err, idx}
+		}(i, args)
+	}
+	// Collect results, returning first definite status or last error.
+	var lastErr error
+	for i := 0; i < len(commands); i++ {
+		res := <-resultsChan
+		if res.err != nil {
+			lastErr = res.err
 		}
-		if status != ports.AgentAuthStatusUnknown {
-			return status, nil
+		if res.status != ports.AgentAuthStatusUnknown {
+			return res.status, nil
 		}
 	}
-	return ports.AgentAuthStatusUnknown, nil
+	return ports.AgentAuthStatusUnknown, lastErr
 }
 
 func commandStatus(ctx context.Context, binary string, args []string, timeout time.Duration) (ports.AgentAuthStatus, error) {
@@ -61,8 +76,9 @@ func commandStatus(ctx context.Context, binary string, args []string, timeout ti
 	if status != ports.AgentAuthStatusUnknown {
 		return status, nil
 	}
+	// Return actual error from CmdRunner rather than silently swallowing it.
 	if err != nil {
-		return ports.AgentAuthStatusUnknown, nil
+		return ports.AgentAuthStatusUnknown, err
 	}
 	return ports.AgentAuthStatusUnknown, nil
 }
