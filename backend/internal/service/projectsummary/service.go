@@ -64,10 +64,30 @@ func (s *Service) Get(ctx context.Context, projectID domain.ProjectID, refresh b
 	if !refresh && ok {
 		return current, nil
 	}
+	if ok {
+		next.NeedsAttention = preserveAttention(current.NeedsAttention, next.NeedsAttention)
+		next.Narrative = narrative(next)
+	}
 	if err := s.store.PutProjectSummary(ctx, next); err != nil {
 		return domain.ProjectSummary{}, err
 	}
 	return next, nil
+}
+
+func preserveAttention(previous, observed []domain.ProjectAttentionItem) []domain.ProjectAttentionItem {
+	bySession := make(map[domain.SessionID]domain.ProjectAttentionItem, len(previous)+len(observed))
+	for _, item := range previous {
+		bySession[item.SessionID] = item
+	}
+	for _, item := range observed {
+		bySession[item.SessionID] = item
+	}
+	result := make([]domain.ProjectAttentionItem, 0, len(bySession))
+	for _, item := range bySession {
+		result = append(result, item)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].SessionID < result[j].SessionID })
+	return result
 }
 
 func project(projectID domain.ProjectID, workers []domain.SessionRecord, prs map[domain.SessionID][]domain.PRFacts, at time.Time) domain.ProjectSummary {

@@ -65,7 +65,7 @@ func TestRefreshIsStableUntilObservedFactsChange(t *testing.T) {
 	}
 }
 
-func TestAttentionClearsWhenWorkerAdvances(t *testing.T) {
+func TestAttentionPersistsWhenWorkerAdvancesWithoutResolutionEvidence(t *testing.T) {
 	base := time.Date(2026, 9, 14, 8, 0, 0, 0, time.UTC)
 	store := &fakeStore{sessions: []domain.SessionRecord{{ID: "demo-1", ProjectID: "demo", Kind: domain.KindWorker, Activity: domain.Activity{State: domain.ActivityWaitingInput}, UpdatedAt: base}}, prs: map[domain.SessionID][]domain.PRFacts{}}
 	svc := New(store)
@@ -75,7 +75,7 @@ func TestAttentionClearsWhenWorkerAdvances(t *testing.T) {
 	}
 	store.sessions[0].Activity.State = domain.ActivityActive
 	store.sessions[0].UpdatedAt = base.Add(time.Minute)
-	if got, _ := svc.Get(context.Background(), "demo", true); len(got.NeedsAttention) != 0 {
-		t.Fatalf("attention = %d, want cleared", len(got.NeedsAttention))
+	if got, _ := svc.Get(context.Background(), "demo", true); len(got.NeedsAttention) != 1 {
+		t.Fatalf("attention = %d, want preserved", len(got.NeedsAttention))
 	}
 }
