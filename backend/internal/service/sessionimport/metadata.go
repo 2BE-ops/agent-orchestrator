@@ -95,7 +95,9 @@ func (s *CodexSource) VisitMetadata(ctx context.Context, visit func(string, os.F
 	}
 	err = walkCodexDates(ctx, filepath.Join(root, "sessions"), 0, visit)
 	if s.includeArchived {
-		err = errors.Join(err, walkCodexDates(ctx, filepath.Join(root, "archived_sessions"), 0, visit))
+		// Codex keeps active transcripts in date shards, but moves archived
+		// transcripts directly under archived_sessions.
+		err = errors.Join(err, walkMetadata(ctx, filepath.Join(root, "archived_sessions"), 1, isCodexRollout, visit, true))
 	}
 	return err
 }

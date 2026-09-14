@@ -186,6 +186,33 @@ func TestSelectedMissingDestinationBecomesStandalone(t *testing.T) {
 	}
 }
 
+func TestSelectedPrefersCheckoutContainingSourceCWD(t *testing.T) {
+	s, _, projects, _, repo := searchFixture(t)
+	for _, args := range [][]string{
+		{"-C", repo, "config", "user.email", "test@example.com"},
+		{"-C", repo, "config", "user.name", "Test User"},
+		{"-C", repo, "commit", "--allow-empty", "-m", "initial"},
+	} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %s %v", args, out, err)
+		}
+	}
+	other := filepath.Join(t.TempDir(), "other-worktree")
+	if out, err := exec.Command("git", "-C", repo, "worktree", "add", "-b", "other", other).CombinedOutput(); err != nil {
+		t.Fatalf("git worktree add: %s %v", out, err)
+	}
+	projects.list = []projectsvc.Summary{{ID: "main-checkout", Path: repo}, {ID: "other-checkout", Path: other}}
+	refreshWait(t, s)
+	page, err := s.Search(context.Background(), "ancient", 50, "")
+	if err != nil || len(page.Results) != 1 {
+		t.Fatal(page, err)
+	}
+	destination, err := s.Destination(context.Background(), page.Results[0].ID)
+	if err != nil || destination.Action != "import" || destination.ProjectID != "main-checkout" || destination.Path != repo {
+		t.Fatal(destination, err)
+	}
+}
+
 func TestSelectedNonRepositoryImportsAsStandaloneAndRetriesIdempotently(t *testing.T) {
 	s, store, projects, path, _ := searchFixture(t)
 	nonRepo := t.TempDir()
@@ -538,5 +565,52 @@ func TestOpenDestinationKeepsMetadataWithoutSource(t *testing.T) {
 	d, err := s.Destination(ctx, id)
 	if err != nil || d.Action != "open" || d.Title == "" || d.Provider != "claude-code" || d.Path != preview.Path {
 		t.Fatal("durable fallback after index deletion", d, err)
+	}
+}
+
+func TestSelectedCodexSessionRelocatesAfterArchive(t *testing.T) {
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "init", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s %v", out, err)
+	}
+	root := t.TempDir()
+	id := "019fbaf8-67a4-79b2-aa80-01283063aab8"
+	active := filepath.Join(root, "sessions", "2026", "09", "14", "rollout-2026-09-14T12-00-00-"+id+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(active), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(map[string]any{
+		"type": "session_meta", "timestamp": "2026-09-14T12:00:00Z",
+		"payload": map[string]any{"id": id, "session_id": id, "cwd": repo, "git": map[string]string{"branch": "main"}},
+	})
+	if err := os.WriteFile(active, append(raw, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store := &selectedStore{}
+	s := New(store, store, &selectedProjects{}, sessionimport.NewCodexSourceAt(root, true))
+	if err := s.EnableSearch(context.Background(), t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.CloseSearch() }()
+	refreshWait(t, s)
+	page, err := s.Search(context.Background(), id, 50, "")
+	if err != nil || len(page.Results) != 1 {
+		t.Fatal(page, err)
+	}
+	archived := filepath.Join(root, "archived_sessions", filepath.Base(active))
+	if err = os.MkdirAll(filepath.Dir(archived), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Rename(active, archived); err != nil {
+		t.Fatal(err)
+	}
+	destination, err := s.Destination(context.Background(), page.Results[0].ID)
+	if err != nil || destination.Action != "add_project" || destination.Path == "" {
+		t.Fatal(destination, err)
+	}
+	refreshWait(t, s)
+	page, err = s.Search(context.Background(), id, 50, "")
+	if err != nil || len(page.Results) != 1 {
+		t.Fatal("archived transcript disappeared after refresh", page, err)
 	}
 }

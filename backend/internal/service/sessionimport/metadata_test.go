@@ -110,3 +110,28 @@ func TestMetadataPreservesLongExplicitTitlesAndRecentDateOrder(t *testing.T) {
 		t.Fatal("first date was not newest", first)
 	}
 }
+
+func TestCodexVisitMetadataIncludesFlatArchivedSessions(t *testing.T) {
+	root := t.TempDir()
+	archived := filepath.Join(root, "archived_sessions", "rollout-2026-09-14T12-00-00-019fbaf8-67a4-79b2-aa80-01283063aab8.jsonl")
+	if err := os.MkdirAll(filepath.Dir(archived), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(archived, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var visited []string
+	if err := NewCodexSourceAt(root, true).VisitMetadata(context.Background(), func(path string, _ os.FileInfo) error {
+		visited = append(visited, path)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.EvalSymlinks(archived)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(visited) != 1 || visited[0] != want {
+		t.Fatalf("visited %v, want archived transcript %s", visited, want)
+	}
+}

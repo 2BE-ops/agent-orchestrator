@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -327,12 +328,21 @@ func (s *Service) selected(ctx context.Context, id string) (sessionimport.Import
 		if err != nil || root != r.Session.ConfigDir {
 			continue
 		}
-		fresh, ok, err := source.ReadMetadata(ctx, r.Session.TranscriptPath)
-		if err != nil {
-			return sessionimport.ImportableSession{}, err
-		}
-		if !ok || fresh.NativeSessionID != r.Session.NativeSessionID {
-			return sessionimport.ImportableSession{}, ErrImportSessionNotFound
+		fresh, ok, readErr := source.ReadMetadata(ctx, r.Session.TranscriptPath)
+		if readErr != nil || !ok || fresh.NativeSessionID != r.Session.NativeSessionID {
+			// Provider apps may move a transcript after AO indexes it. Codex does
+			// this when a conversation is archived. Re-locate the selected native
+			// id instead of making the user repair or rebuild AO's cache first.
+			fresh, ok, err = s.disco.Locate(ctx, r.Session.Provider, r.Session.NativeSessionID, sessionimport.DiscoverOptions{})
+			if err != nil {
+				return sessionimport.ImportableSession{}, err
+			}
+			if !ok {
+				if readErr != nil {
+					return sessionimport.ImportableSession{}, readErr
+				}
+				return sessionimport.ImportableSession{}, ErrImportSessionNotFound
+			}
 		}
 		if fresh.Provider == domain.HarnessCodex {
 			key := string(src.Provider()) + "\x00" + root
@@ -413,16 +423,27 @@ func (s *Service) destination(ctx context.Context, id string, target sessionimpo
 	if err != nil {
 		return d, err
 	}
+	var commonMatches []projectsvc.Summary
+	var pathMatch *projectsvc.Summary
 	for _, p := range projects {
-		if gitCommonDir(p.Path) == common {
-			if d.ProjectID != "" && d.ProjectID != string(p.ID) {
-				d.Reason = "Multiple registered projects refer to this repository. Resolve the duplicate registrations first."
-				d.ProjectID = ""
-				return d, nil
-			}
-			d.ProjectID = string(p.ID)
-			d.Path = p.Path
+		if gitCommonDir(p.Path) != common {
+			continue
 		}
+		commonMatches = append(commonMatches, p)
+		if pathContains(p.Path, cwd) && (pathMatch == nil || len(filepath.Clean(p.Path)) > len(filepath.Clean(pathMatch.Path))) {
+			candidate := p
+			pathMatch = &candidate
+		}
+	}
+	if pathMatch != nil {
+		d.ProjectID = string(pathMatch.ID)
+		d.Path = pathMatch.Path
+	} else if len(commonMatches) == 1 {
+		d.ProjectID = string(commonMatches[0].ID)
+		d.Path = commonMatches[0].Path
+	} else if len(commonMatches) > 1 {
+		d.Reason = "Multiple registered projects refer to this repository. Resolve the duplicate registrations first."
+		return d, nil
 	}
 	if d.ProjectID != "" {
 		d.Action = "import"
@@ -438,6 +459,11 @@ func (s *Service) destination(ctx context.Context, id string, target sessionimpo
 	}
 	d.ConfirmationToken = importindex.ID(id, common, d.Path)
 	return d, nil
+}
+
+func pathContains(root, path string) bool {
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(path))
+	return err == nil && (rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))))
 }
 
 // ImportSelected registers one confirmed dormant history with idempotent retries.

@@ -21,8 +21,9 @@ const codexHomeEnv = "CODEX_HOME"
 // CodexSource discovers Codex CLI conversations.
 //
 // Codex writes one rollout-<ts>-<segment-uuid>.jsonl per session segment,
-// date-sharded under <home>/sessions/YYYY/MM/DD/ (mirrored under
-// archived_sessions). Resuming a conversation appends a new segment file, so a
+// date-sharded under <home>/sessions/YYYY/MM/DD/. Archived transcripts are
+// stored directly under <home>/archived_sessions. Resuming a conversation
+// appends a new segment file, so a
 // single conversation the user recognizes is spread across many rollout files
 // that all share one root session_id. This source groups segments by that root
 // id and surfaces one importable session per conversation, bound to the most
