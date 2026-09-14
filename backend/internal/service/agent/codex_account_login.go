@@ -228,7 +228,6 @@ func (m *codexAccountManager) verifyLogin(ctx context.Context, operationID strin
 			snapshot.Label = accountLabel(snapshot.ID, snapshot.AuthMethod, snapshot.AccountEmail)
 		})
 	} else {
-		activationCredentialPath := filepath.Join(home, codexCredentialFilename)
 		if existing, found := m.matchCredentialAccount(pendingCredential, identity); found {
 			var replaceErr error
 			record, replaceErr = m.catalog.replaceCredential(existing.Snapshot.ID, pendingCredential, observation)
@@ -237,15 +236,14 @@ func (m *codexAccountManager) verifyLogin(ctx context.Context, operationID strin
 			}
 			_ = os.RemoveAll(pendingDir)
 			m.clearReauthenticationRequired(existing.Snapshot.ID)
-			activationCredentialPath = filepath.Join(record.Home, codexCredentialFilename)
 		} else {
 			var err error
 			record, err = m.catalog.commitPending(pendingDir, observation)
 			if err != nil {
 				return m.finishLogin(operationID, domain.CodexAccountLoginFailed, domain.CodexAccountLoginReasonFailed, "The verified Codex account could not be saved.", nil), nil
 			}
-			activationCredentialPath = filepath.Join(record.Home, codexCredentialFilename)
 		}
+		activationCredentialPath := filepath.Join(record.Home, codexCredentialFilename)
 		m.catalog.updateSnapshot(record.Snapshot.ID, func(s *domain.CodexAccountSnapshot) {
 			s.Authentication = uncheckedAuthentication()
 			if observation.Method != domain.CodexAuthMethodUnknown {

@@ -589,7 +589,7 @@ func (m *codexAccountManager) setActivePointer(ctx context.Context, accountID st
 		return nil
 	}
 	now := m.now()
-	active, _, err := m.commitActivePointer(ctx, accountID, current, now)
+	active, err := m.commitActivePointer(ctx, accountID, current, now)
 	if err != nil {
 		return err
 	}
@@ -599,43 +599,35 @@ func (m *codexAccountManager) setActivePointer(ctx context.Context, accountID st
 	return nil
 }
 
-type activePointerCommitOutcome uint8
-
-const (
-	activePointerUnchanged activePointerCommitOutcome = iota
-	activePointerCommitted
-	activePointerUncertain
-)
-
 func (m *codexAccountManager) commitActivePointer(
 	ctx context.Context,
 	accountID string,
 	current domain.CodexActiveAccount,
 	at time.Time,
-) (domain.CodexActiveAccount, activePointerCommitOutcome, error) {
+) (domain.CodexActiveAccount, error) {
 	if m.stateStore == nil {
 		return domain.CodexActiveAccount{
 			AccountID: accountID, Revision: current.Revision + 1, ActivatedAt: at, UpdatedAt: at,
-		}, activePointerCommitted, nil
+		}, nil
 	}
 	active, err := m.stateStore.SetCodexActiveAccount(ctx, accountID, current.Revision, at)
 	if err == nil {
-		return active, activePointerCommitted, nil
+		return active, nil
 	}
 	settleCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), codexAccountAuthTimeout)
 	defer cancel()
 	settled, found, readErr := m.stateStore.GetCodexActiveAccount(settleCtx)
 	if readErr != nil {
-		return domain.CodexActiveAccount{}, activePointerUncertain, errors.Join(err, readErr)
+		return domain.CodexActiveAccount{}, errors.Join(err, readErr)
 	}
 	if found && settled.AccountID == accountID && settled.Revision == current.Revision+1 {
-		return settled, activePointerCommitted, nil
+		return settled, nil
 	}
 	if (found && settled.AccountID == current.AccountID && settled.Revision == current.Revision) ||
 		(!found && current.Revision == 0) {
-		return domain.CodexActiveAccount{}, activePointerUnchanged, err
+		return domain.CodexActiveAccount{}, err
 	}
-	return settled, activePointerUncertain, errors.Join(err, ports.ErrCodexGlobalAccountChanged)
+	return settled, errors.Join(err, ports.ErrCodexGlobalAccountChanged)
 }
 
 func mapUnknownCodexAccount(err error) error {

@@ -92,7 +92,7 @@ func (m *codexAccountManager) logout(ctx context.Context, accountID string) erro
 		m.mu.Lock()
 		current := m.active
 		m.mu.Unlock()
-		cleared, _, pointerErr := m.commitActivePointer(ctx, "", current, m.now())
+		cleared, pointerErr := m.commitActivePointer(ctx, "", current, m.now())
 		if pointerErr != nil {
 			// Logout is irreversible; reconciliation will retry pointer cleanup.
 			return pointerErr
@@ -186,7 +186,7 @@ func (m *codexAccountManager) activateFromCredentialLocked(ctx context.Context, 
 		current = m.active
 	}
 	m.mu.Unlock()
-	active, _, err := m.commitActivePointer(ctx, accountID, current, now)
+	active, err := m.commitActivePointer(ctx, accountID, current, now)
 	if err != nil {
 		// The global credential already changed. Leave it in place so the durable
 		// switch can finish the pointer update locally; rolling it back here made
@@ -208,10 +208,6 @@ func (m *codexAccountManager) activateFromCredentialLocked(ctx context.Context, 
 	return active, nil
 }
 
-func removeGlobalCredential(path string) error {
-	return removeCodexFileIdentityBound(path)
-}
-
 func writeGlobalCredentialSettled(path string, data []byte) error {
 	err := writeGlobalCredentialAtomic(path, data)
 	if err == nil {
@@ -224,29 +220,9 @@ func writeGlobalCredentialSettled(path string, data []byte) error {
 	return errors.Join(err, readErr)
 }
 
-func removeGlobalCredentialSettled(path string) error {
-	err := removeGlobalCredential(path)
-	if err == nil {
-		return nil
-	}
-	_, state, readErr := readCodexFileState(path, true)
-	if readErr == nil && !state.exists {
-		return nil
-	}
-	return errors.Join(err, readErr)
-}
-
 func readOpaqueCredential(source string) ([]byte, error) {
 	data, _, err := readCodexFileState(source, false)
 	return data, err
-}
-
-func copyOpaqueCredential(source, target string) error {
-	data, err := readOpaqueCredential(source)
-	if err != nil {
-		return err
-	}
-	return writePrivateFileAtomic(target, data)
 }
 
 func writeGlobalCredentialAtomic(path string, data []byte) error {

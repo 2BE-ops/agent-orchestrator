@@ -557,10 +557,6 @@ func (c *codexCapacityCoordinator) acceptDirect(accountID string, observation po
 	c.finishSuccess(accountID, observation, attemptedAt, nil, "reset_credit")
 }
 
-func (c *codexCapacityCoordinator) acceptLoginVerification(accountID string, observation ports.CodexCapacityObservation, attemptedAt time.Time) {
-	c.finishSuccess(accountID, observation, attemptedAt, nil, "login_verification")
-}
-
 func (c *codexCapacityCoordinator) invalidateAfterReset(accountID string) {
 	c.mu.Lock()
 	state := c.ensureStateLocked(accountID)
