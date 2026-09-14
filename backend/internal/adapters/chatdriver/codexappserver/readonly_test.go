@@ -91,41 +91,15 @@ func TestReadOnlyRequiresProviderConfirmation(t *testing.T) {
 	}
 }
 
-func TestStartResumeAcceptGranularApprovalPolicyOutsideReadOnly(t *testing.T) {
-	for _, mode := range []ports.PermissionMode{ports.PermissionModeDefault, ports.PermissionModeAcceptEdits, ports.PermissionModeAuto, ports.PermissionModeBypassPermissions} {
-		for _, method := range []string{"thread/start", "thread/resume"} {
-			t.Run(string(mode)+"/"+method, func(t *testing.T) {
-				d, srv := newTestDriver(t)
-				srv.reply(method, `{"thread":{"id":"thread-1"},"approvalPolicy":{"granular":{"sandbox_approval":true,"rules":false,"mcp_elicitations":true,"request_permissions":false,"skill_approval":true}},"sandbox":{"type":"readOnly"}}`)
-				var conv ports.ChatConversation
-				var err error
-				if method == "thread/resume" {
-					conv, err = d.Resume(context.Background(), ports.ChatResumeConfig{WorkspacePath: "/tmp/ws", ProviderConversationID: "thread-1", Permissions: mode})
-				} else {
-					conv, err = d.Start(context.Background(), ports.ChatStartConfig{WorkspacePath: "/tmp/ws", Permissions: mode})
-				}
-				if err != nil {
-					t.Fatal(err)
-				}
-				defer func() { _ = conv.Close() }()
-				if _, err := conv.SendTurn(context.Background(), ports.ChatUserMessage{Text: "inspect"}); err != nil {
-					t.Fatal(err)
-				}
-			})
-		}
-	}
-}
-
 func TestReadOnlyReconnectRequiresRetainedProviderState(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
-		state    map[string]persistenthost.CodexPermissions
+		state    map[string]bool
 		accepted bool
 	}{
 		{"legacy host unknown", nil, false},
-		{"different thread", map[string]persistenthost.CodexPermissions{"other": {ApprovalPolicy: "never", SandboxType: "readOnly"}}, false},
-		{"write access", map[string]persistenthost.CodexPermissions{"thread-1": {ApprovalPolicy: "never", SandboxType: "dangerFullAccess"}}, false},
-		{"confirmed", map[string]persistenthost.CodexPermissions{"thread-1": {ApprovalPolicy: "never", SandboxType: "readOnly"}}, true},
+		{"different thread", map[string]bool{"other": true}, false},
+		{"confirmed", map[string]bool{"thread-1": true}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d, srv := newTestDriver(t)
@@ -135,7 +109,7 @@ func TestReadOnlyReconnectRequiresRetainedProviderState(t *testing.T) {
 			}
 			d.persistent = true
 			d.connectHost = func(context.Context, persistenthost.Config) (*persistenthost.Transport, error) {
-				return &persistenthost.Transport{Stdin: proc.stdin, Stdout: proc.stdout, Reconnected: true, CodexPermissions: tc.state}, nil
+				return &persistenthost.Transport{Stdin: proc.stdin, Stdout: proc.stdout, Reconnected: true, CodexReadOnly: tc.state}, nil
 			}
 			conv, err := d.Resume(context.Background(), ports.ChatResumeConfig{SessionID: "readonly", DataDir: t.TempDir(), WorkspacePath: "/tmp/ws", ProviderConversationID: "thread-1", Permissions: ports.PermissionModeReadOnly})
 			if tc.accepted {

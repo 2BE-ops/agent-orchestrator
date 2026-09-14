@@ -490,7 +490,7 @@ function SettingsBody({
 							control: (
 								<PermissionModeSelect
 									value={form.permissions}
-									supportsReadOnly={[form.workerAgent, form.orchestratorAgent].every((harness) => settings?.chatPermissionModes?.[harness]?.includes("read-only"))}
+									supportsReadOnly={[form.workerAgent, form.orchestratorAgent].every((harness) => settings?.readOnlyChatHarnesses.includes(harness))}
 									onChange={(v) => setForm((f) => ({ ...f, permissions: v }))}
 								/>
 							),

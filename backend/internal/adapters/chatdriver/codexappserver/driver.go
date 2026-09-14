@@ -56,9 +56,9 @@ type process struct {
 	// reconnected means the provider process and initialized protocol connection
 	// survived a prior daemon. The replacement must not initialize/resume it a
 	// second time.
-	reconnected      bool
-	nextRequestID    int64
-	codexPermissions map[string]persistenthost.CodexPermissions
+	reconnected   bool
+	nextRequestID int64
+	codexReadOnly map[string]bool
 	// stop releases the process. It must be safe to call more than once.
 	stop func() error
 	// terminate destroys a persistent host for explicit session shutdown.
@@ -348,8 +348,7 @@ func (d *Driver) Resume(ctx context.Context, cfg ports.ChatResumeConfig) (ports.
 		// loaded thread. Host replay bridges output and unresolved server requests
 		// across the daemon detach without waiting for the active turn to settle.
 		if cfg.Permissions == ports.PermissionModeReadOnly {
-			confirmed := conv.proc.codexPermissions[cfg.ProviderConversationID]
-			if confirmed.ApprovalPolicy != "never" || confirmed.SandboxType != "readOnly" {
+			if !conv.proc.codexReadOnly[cfg.ProviderConversationID] {
 				_ = conv.Close()
 				return nil, fmt.Errorf("%w: surviving Codex host has no confirmed read-only policy", ports.ErrChatRecoveryInconclusive)
 			}
@@ -478,12 +477,12 @@ func (d *Driver) connectSession(
 		return nil, false, fmt.Errorf("%w: persistent host: %w", ports.ErrChatDriverUnavailable, err)
 	}
 	proc := &process{
-		stdin:            transport.Stdin,
-		stdout:           transport.Stdout,
-		reconnected:      transport.Reconnected,
-		nextRequestID:    transport.NextRequestID,
-		codexPermissions: transport.CodexPermissions,
-		stop:             transport.Stdin.Close,
+		stdin:         transport.Stdin,
+		stdout:        transport.Stdout,
+		reconnected:   transport.Reconnected,
+		nextRequestID: transport.NextRequestID,
+		codexReadOnly: transport.CodexReadOnly,
+		stop:          transport.Stdin.Close,
 		terminate: func() error {
 			_ = transport.Stdin.Close()
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

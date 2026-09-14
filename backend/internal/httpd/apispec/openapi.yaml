@@ -11610,14 +11610,6 @@ components:
           items:
             type: string
           type: array
-        chatPermissionModes:
-          additionalProperties:
-            items:
-              type: string
-            type: array
-          type:
-          - object
-          - "null"
         client:
           type: string
         cloudControlPlaneUrl:
@@ -11633,10 +11625,14 @@ components:
           type: string
         localEnabled:
           type: boolean
+        readOnlyChatHarnesses:
+          items:
+            type: string
+          type: array
       required:
       - defaultSessionMode
       - chatHarnesses
-      - chatPermissionModes
+      - readOnlyChatHarnesses
       - client
       - localEnabled
       - cloudOffering

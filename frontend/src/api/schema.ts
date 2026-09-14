@@ -4135,9 +4135,6 @@ export interface components {
         };
         SettingsResponse: {
             chatHarnesses: string[];
-            chatPermissionModes: {
-                [key: string]: string[];
-            } | null;
             client: string;
             cloudControlPlaneUrl: string;
             cloudEnabled: boolean;
@@ -4145,6 +4142,7 @@ export interface components {
             /** @enum {string} */
             defaultSessionMode: "chat" | "tui";
             localEnabled: boolean;
+            readOnlyChatHarnesses: string[];
         };
         ShellTerminalEnvelope: {
             shellTerminal: components["schemas"]["ShellTerminalResponse"];

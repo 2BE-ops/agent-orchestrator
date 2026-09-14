@@ -422,8 +422,8 @@ func conversationReconnectedLive(conversation ports.ChatConversation) bool {
 
 type fakeRegistry struct{ driver ports.ChatDriver }
 
-func (r fakeRegistry) SupportsPermissionMode(_ domain.AgentHarness, mode ports.PermissionMode) bool {
-	return mode != ports.PermissionModeReadOnly || r.driver.Capabilities().Has(ports.ChatCapabilityPreventiveReadOnly)
+func (r fakeRegistry) SupportsReadOnlyChat(_ domain.AgentHarness) bool {
+	return r.driver.Capabilities().Has(ports.ChatCapabilityPreventiveReadOnly)
 }
 
 func (r fakeRegistry) Driver(domain.AgentHarness) (ports.ChatDriver, error) { return r.driver, nil }

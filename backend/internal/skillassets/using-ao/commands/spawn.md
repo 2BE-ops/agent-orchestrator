@@ -48,4 +48,4 @@ ao spawn --project agent-orchestrator --agent codex --mode chat --permission rea
 A worker launched `read-only` keeps that restriction across restarts and settings
 changes. Only Codex Chat currently supports it; unsupported harnesses and terminal
 mode fail before creating a session. `GET /api/v1/settings` reports supported
-`chatPermissionModes` by harness before launch.
+`readOnlyChatHarnesses` before launch.

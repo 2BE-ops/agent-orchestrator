@@ -209,9 +209,9 @@ func (d integrationChatDriver) Resume(context.Context, ports.ChatResumeConfig) (
 
 type integrationChatRegistry map[domain.AgentHarness]ports.ChatDriver
 
-func (r integrationChatRegistry) SupportsPermissionMode(h domain.AgentHarness, mode ports.PermissionMode) bool {
+func (r integrationChatRegistry) SupportsReadOnlyChat(h domain.AgentHarness) bool {
 	d, ok := r[h]
-	return ok && (mode != ports.PermissionModeReadOnly || d.Capabilities().Has(ports.ChatCapabilityPreventiveReadOnly))
+	return ok && d.Capabilities().Has(ports.ChatCapabilityPreventiveReadOnly)
 }
 
 func (r integrationChatRegistry) Driver(harness domain.AgentHarness) (ports.ChatDriver, error) {

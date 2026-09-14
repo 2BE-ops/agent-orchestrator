@@ -382,7 +382,7 @@ func TestHostReconnectsSameProviderAndReplaysDetachedOutput(t *testing.T) {
 	}
 }
 
-func TestHostRetainsCodexPermissionReceiptAcrossAttachments(t *testing.T) {
+func TestHostRetainsCodexReadOnlyReceiptAcrossAttachments(t *testing.T) {
 	cfg := Config{
 		SessionID: "readonly-host", DataDir: t.TempDir(), Workdir: t.TempDir(),
 		Env:  append(os.Environ(), "AO_CHAT_HOST_PROVIDER_HELPER=1"),
@@ -405,7 +405,7 @@ func TestHostRetainsCodexPermissionReceiptAcrossAttachments(t *testing.T) {
 		}
 	})
 	first := awaitAttach(t, d)
-	if len(first.CodexPermissions) != 0 {
+	if len(first.CodexReadOnly) != 0 {
 		t.Fatal("new host invented permission evidence")
 	}
 	pid := requestProviderPID(t, first, 1, "pid")
@@ -413,9 +413,8 @@ func TestHostRetainsCodexPermissionReceiptAcrossAttachments(t *testing.T) {
 	_ = readFrame(t, bufio.NewReader(first.Stdout))
 	_ = first.Stdin.Close()
 	second := awaitAttach(t, d)
-	policy := second.CodexPermissions["readonly-thread"]
-	if policy.ApprovalPolicy != "never" || policy.SandboxType != "readOnly" {
-		t.Fatalf("reattached policy=%+v", policy)
+	if !second.CodexReadOnly["readonly-thread"] {
+		t.Fatal("reattached host lost read-only receipt")
 	}
 	if got := requestProviderPID(t, second, 3, "pid"); got != pid {
 		t.Fatalf("provider restarted: %d -> %d", pid, got)

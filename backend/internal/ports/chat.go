@@ -1059,6 +1059,7 @@ type ChatDriverRegistry interface {
 	// SupportsChat reports whether a harness has a Chat driver registered at
 	// all, without probing the local install.
 	SupportsChat(harness domain.AgentHarness) bool
-	// SupportsPermissionMode is static discovery; readiness is checked at spawn.
-	SupportsPermissionMode(harness domain.AgentHarness, mode PermissionMode) bool
+	// SupportsReadOnlyChat reports static preventive read-only support; readiness
+	// is checked at spawn.
+	SupportsReadOnlyChat(harness domain.AgentHarness) bool
 }

@@ -2460,8 +2460,9 @@ type SettingsResponse struct {
 	// ChatHarnesses are the agents that can run in chat mode today. Empty means
 	// chat cannot be used yet, which a client should say plainly.
 	ChatHarnesses []string `json:"chatHarnesses"`
-	// ChatPermissionModes reports static support before a session is created; installation and authentication are checked at launch.
-	ChatPermissionModes map[string][]domain.PermissionMode `json:"chatPermissionModes"`
+	// ReadOnlyChatHarnesses reports static preventive read-only support before a
+	// session is created; installation and authentication are checked at launch.
+	ReadOnlyChatHarnesses []string `json:"readOnlyChatHarnesses"`
 	// Client is the deployment's client identity (AO_CLIENT); empty when unset.
 	Client string `json:"client"`
 	// LocalEnabled reports whether the local offering is available.

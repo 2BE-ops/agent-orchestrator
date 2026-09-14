@@ -2,14 +2,6 @@ package persistenthost
 
 import "encoding/json"
 
-// CodexPermissions is provider-reported state, retained by the process owner
-// across daemon attachments. Missing state is unknown, never inferred from a
-// requested config. The raw relay does not change the provider's wire protocol.
-type CodexPermissions struct {
-	ApprovalPolicy string `json:"approvalPolicy"`
-	SandboxType    string `json:"sandboxType"`
-}
-
 // observeCodexRequest invalidates proof before a request can change it. A daemon
 // crash between dispatch and the provider response must not replay stale proof.
 // Called under host.mu before forwarding the request.
@@ -29,23 +21,22 @@ func (h *host) observeCodexRequest(frame []byte) {
 	}
 	switch request.Method {
 	case "thread/resume":
-		delete(h.codexPermissions, request.Params.ThreadID)
+		delete(h.codexReadOnly, request.Params.ThreadID)
 	case "turn/start":
 		// An explicitly read-only dispatch cannot broaden an already confirmed
 		// read-only thread, including while its settings notification is in flight.
-		previous := h.codexPermissions[request.Params.ThreadID]
-		if previous.ApprovalPolicy == "never" && previous.SandboxType == "readOnly" &&
+		if h.codexReadOnly[request.Params.ThreadID] &&
 			codexApprovalPolicy(request.Params.ApprovalPolicy) == "never" && request.Params.SandboxPolicy.Type == "readOnly" {
 			return
 		}
-		delete(h.codexPermissions, request.Params.ThreadID)
+		delete(h.codexReadOnly, request.Params.ThreadID)
 	}
 }
 
-// observeCodexPermissions uses the native thread-open response or subsequent
+// observeCodexReadOnly uses the native thread-open response or subsequent
 // settings notification. Requested settings and turn acceptance are not proof
 // of the effective provider policy. Called under host.mu.
-func (h *host) observeCodexPermissions(frame []byte) {
+func (h *host) observeCodexReadOnly(frame []byte) {
 	var message struct {
 		Method string `json:"method"`
 		Result struct {
@@ -71,27 +62,32 @@ func (h *host) observeCodexPermissions(frame []byte) {
 		return
 	}
 	id := message.Result.Thread.ID
-	policy := CodexPermissions{ApprovalPolicy: codexApprovalPolicy(message.Result.ApprovalPolicy), SandboxType: message.Result.Sandbox.Type}
+	approvalPolicy := message.Result.ApprovalPolicy
+	sandboxType := message.Result.Sandbox.Type
 	if message.Method == "thread/settings/updated" {
 		id = message.Params.ThreadID
-		policy = CodexPermissions{ApprovalPolicy: codexApprovalPolicy(message.Params.ThreadSettings.ApprovalPolicy),
-			SandboxType: message.Params.ThreadSettings.SandboxPolicy.Type}
+		approvalPolicy = message.Params.ThreadSettings.ApprovalPolicy
+		sandboxType = message.Params.ThreadSettings.SandboxPolicy.Type
 	}
 	if id == "" {
 		return
 	}
-	if policy.ApprovalPolicy == "" || policy.SandboxType == "" {
+	if approvalPolicy == nil || sandboxType == "" {
 		// thread/read returns history without policy fields. It does not change
 		// permissions; resume already invalidated its receipt before dispatch.
 		if message.Method == "thread/settings/updated" || message.Result.ApprovalPolicy != nil {
-			delete(h.codexPermissions, id)
+			delete(h.codexReadOnly, id)
 		}
 		return
 	}
-	if h.codexPermissions == nil {
-		h.codexPermissions = make(map[string]CodexPermissions)
+	if codexApprovalPolicy(approvalPolicy) != "never" || sandboxType != "readOnly" {
+		delete(h.codexReadOnly, id)
+		return
 	}
-	h.codexPermissions[id] = policy
+	if h.codexReadOnly == nil {
+		h.codexReadOnly = make(map[string]bool)
+	}
+	h.codexReadOnly[id] = true
 }
 
 // Granular policies cannot prove "never". Decode them as unknown without losing

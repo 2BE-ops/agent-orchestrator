@@ -71,7 +71,7 @@ func (o Offering) CloudEnabled(snapshot Snapshot) bool {
 // discover it at spawn time.
 type ChatCapability interface {
 	SupportsChat(harness domain.AgentHarness) bool
-	SupportsPermissionMode(harness domain.AgentHarness, mode ports.PermissionMode) bool
+	SupportsReadOnlyChat(harness domain.AgentHarness) bool
 }
 
 // Service reads and writes preferences.
@@ -148,20 +148,16 @@ func (s *Service) ChatHarnesses(candidates []domain.AgentHarness) []domain.Agent
 	return out
 }
 
-// ChatPermissionModes declares policy support independently of local authentication.
-func (s *Service) ChatPermissionModes(candidates []domain.AgentHarness) map[string][]ports.PermissionMode {
-	out := make(map[string][]ports.PermissionMode)
+// ReadOnlyChatHarnesses declares preventive read-only support independently of
+// local installation and authentication readiness.
+func (s *Service) ReadOnlyChatHarnesses(candidates []domain.AgentHarness) []domain.AgentHarness {
 	if s.chat == nil {
-		return out
+		return nil
 	}
+	var out []domain.AgentHarness
 	for _, harness := range candidates {
-		if !s.chat.SupportsChat(harness) {
-			continue
-		}
-		for _, mode := range []ports.PermissionMode{ports.PermissionModeReadOnly, ports.PermissionModeDefault, ports.PermissionModeAcceptEdits, ports.PermissionModeAuto, ports.PermissionModeBypassPermissions} {
-			if s.chat.SupportsPermissionMode(harness, mode) {
-				out[string(harness)] = append(out[string(harness)], mode)
-			}
+		if s.chat.SupportsReadOnlyChat(harness) {
+			out = append(out, harness)
 		}
 	}
 	return out

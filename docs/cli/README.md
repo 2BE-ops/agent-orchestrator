@@ -197,7 +197,7 @@ ao spawn --project my-project --agent codex --mode chat --permission read-only -
 The optional `permissions` field on `POST /api/v1/sessions` applies the same
 session-scoped override. Project and role defaults can also use `read-only`;
 existing defaults stay unchanged. `GET /api/v1/settings` advertises supported
-`chatPermissionModes` by harness before creation. Only Codex Chat currently
+`readOnlyChatHarnesses` before creation. Only Codex Chat currently
 supports preventive read-only access. Unsupported harnesses and terminal mode
 fail before creating a worker; AO never falls back to a broader permission mode.
 

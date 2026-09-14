@@ -2,7 +2,7 @@ package persistenthost
 
 import "testing"
 
-func TestCodexPermissionProofTracksProviderState(t *testing.T) {
+func TestCodexReadOnlyProofTracksProviderState(t *testing.T) {
 	for _, tc := range []struct {
 		name, request, update string
 		known                 bool
@@ -23,15 +23,12 @@ func TestCodexPermissionProofTracksProviderState(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := &host{}
-			h.observeCodexPermissions([]byte(`{"id":1,"result":{"thread":{"id":"t"},"approvalPolicy":"never","sandbox":{"type":"readOnly"}}}`))
+			h.observeCodexReadOnly([]byte(`{"id":1,"result":{"thread":{"id":"t"},"approvalPolicy":"never","sandbox":{"type":"readOnly"}}}`))
 			h.observeCodexRequest([]byte(tc.request))
-			h.observeCodexPermissions([]byte(tc.update))
-			policy, known := h.codexPermissions["t"]
+			h.observeCodexReadOnly([]byte(tc.update))
+			_, known := h.codexReadOnly["t"]
 			if known != tc.known {
-				t.Fatalf("policy=%+v known=%v, want %v", policy, known, tc.known)
-			}
-			if known && (policy.ApprovalPolicy != "never" || policy.SandboxType != "readOnly") {
-				t.Fatalf("policy=%+v", policy)
+				t.Fatalf("known=%v, want %v", known, tc.known)
 			}
 		})
 	}

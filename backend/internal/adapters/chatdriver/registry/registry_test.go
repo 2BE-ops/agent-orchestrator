@@ -54,11 +54,8 @@ func TestShippedChatDrivers(t *testing.T) {
 func TestReadOnlySupportIsDiscoverableWithoutLaunchingProviders(t *testing.T) {
 	r := Build(nil)
 	for _, harness := range domain.AllHarnesses {
-		if got := r.SupportsPermissionMode(harness, ports.PermissionModeReadOnly); got != (harness == domain.HarnessCodex) {
+		if got := r.SupportsReadOnlyChat(harness); got != (harness == domain.HarnessCodex) {
 			t.Errorf("read-only support for %s = %v", harness, got)
 		}
-	}
-	if r.SupportsPermissionMode(domain.HarnessCodex, "plan") {
-		t.Fatal("advisory plan mode is not a permission contract")
 	}
 }

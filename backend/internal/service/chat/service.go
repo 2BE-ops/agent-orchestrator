@@ -1306,9 +1306,9 @@ func (s *Service) SupportsChat(harness domain.AgentHarness) bool {
 	return s.drivers.SupportsChat(harness)
 }
 
-// SupportsPermissionMode exposes static driver support before creating a session.
-func (s *Service) SupportsPermissionMode(harness domain.AgentHarness, mode ports.PermissionMode) bool {
-	return s.drivers.SupportsPermissionMode(harness, mode)
+// SupportsReadOnlyChat exposes static preventive read-only support before spawn.
+func (s *Service) SupportsReadOnlyChat(harness domain.AgentHarness) bool {
+	return s.drivers.SupportsReadOnlyChat(harness)
 }
 
 // PreflightChat reports whether a harness can start in chat mode right now.

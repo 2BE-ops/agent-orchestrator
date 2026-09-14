@@ -94,11 +94,10 @@ func (r *Registry) SupportsChat(harness domain.AgentHarness) bool {
 	return ok
 }
 
-// SupportsPermissionMode reports whether a driver declares the requested contract.
-func (r *Registry) SupportsPermissionMode(harness domain.AgentHarness, mode ports.PermissionMode) bool {
+// SupportsReadOnlyChat reports whether a driver declares preventive read-only.
+func (r *Registry) SupportsReadOnlyChat(harness domain.AgentHarness) bool {
 	driver, ok := r.drivers[harness]
-	return ok && mode.Valid() && (mode != ports.PermissionModeReadOnly ||
-		driver.Capabilities().Has(ports.ChatCapabilityPreventiveReadOnly))
+	return ok && driver.Capabilities().Has(ports.ChatCapabilityPreventiveReadOnly)
 }
 
 // Harnesses lists the harnesses with a registered driver, for diagnostics and for
