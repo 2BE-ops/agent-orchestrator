@@ -1439,7 +1439,7 @@ func (q *Queries) ResolveConversationApproval(ctx context.Context, arg ResolveCo
 }
 
 const selectCompletedEditReplacement = `-- name: SelectCompletedEditReplacement :one
-SELECT t.id, t.conversation_id, t.handled_by_session_id, t.provider_turn_id, t.controller_generation, t.state, t.error_message, t.requested_at, t.started_at, t.completed_at, t.diff_json, t.rolled_back_at, t.plan_json, t.branch_id, t.promotion_started_at, t.promoted_to_turn_id, t.retry_of_turn_id, b.parent_branch_id
+SELECT t.id, t.conversation_id, t.handled_by_session_id, t.provider_turn_id, t.controller_generation, t.state, t.error_message, t.requested_at, t.started_at, t.completed_at, t.diff_json, t.rolled_back_at, t.plan_json, t.branch_id, t.promotion_started_at, t.promoted_to_turn_id, t.retry_of_turn_id, t.imported_from_terminal, b.parent_branch_id
 FROM conversation_messages m
 JOIN conversation_turns t ON t.id = m.turn_id
 JOIN conversation_branches b ON b.id = m.branch_id
@@ -1483,6 +1483,7 @@ func (q *Queries) SelectCompletedEditReplacement(ctx context.Context, arg Select
 		&i.ConversationTurn.PromotionStartedAt,
 		&i.ConversationTurn.PromotedToTurnID,
 		&i.ConversationTurn.RetryOfTurnID,
+		&i.ConversationTurn.ImportedFromTerminal,
 		&i.ParentBranchID,
 	)
 	return i, err

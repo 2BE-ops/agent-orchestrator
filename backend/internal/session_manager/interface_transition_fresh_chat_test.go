@@ -115,7 +115,7 @@ func TestInterfaceTransitionUnpromptedChatRoundTrip(t *testing.T) {
 			}{store, history}
 			if tc.providerTurn {
 				if err := history.AdoptProviderTurn(ctx, "conversation-1", rec.ID,
-					rec.Metadata.ControllerGeneration, "turn-1", "provider-turn-1", time.Now()); err != nil {
+					rec.Metadata.ControllerGeneration, "turn-1", "provider-turn-1", false, time.Now()); err != nil {
 					t.Fatal(err)
 				}
 			}
