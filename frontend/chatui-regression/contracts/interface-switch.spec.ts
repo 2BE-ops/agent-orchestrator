@@ -96,7 +96,8 @@ test.describe("ChatUI interface switching", () => {
 
 		test("offers Finish work before submitting the non-destructive drain policy", async ({ chatUI, page }) => {
 			await chatUI.open();
-			await page.getByRole("button", { name: "Switch to terminal UI" }).click();
+			await page.getByRole("button", { name: "Session actions" }).click();
+			await page.getByRole("menuitem", { name: "Switch to terminal UI", exact: true }).click();
 
 			const dialog = page.getByRole("dialog", { name: "Switch to Terminal UI?" });
 			await expect(dialog).toBeVisible();
@@ -112,7 +113,8 @@ test.describe("ChatUI interface switching", () => {
 
 		test("maps explicit Stop now consent to the destructive interrupt policy", async ({ chatUI, page }) => {
 			await chatUI.open();
-			await page.getByRole("button", { name: "Switch to terminal UI" }).click();
+			await page.getByRole("button", { name: "Session actions" }).click();
+			await page.getByRole("menuitem", { name: "Switch to terminal UI", exact: true }).click();
 
 			const dialog = page.getByRole("dialog", { name: "Switch to Terminal UI?" });
 			await expect(dialog).toBeVisible();

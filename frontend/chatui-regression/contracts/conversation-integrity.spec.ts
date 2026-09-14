@@ -69,16 +69,19 @@ test.describe("ChatUI conversation integrity", () => {
 			await chatUI.open();
 			await expect(page.getByTestId("queued-message-dock")).toBeVisible();
 
-			const cancelButtons = page.getByRole("button", { name: /Cancel queued message:/ });
-			const promoteButtons = page.getByRole("button", { name: /Use as next message:/ });
+			const toggle = page.getByTestId("queued-message-toggle");
+			if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click();
+			const cancelButtons = page.getByRole("button", { name: "Delete queued message", exact: true });
+			const promoteButtons = page.getByRole("button", { name: "Steer this queued message into the running turn", exact: true });
 			await expect(cancelButtons).toHaveCount(2);
 			await expect(promoteButtons).toHaveCount(2);
-			await expect(page.getByRole("button", { name: "Stop turn" })).toHaveAccessibleDescription(
+			await expect(page.getByRole("button", { name: "Stop turn and cancel 2 queued messages", exact: true })).toHaveAccessibleDescription(
 				/also cancels 2 queued messages/i,
 			);
 
 			await page
-				.getByRole("button", { name: "Cancel queued message: First queued follow-up" })
+				.getByTestId("queued-message-turn-queued-one")
+				.getByRole("button", { name: "Delete queued message", exact: true })
 				.click();
 			await expect
 				.poll(
@@ -95,8 +98,10 @@ test.describe("ChatUI conversation integrity", () => {
 			await expect(page.getByText("First queued follow-up", { exact: true })).toHaveCount(0);
 			await expect(page.getByTestId("queued-message-turn-queued-two")).toBeVisible();
 
+			await page.getByTestId("queued-message-turn-queued-two").hover();
 			await page
-				.getByRole("button", { name: "Use as next message: Second queued follow-up" })
+				.getByTestId("queued-message-turn-queued-two")
+				.getByRole("button", { name: "Steer this queued message into the running turn", exact: true })
 				.click();
 			await expect
 				.poll(() =>
@@ -118,7 +123,7 @@ test.describe("ChatUI conversation integrity", () => {
 			chatUI.conversation = conversationWithQueue(chatUI.conversation);
 
 			await chatUI.open();
-			await page.getByRole("button", { name: "Stop turn" }).click();
+			await page.getByRole("button", { name: "Stop turn and cancel 2 queued messages", exact: true }).click();
 			await expect(
 				page.getByRole("dialog", { name: "Stop turn and cancel 2 queued messages?" }),
 			).toBeVisible();
@@ -179,16 +184,15 @@ test.describe("ChatUI conversation integrity", () => {
 			const restoredFile = page
 				.getByRole("list", { name: "Attached files" })
 				.getByRole("listitem");
-			await expect(restoredFile).toContainText("Worktree path · agent must read");
-			await expect(restoredFile).not.toContainText("native image");
-			await expect(restoredFile.getByRole("status")).toHaveText("Worktree path · agent must read");
+			await expect(restoredFile).toContainText("Worktree path + native image");
+			await expect(restoredFile.getByRole("status")).toHaveText("Worktree path + native image");
 			await page.getByRole("combobox", { name: "Message the agent" }).fill("Inspect after reload");
 			await page.getByRole("button", { name: "Send message" }).click();
 
 			await expect.poll(() => chatUI.requestsMatching("POST", "/conversation/messages").length).toBe(1);
 			const sent = chatUI.requestsMatching("POST", "/conversation/messages")[0]?.body as JsonObject;
 			expect(String(sent.text ?? "")).toContain(".ao/attachments/");
-			expect(sent.attachments ?? []).toEqual([]);
+			expect(sent.attachments).toEqual([{ mimeType: "image/png", data: expect.any(String), name: "delivery-route.png" }]);
 		});
 
 		test("preserves the original filename in staged and native image payloads", async ({ chatUI, page }) => {

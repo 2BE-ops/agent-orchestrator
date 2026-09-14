@@ -36,7 +36,7 @@ test.describe("ChatUI truthful controls and operability", () => {
 			];
 			await chatUI.open();
 
-			await page.getByRole("button", { name: "Claude Code permission mode" }).click();
+			await page.getByRole("button", { name: "Model mode for the next turn" }).click();
 			const menu = page.getByRole("menu");
 			await expect(menu).toBeVisible();
 			await expect.soft(menu).not.toContainText("no actual tool execution");
@@ -51,7 +51,8 @@ test.describe("ChatUI truthful controls and operability", () => {
 
 		test("states that a switch can start fresh without claiming semantic handoff", async ({ chatUI, page }) => {
 			await chatUI.open();
-			await page.getByRole("button", { name: "Switch agent", exact: true }).click();
+			await page.getByRole("button", { name: "Session actions" }).click();
+			await page.getByRole("menuitem", { name: "Switch agent", exact: true }).click();
 
 			const dialog = page.getByRole("dialog", { name: "Switch agent" });
 			await expect(dialog).toBeVisible();
@@ -72,7 +73,7 @@ test.describe("ChatUI truthful controls and operability", () => {
 			},
 		});
 
-		test("exposes delivery and settings selection to assistive technology", async ({ chatUI, page }) => {
+		test("exposes delivery selection to assistive technology", async ({ chatUI, page }) => {
 			chatUI.conversation = {
 				...chatUI.conversation,
 				controller: "busy",
@@ -106,14 +107,19 @@ test.describe("ChatUI truthful controls and operability", () => {
 				await page.keyboard.up("Control");
 			}
 
-			await page.getByRole("button", { name: "What the agent may do without asking" }).click();
+		});
+
+		test("exposes settings selection to assistive technology", async ({ chatUI, page }) => {
+			await chatUI.open();
+
+			await page.getByRole("button", { name: "Approval policy for the next turn" }).click();
 			const choices = page.getByRole("menuitemradio");
 			await expect(choices).toHaveCount(4);
 			await expect.poll(() => exposesSelectedState(choices.first())).toBe(true);
 			await expect.poll(() => exposesSelectedState(choices.last())).toBe(false);
 			await choices.last().click();
 
-			await page.getByRole("button", { name: "What the agent may do without asking" }).click();
+			await page.getByRole("button", { name: "Approval policy for the next turn" }).click();
 			const updatedChoices = page.getByRole("menuitemradio");
 			await expect(updatedChoices).toHaveCount(4);
 			await expect.poll(() => exposesSelectedState(updatedChoices.first())).toBe(false);

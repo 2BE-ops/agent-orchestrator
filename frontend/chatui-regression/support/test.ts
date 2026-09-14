@@ -9,6 +9,7 @@ import {
 
 import { installFakeTerminalMux } from "../../e2e/support/fake-terminal-mux";
 import { installFakeAgent } from "./fake-agent";
+import { agentReadiness } from "../../src/renderer/test/agent-readiness-fixtures";
 
 export type JsonObject = Record<string, unknown>;
 
@@ -251,6 +252,10 @@ export class ChatUIRegressionHarness {
 				});
 				return;
 			}
+			if (method === "GET" && pathname === `/api/v1/sessions/${this.sessionId}/preview/files/.ao/attachments/attachment-regression.png`) {
+				await route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j6mQAAAAASUVORK5CYII=", "base64") });
+				return;
+			}
 			if (method === "GET" && pathname === "/api/v1/notifications") {
 				await route.fulfill({
 					json: { notifications: [], unreadCount: 0, unresolvedCount: 0 },
@@ -271,6 +276,20 @@ export class ChatUIRegressionHarness {
 				});
 				return;
 			}
+			if (method === "GET" && pathname === "/api/v1/agents/readiness") {
+				await route.fulfill({ json: { agents: [agentReadiness("codex", "Codex"), agentReadiness("claude-code", "Claude Code")] } });
+				return;
+			}
+			if (method === "GET" && [this.sessionId, this.secondarySessionId].some((id) => id && pathname === `/api/v1/sessions/${id}/pr`)) {
+				await route.fulfill({ json: { prs: [] } });
+				return;
+			}
+			if (method === "GET" && pathname === "/api/v1/agents/codex/accounts") {
+				const supported = { state: "supported", reasonCode: "supported", reason: "available" };
+				await route.fulfill({ json: { accountRevision: 0, accounts: [], capabilities: { nativeLogin: supported, globalSwitch: supported, resetCreditConsume: supported } } });
+				return;
+			}
+
 			if (method === "GET" && pathname === "/api/v1/agents") {
 				const agents = [
 					{ id: "codex", label: "Codex", authStatus: "authorized" },
@@ -525,7 +544,9 @@ export class ChatUIRegressionHarness {
 			.getByRole("tablist", { name: "Chat tabs" })
 			.getByRole("tab", { selected: true });
 		await expect(sessionTab).toHaveCount(1);
-		await expect(sessionTab).toHaveAccessibleName(this.provider === "claude-code" ? "Claude Code" : "Codex");
+		const title = sessionId === this.secondarySessionId ? "ChatUI regression secondary worker" : "ChatUI regression worker";
+		const provider = this.provider === "claude-code" ? "Claude Code" : "Codex";
+		await expect(sessionTab).toHaveAccessibleName(`${title} · ${provider} · Idle`);
 	}
 
 	requestsMatching(method: string, suffix: string): RecordedRequest[] {

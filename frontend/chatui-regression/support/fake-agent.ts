@@ -307,22 +307,27 @@ export async function installFakeAgent(page: Page, opts: FakeAgentOptions = {}):
 				isLoading: false,
 				...(error ? { error } : {}),
 			});
-			const chatDraftRiskBridge = { setChatDraftRisk: () => undefined };
 			const ao = {
-				app: {
-					getVersion: async () => version,
-					chooseDirectory: async () => null,
-					openExternal: async () => undefined,
-					scanImportFolder: async ({ path }: { path: string }) => ({ path, repos: [] }),
-					checkAncestorRepo: async () => undefined,
-					getPathForFile: () => "",
+					app: {
+						getVersion: async () => version,
+						chooseDirectory: async () => null,
+						checkGitRepository: async () => true,
+						openExternal: async () => undefined,
+						scanImportFolder: async ({ path }: { path: string }) => ({ path, repos: [] }),
+						checkAncestorRepo: async () => undefined,
+						getRepositoryBranch: async () => undefined,
+						getGitHubLogin: async () => "",
+						getCachedGitHubOwners: async () => [],
+						refreshGitHubOwners: async () => [],
+						checkGitHubRepositoryAvailability: async () => ({ available: true }),
+						getPathForFile: () => "",
 					onOpenFolderPath: () => () => undefined,
 					onNewSessionShortcut: unsubscribe,
 					onKeyboardShortcutsHelp: unsubscribe,
 					onNewShellTerminalShortcut: unsubscribe,
 					onCloseShellTerminalShortcut: unsubscribe,
 					setCloseShellTerminalShortcutEnabled: () => undefined,
-					...chatDraftRiskBridge,
+					setChatDraftRisk: () => undefined,
 					onOpenSettingsShortcut: unsubscribe,
 					onPreviousSessionShortcut: unsubscribe,
 					onNextSessionShortcut: unsubscribe,
@@ -341,9 +346,15 @@ export async function installFakeAgent(page: Page, opts: FakeAgentOptions = {}):
 					isFullScreen: async () => false,
 					onFullScreen: () => () => undefined,
 				},
-				theme: { set: async () => undefined },
+				theme: {
+					set: async () => undefined,
+					persistTerminal: async () => undefined,
+				},
 				menu: { action: async () => undefined, notifyShellFocus: () => undefined },
-				clipboard: { writeText: async () => undefined, readText: async () => "" },
+				clipboard: {
+					writeText: async () => undefined,
+					readText: async () => "",
+				},
 				daemon: {
 					getStatus: async () => status,
 					start: async () => status,
@@ -366,14 +377,22 @@ export async function installFakeAgent(page: Page, opts: FakeAgentOptions = {}):
 					}),
 					open: async () => ({ id: "cursor" as const, name: "Cursor", kind: "editor" as const }),
 				},
-				telemetry: { getBootstrap: async () => null },
+				telemetry: {
+					getBootstrap: async () => null,
+					getPolicy: async () => ({ eventsEnabled: false, consentGeneration: "e2e", updatedAt: new Date(0).toISOString(), acknowledged: false, consentRenewalRequired: false, state: "applied", environmentVeto: true, durabilitySupported: false, reason: "environment_veto" }),
+					setEventsEnabled: async () => ({ eventsEnabled: false, consentGeneration: "e2e", updatedAt: new Date(0).toISOString(), acknowledged: false, consentRenewalRequired: false, state: "applied", environmentVeto: true, durabilitySupported: false, reason: "environment_veto" }),
+					onPolicy: () => () => false,
+					onClearQueues: () => () => false,
+					capture: async () => false,
+					signalAgentSwitchVisibility: () => false,
+				},
 				browser: {
 					nativeCompositionEnabled: true,
 					ensure: async (sessionId: string) => navState(`preview:${sessionId}`),
 					setBounds: () => undefined,
 					setOverlayOpen: () => undefined,
-					navigate: async ({ viewId, url }: { viewId: string; url: string }) =>
-						state.browserError ? navState(viewId, "", state.browserError) : navState(viewId, url),
+					navigate: async ({ viewId }: { viewId: string }) => navState(viewId),
+					historySuggestions: async () => [],
 					clear: async (viewId: string) => navState(viewId),
 					goBack: async (viewId: string) => navState(viewId),
 					goForward: async (viewId: string) => navState(viewId),
@@ -399,6 +418,20 @@ export async function installFakeAgent(page: Page, opts: FakeAgentOptions = {}):
 						activeTabId: "t1",
 						tabs: [{ id: "t1", url: "", title: "", active: true }],
 					}),
+					getProfile: async (viewId: string) => ({ viewId, profileId: null, temporary: true }),
+					showProfileMenu: async () => undefined,
+					selectProfile: async () => undefined,
+					captureScreenshot: async () => undefined,
+					downloads: {
+						list: async () => ({ downloads: [] }),
+						action: async () => ({ downloads: [] }),
+						clear: async () => ({ downloads: [] }),
+						onChanged: unsubscribe,
+					},
+					notifyPanelUsed: () => undefined,
+					notifyPanelBlur: () => undefined,
+					onFocusLocation: unsubscribe,
+					onReopenClosedTab: unsubscribe,
 					devtools: async (input: { viewId: string }) => ({ viewId: input.viewId, open: false, activeTabId: "" }),
 					destroy: () => undefined,
 					// Annotation contract (mirrors src/preload.ts): useBrowserView subscribes
@@ -411,6 +444,25 @@ export async function installFakeAgent(page: Page, opts: FakeAgentOptions = {}):
 					onTabsState: unsubscribe,
 					onAgentActivity: unsubscribe,
 					onDevToolsState: unsubscribe,
+					onProfileState: unsubscribe,
+					onProfileManage: unsubscribe,
+					onPageFocus: unsubscribe,
+				},
+				browserProfiles: {
+					list: async () => ({ profiles: [] }),
+					create: async (name: string) => {
+						const now = new Date().toISOString();
+						return { id: `fake-${name}`, name, createdAt: now, updatedAt: now };
+					},
+					rename: async ({ id, name }: { id: string; name: string }) => {
+						const now = new Date().toISOString();
+						return { id, name, createdAt: now, updatedAt: now };
+					},
+					clear: async () => undefined,
+					delete: async () => undefined,
+					discoverImportSources: async () => ({ sources: [] }),
+					import: async () => ({ sourceName: "", entries: [] }),
+					onImportProgress: () => () => undefined,
 				},
 				notifications: {
 					show: async () => undefined,
@@ -418,8 +470,14 @@ export async function installFakeAgent(page: Page, opts: FakeAgentOptions = {}):
 					devBounce: async () => undefined,
 					onClick: unsubscribe,
 				},
-				tray: { setAttentionState: () => undefined, onOpenSession: unsubscribe },
-				appState: { getMigration: async () => ({ status: "completed" }), setMigration: async () => undefined },
+				tray: {
+					setAttentionState: () => undefined,
+					onOpenSession: unsubscribe,
+				},
+				appState: {
+					getMigration: async () => ({ status: "completed" }),
+					setMigration: async () => undefined,
+				},
 				updateSettings: {
 					get: async () => ({ enabled: false, channel: "latest", nightlyAck: false, feature: null }),
 					set: async () => undefined,
@@ -452,6 +510,13 @@ export async function installFakeAgent(page: Page, opts: FakeAgentOptions = {}):
 					getSession: async () => null,
 					signIn: async () => undefined,
 					signOut: async () => undefined,
+					localAuthAvailable: async () => false,
+					localRegister: async () => {
+						throw new Error("local auth is unavailable in e2e");
+					},
+					localLogin: async () => {
+						throw new Error("local auth is unavailable in e2e");
+					},
 					onSessionChanged: unsubscribe,
 				},
 				cloudCp: {

@@ -70,7 +70,11 @@ export const requiredPlaywrightContracts = Object.freeze([
 	},
 	{
 		id: "MQA-11:selection-semantics",
-		marker: "MQA-11 selection semantics › exposes delivery and settings selection to assistive technology",
+		marker: "MQA-11 selection semantics › exposes delivery selection to assistive technology",
+	},
+	{
+		id: "MQA-11:settings-semantics",
+		marker: "MQA-11 selection semantics › exposes settings selection to assistive technology",
 	},
 	{
 		id: "GAP-01:context-quota",
