@@ -134,6 +134,11 @@ var (
 	// ErrInterfaceTransitionNoticeNotAcknowledgeable rejects acknowledgements for
 	// active/successful rows that have no failure or recovery notice to dismiss.
 	ErrInterfaceTransitionNoticeNotAcknowledgeable = errors.New("session: interface transition has no acknowledgeable notice")
+	// ErrInterfaceProviderHistoryRecoveryUnavailable rejects broad or stale
+	// recovery requests. AO permits provider authority only for the latest exact
+	// TUI-to-Chat saga after it proved every mismatch was legacy text, including
+	// the same explicit recovery saga after startup reconciliation interrupted it.
+	ErrInterfaceProviderHistoryRecoveryUnavailable = errors.New("session: provider-history recovery is unavailable")
 	// ErrResumeInProgress prevents concurrent resume requests from replacing the
 	// same runtime twice.
 	ErrResumeInProgress = errors.New("session: agent resume already in progress")
@@ -231,8 +236,10 @@ type lifecycleRecorder interface {
 	CancelLaunch(id domain.SessionID, launchID string)
 	ReleaseLaunch(id domain.SessionID, launchID string)
 	MarkSpawned(ctx context.Context, id domain.SessionID, metadata domain.SessionMetadata) error
+	MarkChatReconnected(ctx context.Context, id domain.SessionID, metadata domain.SessionMetadata) error
 	MarkChatSpawned(ctx context.Context, id domain.SessionID, metadata domain.SessionMetadata, boundary domain.ConversationBranch) error
 	CommitControllerEpoch(ctx context.Context, id domain.SessionID, source, target domain.SessionMode, nativeConversationID string, startFresh bool) (bool, error)
+	RestoreControllerEpoch(ctx context.Context, id domain.SessionID, source, target domain.SessionMode, nativeConversationID string, startFresh bool) (bool, error)
 	ConfirmAgentSwitchSourceStopped(ctx context.Context, confirmation domain.AgentSwitchSourceStopConfirmation) (bool, error)
 	ActivateAgentSwitchTarget(ctx context.Context, activation domain.AgentSwitchTargetActivation) (bool, error)
 	ActivateChatAgentSwitchTarget(ctx context.Context, activation domain.AgentSwitchChatTargetActivation) (bool, error)
@@ -333,7 +340,7 @@ type Store interface {
 	ListWorkspaceRepos(ctx context.Context, projectID string) ([]domain.WorkspaceRepoRecord, error)
 	CreateSession(ctx context.Context, rec domain.SessionRecord) (domain.SessionRecord, error)
 	UpdateSession(ctx context.Context, rec domain.SessionRecord) error
-	UpdateBrowserCapabilityVerifier(ctx context.Context, id domain.SessionID, expected domain.SessionControllerOwner, verifier string, updatedAt time.Time) (bool, error)
+	UpdateBrowserCapabilityVerifier(ctx context.Context, id domain.SessionID, expected domain.SessionControllerOwner, verifier string) (bool, error)
 	GetSession(ctx context.Context, id domain.SessionID) (domain.SessionRecord, bool, error)
 	ListSessions(ctx context.Context, project domain.ProjectID) ([]domain.SessionRecord, error)
 	ListAllSessions(ctx context.Context) ([]domain.SessionRecord, error)
@@ -417,8 +424,15 @@ type Manager struct {
 	codexAccountSwitchObserver      func()
 	startupBackgroundReconcileDone  chan struct{}
 	startupBackgroundReconcileOnce  sync.Once
+	statusRecoveryMu                sync.RWMutex
+	statusRecoveryFailed            bool
+	statusRecoveryRevision          uint64
+	statusRecoveries                map[domain.SessionID]statusRecovery
+	statusVerificationLimit         time.Duration
 	agentOpMu                       sync.Mutex
 	agentOperations                 map[domain.SessionID]agentOperationKind
+	interfaceRecoveryMu             sync.Mutex
+	deferredInterfaceRecovery       map[domain.SessionID]string
 	// switchDecisionInput opens a narrow human-only terminal lane while the
 	// source is blocked on permission during a mandatory switch.
 	switchDecisionInput map[domain.SessionID]domain.AgentSwitchID
@@ -501,9 +515,10 @@ func (m *Manager) beginHarnessUse(harness domain.AgentHarness) (func(), error) {
 	return release, nil
 }
 
-// latestUserPromptRecorder narrows the post-delivery write to the single fact
-// Send owns. A full SessionRecord update here could race a provider switch and
-// resurrect stale harness/runtime ownership read before the pane write.
+// latestUserPromptRecorder narrows the post-delivery write to the pane prompt's
+// coherent fallback checkpoint. A full SessionRecord update here could race a
+// provider switch and resurrect stale harness/runtime ownership read before the
+// pane write.
 type latestUserPromptRecorder interface {
 	RecordSessionLatestUserPrompt(context.Context, domain.SessionID, string, time.Time) (bool, error)
 }
@@ -798,6 +813,8 @@ func New(d Deps) *Manager {
 		// default produced mixed-timezone timestamps in `ao session get`.
 		m.clock = func() time.Time { return time.Now().UTC() }
 	}
+	m.statusRecoveries = make(map[domain.SessionID]statusRecovery)
+	m.statusVerificationLimit = statusVerificationLimit
 	if m.reconcileWorkers < 1 {
 		m.reconcileWorkers = 1
 	}
@@ -925,6 +942,7 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 	if err != nil {
 		return domain.SessionRecord{}, 0, 0, wrapSpawnStageEarly(ErrSpawnCreate, err)
 	}
+	m.markFreshSessionStatusReady(rec.ID)
 	id := rec.ID
 	systemPromptFile, err := m.prepareSystemPromptFile(id, cfg.Harness, systemPrompt)
 	if err != nil {
@@ -2172,6 +2190,18 @@ func (m *Manager) ResumeAgentWithMode(ctx context.Context, id domain.SessionID) 
 	if rec.IsTerminated {
 		return RestoreResult{}, fmt.Errorf("resume agent %s: %w", id, ErrTerminated)
 	}
+	if m.SessionStatusReadiness(rec) == "unavailable" {
+		m.beginStatusRecovery(id)
+		recoveryCtx, cancel := context.WithTimeout(ctx, m.statusVerificationLimit)
+		defer cancel()
+		err := m.reconcileLive(recoveryCtx, rec)
+		m.finishStatusRecovery(ctx, rec, err)
+		if err != nil {
+			return RestoreResult{}, err
+		}
+		current, err := m.getRecord(ctx, id)
+		return RestoreResult{Session: current, Mode: RestoreModeNative}, err
+	}
 	mode := domain.NormalizeSessionMode(rec.Mode)
 	if mode == domain.SessionModeChat && m.chat != nil && m.chat.HasLiveChatController(id) {
 		return RestoreResult{}, fmt.Errorf("resume agent %s: %w", id, ErrAgentNotExited)
@@ -2225,21 +2255,40 @@ func (m *Manager) resumeAgentRecordWithReservedGeneration(
 		ProjectID: rec.ProjectID,
 	}
 	if domain.NormalizeSessionMode(rec.Mode) == domain.SessionModeChat {
-		return m.relaunchSessionWithPolicyAndGeneration(ctx, operation, rec, project, ws, nil, forceFresh, requireNativeHistory, reservedGeneration)
+		return m.relaunchSessionWithPolicyAndGeneration(ctx, operation, rec, project, ws, nil, forceFresh, requireNativeHistory, reservedGeneration, domain.SessionInterfaceTransitionHistoryStrict)
 	}
 	handle := ports.RuntimeHandle{ID: meta.RuntimeHandleID}
-	return m.relaunchSessionWithPolicyAndGeneration(ctx, operation, rec, project, ws, &handle, forceFresh, requireNativeHistory, reservedGeneration)
+	return m.relaunchSessionWithPolicyAndGeneration(ctx, operation, rec, project, ws, &handle, forceFresh, requireNativeHistory, reservedGeneration, domain.SessionInterfaceTransitionHistoryStrict)
 }
 
 func (m *Manager) relaunchSession(ctx context.Context, operation string, rec domain.SessionRecord, project domain.ProjectRecord, ws ports.WorkspaceInfo, restartHandle *ports.RuntimeHandle) (RestoreResult, error) {
-	return m.relaunchSessionWithPolicy(ctx, operation, rec, project, ws, restartHandle, false, false)
+	return m.relaunchSessionWithPolicy(
+		ctx,
+		operation,
+		rec,
+		project,
+		ws,
+		restartHandle,
+		false,
+		false,
+		domain.SessionInterfaceTransitionHistoryStrict,
+	)
 }
 
-func (m *Manager) relaunchSessionWithPolicy(ctx context.Context, operation string, rec domain.SessionRecord, project domain.ProjectRecord, ws ports.WorkspaceInfo, restartHandle *ports.RuntimeHandle, forceFresh, requireNativeHistory bool) (RestoreResult, error) {
-	return m.relaunchSessionWithPolicyAndGeneration(ctx, operation, rec, project, ws, restartHandle, forceFresh, requireNativeHistory, "")
+func (m *Manager) relaunchSessionWithPolicy(
+	ctx context.Context,
+	operation string,
+	rec domain.SessionRecord,
+	project domain.ProjectRecord,
+	ws ports.WorkspaceInfo,
+	restartHandle *ports.RuntimeHandle,
+	forceFresh, requireNativeHistory bool,
+	historyPolicy domain.SessionInterfaceTransitionHistoryPolicy,
+) (RestoreResult, error) {
+	return m.relaunchSessionWithPolicyAndGeneration(ctx, operation, rec, project, ws, restartHandle, forceFresh, requireNativeHistory, "", historyPolicy)
 }
 
-func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, operation string, rec domain.SessionRecord, project domain.ProjectRecord, ws ports.WorkspaceInfo, restartHandle *ports.RuntimeHandle, forceFresh, requireNativeHistory bool, reservedGeneration string) (RestoreResult, error) {
+func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, operation string, rec domain.SessionRecord, project domain.ProjectRecord, ws ports.WorkspaceInfo, restartHandle *ports.RuntimeHandle, forceFresh, requireNativeHistory bool, reservedGeneration string, historyPolicy domain.SessionInterfaceTransitionHistoryPolicy) (RestoreResult, error) {
 	// Relaunch dispatches from the currently committed persisted mode, never from
 	// a caller hint. The interface-transition coordinator changes that fact only
 	// after stopping the old controller, then reuses this ordinary restore path.
@@ -2249,7 +2298,9 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 		} else if strings.TrimSpace(rec.Metadata.ProviderConversationID) == "" {
 			return RestoreResult{}, fmt.Errorf("%s %s: %w", operation, rec.ID, ErrIncompleteHandle)
 		}
-		return m.resumeChatController(ctx, operation, rec, project, ws, requireNativeHistory, reservedGeneration)
+		return m.resumeChatController(
+			ctx, operation, rec, project, ws, requireNativeHistory, reservedGeneration, historyPolicy,
+		)
 	}
 
 	agent, ok := m.agents.Agent(rec.Harness)
@@ -2360,12 +2411,14 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 		BrowserCapabilityVerifier: rec.Metadata.BrowserCapabilityVerifier,
 	}
 	// Bind an exact native resume to the target launch immediately. Passive Codex
-	// resumes do not necessarily emit SessionStart until the next user turn, but
-	// `codex resume <id>` cannot silently select a different conversation. The
-	// interface coordinator provides the same guarantee after it freezes Chat and
-	// transfers the required native history. Fresh and fallback launches still
-	// require current-generation identity proof from their hooks.
-	bindNativeIdentity := mode == RestoreModeNative && rec.Harness == domain.HarnessCodex
+	// resumes do not necessarily emit SessionStart until the next user turn, and
+	// Claude emits SessionStart after its resume process is already running, but
+	// both adapters' explicit resume commands name the exact stored conversation.
+	// The interface coordinator provides the same guarantee after it freezes Chat
+	// and transfers the required native history. Fresh and fallback launches
+	// still require current-generation identity proof from their hooks.
+	bindNativeIdentity := mode == RestoreModeNative &&
+		(rec.Harness == domain.HarnessCodex || rec.Harness == domain.HarnessClaudeCode)
 	if (bindNativeIdentity || (requireNativeHistory && !forceFresh)) && strings.TrimSpace(metadata.AgentSessionID) != "" {
 		metadata.AgentSessionIDLaunchID = launchID
 	}
@@ -2670,9 +2723,9 @@ func (m *Manager) preserveFailedReconcileRelaunch(ctx context.Context, before do
 		}
 
 		signal := ports.ActivitySignal{
-			Valid:             true,
-			State:             domain.ActivityExited,
-			ExpectedUpdatedAt: current.UpdatedAt,
+			Valid:            true,
+			State:            domain.ActivityExited,
+			ExpectedRevision: &current.Revision,
 		}
 		if domain.NormalizeSessionMode(current.Mode) == domain.SessionModeChat {
 			signal.ControllerGeneration = current.Metadata.ControllerGeneration
@@ -2754,9 +2807,8 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	return m.ReconcileBackground(ctx)
 }
 
-// ReconcileStartupSafety closes durable agent-switch and interface-transition
-// state that would otherwise lose its in-memory input fence across a daemon
-// restart. This must complete before the API accepts user input.
+// ReconcileStartupSafety closes interrupted operations or quarantines ambiguous
+// interface targets and agent switches with a restored input fence before the API accepts input.
 func (m *Manager) ReconcileStartupSafety(ctx context.Context) error {
 	if err := m.ReconcileCodexAccountSwitches(ctx); err != nil {
 		return fmt.Errorf("reconcile: Codex account-switch pass: %w", err)
@@ -2764,7 +2816,7 @@ func (m *Manager) ReconcileStartupSafety(ctx context.Context) error {
 	// A daemon restart destroys the in-memory input fence. Close any durable
 	// non-terminal switch before adopting runtimes so the API never implies an
 	// unconfirmed continuation was delivered.
-	if err := m.ReconcileAgentSwitches(ctx); err != nil {
+	if err := m.reconcileAgentSwitches(ctx, true); err != nil {
 		return fmt.Errorf("reconcile: agent-switch pass: %w", err)
 	}
 	m.startTransitionMessageDispatcher(ctx)
@@ -2779,8 +2831,14 @@ func (m *Manager) ReconcileStartupSafety(ctx context.Context) error {
 // saved-session restoration passes. It is deliberately separate from the
 // startup safety pass so the daemon can serve durable SQLite-backed project
 // and session metadata while this best-effort work continues.
-func (m *Manager) ReconcileBackground(ctx context.Context) error {
-	defer m.startupBackgroundReconcileOnce.Do(func() { close(m.startupBackgroundReconcileDone) })
+func (m *Manager) ReconcileBackground(ctx context.Context) (resultErr error) {
+	defer func() {
+		m.statusRecoveryMu.Lock()
+		m.statusRecoveryFailed = resultErr != nil
+		m.statusRecoveryRevision++
+		m.statusRecoveryMu.Unlock()
+		m.startupBackgroundReconcileOnce.Do(func() { close(m.startupBackgroundReconcileDone) })
+	}()
 	recs, err := m.store.ListAllSessions(ctx)
 	if err != nil {
 		return fmt.Errorf("reconcile: list sessions: %w", err)
@@ -2822,6 +2880,9 @@ func (m *Manager) reconcileLivePass(ctx context.Context, recs []domain.SessionRe
 	// reaper until a worker dequeues them.
 	acquired, err := m.beginAgentOperations(ctx, ids, agentOperationReconcile)
 	if err != nil {
+		for _, rec := range candidates {
+			m.finishStatusRecovery(ctx, rec, err)
+		}
 		m.logger.Warn("reconcile: could not fence live sessions", "error", err)
 		return
 	}
@@ -2832,6 +2893,7 @@ func (m *Manager) reconcileLivePass(ctx context.Context, recs []domain.SessionRe
 	live := make([]domain.SessionRecord, 0, len(acquired))
 	for _, rec := range candidates {
 		if _, ok := acquiredSet[rec.ID]; !ok {
+			m.finishStatusRecovery(ctx, rec, ErrResumeInProgress)
 			m.logger.Warn("reconcile: session remains input-gated pending unambiguous agent-switch recovery", "sessionID", rec.ID)
 			continue
 		}
@@ -2851,10 +2913,14 @@ func (m *Manager) reconcileLivePass(ctx context.Context, recs []domain.SessionRe
 		go func() {
 			defer wg.Done()
 			for rec := range jobs {
+				m.beginStatusRecovery(rec.ID)
 				err := func() error {
 					defer m.endAgentOperation(rec.ID, agentOperationReconcile)
-					return m.reconcileLive(ctx, rec)
+					recoveryCtx, cancel := context.WithTimeout(ctx, m.statusVerificationLimit)
+					defer cancel()
+					return m.reconcileLive(recoveryCtx, rec)
 				}()
+				m.finishStatusRecovery(ctx, rec, err)
 				if err != nil {
 					m.logger.Error("reconcile: live pass failed, skipping", "sessionID", rec.ID, "error", err)
 				}
@@ -4392,8 +4458,7 @@ func (m *Manager) persistBrowserCapabilityVerifier(
 	if verifier == "" {
 		return rec, nil
 	}
-	updatedAt := m.clock()
-	applied, err := m.store.UpdateBrowserCapabilityVerifier(ctx, rec.ID, expected, verifier, updatedAt)
+	applied, err := m.store.UpdateBrowserCapabilityVerifier(ctx, rec.ID, expected, verifier)
 	if err != nil {
 		return rec, err
 	}
@@ -4401,9 +4466,6 @@ func (m *Manager) persistBrowserCapabilityVerifier(
 		return rec, errors.New("session controller ownership changed before browser capability rotation")
 	}
 	rec.Metadata.BrowserCapabilityVerifier = verifier
-	if rec.UpdatedAt.Before(updatedAt) {
-		rec.UpdatedAt = updatedAt
-	}
 	return rec, nil
 }
 

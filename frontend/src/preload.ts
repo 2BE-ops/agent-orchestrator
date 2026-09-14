@@ -569,6 +569,9 @@ const api = {
 		returnHome: (requestId?: string) => ipcRenderer.invoke("updates:returnHome", requestId) as Promise<void>,
 		download: (requestId?: string) => ipcRenderer.invoke("updates:download", requestId) as Promise<void>,
 		install: (confirmedVersion?: string) => ipcRenderer.invoke("updates:install", confirmedVersion) as Promise<UpdateInstallResult>,
+		// True only when this boot is a genuine post-update relaunch; lets the
+		// startup loader swap "Connecting" copy for "Updating / Restarting".
+		isPostUpdateRelaunch: () => ipcRenderer.invoke("updates:isPostUpdateRelaunch") as Promise<boolean>,
 		onStatus: (listener: (status: UpdateStatus) => void) => {
 			const wrapped = (_event: Electron.IpcRendererEvent, status: UpdateStatus) => listener(status);
 			ipcRenderer.on("updates:status", wrapped);
