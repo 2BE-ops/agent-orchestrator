@@ -1,12 +1,15 @@
 package sqlite
 
 import (
+	"database/sql"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
 
 func TestMigration0142RemovesRetiredCodexAccountSwitchState(t *testing.T) {
-	for _, row := range []struct {
+	rows := []struct {
 		id, phase, failureCode, wantPhase, wantCode string
 		terminal                                    bool
 	}{
@@ -15,10 +18,36 @@ func TestMigration0142RemovesRetiredCodexAccountSwitchState(t *testing.T) {
 		{id: "verifying-target", phase: "verifying_target", wantPhase: "recovery_required", wantCode: "legacy_switch_recovery"},
 		{id: "rollback-required", phase: "rollback_required", wantPhase: "recovery_required", wantCode: "legacy_switch_recovery"},
 		{id: "stop-unconfirmed", phase: "recovery_required", failureCode: "stop_unconfirmed", wantPhase: "failed", wantCode: "legacy_session_switch_retired", terminal: true},
-	} {
+	}
+
+	// Building a database through the full migration history is deliberately
+	// expensive under the race detector. Build that history once, then give each
+	// legacy state an isolated copy so the one-active-switch invariant is kept.
+	templatePath := filepath.Join(t.TempDir(), "ao.db")
+	templateDB, err := sql.Open("sqlite", "file:"+templatePath+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatalf("open template database: %v", err)
+	}
+	upTo(t, templateDB, 141)
+	if err := templateDB.Close(); err != nil {
+		t.Fatalf("close template database: %v", err)
+	}
+	template, err := os.ReadFile(templatePath)
+	if err != nil {
+		t.Fatalf("read template database: %v", err)
+	}
+
+	for _, row := range rows {
 		t.Run(row.id, func(t *testing.T) {
-			db := openTestDB(t)
-			upTo(t, db, 141)
+			databasePath := filepath.Join(t.TempDir(), "ao.db")
+			if err := os.WriteFile(databasePath, template, 0o600); err != nil {
+				t.Fatalf("copy template database: %v", err)
+			}
+			db, err := sql.Open("sqlite", "file:"+databasePath+"?_pragma=busy_timeout(5000)")
+			if err != nil {
+				t.Fatalf("open copied database: %v", err)
+			}
+			t.Cleanup(func() { _ = db.Close() })
 			now := time.Now().UTC().Truncate(time.Second)
 			if _, err := db.Exec(`INSERT INTO codex_account_switches (
 			id, source_account_id, target_account_id, idempotency_key,

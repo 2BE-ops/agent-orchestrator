@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -97,6 +97,15 @@ describe("SettingsDialog", () => {
 		expect(postMock).toHaveBeenCalledTimes(1);
 	});
 
+	it("mounts dialog chrome before the selected settings form", async () => {
+		useUiStore.getState().openGlobalSettings("general");
+		renderSettingsDialog();
+
+		expect(screen.getByTestId("settings-dialog-body-pending")).toBeInTheDocument();
+		expect(screen.queryByTestId("global-settings-section")).not.toBeInTheDocument();
+		expect(await screen.findByTestId("global-settings-section")).toHaveTextContent("general");
+	});
+
 	it("does not expose Downloads as a standalone settings page", async () => {
 		useUiStore.getState().openGlobalSettings("browserProfiles");
 		renderSettingsDialog();
@@ -123,5 +132,32 @@ describe("SettingsDialog", () => {
 
 		await vi.waitFor(() => expect(useUiStore.getState().settingsModal).toBeNull());
 		expect(postMock.mock.calls.map(([path]) => path)).toEqual(["/api/v1/agents/codex/accounts/ensure"]);
+	});
+
+	it("traps focus and closes from Escape or the backdrop", async () => {
+		useUiStore.getState().openGlobalSettings("general");
+		renderSettingsDialog();
+
+		const dialog = await screen.findByRole("dialog");
+		expect(dialog).toHaveAttribute("aria-modal", "true");
+		await vi.waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
+		await userEvent.keyboard("{Escape}");
+		await vi.waitFor(() => expect(useUiStore.getState().settingsModal).toBeNull());
+
+		useUiStore.getState().openGlobalSettings("general");
+		fireEvent.pointerDown(await screen.findByTestId("settings-dialog-overlay"));
+		await vi.waitFor(() => expect(useUiStore.getState().settingsModal).toBeNull());
+	});
+
+	it("does not close when Escape is handled by a portaled nested menu", async () => {
+		useUiStore.getState().openGlobalSettings("general");
+		renderSettingsDialog();
+
+		await screen.findByRole("dialog");
+		fireEvent.keyDown(document.body, { key: "Escape" });
+		expect(useUiStore.getState().settingsModal).not.toBeNull();
+
+		fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+		await vi.waitFor(() => expect(useUiStore.getState().settingsModal).toBeNull());
 	});
 });
