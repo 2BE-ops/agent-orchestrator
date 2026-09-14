@@ -42,7 +42,7 @@ type Store interface {
 	CreateConversation(ctx context.Context, id string, scope domain.ConversationScope, project domain.ProjectID, session domain.SessionID, now time.Time) (domain.ConversationRecord, error)
 	CreateProjectConversationWithContextReset(ctx context.Context, id string, project domain.ProjectID, session domain.SessionID, reset domain.ConversationActivity, now time.Time) (domain.ConversationRecord, error)
 	ConversationForSession(ctx context.Context, session domain.SessionID) (domain.ConversationRecord, error)
-	ClaimChatControllerGeneration(ctx context.Context, session domain.SessionID, generation string, now time.Time) error
+	ClaimChatControllerGeneration(ctx context.Context, session domain.SessionID, generation string) error
 	ConversationBranch(ctx context.Context, conversationID, branchID string) (domain.ConversationBranch, error)
 	ConversationEditAnchor(ctx context.Context, conversationID, replacedTurnID string) (domain.ConversationEditAnchor, error)
 	RepairIncompleteConversationEdit(ctx context.Context, sessionID domain.SessionID, conversationID string, now time.Time) (domain.ConversationBranch, bool, error)
