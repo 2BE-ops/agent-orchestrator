@@ -45,6 +45,36 @@ type CreateReportResponse struct {
 	ID string `json:"id"`
 }
 
+// ReportOutputResponse is one ordered output reference in the read projection.
+type ReportOutputResponse struct {
+	Kind      string `json:"kind"`
+	Reference string `json:"reference"`
+	Label     string `json:"label,omitempty"`
+}
+
+// ReportResponse is one persisted worker claim, independent of delivery state.
+type ReportResponse struct {
+	ID          string                 `json:"id"`
+	SessionID   string                 `json:"sessionId"`
+	ProjectID   string                 `json:"projectId"`
+	State       string                 `json:"state,omitempty"`
+	Note        string                 `json:"note,omitempty"`
+	Message     string                 `json:"message,omitempty"`
+	Outputs     []ReportOutputResponse `json:"outputs,omitempty"`
+	CreatedAt   time.Time              `json:"createdAt"`
+	RepeatCount int64                  `json:"repeatCount"`
+}
+
+// ListReportsResponse contains a project's ordered persisted reports.
+type ListReportsResponse struct {
+	Reports []ReportResponse `json:"reports"`
+}
+
+// ListReportsQuery selects reports by stable project identity.
+type ListReportsQuery struct {
+	ProjectID string `query:"projectId" required:"true" description:"Stable project identifier."`
+}
+
 // HTTP response envelopes for the projects surface — the SINGLE definition of
 // each wire shape. The handlers encode these (envelope.WriteJSON), and
 // apispec.Build reflects these same types into openapi.yaml, so the served

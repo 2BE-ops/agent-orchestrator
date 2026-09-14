@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
@@ -71,6 +72,141 @@ func (s *Store) ListReportsBySession(ctx context.Context, id domain.SessionID) (
 		return nil, fmt.Errorf("list reports: %w", err)
 	}
 	return s.reportsWithOutputs(ctx, rows)
+}
+
+// ListReportsByProject is the read-only persisted report projection. Consumers
+// such as Project Summary do not participate in the delivery claim lifecycle.
+func (s *Store) ListReportsByProject(ctx context.Context, id domain.ProjectID) ([]domain.ReportRecord, error) {
+	rows, err := s.qr.ListReportsByProject(ctx, string(id))
+	if err != nil {
+		return nil, fmt.Errorf("list project reports: %w", err)
+	}
+	return s.reportsWithOutputs(ctx, rows)
+}
+
+// ListPendingReportSchedule returns the earliest pending work regardless of
+// availability so a coordinator can restore the original deadline after restart.
+func (s *Store) ListPendingReportSchedule(ctx context.Context, limit int64) ([]domain.ReportRecord, error) {
+	rows, err := s.qr.ListPendingReportSchedule(ctx, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list report schedule: %w", err)
+	}
+	return s.reportsWithOutputs(ctx, rows)
+}
+
+// ClaimPendingReportBatch atomically claims every pending report for a project.
+// A due, attention, or piggyback trigger therefore includes earlier batch work.
+func (s *Store) ClaimPendingReportBatch(ctx context.Context, projectID domain.ProjectID, token string, at time.Time) ([]domain.ReportRecord, error) {
+	if projectID == "" || token == "" || at.IsZero() {
+		return nil, domain.ErrInvalidReport
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	var rows []gen.Report
+	err := s.inTx(ctx, "claim project report batch", func(q *gen.Queries) error {
+		scheduled, err := q.ListPendingReportsByProjectSchedule(ctx, gen.ListPendingReportsByProjectScheduleParams{
+			ProjectID: string(projectID), Limit: 1,
+		})
+		if err != nil || len(scheduled) == 0 {
+			return err
+		}
+		batchID := scheduled[0].DeliveryBatchID
+		if batchID == "" {
+			batchID = "report-batch:" + scheduled[0].ID
+			if err := q.AssignPendingReportsToBatch(ctx, gen.AssignPendingReportsToBatchParams{
+				DeliveryBatchID: batchID, ProjectID: string(projectID),
+			}); err != nil {
+				return err
+			}
+		}
+		rows, err = q.ClaimPendingReportsByBatch(ctx, gen.ClaimPendingReportsByBatchParams{
+			ProjectID: string(projectID), DeliveryBatchID: batchID,
+			ClaimToken: token, ClaimedAt: nullTime(at),
+		})
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("claim project report batch: %w", err)
+	}
+	return s.reportsWithOutputs(ctx, orderedReportRows(rows))
+}
+
+// AcknowledgeReportBatch completes only the project batch holding token.
+func (s *Store) AcknowledgeReportBatch(ctx context.Context, projectID domain.ProjectID, token string, at time.Time) (int, error) {
+	if projectID == "" || token == "" || at.IsZero() {
+		return 0, domain.ErrInvalidReport
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	rows, err := s.qw.AcknowledgeReportBatch(ctx, gen.AcknowledgeReportBatchParams{
+		ProjectID: string(projectID), ClaimToken: token, AcknowledgedAt: nullTime(at),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("acknowledge project report batch: %w", err)
+	}
+	return len(rows), nil
+}
+
+// ReleaseReportBatch returns the matching project batch to pending without
+// moving any report's original deadline later.
+func (s *Store) ReleaseReportBatch(ctx context.Context, projectID domain.ProjectID, token string, at time.Time, lastError string) (int, error) {
+	if projectID == "" || token == "" || at.IsZero() {
+		return 0, domain.ErrInvalidReport
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	rows, err := s.qw.ReleaseReportBatch(ctx, gen.ReleaseReportBatchParams{
+		ProjectID: string(projectID), ClaimToken: token, AvailableAt: at, LastError: lastError,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("release project report batch: %w", err)
+	}
+	return len(rows), nil
+}
+
+// DeferReportBatch coalesces a throttled urgent retry until it may request the
+// next interruption. Unlike failure release, this intentionally moves its
+// delivery availability later.
+func (s *Store) DeferReportBatch(ctx context.Context, projectID domain.ProjectID, token string, at time.Time, lastError string) (int, error) {
+	if projectID == "" || token == "" || at.IsZero() {
+		return 0, domain.ErrInvalidReport
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	rows, err := s.qw.DeferReportBatch(ctx, gen.DeferReportBatchParams{
+		ProjectID: string(projectID), ClaimToken: token, AvailableAt: at, LastError: lastError,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("defer project report batch: %w", err)
+	}
+	return len(rows), nil
+}
+
+// AcquireReportInterrupt durably enforces the per-worker interruption window.
+func (s *Store) AcquireReportInterrupt(ctx context.Context, sessionID domain.SessionID, at time.Time, window time.Duration) (bool, time.Time, error) {
+	if sessionID == "" || at.IsZero() || window <= 0 {
+		return false, time.Time{}, domain.ErrInvalidReport
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	acquired := false
+	next := at
+	err := s.inTx(ctx, "acquire report interrupt", func(q *gen.Queries) error {
+		last, err := q.GetReportInterrupt(ctx, string(sessionID))
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if err == nil && last.After(at.Add(-window)) {
+			next = last.Add(window)
+			return nil
+		}
+		if err := q.PutReportInterrupt(ctx, gen.PutReportInterruptParams{SessionID: string(sessionID), LastInterruptedAt: at}); err != nil {
+			return err
+		}
+		acquired = true
+		return nil
+	})
+	return acquired, next, err
 }
 
 // ListPendingReports returns reports eligible for a later delivery batch.
@@ -156,6 +292,16 @@ func (s *Store) reportsWithOutputs(ctx context.Context, rows []gen.Report) ([]do
 	return out, nil
 }
 
+func orderedReportRows(rows []gen.Report) []gen.Report {
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+	})
+	return rows
+}
+
 func reportFromGen(r gen.Report) domain.ReportRecord {
 	return domain.ReportRecord{
 		ID: r.ID, SessionID: domain.SessionID(r.SessionID), ProjectID: domain.ProjectID(r.ProjectID),
@@ -164,5 +310,6 @@ func reportFromGen(r gen.Report) domain.ReportRecord {
 		SettlementDeadline: timeFromNull(r.SettlementDeadline), RepeatCount: r.RepeatCount,
 		ClaimToken: r.ClaimToken, ClaimedAt: timeFromNull(r.ClaimedAt), DeliveryAttempts: r.DeliveryAttempts,
 		AcknowledgedAt: timeFromNull(r.AcknowledgedAt), LastError: r.LastError,
+		DeliveryBatchID: r.DeliveryBatchID,
 	}
 }

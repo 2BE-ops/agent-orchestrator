@@ -95,6 +95,7 @@ type ReportRecord struct {
 	DeliveryAttempts   int64
 	AcknowledgedAt     time.Time
 	LastError          string
+	DeliveryBatchID    string
 }
 
 // ErrInvalidReport reports an invalid report or delivery transition input.

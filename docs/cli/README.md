@@ -60,6 +60,7 @@ Every product command resolves to a daemon HTTP route. Run `ao <command>
 | `ao session claim-pr [<id>] <pr-ref>` | `POST /api/v1/sessions/{id}/pr/claim`        |
 | `ao orchestrator ls`                | `GET /api/v1/orchestrators`                    |
 | `ao send`                           | `POST /api/v1/sessions/{id}/send`              |
+| `ao report ...`                     | `POST /api/v1/reports`                         |
 | `ao preview [url]`                  | `POST /api/v1/sessions/{id}/preview`           |
 | `ao preview start/status/stop`      | `POST/GET/DELETE /api/v1/sessions/{id}/preview/server` |
 | `ao browser ...`                    | `GET /api/v1/browser/status`, `POST /api/v1/browser/commands` |
@@ -113,6 +114,27 @@ native history and compaction.
 `AO_SESSION_ID`. From an orchestrator or external shell, pass the target
 explicitly with `ao session claim-pr <session-id> <pr-ref>`. The explicit form
 remains supported for backward compatibility and cross-session coordination.
+
+`ao report` persists a worker-originated coordination claim before reporting
+success. Checkpoints, free-form messages, and output-only reports batch until
+another flush or the first report's one-hour fallback. The first `--done`
+report opens a fixed five-minute settlement window. `--needs-input` delivers
+immediately without interrupting current orchestrator work. `--stuck` requests
+an interrupt at most once per worker every three minutes and coalesces equal
+repeats. Reports route to the active project orchestrator at each attempt and
+remain pending when none is active. AO never spawns an orchestrator to deliver
+a report.
+
+Scheduled delivery and exact same-turn user-message piggyback use Chat's
+durable semantic message boundary. TUI exposes raw terminal input and does not
+provide an acceptance boundary, so AO keeps those reports durable rather than
+injecting terminal keystrokes. A future semantic TUI input contract can extend
+the same outbox without changing report ingestion.
+
+`GET /api/v1/reports?projectId=<id>` is the read-only persisted report
+projection. Consumers such as Project Summary can read ordered report facts
+and outputs through it without claiming, acknowledging, waking, or interrupting
+delivery.
 
 If `--agent` / `--harness` is omitted, `ao spawn` uses the resolved project's
 `worker.agent` config. Before spawning, the CLI performs one targeted launch

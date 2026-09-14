@@ -374,6 +374,9 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"ControllersCreateReportRequest":              "CreateReportRequest",
 	"ControllersReportOutputRequest":              "ReportOutputRequest",
 	"ControllersCreateReportResponse":             "CreateReportResponse",
+	"ControllersReportOutputResponse":             "ReportOutputResponse",
+	"ControllersReportResponse":                   "ReportResponse",
+	"ControllersListReportsResponse":              "ListReportsResponse",
 	"ControllersUsageHookMetadata":                "UsageHookMetadata",
 	"ControllersListUsageSessionsQuery":           "ListUsageSessionsQuery",
 	"ControllersEstimatedCostResponse":            "EstimatedCostResponse",
@@ -608,6 +611,16 @@ func identityOperations() []operation {
 
 func reportOperations() []operation {
 	return []operation{{
+		method: http.MethodGet, path: "/api/v1/reports", id: "listReports", tag: "reports",
+		summary:    "List persisted project reports without changing delivery state",
+		pathParams: []any{controllers.ListReportsQuery{}},
+		resps: []respUnit{
+			{http.StatusOK, controllers.ListReportsResponse{}},
+			{http.StatusBadRequest, envelope.APIError{}},
+			{http.StatusInternalServerError, envelope.APIError{}},
+			{http.StatusNotImplemented, envelope.APIError{}},
+		},
+	}, {
 		method: http.MethodPost, path: "/api/v1/reports", id: "createReport", tag: "reports",
 		summary: "Persist a worker report for later orchestrator delivery",
 		reqBody: controllers.CreateReportRequest{},

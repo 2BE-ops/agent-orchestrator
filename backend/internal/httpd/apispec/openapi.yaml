@@ -2531,6 +2531,44 @@ paths:
       tags:
       - push
   /api/v1/reports:
+    get:
+      operationId: listReports
+      parameters:
+      - description: Stable project identifier.
+        in: query
+        name: projectId
+        required: true
+        schema:
+          description: Stable project identifier.
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListReportsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: List persisted project reports without changing delivery state
+      tags:
+      - reports
     post:
       operationId: createReport
       requestBody:
@@ -9931,6 +9969,15 @@ components:
       required:
       - projects
       type: object
+    ListReportsResponse:
+      properties:
+        reports:
+          items:
+            $ref: '#/components/schemas/ReportResponse'
+          type: array
+      required:
+      - reports
+      type: object
     ListReviewsResponse:
       properties:
         reviewerActivityState:
@@ -10730,6 +10777,49 @@ components:
       required:
       - kind
       - reference
+      type: object
+    ReportOutputResponse:
+      properties:
+        kind:
+          type: string
+        label:
+          type: string
+        reference:
+          type: string
+      required:
+      - kind
+      - reference
+      type: object
+    ReportResponse:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        message:
+          type: string
+        note:
+          type: string
+        outputs:
+          items:
+            $ref: '#/components/schemas/ReportOutputResponse'
+          type: array
+        projectId:
+          type: string
+        repeatCount:
+          format: int64
+          type: integer
+        sessionId:
+          type: string
+        state:
+          type: string
+      required:
+      - id
+      - sessionId
+      - projectId
+      - createdAt
+      - repeatCount
       type: object
     ResolveCommentsResponse:
       properties:

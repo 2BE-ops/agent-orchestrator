@@ -531,6 +531,7 @@ type Report struct {
 	DeliveryAttempts   int64
 	AcknowledgedAt     sql.NullTime
 	LastError          string
+	DeliveryBatchID    string
 }
 
 type ReportOutput struct {
@@ -539,6 +540,11 @@ type ReportOutput struct {
 	Kind      string
 	Reference string
 	Label     string
+}
+
+type ReportWorkerInterrupt struct {
+	SessionID         string
+	LastInterruptedAt time.Time
 }
 
 type Review struct {

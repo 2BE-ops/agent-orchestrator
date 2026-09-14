@@ -520,7 +520,22 @@ func Run() error {
 	lcStack.LCM.SetSessionOperationGate(sessMgr)
 	termMgr.SetSessionInputLease(sessMgr)
 	projectSvc := projectsvc.NewWithDeps(projectsvc.Deps{Store: store, Sessions: sessionSvc, DefaultHarness: domain.AgentHarness(cfg.Agent), Telemetry: telemetrySink, Logger: log})
-	reportSvc := reportsvc.New(reportsvc.Deps{Store: store})
+	var reportCoordinator *reportsvc.Coordinator
+	reportSvc := reportsvc.New(reportsvc.Deps{Store: store, OnCreated: func(domain.ReportRecord) {
+		if reportCoordinator != nil {
+			reportCoordinator.Wake()
+		}
+	}})
+	reportCoordinator = reportsvc.NewCoordinator(reportsvc.CoordinatorDeps{
+		Store:    store,
+		Delivery: reportChatDelivery{chat: chatSvc},
+	})
+	chatSvc.SetReportCoordinator(reportCoordinator)
+	reportDeliveryDone := reportCoordinator.Start(ctx)
+	defer func() {
+		stop()
+		<-reportDeliveryDone
+	}()
 	if err := seedScratchProjectOnBoot(ctx, cfg, projectSvc); err != nil {
 		stop()
 		lcStack.Stop()
@@ -946,6 +961,29 @@ func Run() error {
 		log.Error("cdc pipeline shutdown", "err", err)
 	}
 	return runErr
+}
+
+type reportChatDelivery struct {
+	chat *chatsvc.Service
+}
+
+func (d reportChatDelivery) Submit(ctx context.Context, id domain.SessionID, message, idempotencyKey string) error {
+	if d.chat == nil {
+		return reportsvc.ErrReportDeliveryModeUnsupported
+	}
+	_, err := d.chat.RelayChatTurnWithID(ctx, id, message, idempotencyKey)
+	return err
+}
+
+func (d reportChatDelivery) Interrupt(ctx context.Context, id domain.SessionID) error {
+	if d.chat == nil {
+		return reportsvc.ErrReportDeliveryModeUnsupported
+	}
+	err := d.chat.Interrupt(ctx, id)
+	if errors.Is(err, chatsvc.ErrNoActiveTurn) {
+		return nil
+	}
+	return err
 }
 
 func installedAgentHarness(target systeminstall.Target) (string, bool) {
