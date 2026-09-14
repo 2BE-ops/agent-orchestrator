@@ -978,10 +978,15 @@ func reconcileNativeHistory(
 		if event.Kind == ports.ChatEventTurnCompleted &&
 			event.TurnState == domain.TurnStateRecovered && knownTurnOutcome(candidate.state) {
 			event.TurnState = candidate.state
-			// SettleTurn writes error_message unconditionally, so a replay that
-			// upgrades the state without carrying the stored message back would
-			// blank it and undo the explanation the turn already had.
-			if event.Err == nil && candidate.errorMessage != "" {
+		}
+		// SettleTurn replaces error_message. Both explicit failures and recovered
+		// outcomes must retain a stronger stored explanation over absent details
+		// or an adapter's fallback. Never carry failure text to another outcome.
+		if event.Kind == ports.ChatEventTurnCompleted && event.TurnState == domain.TurnStateFailed &&
+			candidate.state == domain.TurnStateFailed && strings.TrimSpace(candidate.errorMessage) != "" {
+			var fallback interface{ ChatFailureFallback() bool }
+			if event.Err == nil || strings.TrimSpace(event.Err.Error()) == "" ||
+				(errors.As(event.Err, &fallback) && fallback.ChatFailureFallback()) {
 				event.Err = errors.New(candidate.errorMessage)
 			}
 		}

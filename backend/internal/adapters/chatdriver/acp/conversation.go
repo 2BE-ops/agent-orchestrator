@@ -600,8 +600,12 @@ func (c *conversation) finishPrompt(
 		// no message, just a bare "The agent ran into a problem". A stop the user
 		// asked for is excluded, since an agent abandoning cancelled work is not
 		// an agent-side failure to blame on it.
-		if state == domain.TurnStateFailed && !interruptedLocally {
-			failure = stopReasonFailure(resp.StopReason)
+		if state == domain.TurnStateFailed {
+			if interruptedLocally {
+				state = domain.TurnStateInterrupted
+			} else {
+				failure = stopReasonFailure(resp.StopReason)
+			}
 		}
 		if resp.Usage != nil {
 			cached := 0

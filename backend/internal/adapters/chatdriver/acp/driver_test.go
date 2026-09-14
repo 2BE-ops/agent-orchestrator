@@ -2479,6 +2479,9 @@ func TestACPDriverDoesNotBlameAgentForLocalInterrupt(t *testing.T) {
 			if event.Err != nil {
 				t.Fatalf("user-requested stop reported as %q", event.Err)
 			}
+			if event.TurnState != domain.TurnStateInterrupted {
+				t.Fatalf("user-requested stop state = %q, want interrupted", event.TurnState)
+			}
 			break
 		}
 	}
