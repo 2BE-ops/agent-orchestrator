@@ -1369,6 +1369,8 @@
 	"startup.recommendedInstallGh": "권장: gh 설치",
 	"startup.retryPrefix": "다시 시도: {{label}}",
 	"startup.startingServices": "로컬 서비스 시작 중",
+	"startup.updatingApp": "AO 업데이트 중",
+	"startup.restartingApp": "AO 다시 시작 중",
 	"status.approved": "승인됨",
 	"status.changes_requested": "변경 요청됨",
 	"status.ci_failed": "CI 실패",

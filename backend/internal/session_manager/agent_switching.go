@@ -3130,8 +3130,15 @@ func (m *Manager) ReconcileAgentSwitches(ctx context.Context) error {
 			for _, historical := range history {
 				if historical.State.Terminal() {
 					if cleanupErr := m.cleanupAgentHandoffArtifacts(ctx, historical); cleanupErr != nil {
+						// Deleting a terminal switch's leftover private artifacts is
+						// best-effort maintenance, not a safety invariant. A file the
+						// switch left behind can be undeletable across restarts (on
+						// Windows a crashed agent's still-open handle or a read-only
+						// attribute makes os.RemoveAll fail every boot), so folding this
+						// into the boot-fatal error would refuse to bind the daemon
+						// forever. Record it as a maintenance fault and keep going.
 						m.observeTerminalAgentSwitchMaintenanceFailure(ctx, store, historical, domain.NormalizeSessionMode(rec.Mode), domain.AgentSwitchExecutionStartupReconcile)
-						errs = append(errs, cleanupErr)
+						m.logger.Warn("agent switch: terminal handoff artifact cleanup failed on boot; continuing", "sessionID", rec.ID, "switchID", historical.ID, "error", cleanupErr)
 					}
 				}
 			}
@@ -3157,8 +3164,10 @@ func (m *Manager) ReconcileAgentSwitches(ctx context.Context) error {
 				errs = append(errs, reloadErr)
 			} else if found && current.State.Terminal() && strings.TrimSpace(m.dataDir) != "" {
 				if cleanupErr := m.cleanupAgentHandoffArtifacts(ctx, current); cleanupErr != nil {
+					// Same best-effort maintenance as the terminal sweep above: a
+					// failed artifact deletion must not wedge daemon boot.
 					m.observeTerminalAgentSwitchMaintenanceFailure(ctx, store, current, domain.NormalizeSessionMode(rec.Mode), domain.AgentSwitchExecutionStartupReconcile)
-					errs = append(errs, cleanupErr)
+					m.logger.Warn("agent switch: terminal handoff artifact cleanup failed on boot; continuing", "sessionID", rec.ID, "switchID", current.ID, "error", cleanupErr)
 				}
 			}
 		} else {

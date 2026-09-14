@@ -266,6 +266,7 @@ export async function installFakeBridge(page: Page, opts: FakeBridgeOptions = {}
 					returnHome: async () => undefined,
 					download: async () => undefined,
 					install: async () => undefined,
+					isPostUpdateRelaunch: async () => false,
 					onStatus: (listener: (status: UpdateStatus) => void) => {
 						updateListeners.add(listener);
 						return () => {
@@ -809,6 +810,7 @@ export async function installFakeAgent(page: Page, opts: FakeAgentOptions = {}):
 					returnHome: async () => undefined,
 					download: async () => undefined,
 					install: async () => undefined,
+					isPostUpdateRelaunch: async () => false,
 					onStatus: unsubscribe,
 					onTelemetry: unsubscribe,
 				},

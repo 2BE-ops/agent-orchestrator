@@ -1370,6 +1370,8 @@
 	"startup.recommendedInstallGh": "推荐：安装 gh",
 	"startup.retryPrefix": "重试：{{label}}",
 	"startup.startingServices": "正在启动本地服务",
+	"startup.updatingApp": "正在更新 AO",
+	"startup.restartingApp": "正在重启 AO",
 	"status.approved": "已批准",
 	"status.changes_requested": "请求修改",
 	"status.ci_failed": "CI 失败",

@@ -542,7 +542,6 @@ func Run() error {
 		agentSvc.InvalidateAgentInstallation(harness)
 		agentSvc.RecheckAgent(harness)
 	})
-	agentSvc.WarmReadiness()
 
 	// Connect Mobile: the bridge service needs the LAN listener, but the LAN
 	// listener needs the built router's handler, which only exists once srv is
@@ -841,6 +840,11 @@ func Run() error {
 
 	var startupReconcileDone <-chan struct{}
 	runErr := srv.RunWithReady(ctx, func() {
+		// Agent-readiness warming is advisory and idempotent, and request paths
+		// lazily Ensure on demand. Kick it here, after the listener is live, so its
+		// bounded subprocess probes no longer contend with the synchronous
+		// migration and fencing reconcile that gate the port bind.
+		agentSvc.WarmReadiness()
 		done := make(chan struct{})
 		startupReconcileDone = done
 		go func() {
