@@ -240,9 +240,12 @@ func (l *generationClaimFailureLauncher) StartChat(ctx context.Context, cfg Chat
 func TestReconcileLive_ChatReconnectPreservesActivity(t *testing.T) {
 	launcher := &recordingLauncher{liveReconnect: true}
 	m, st, _ := newChatManager(launcher)
+	m.browserCapabilities = browsersvc.NewAuthority()
+	before := time.Unix(100, 0).UTC()
+	m.clock = func() time.Time { return before.Add(time.Minute) }
 	rec := domain.SessionRecord{ID: "mer-1", ProjectID: chatTestProject, Kind: domain.KindWorker,
 		Harness: domain.HarnessCodex, Mode: domain.SessionModeChat,
-		Activity: domain.Activity{State: domain.ActivityBlocked, LastActivityAt: time.Unix(100, 0)},
+		Activity: domain.Activity{State: domain.ActivityBlocked, LastActivityAt: before}, UpdatedAt: before,
 		Metadata: domain.SessionMetadata{Branch: "ao/mer-1/root", WorkspacePath: "/ws/mer-1", ProviderConversationID: "thread-1"}}
 	st.sessions[rec.ID] = rec
 	if err := m.reconcileLive(context.Background(), rec); err != nil {
@@ -250,6 +253,9 @@ func TestReconcileLive_ChatReconnectPreservesActivity(t *testing.T) {
 	}
 	if st.sessions[rec.ID].Activity != rec.Activity {
 		t.Fatal("live reconnect reset activity")
+	}
+	if !st.sessions[rec.ID].UpdatedAt.Equal(before) {
+		t.Fatalf("live reconnect changed recency from %s to %s", before, st.sessions[rec.ID].UpdatedAt)
 	}
 	if m.lcm.(*fakeLCM).completed != 0 {
 		t.Fatal("live reconnect used the spawn lifecycle")

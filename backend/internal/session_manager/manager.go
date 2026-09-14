@@ -334,7 +334,7 @@ type Store interface {
 	ListWorkspaceRepos(ctx context.Context, projectID string) ([]domain.WorkspaceRepoRecord, error)
 	CreateSession(ctx context.Context, rec domain.SessionRecord) (domain.SessionRecord, error)
 	UpdateSession(ctx context.Context, rec domain.SessionRecord) error
-	UpdateBrowserCapabilityVerifier(ctx context.Context, id domain.SessionID, expected domain.SessionControllerOwner, verifier string, updatedAt time.Time) (bool, error)
+	UpdateBrowserCapabilityVerifier(ctx context.Context, id domain.SessionID, expected domain.SessionControllerOwner, verifier string) (bool, error)
 	GetSession(ctx context.Context, id domain.SessionID) (domain.SessionRecord, bool, error)
 	ListSessions(ctx context.Context, project domain.ProjectID) ([]domain.SessionRecord, error)
 	ListAllSessions(ctx context.Context) ([]domain.SessionRecord, error)
@@ -419,10 +419,10 @@ type Manager struct {
 	startupBackgroundReconcileDone  chan struct{}
 	startupBackgroundReconcileOnce  sync.Once
 	statusRecoveryMu                sync.RWMutex
-	statusRecoveryStartedAt         time.Time
 	statusRecoveryFailed            bool
 	statusRecoveryRevision          uint64
 	statusRecoveries                map[domain.SessionID]statusRecovery
+	statusVerificationLimit         time.Duration
 	agentOpMu                       sync.Mutex
 	agentOperations                 map[domain.SessionID]agentOperationKind
 	// switchDecisionInput opens a narrow human-only terminal lane while the
@@ -804,8 +804,8 @@ func New(d Deps) *Manager {
 		// default produced mixed-timezone timestamps in `ao session get`.
 		m.clock = func() time.Time { return time.Now().UTC() }
 	}
-	m.statusRecoveryStartedAt = m.clock()
 	m.statusRecoveries = make(map[domain.SessionID]statusRecovery)
+	m.statusVerificationLimit = statusVerificationLimit
 	if m.reconcileWorkers < 1 {
 		m.reconcileWorkers = 1
 	}
@@ -926,6 +926,7 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 	if err != nil {
 		return domain.SessionRecord{}, 0, 0, wrapSpawnStageEarly(ErrSpawnCreate, err)
 	}
+	m.markFreshSessionStatusReady(rec.ID)
 	id := rec.ID
 	systemPromptFile, err := m.prepareSystemPromptFile(id, cfg.Harness, systemPrompt)
 	if err != nil {
@@ -2173,7 +2174,7 @@ func (m *Manager) ResumeAgentWithMode(ctx context.Context, id domain.SessionID) 
 	}
 	if m.SessionStatusReadiness(rec) == "unavailable" {
 		m.beginStatusRecovery(id)
-		recoveryCtx, cancel := context.WithTimeout(ctx, statusVerificationLimit)
+		recoveryCtx, cancel := context.WithTimeout(ctx, m.statusVerificationLimit)
 		defer cancel()
 		err := m.reconcileLive(recoveryCtx, rec)
 		m.finishStatusRecovery(ctx, rec, err)
@@ -2872,7 +2873,7 @@ func (m *Manager) reconcileLivePass(ctx context.Context, recs []domain.SessionRe
 				m.beginStatusRecovery(rec.ID)
 				err := func() error {
 					defer m.endAgentOperation(rec.ID, agentOperationReconcile)
-					recoveryCtx, cancel := context.WithTimeout(ctx, statusVerificationLimit)
+					recoveryCtx, cancel := context.WithTimeout(ctx, m.statusVerificationLimit)
 					defer cancel()
 					return m.reconcileLive(recoveryCtx, rec)
 				}()
@@ -4391,8 +4392,7 @@ func (m *Manager) persistBrowserCapabilityVerifier(
 	if verifier == "" {
 		return rec, nil
 	}
-	updatedAt := m.clock()
-	applied, err := m.store.UpdateBrowserCapabilityVerifier(ctx, rec.ID, expected, verifier, updatedAt)
+	applied, err := m.store.UpdateBrowserCapabilityVerifier(ctx, rec.ID, expected, verifier)
 	if err != nil {
 		return rec, err
 	}
@@ -4400,9 +4400,6 @@ func (m *Manager) persistBrowserCapabilityVerifier(
 		return rec, errors.New("session controller ownership changed before browser capability rotation")
 	}
 	rec.Metadata.BrowserCapabilityVerifier = verifier
-	if rec.UpdatedAt.Before(updatedAt) {
-		rec.UpdatedAt = updatedAt
-	}
 	return rec, nil
 }
 

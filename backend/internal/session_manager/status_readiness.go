@@ -12,9 +12,8 @@ import (
 const statusVerificationLimit = 30 * time.Second
 
 type statusRecovery struct {
-	startedAt time.Time
-	pending   bool
-	failed    *domain.SessionRecord
+	pending bool
+	failed  *domain.SessionRecord
 }
 
 // StatusRecoveryRevision fences API snapshots read concurrently with recovery.
@@ -30,28 +29,26 @@ func (m *Manager) SessionStatusReadiness(rec domain.SessionRecord) string {
 	m.statusRecoveryMu.RLock()
 	defer m.statusRecoveryMu.RUnlock()
 	result, found := m.statusRecoveries[rec.ID]
-	if found && !result.pending {
+	if found {
+		// A deadline cancels the recovery context, but the dependency must return
+		// before another attempt can safely own this session. Keep the UI checking
+		// until the operation gate has actually been released.
+		if result.pending {
+			return "checking"
+		}
 		if result.failed != nil && !rec.IsTerminated && rec.Activity.State != domain.ActivityExited &&
 			rec.ControllerOwner() == result.failed.ControllerOwner() && rec.Activity == result.failed.Activity {
 			return "unavailable"
 		}
 		return "ready"
 	}
-	started := m.statusRecoveryStartedAt
-	if found {
-		started = result.startedAt
-	} else {
-		select {
-		case <-m.startupBackgroundReconcileDone:
-			if m.statusRecoveryFailed {
-				return "unavailable"
-			}
-			return "ready"
-		default:
+	select {
+	case <-m.startupBackgroundReconcileDone:
+		if m.statusRecoveryFailed {
+			return "unavailable"
 		}
-	}
-	if m.clock().Sub(started) >= statusVerificationLimit {
-		return "unavailable"
+		return "ready"
+	default:
 	}
 	return "checking"
 }
@@ -59,7 +56,29 @@ func (m *Manager) SessionStatusReadiness(rec domain.SessionRecord) string {
 func (m *Manager) beginStatusRecovery(id domain.SessionID) {
 	m.statusRecoveryMu.Lock()
 	defer m.statusRecoveryMu.Unlock()
-	m.statusRecoveries[id] = statusRecovery{startedAt: m.clock(), pending: true}
+	m.statusRecoveries[id] = statusRecovery{pending: true}
+	m.statusRecoveryRevision++
+}
+
+// markFreshSessionStatusReady keeps a session created by this daemon outside
+// the startup snapshot's failure state. A concurrent startup recovery remains
+// authoritative once it has already claimed the same session.
+func (m *Manager) markFreshSessionStatusReady(id domain.SessionID) {
+	m.statusRecoveryMu.Lock()
+	defer m.statusRecoveryMu.Unlock()
+	select {
+	case <-m.startupBackgroundReconcileDone:
+		// After a successful startup, an untracked session already reads as ready;
+		// avoid turning ordinary spawns into recovery-revision changes.
+		if !m.statusRecoveryFailed {
+			return
+		}
+	default:
+	}
+	if result, found := m.statusRecoveries[id]; found && result.pending {
+		return
+	}
+	m.statusRecoveries[id] = statusRecovery{}
 	m.statusRecoveryRevision++
 }
 

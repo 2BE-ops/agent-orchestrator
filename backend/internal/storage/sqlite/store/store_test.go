@@ -295,7 +295,7 @@ func TestBrowserCapabilityRotationIsNarrowAndControllerOwnerFenced(t *testing.T)
 		t.Fatalf("UpdateSession concurrent facts: %v", err)
 	}
 	applied, err := s.UpdateBrowserCapabilityVerifier(
-		ctx, created.ID, expected, "verifier-2", created.UpdatedAt.Add(time.Second),
+		ctx, created.ID, expected, "verifier-2",
 	)
 	if err != nil || !applied {
 		t.Fatalf("UpdateBrowserCapabilityVerifier: applied=%v err=%v", applied, err)
@@ -315,7 +315,7 @@ func TestBrowserCapabilityRotationIsNarrowAndControllerOwnerFenced(t *testing.T)
 		t.Fatalf("ClaimChatControllerGeneration: %v", err)
 	}
 	applied, err = s.UpdateBrowserCapabilityVerifier(
-		ctx, created.ID, expected, "stale-verifier", concurrent.UpdatedAt.Add(2*time.Second),
+		ctx, created.ID, expected, "stale-verifier",
 	)
 	if err != nil || applied {
 		t.Fatalf("stale owner verifier update: applied=%v err=%v", applied, err)
