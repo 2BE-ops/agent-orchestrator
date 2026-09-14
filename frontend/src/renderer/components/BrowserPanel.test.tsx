@@ -300,8 +300,13 @@ describe("BrowserPanel", () => {
 			{ url: "https://gist.github.com/example", title: "Gist" },
 			{ url: "https://githubstatus.com", title: "Fifth result" },
 		]);
-		window.ao!.browser.historyFavicon = vi.fn(async ({ url }) =>
-			url.startsWith("https://github.com/") ? "data:image/png;base64,github" : undefined,
+		let resolveGithubFavicon: (favicon: string | undefined) => void = () => undefined;
+		window.ao!.browser.historyFavicon = vi.fn(({ url }) =>
+			url.startsWith("https://github.com/")
+				? new Promise<string | undefined>((resolve) => {
+					resolveGithubFavicon = resolve;
+				})
+				: Promise.resolve(undefined),
 		);
 		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut={false} session={session} />);
 		const input = screen.getByRole("textbox", { name: /browser url/i });
@@ -322,6 +327,8 @@ describe("BrowserPanel", () => {
 		expect(screen.getByText("OpenAI")).toBeInTheDocument();
 		expect(screen.getByText("https://github.com/openai")).toBeInTheDocument();
 		expect(screen.queryByText("Fifth result")).not.toBeInTheDocument();
+		expect(screen.getAllByRole("option")[0]!.querySelector("img")).not.toBeInTheDocument();
+		await act(async () => resolveGithubFavicon("data:image/png;base64,github"));
 		await waitFor(() => expect(menu.querySelector("img")).toHaveAttribute("src", "data:image/png;base64,github"));
 		expect(window.ao!.browser.historyFavicon).toHaveBeenCalledWith({
 			viewId: "42:sess-1",
