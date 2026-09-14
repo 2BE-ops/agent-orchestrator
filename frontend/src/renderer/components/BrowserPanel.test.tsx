@@ -286,7 +286,7 @@ describe("BrowserPanel", () => {
 		expect(input).not.toHaveFocus();
 	});
 
-	it("shows imported history through native address-bar suggestions without adding an overlay", async () => {
+	it("shows imported history in the shared dropdown and navigates from a suggestion", async () => {
 		hookState.profileState = {
 			viewId: "42:sess-1",
 			profileId: "11111111-1111-4111-8111-111111111111",
@@ -304,16 +304,35 @@ describe("BrowserPanel", () => {
 			viewId: "42:sess-1",
 			query: "git",
 		}), { timeout: 2_000 });
-		await waitFor(() => expect(document.querySelector("datalist option")).not.toBeNull());
-		const option = document.querySelector("datalist option")!;
-		expect(option).toHaveValue("https://github.com/openai");
-		expect(input).toHaveAttribute("list", option.closest("datalist")?.id);
-		expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+		const menu = await screen.findByRole("listbox", { name: "Address suggestions" });
+		expect(menu).toHaveAttribute("data-browser-native-overlay", "true");
+		expect(screen.getByText("OpenAI")).toBeInTheDocument();
+		expect(screen.getByText("https://github.com/openai")).toBeInTheDocument();
 
-		fireEvent.change(input, { target: { value: "https://github.com/openai" } });
+		await userEvent.click(screen.getByRole("option"));
 		expect(hookState.navigate).toHaveBeenCalledWith("https://github.com/openai");
 		expect(input).not.toHaveFocus();
-		expect(document.querySelector("datalist option")).toBeNull();
+		expect(screen.queryByRole("listbox", { name: "Address suggestions" })).not.toBeInTheDocument();
+	});
+
+	it("supports keyboard selection in address suggestions", async () => {
+		hookState.profileState = {
+			viewId: "42:sess-1",
+			profileId: "11111111-1111-4111-8111-111111111111",
+			temporary: false,
+		};
+		window.ao!.browser.historySuggestions = vi.fn(async () => [
+			{ url: "https://github.com/openai", title: "OpenAI" },
+			{ url: "https://github.com/aoagents", title: "AO" },
+		]);
+		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut={false} session={session} />);
+		const input = screen.getByRole("textbox", { name: /browser url/i });
+
+		await userEvent.type(input, "git");
+		await screen.findByRole("listbox", { name: "Address suggestions" });
+		await userEvent.keyboard("{ArrowDown}{ArrowDown}{Enter}");
+
+		expect(hookState.navigate).toHaveBeenCalledWith("https://github.com/aoagents");
 	});
 
 	it("does not search imported history until the address is edited", async () => {

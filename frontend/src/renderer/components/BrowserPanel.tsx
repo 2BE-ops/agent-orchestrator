@@ -8,6 +8,7 @@ import {
 	useState,
 	type FocusEvent,
 	type FormEvent,
+	type KeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -66,7 +67,9 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { SETTINGS_MENU_ROW, SETTINGS_MENU_SURFACE } from "./settings/SettingsMenuTrigger";
 import { Input } from "./ui/input";
+import { Popover, PopoverAnchor, PopoverContent } from "./ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "../lib/utils";
 import { useUiStore } from "../stores/ui-store";
@@ -378,7 +381,8 @@ export function BrowserPanelView({
 	} = browserView;
 	const [urlInput, setUrlInput] = useState(navState.url);
 	const [historySuggestions, setHistorySuggestions] = useState<Array<{ url: string; title?: string }>>([]);
-	const historyListId = useId();
+	const historyMenuId = useId();
+	const [activeHistorySuggestion, setActiveHistorySuggestion] = useState(-1);
 	const [urlEditing, setUrlEditing] = useState(false);
 	const { beginPicking, cancelPicking, enqueue, error, failPicking, queuedCount, retryQueued, status } =
 		annotationQueue;
@@ -397,6 +401,7 @@ export function BrowserPanelView({
 			? clampDeviceFrameWidth(Number(customDeviceWidth))
 			: DEVICE_PRESETS.find((preset) => preset.id === devicePreset)?.width;
 	const urlInputRef = useRef<HTMLInputElement>(null);
+	const historyMenuRef = useRef<HTMLDivElement>(null);
 	const [draggedTopTabId, setDraggedTopTabId] = useState<string | null>(null);
 	const draggedTopTab = tabs.find((tab) => tab.id === draggedTopTabId);
 	const {
@@ -559,6 +564,7 @@ export function BrowserPanelView({
 	useEffect(() => {
 		setUrlInput(navState.url);
 		setHistorySuggestions([]);
+		setActiveHistorySuggestion(-1);
 		// A prior submit (typed, or pasted, then Enter) leaves the caret at the
 		// end of the old value; the browser keeps that same horizontal scroll
 		// position for the new value, scrolling the scheme/host off the left
@@ -587,8 +593,16 @@ export function BrowserPanelView({
 		let current = true;
 		const timer = window.setTimeout(() => {
 			void window.ao!.browser.historySuggestions({ viewId, query }).then(
-				(suggestions) => current && setHistorySuggestions(suggestions),
-				() => current && setHistorySuggestions([]),
+				(suggestions) => {
+					if (!current) return;
+					setHistorySuggestions(suggestions);
+					setActiveHistorySuggestion(-1);
+				},
+				() => {
+					if (!current) return;
+					setHistorySuggestions([]);
+					setActiveHistorySuggestion(-1);
+				},
 			);
 		}, 120);
 		return () => {
@@ -611,6 +625,7 @@ export function BrowserPanelView({
 			setUrlEditing(false);
 			setUrlInput(navState.url);
 			setHistorySuggestions([]);
+			setActiveHistorySuggestion(-1);
 		});
 	}, [navState.url, viewId]);
 
@@ -634,6 +649,7 @@ export function BrowserPanelView({
 		setUrlEditing(false);
 		setUrlInput(url);
 		setHistorySuggestions([]);
+		setActiveHistorySuggestion(-1);
 		void navigate(url);
 	};
 
@@ -645,15 +661,38 @@ export function BrowserPanelView({
 
 	const handleURLChange = (value: string) => {
 		setUrlInput(value);
-		const selected = historySuggestions.find((suggestion) => suggestion.url === value.trim());
-		if (!selected) return;
-		navigateFromAddressBar(selected.url);
+		setActiveHistorySuggestion(-1);
 	};
 
-	const endUrlEditing = () => {
+	const handleURLKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+		if (historySuggestions.length === 0) return;
+		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+			event.preventDefault();
+			const direction = event.key === "ArrowDown" ? 1 : -1;
+			setActiveHistorySuggestion((current) => {
+				if (current < 0) return direction > 0 ? 0 : historySuggestions.length - 1;
+				return (current + direction + historySuggestions.length) % historySuggestions.length;
+			});
+			return;
+		}
+		if (event.key === "Enter" && activeHistorySuggestion >= 0) {
+			event.preventDefault();
+			navigateFromAddressBar(historySuggestions[activeHistorySuggestion]!.url);
+			return;
+		}
+		if (event.key === "Escape") {
+			event.preventDefault();
+			setHistorySuggestions([]);
+			setActiveHistorySuggestion(-1);
+		}
+	};
+
+	const endUrlEditing = (event: FocusEvent<HTMLInputElement>) => {
+		if (event.relatedTarget instanceof Node && historyMenuRef.current?.contains(event.relatedTarget)) return;
 		setUrlEditing(false);
 		setUrlInput(navState.url);
 		setHistorySuggestions([]);
+		setActiveHistorySuggestion(-1);
 	};
 
 	const beginUrlEditing = () => {
@@ -724,52 +763,102 @@ export function BrowserPanelView({
 							? error
 							: "";
 	const agentStatusLabel = agentActivityLabel(agentBrowserActivity, agentBrowserActive);
+	const suggestionsOpen = urlEditing && historySuggestions.length > 0;
 	const browserAddressBar = (
 		<form
 			className="browser-panel__address-bar min-w-0 flex-1"
 			data-testid="browser-address-bar"
 			onSubmit={submit}
 		>
-			<div className="browser-panel__url-wrap relative min-w-0 flex-1">
-				<Input
-					aria-label={t("browser.url")}
-					className="browser-panel__url-input h-browser-url text-xs"
-					list={historySuggestions.length > 0 ? historyListId : undefined}
-					onBlur={endUrlEditing}
-					onChange={(event) => handleURLChange(event.target.value)}
-					onClick={() => urlInputRef.current?.select()}
-					onFocus={beginUrlEditing}
-					placeholder={t("browser.urlPlaceholder")}
-					ref={urlInputRef}
-					value={urlEditing || poppedOut ? urlInput : getDisplayUrl(navState.url)}
-				/>
-				{isWebLink(navState.url) ? (
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<Button
-								aria-label={t("inspector.openInSystemBrowser")}
-								className="browser-panel__url-external"
-								onClick={openCurrentPageExternally}
-								size="icon-sm"
-								type="button"
-								variant="ghost"
-							>
-								<ExternalLink aria-hidden="true" className="size-icon-base" />
-							</Button>
-						</TooltipTrigger>
-						<TooltipContent data-browser-native-overlay="true" side="bottom">
-							{t("inspector.openInSystemBrowser")}
-						</TooltipContent>
-					</Tooltip>
-				) : null}
-				<datalist id={historyListId}>
-					{historySuggestions.map((suggestion) => (
-						<option key={suggestion.url} value={suggestion.url}>
-							{suggestion.title}
-						</option>
+			<Popover
+				onOpenChange={(open) => {
+					if (!open && suggestionsOpen) {
+						setHistorySuggestions([]);
+						setActiveHistorySuggestion(-1);
+					}
+				}}
+				open={suggestionsOpen}
+			>
+				<PopoverAnchor asChild>
+					<div className="browser-panel__url-wrap relative min-w-0 flex-1">
+						<Input
+							aria-activedescendant={activeHistorySuggestion >= 0 ? `${historyMenuId}-${activeHistorySuggestion}` : undefined}
+							aria-controls={suggestionsOpen ? historyMenuId : undefined}
+							aria-expanded={suggestionsOpen}
+							aria-haspopup="listbox"
+							aria-label={t("browser.url")}
+							className="browser-panel__url-input h-browser-url text-xs"
+							onBlur={endUrlEditing}
+							onChange={(event) => handleURLChange(event.target.value)}
+							onClick={() => urlInputRef.current?.select()}
+							onFocus={beginUrlEditing}
+							onKeyDown={handleURLKeyDown}
+							placeholder={t("browser.urlPlaceholder")}
+							ref={urlInputRef}
+							value={urlEditing || poppedOut ? urlInput : getDisplayUrl(navState.url)}
+						/>
+						{isWebLink(navState.url) ? (
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<Button
+										aria-label={t("inspector.openInSystemBrowser")}
+										className="browser-panel__url-external"
+										onClick={openCurrentPageExternally}
+										size="icon-sm"
+										type="button"
+										variant="ghost"
+									>
+										<ExternalLink aria-hidden="true" className="size-icon-base" />
+									</Button>
+								</TooltipTrigger>
+								<TooltipContent data-browser-native-overlay="true" side="bottom">
+									{t("inspector.openInSystemBrowser")}
+								</TooltipContent>
+							</Tooltip>
+						) : null}
+					</div>
+				</PopoverAnchor>
+				<PopoverContent
+					align="start"
+					aria-label={t("browser.urlSuggestions")}
+					className={cn(
+						SETTINGS_MENU_SURFACE,
+						"w-[min(28rem,calc(100vw-1rem))] overflow-hidden p-1",
+					)}
+					data-browser-native-overlay="true"
+					id={historyMenuId}
+					onOpenAutoFocus={(event) => event.preventDefault()}
+					ref={historyMenuRef}
+					role="listbox"
+					sideOffset={4}
+				>
+					{historySuggestions.map((suggestion, index) => (
+						<button
+							aria-selected={index === activeHistorySuggestion}
+							className={cn(
+								SETTINGS_MENU_ROW,
+								"flex w-full items-center gap-2.5 px-2.5 py-2 text-left",
+								index === activeHistorySuggestion && "bg-settings-menu-selected text-settings-title",
+							)}
+							id={`${historyMenuId}-${index}`}
+							key={suggestion.url}
+							onClick={() => navigateFromAddressBar(suggestion.url)}
+							onMouseDown={(event) => event.preventDefault()}
+							onPointerMove={() => setActiveHistorySuggestion(index)}
+							role="option"
+							type="button"
+						>
+							<Globe2 aria-hidden="true" className="size-icon-base shrink-0 text-settings-muted" />
+							<span className="min-w-0 flex-1">
+								{suggestion.title ? (
+									<span className="block truncate text-control text-settings-title">{suggestion.title}</span>
+								) : null}
+								<span className="block truncate text-caption text-settings-muted">{suggestion.url}</span>
+							</span>
+						</button>
 					))}
-				</datalist>
-			</div>
+				</PopoverContent>
+			</Popover>
 		</form>
 	);
 	const browserTabBar = (
