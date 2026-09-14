@@ -88,10 +88,7 @@ vi.mock("../hooks/useCloudCp", () => ({
 
 import { TaskComposer } from "./TaskComposer";
 import { agentReadiness } from "../test/agent-readiness-fixtures";
-import { agentReadinessQueryKey as realAgentReadinessQueryKey } from "../hooks/useAgentReadinessQuery";
-
-// Use hardcoded query key that matches the mock
-const agentReadinessQueryKey = ["agent-readiness"] as const;
+import { agentReadinessQueryKey } from "../hooks/useAgentReadinessQuery";
 
 function Wrap({ children, queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }) }: {
 	children: ReactNode;
@@ -867,6 +864,51 @@ describe("TaskComposer", () => {
 				"/api/v1/orchestrators/delegate",
 				expect.objectContaining({
 					body: expect.objectContaining({ model: "gpt-5.1" }),
+				}),
+			),
+		);
+	});
+
+	it("sends effort level with untouched default model", async () => {
+		h.get.mockImplementation(async (path: string) => {
+			if (path.includes("/models")) {
+				return {
+					data: {
+						agent: "codex",
+						selectionMode: "text",
+						models: [
+							{ id: "claude-opus", label: "Claude Opus", isDefault: true },
+							{ id: "effort:medium", label: "Medium", isDefault: false },
+							{ id: "effort:high", label: "High", isDefault: false },
+						],
+						allowCustom: true,
+						refreshRecommended: false,
+					},
+				};
+			}
+			return { data: { status: "ok", project: { config: {} } } };
+		});
+		h.post.mockResolvedValueOnce({ data: { workerId: "sess-1" } });
+
+		render(
+			<Wrap>
+				<TaskComposer projectId="proj-1" onCreated={vi.fn()} />
+			</Wrap>,
+		);
+
+		// Select an effort level without changing the model (stays at default)
+		const model = await screen.findByRole("button", { name: "Model" });
+		await userEvent.click(model);
+		await userEvent.click(screen.getByRole("menuitem", { name: "High" }));
+
+		fireEvent.change(task(), { target: { value: "Do the thing" } });
+		fireEvent.click(screen.getByText("Start task"));
+
+		await waitFor(() =>
+			expect(h.post).toHaveBeenCalledWith(
+				"/api/v1/orchestrators/delegate",
+				expect.objectContaining({
+					body: expect.objectContaining({ effort: "effort:high" }),
 				}),
 			),
 		);

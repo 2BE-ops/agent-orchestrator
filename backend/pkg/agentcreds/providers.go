@@ -114,6 +114,10 @@ func setAnthropicAuth(request *http.Request, cred Credential) error {
 		request.Header.Set("x-api-key", secret)
 	case KindOAuthToken, KindAuthToken:
 		request.Header.Set("authorization", "Bearer "+secret)
+		// OAuth tokens (subscription logins from claude.ai) may require identifying
+		// headers that API keys do not. Include them to enable the endpoint to
+		// distinguish token types, if needed.
+		request.Header.Set("user-agent", "ao-credential-validator")
 	default:
 		return fmt.Errorf("agentcreds: credential kind %q cannot authenticate to Anthropic", cred.Kind)
 	}

@@ -488,8 +488,12 @@ func (c *commandContext) checkClaudeAuth(ctx context.Context) doctorCheck {
 	// Ask the provider. This is the only step that can distinguish a working
 	// credential from a revoked one, and the reason the check can say more
 	// than `claude auth status` already does.
+	// Give the provider probe its own budget so the subprocess and the round-trip
+	// do not compete for a single timeout.
+	probeCtx, cancel := context.WithTimeout(ctx, agentcreds.DefaultTimeout)
+	defer cancel()
 	result := doctorCredentialValidator().ValidateLocal(
-		reqCtx, report.APIProvider, agentcreds.ResolveOptions{AllowKeychain: true})
+		probeCtx, report.APIProvider, agentcreds.ResolveOptions{AllowKeychain: true})
 	switch result.State {
 	case agentcreds.StateValid:
 		models := ""

@@ -144,10 +144,13 @@ func (p *Plugin) probeVerdict(ctx context.Context, report claudeAuthReport, cliO
 	probeCtx, cancel := context.WithTimeout(ctx, agentcreds.DefaultTimeout)
 	defer cancel()
 	result := claudeValidator().ValidateLocal(probeCtx, reported, opts)
+	// Cache all verdicts, including inconclusive ones, so repeated failures do not
+	// re-pay the full probe cost. The caller (the ladder) will handle StateUnknown
+	// by falling through to the next rung.
+	p.authCache().Put(claudeAgentID, result)
 	if result.State == agentcreds.StateUnknown {
 		return ports.AuthVerdict{}, false
 	}
-	p.authCache().Put(claudeAgentID, result)
 	return verdictFromResult(result), true
 }
 
@@ -400,6 +403,10 @@ func ProviderModels(ctx context.Context, env map[string]string) ([]ports.AgentMo
 	// The reported provider is unavailable here without running the CLI, so
 	// resolution falls back to the environment gate. That is safe: it either
 	// identifies a provider or declines, and never guesses a host.
+	// FIXME: A machine configured for Bedrock/Vertex through settings.json that
+	// also carries a working first-party credential in the keychain may report
+	// first-party model IDs instead of provider-prefixed ones. This edge case
+	// requires running the CLI first to resolve the intended provider.
 	probeCtx, cancel := context.WithTimeout(ctx, agentcreds.DefaultTimeout)
 	defer cancel()
 	result := claudeValidator().ValidateLocal(probeCtx, "", opts)
