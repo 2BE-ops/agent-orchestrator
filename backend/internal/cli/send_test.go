@@ -99,7 +99,7 @@ func TestSend_SteerActiveTurnUsesProviderSteeringWithoutQueueing(t *testing.T) {
 		bodies = append(bodies, string(raw))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
-		_, _ = io.WriteString(w, `{"providerTurnId":"provider-turn-1","activityId":"activity-1"}`)
+		_, _ = io.WriteString(w, `{"outcome":"steered","providerTurnId":"provider-turn-1","activityId":"activity-1"}`)
 	}))
 	t.Cleanup(srv.Close)
 	writeRunFileFor(t, cfg, srv)
@@ -109,8 +109,8 @@ func TestSend_SteerActiveTurnUsesProviderSteeringWithoutQueueing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr=%s", err, errOut)
 	}
-	if len(paths) != 1 || paths[0] != "/api/v1/sessions/demo-1/conversation/steer" {
-		t.Fatalf("paths = %v, want one steer request", paths)
+	if len(paths) != 1 || paths[0] != "/api/v1/sessions/demo-1/conversation/steer-or-send" {
+		t.Fatalf("paths = %v, want one atomic steer-or-send request", paths)
 	}
 	var req conversationMessageAPIRequest
 	if err := json.Unmarshal([]byte(bodies[0]), &req); err != nil {
@@ -141,13 +141,8 @@ func TestSend_SteerIdleStartsOneNormalChatTurn(t *testing.T) {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		ids = append(ids, req.ID)
 		w.Header().Set("Content-Type", "application/json")
-		if strings.HasSuffix(r.URL.Path, "/steer") {
-			w.WriteHeader(http.StatusConflict)
-			_, _ = io.WriteString(w, `{"error":"conflict","code":"CHAT_NO_ACTIVE_TURN","message":"idle"}`)
-			return
-		}
 		w.WriteHeader(http.StatusAccepted)
-		_, _ = io.WriteString(w, `{"turnId":"turn-2","state":"running","duplicate":false}`)
+		_, _ = io.WriteString(w, `{"outcome":"sent","turnId":"turn-2","state":"running","duplicate":false}`)
 	}))
 	t.Cleanup(srv.Close)
 	writeRunFileFor(t, cfg, srv)
@@ -158,13 +153,12 @@ func TestSend_SteerIdleStartsOneNormalChatTurn(t *testing.T) {
 		t.Fatalf("unexpected error: %v\nstderr=%s", err, errOut)
 	}
 	wantPaths := []string{
-		"/api/v1/sessions/demo-1/conversation/steer",
-		"/api/v1/sessions/demo-1/conversation/messages",
+		"/api/v1/sessions/demo-1/conversation/steer-or-send",
 	}
 	if strings.Join(paths, ",") != strings.Join(wantPaths, ",") {
 		t.Fatalf("paths = %v, want %v", paths, wantPaths)
 	}
-	if len(ids) != 2 || ids[0] == "" || ids[0] != ids[1] {
+	if len(ids) != 1 || ids[0] == "" {
 		t.Fatalf("delivery ids = %v, want one stable non-empty id", ids)
 	}
 	if !strings.Contains(out, "normal Chat turn in running state") || !strings.Contains(out, "not confirmed") {
@@ -172,7 +166,7 @@ func TestSend_SteerIdleStartsOneNormalChatTurn(t *testing.T) {
 	}
 }
 
-func TestSend_SteerIdlePromotesFallbackQueuedByStateChangeRace(t *testing.T) {
+func TestSend_SteerStateChangeRaceUsesOneAtomicRequest(t *testing.T) {
 	t.Setenv("AO_SESSION_ID", "")
 	cfg := setConfigEnv(t)
 	var paths []string
@@ -183,19 +177,8 @@ func TestSend_SteerIdlePromotesFallbackQueuedByStateChangeRace(t *testing.T) {
 		}
 		paths = append(paths, r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/api/v1/sessions/demo-1/conversation/steer":
-			w.WriteHeader(http.StatusConflict)
-			_, _ = io.WriteString(w, `{"error":"conflict","code":"CHAT_NO_ACTIVE_TURN","message":"idle"}`)
-		case "/api/v1/sessions/demo-1/conversation/messages":
-			w.WriteHeader(http.StatusAccepted)
-			_, _ = io.WriteString(w, `{"turnId":"queued-2","state":"queued","duplicate":false}`)
-		case "/api/v1/sessions/demo-1/conversation/turns/queued-2/steer":
-			w.WriteHeader(http.StatusAccepted)
-			_, _ = io.WriteString(w, `{"sourceTurnId":"queued-2","providerTurnId":"provider-running"}`)
-		default:
-			http.NotFound(w, r)
-		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, `{"outcome":"steered","providerTurnId":"provider-running"}`)
 	}))
 	t.Cleanup(srv.Close)
 	writeRunFileFor(t, cfg, srv)
@@ -206,14 +189,12 @@ func TestSend_SteerIdlePromotesFallbackQueuedByStateChangeRace(t *testing.T) {
 		t.Fatalf("unexpected error: %v\nstderr=%s", err, errOut)
 	}
 	wantPaths := []string{
-		"/api/v1/sessions/demo-1/conversation/steer",
-		"/api/v1/sessions/demo-1/conversation/messages",
-		"/api/v1/sessions/demo-1/conversation/turns/queued-2/steer",
+		"/api/v1/sessions/demo-1/conversation/steer-or-send",
 	}
 	if strings.Join(paths, ",") != strings.Join(wantPaths, ",") {
 		t.Fatalf("paths = %v, want %v", paths, wantPaths)
 	}
-	if !strings.Contains(out, "Queued message queued-2 was steered into active turn provider-running") {
+	if !strings.Contains(out, "accepted by provider for active turn provider-running") {
 		t.Fatalf("output = %q", out)
 	}
 }
@@ -300,6 +281,39 @@ func TestSend_SteerUncertainExposesHandleForRecovery(t *testing.T) {
 	}
 }
 
+func TestSend_SteerTransportFailureExposesRetryHandle(t *testing.T) {
+	cfg := setConfigEnv(t)
+	captured := make(chan conversationMessageAPIRequest, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/internal/") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		var req conversationMessageAPIRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		captured <- req
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Errorf("hijack response: %v", err)
+			return
+		}
+		_ = conn.Close()
+	}))
+	t.Cleanup(srv.Close)
+	writeRunFileFor(t, cfg, srv)
+
+	_, _, err := executeCLI(t, Deps{ProcessAlive: func(int) bool { return true }},
+		"send", "--session", "demo-1", "--steer", "--message", "correction")
+	req := <-captured
+	if err == nil || req.ClientMessageID == "" {
+		t.Fatalf("err = %v clientMessageId = %q", err, req.ClientMessageID)
+	}
+	if !strings.Contains(err.Error(), "outcome is unknown") ||
+		!strings.Contains(err.Error(), "--client-message-id "+req.ClientMessageID) {
+		t.Fatalf("err = %q, want safe retry handle %q", err, req.ClientMessageID)
+	}
+}
+
 func TestSend_SteerRecoverOnlyReusesHandleWithoutMessage(t *testing.T) {
 	cfg := setConfigEnv(t)
 	var req conversationMessageAPIRequest
@@ -311,7 +325,7 @@ func TestSend_SteerRecoverOnlyReusesHandleWithoutMessage(t *testing.T) {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
-		_, _ = io.WriteString(w, `{"providerTurnId":"provider-turn-1"}`)
+		_, _ = io.WriteString(w, `{"outcome":"steered","providerTurnId":"provider-turn-1"}`)
 	}))
 	t.Cleanup(srv.Close)
 	writeRunFileFor(t, cfg, srv)

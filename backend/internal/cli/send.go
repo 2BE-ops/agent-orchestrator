@@ -35,20 +35,13 @@ type conversationMessageAPIRequest struct {
 	RecoverOnly     bool   `json:"recoverOnly,omitempty"`
 }
 
-type steerAPIResponse struct {
-	ProviderTurnID string `json:"providerTurnId"`
-}
-
-type chatSendAPIResponse struct {
+type steerOrSendAPIResponse struct {
+	Outcome        string `json:"outcome"`
 	TurnID         string `json:"turnId"`
 	ProviderTurnID string `json:"providerTurnId"`
+	ActivityID     string `json:"activityId"`
 	State          string `json:"state"`
 	Duplicate      bool   `json:"duplicate"`
-}
-
-type promoteQueuedTurnAPIResponse struct {
-	SourceTurnID   string `json:"sourceTurnId"`
-	ProviderTurnID string `json:"providerTurnId"`
 }
 
 func newSendCommand(ctx *commandContext) *cobra.Command {
@@ -108,68 +101,46 @@ func (c *commandContext) steerMessage(
 	if clientMessageID == "" {
 		clientMessageID = uuid.NewString()
 	}
-	var steered steerAPIResponse
-	err := c.postJSON(ctx, sessionPath+"/conversation/steer", conversationMessageAPIRequest{
+	var result steerOrSendAPIResponse
+	err := c.postJSON(ctx, sessionPath+"/conversation/steer-or-send", conversationMessageAPIRequest{
 		Text: message, ClientMessageID: clientMessageID, RecoverOnly: recoverOnly,
-	}, &steered)
-	if err == nil {
+	}, &result)
+	if err != nil {
+		var responseErr apiResponseError
+		if errors.As(err, &responseErr) && responseErr.ErrorBody.Code == "CHAT_STEER_UNCERTAIN" {
+			if recoverOnly {
+				return fmt.Errorf("%w; delivery handle %s remains unresolved and was not resent", err, clientMessageID)
+			}
+			return fmt.Errorf(
+				"%w; recover this delivery without resending it: ao send --session %s --steer --recover-only --client-message-id %s",
+				err, strings.TrimPrefix(sessionPath, "sessions/"), clientMessageID)
+		}
+		if errors.Is(err, errDaemonUnavailable) {
+			return fmt.Errorf(
+				"%w; outcome is unknown for delivery handle %s; retry safely with --client-message-id %s",
+				err, clientMessageID, clientMessageID)
+		}
+		return err
+	}
+
+	if result.Outcome == "steered" {
 		if recoverOnly {
 			_, _ = fmt.Fprintf(c.deps.Out,
-				"Recovered steering receipt for active turn %s with delivery handle %s; agent action is not confirmed.\n",
-				steered.ProviderTurnID, clientMessageID)
+				"Recovered steering receipt for turn %s with delivery handle %s; agent action is not confirmed.\n",
+				result.ProviderTurnID, clientMessageID)
 			return nil
 		}
 		_, _ = fmt.Fprintf(c.deps.Out,
 			"Steering accepted by provider for active turn %s with delivery handle %s; agent action is not confirmed.\n",
-			steered.ProviderTurnID, clientMessageID)
+			result.ProviderTurnID, clientMessageID)
 		return nil
 	}
-
-	var responseErr apiResponseError
-	if errors.As(err, &responseErr) && responseErr.ErrorBody.Code == "CHAT_STEER_UNCERTAIN" {
-		if recoverOnly {
-			return fmt.Errorf("%w; delivery handle %s remains unresolved and was not resent", err, clientMessageID)
-		}
-		return fmt.Errorf(
-			"%w; recover this delivery without resending it: ao send --session %s --steer --recover-only --client-message-id %s",
-			err, strings.TrimPrefix(sessionPath, "sessions/"), clientMessageID)
-	}
-	if recoverOnly {
-		return err
-	}
-	if !errors.As(err, &responseErr) || responseErr.ErrorBody.Code != "CHAT_NO_ACTIVE_TURN" {
-		return err
-	}
-
-	var sent chatSendAPIResponse
-	if err := c.postJSON(ctx, sessionPath+"/conversation/messages", conversationMessageAPIRequest{
-		Text: message, ClientMessageID: clientMessageID,
-	}, &sent); err != nil {
-		return err
-	}
-	if sent.State == "queued" {
-		if sent.TurnID == "" {
-			return errors.New("daemon returned a queued Chat turn without a turn id")
-		}
-		var promoted promoteQueuedTurnAPIResponse
-		if err := c.postJSON(ctx,
-			sessionPath+"/conversation/turns/"+url.PathEscape(sent.TurnID)+"/steer",
-			nil,
-			&promoted,
-		); err != nil {
-			return err
-		}
-		_, _ = fmt.Fprintf(c.deps.Out,
-			"A turn started during fallback. Queued message %s was steered into active turn %s; agent action is not confirmed.\n",
-			promoted.SourceTurnID, promoted.ProviderTurnID)
-		return nil
-	}
-	if sent.Duplicate {
+	if result.Duplicate {
 		_, _ = fmt.Fprintln(c.deps.Out, "Message was already accepted; delivery state is unchanged.")
 		return nil
 	}
 	_, _ = fmt.Fprintf(c.deps.Out,
-		"No active turn to steer. Message accepted as a normal Chat turn in %s state; provider delivery is not confirmed.\n",
-		sent.State)
+		"No active turn to steer. Message accepted as a normal Chat turn in %s state with delivery handle %s; provider delivery is not confirmed.\n",
+		result.State, clientMessageID)
 	return nil
 }
