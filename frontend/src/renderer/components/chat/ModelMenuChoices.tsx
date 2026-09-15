@@ -21,6 +21,7 @@ export function ModelMenuChoices<T extends { id: string; label: string; provider
 		() => query ? searchModelIndex(index, query).models.map((item) => models[item.index]) : models,
 		[index, models, query],
 	);
+	const searchRef = useRef<HTMLInputElement>(null);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const [canScrollDown, setCanScrollDown] = useState(false);
 	const updateScrollCue = useCallback(() => {
@@ -44,6 +45,10 @@ export function ModelMenuChoices<T extends { id: string; label: string; provider
 					className="relative shrink-0 p-1"
 					onClick={(event) => event.stopPropagation()}
 					onKeyDown={(event) => {
+						if (event.nativeEvent.isComposing) {
+							event.stopPropagation();
+							return;
+						}
 						if (event.key === "Escape") return;
 						event.stopPropagation();
 						if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -59,6 +64,7 @@ export function ModelMenuChoices<T extends { id: string; label: string; provider
 						aria-hidden="true"
 					/>
 					<input
+						ref={searchRef}
 						type="search"
 						aria-label={t("settings.models.searchAria", { label: "models" })}
 						value={search}
@@ -69,7 +75,21 @@ export function ModelMenuChoices<T extends { id: string; label: string; provider
 				</div>
 			)}
 			<div className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden">
-				<div ref={scrollRef} className="model-menu-scroll min-h-0 overflow-y-auto overscroll-contain" onScroll={updateScrollCue}>
+				<div
+					ref={scrollRef}
+					className="model-menu-scroll min-h-0 overflow-y-auto overscroll-contain"
+					onScroll={updateScrollCue}
+					onKeyDownCapture={(event) => {
+						if (!searchRef.current) return;
+						const firstItem = event.currentTarget.querySelector('[role="menuitemradio"]');
+						if ((event.key === "ArrowUp" && event.target === firstItem) || (event.key === "Tab" && event.shiftKey)) {
+							// Return to search before the menu's roving focus handles the key.
+							event.preventDefault();
+							event.stopPropagation();
+							searchRef.current.focus();
+						}
+					}}
+				>
 					{children(matches)}
 					{matches.length === 0 && (
 						<p className="px-2 py-1.5 text-xs text-settings-muted">{t("settings.models.noMatches")}</p>

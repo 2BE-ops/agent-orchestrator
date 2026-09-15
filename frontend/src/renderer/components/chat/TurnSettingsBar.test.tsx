@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ChatConfigOption } from "../../types/conversation";
@@ -146,6 +146,44 @@ describe.each(["native", "ACP submenu", "ACP standalone"] as const)("%s model se
 		expect(screen.getByRole("menuitemradio", { name: "Model 99" })).toHaveFocus();
 		await user.keyboard("{Enter}");
 		expect(onChange).toHaveBeenCalledOnce();
+	});
+
+	it.each(["ArrowUp", "Shift+Tab"])("returns to the query with %s so it can be refined", async (key) => {
+		const { user, open } = setup();
+		await open();
+		const search = screen.getByRole("searchbox", { name: "Search models" });
+		await user.type(search, "Model");
+		const results = screen.getAllByRole("menuitemradio");
+		await user.keyboard("{ArrowDown}{ArrowDown}");
+		expect(results[1]).toHaveFocus();
+		if (key === "ArrowUp") {
+			await user.keyboard("{ArrowUp}");
+			expect(results[0]).toHaveFocus();
+			await user.keyboard("{ArrowUp}");
+		} else {
+			await user.tab({ shift: true });
+		}
+		expect(search).toHaveFocus();
+		expect(search).toHaveValue("Model");
+		await user.keyboard(" 99");
+		expect(search).toHaveValue("Model 99");
+		expect(screen.getAllByRole("menuitemradio")).toHaveLength(1);
+		await user.keyboard("{ArrowDown}");
+		expect(screen.getByRole("menuitemradio", { name: "Model 99" })).toHaveFocus();
+	});
+
+	it.each(["ArrowUp", "ArrowDown"])("keeps %s available for input-method candidate selection", async (key) => {
+		const { user, onChange, open } = setup();
+		await open();
+		const search = screen.getByRole("searchbox", { name: "Search models" });
+		await user.click(search);
+		fireEvent.compositionStart(search);
+		expect(fireEvent.keyDown(search, { key, isComposing: true })).toBe(true);
+		expect(search).toHaveFocus();
+		expect(onChange).not.toHaveBeenCalled();
+		fireEvent.compositionEnd(search);
+		await user.keyboard("{ArrowDown}");
+		expect(screen.getByRole("menuitemradio", { name: "Model 0" })).toHaveFocus();
 	});
 
 	it("filters providers and restores all models after clearing or dismissing search", async () => {
