@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -142,7 +143,7 @@ func TestCodexAccountCatalogLazilyUpgradesLegacyDescriptorIdentity(t *testing.T)
 	if err := catalog.refresh(); err != nil {
 		t.Fatal(err)
 	}
-	if err := catalog.updateCredentialIdentity(record.Snapshot.ID, credential); err != nil {
+	if err := catalog.updateCredentialIdentity(context.Background(), record.Snapshot.ID, credential); err != nil {
 		t.Fatal(err)
 	}
 	upgraded, err := readCodexAccountDescriptor(descriptorPath)
@@ -316,7 +317,7 @@ func TestCodexAccountCatalogRetainsSignedOutSlotAndReplacesItsCredential(t *test
 		t.Fatalf("rediscovered account = %#v", rediscovered.Snapshot)
 	}
 
-	reauthenticated, err := catalog.replaceCredential(record.Snapshot.ID, []byte("replacement-opaque-credential"), observation)
+	reauthenticated, err := catalog.replaceCredential(context.Background(), record.Snapshot.ID, []byte("replacement-opaque-credential"), observation)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -17,8 +17,8 @@ func TestCodexAccountSwitchIdempotencyAndSingleActiveConstraint(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	first := domain.CodexAccountSwitch{
 		ID: "switch-a", SourceKind: domain.CodexAccountSwitchSourceDevice, TargetAccountID: "account-b",
-		IdempotencyKey: "request-a", RequestFingerprint: "v4:first",
-		Phase: domain.CodexAccountSwitchRequested, CreatedAt: now, UpdatedAt: now,
+		IdempotencyKey: "request-a",
+		Phase:          domain.CodexAccountSwitchActivatingAccount, CreatedAt: now, UpdatedAt: now,
 	}
 
 	created, inserted, err := st.CreateCodexAccountSwitch(ctx, first)
@@ -31,14 +31,13 @@ func TestCodexAccountSwitchIdempotencyAndSingleActiveConstraint(t *testing.T) {
 	}
 	conflict := first
 	conflict.ID = "switch-b"
-	conflict.RequestFingerprint = "v3:different"
+	conflict.TargetAccountID = "account-c"
 	if _, _, err := st.CreateCodexAccountSwitch(ctx, conflict); !errors.Is(err, ports.ErrCodexAccountSwitchIdempotencyConflict) {
 		t.Fatalf("idempotency conflict error = %v", err)
 	}
 	other := first
 	other.ID = "switch-c"
 	other.IdempotencyKey = "request-c"
-	other.RequestFingerprint = "v3:other"
 	if _, _, err := st.CreateCodexAccountSwitch(ctx, other); !errors.Is(err, ports.ErrCodexAccountSwitchInProgress) {
 		t.Fatalf("active switch conflict error = %v", err)
 	}
@@ -53,8 +52,8 @@ func TestCodexAccountSwitchRejectsObsoletePhases(t *testing.T) {
 			now := time.Now().UTC().Truncate(time.Second)
 			switchRecord := domain.CodexAccountSwitch{
 				ID: "switch-" + phase, SourceAccountID: "account-a", TargetAccountID: "account-b",
-				IdempotencyKey: "request-" + phase, RequestFingerprint: "v4:" + phase,
-				Phase: domain.CodexAccountSwitchPhase(phase), CreatedAt: now, UpdatedAt: now,
+				IdempotencyKey: "request-" + phase,
+				Phase:          domain.CodexAccountSwitchPhase(phase), CreatedAt: now, UpdatedAt: now,
 			}
 
 			if _, _, err := st.CreateCodexAccountSwitch(context.Background(), switchRecord); err == nil {
@@ -71,18 +70,18 @@ func TestCodexAccountSwitchTransitionsAreCompareAndSwap(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	sw := domain.CodexAccountSwitch{
 		ID: "switch-cas", SourceAccountID: "account-a", TargetAccountID: "account-b",
-		IdempotencyKey: "request-cas", RequestFingerprint: "v4:cas",
-		Phase: domain.CodexAccountSwitchRequested, CreatedAt: now, UpdatedAt: now,
+		IdempotencyKey: "request-cas",
+		Phase:          domain.CodexAccountSwitchActivatingAccount, CreatedAt: now, UpdatedAt: now,
 	}
 	if _, _, err := st.CreateCodexAccountSwitch(ctx, sw); err != nil {
 		t.Fatal(err)
 	}
-	sw.Phase = domain.CodexAccountSwitchCheckpointCredential
+	sw.Phase = domain.CodexAccountSwitchCompleted
 	sw.UpdatedAt = now.Add(time.Second)
-	if ok, err := st.UpdateCodexAccountSwitch(ctx, sw, domain.CodexAccountSwitchRequested); err != nil || !ok {
+	if ok, err := st.UpdateCodexAccountSwitch(ctx, sw, domain.CodexAccountSwitchActivatingAccount); err != nil || !ok {
 		t.Fatalf("switch transition: ok=%v err=%v", ok, err)
 	}
-	if ok, err := st.UpdateCodexAccountSwitch(ctx, sw, domain.CodexAccountSwitchRequested); err != nil || ok {
+	if ok, err := st.UpdateCodexAccountSwitch(ctx, sw, domain.CodexAccountSwitchActivatingAccount); err != nil || ok {
 		t.Fatalf("stale switch transition: ok=%v err=%v", ok, err)
 	}
 }

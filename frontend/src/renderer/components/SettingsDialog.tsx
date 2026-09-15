@@ -110,7 +110,11 @@ export function SettingsDialog() {
 		// Warm account management as soon as global Settings opens, regardless of
 		// which page is selected. By the time the user visits Accounts, external
 		// login/logout changes and saved-account observations are already current.
-		void ensureCodexAccounts([], true, true, true)
+		void ensureCodexAccounts([], {
+			includeUsage: true,
+			forceAuthentication: true,
+			forceDeviceReconciliation: true,
+		})
 			.then((next) => writeCodexAccounts(queryClient, next, "replace"))
 			.catch(() => undefined);
 	}, [queryClient, settingsModal?.scope]);

@@ -59,6 +59,5 @@ type CodexAccountSwitch struct {
 	UpdatedAt              time.Time                    `json:"updatedAt"`
 	CompletedAt            *time.Time                   `json:"completedAt,omitempty"`
 	// Daemon-private idempotency data.
-	IdempotencyKey     string `json:"-"`
-	RequestFingerprint string `json:"-"`
+	IdempotencyKey string `json:"-"`
 }

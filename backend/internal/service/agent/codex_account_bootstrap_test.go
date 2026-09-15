@@ -131,7 +131,7 @@ func TestBootstrapStorageFailureClassifiesPreservedIOCause(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			var failure *codexAccountStoreFailure
+			var failure *codexAccountLocalFailure
 			if !errors.As(accountStoreStorageFailure(tc.err), &failure) {
 				t.Fatalf("not a bootstrap failure: %#v", tc.err)
 			}

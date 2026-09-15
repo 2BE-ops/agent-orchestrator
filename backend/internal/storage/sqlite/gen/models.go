@@ -163,7 +163,6 @@ type CodexAccountSwitch struct {
 	SourceAccountID        string
 	TargetAccountID        string
 	IdempotencyKey         string
-	RequestFingerprint     string
 	Phase                  string
 	FailureCode            string
 	CredentialsCommittedAt sql.NullTime

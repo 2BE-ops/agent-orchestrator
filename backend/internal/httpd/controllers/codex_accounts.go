@@ -22,7 +22,7 @@ import (
 // CodexAccountService is the HTTP controller's account-management boundary.
 type CodexAccountService interface {
 	CachedCodexAccounts(context.Context) (agentsvc.CodexAccounts, error)
-	EnsureCodexAccounts(context.Context, []string, bool, bool, bool) (agentsvc.CodexAccounts, error)
+	EnsureCodexAccounts(context.Context, []string, agentsvc.CodexAccountEnsureOptions) (agentsvc.CodexAccounts, error)
 	ConsumeCodexAccountResetCredit(context.Context, string, string) (agentsvc.CodexAccounts, error)
 	SubscribeCodexAccounts(context.Context) (<-chan agentsvc.CodexAccounts, error)
 	OpenCodexAccountLoginTerminal(context.Context) (agentsvc.CodexAccountLoginTerminalStart, error)
@@ -32,6 +32,7 @@ type CodexAccountService interface {
 	VerifyCodexAccountLogin(context.Context, string) (domain.CodexAccountLoginOperation, error)
 	CancelCodexAccountLogin(context.Context, string) (domain.CodexAccountLoginOperation, error)
 	StartCodexAccountSwitch(context.Context, ports.CodexAccountSwitchConfig) (domain.CodexAccountSwitch, error)
+	GetCodexAccountSwitch(context.Context, string) (domain.CodexAccountSwitch, error)
 }
 
 // CodexAccountsController exposes cached accounts, login, switching, and events.
@@ -49,6 +50,20 @@ func (c *CodexAccountsController) Register(r chi.Router) {
 	r.Post("/agents/codex/accounts/login-operations/{operationId}/verify", c.verifyLogin)
 	r.Post("/agents/codex/accounts/login-operations/{operationId}/cancel", c.cancelLogin)
 	r.Post("/agents/codex/account-switches", c.startSwitch)
+	r.Get("/agents/codex/account-switches/{switchId}", c.getSwitch)
+}
+
+func (c *CodexAccountsController) getSwitch(w http.ResponseWriter, r *http.Request) {
+	if c.Svc == nil {
+		apispec.NotImplemented(w, r, "GET", "/api/v1/agents/codex/account-switches/{switchId}")
+		return
+	}
+	result, err := c.Svc.GetCodexAccountSwitch(r.Context(), strings.TrimSpace(chi.URLParam(r, "switchId")))
+	if err != nil {
+		envelope.WriteError(w, r, err)
+		return
+	}
+	envelope.WriteJSON(w, http.StatusOK, newCodexSwitchResponse(result))
 }
 
 func (c *CodexAccountsController) consumeResetCredit(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +159,10 @@ func (c *CodexAccountsController) ensure(w http.ResponseWriter, r *http.Request)
 		envelope.WriteAPIError(w, r, http.StatusBadRequest, "bad_request", "INVALID_JSON", "Invalid JSON body", nil)
 		return
 	}
-	result, err := c.Svc.EnsureCodexAccounts(r.Context(), request.AccountIDs, request.IncludeUsage, request.ForceAuthentication, request.ForceDeviceReconciliation)
+	result, err := c.Svc.EnsureCodexAccounts(r.Context(), request.AccountIDs, agentsvc.CodexAccountEnsureOptions{
+		IncludeUsage: request.IncludeUsage, ForceAuthentication: request.ForceAuthentication,
+		ForceDeviceReconciliation: request.ForceDeviceReconciliation,
+	})
 	if err != nil {
 		envelope.WriteError(w, r, err)
 		return

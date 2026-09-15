@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"path/filepath"
 	"strings"
 	"unicode"
@@ -32,12 +31,8 @@ func parseCodexCredentialIdentity(data []byte) (codexCredentialIdentity, error) 
 			RefreshToken string `json:"refresh_token"`
 		} `json:"tokens"`
 	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	if err := decoder.Decode(&document); err != nil {
+	if err := json.Unmarshal(data, &document); err != nil {
 		return codexCredentialIdentity{}, errors.New("codex credential is not valid JSON")
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return codexCredentialIdentity{}, errors.New("codex credential contains trailing data")
 	}
 	if document.OpenAIAPIKey != nil && strings.TrimSpace(*document.OpenAIAPIKey) != "" {
 		return codexCredentialIdentity{Method: domain.CodexAuthMethodAPIKey, APIKey: *document.OpenAIAPIKey}, nil

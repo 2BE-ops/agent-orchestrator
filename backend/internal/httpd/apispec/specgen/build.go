@@ -1202,6 +1202,11 @@ func agentOperations() []operation {
 			resps: []respUnit{{http.StatusAccepted, controllers.CodexAccountSwitchResponse{}}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusServiceUnavailable, envelope.APIError{}}},
 		},
 		{
+			method: http.MethodGet, path: "/api/v1/agents/codex/account-switches/{switchId}", id: "getCodexAccountSwitch", tag: "agents",
+			summary: "Read one durable Codex account switch", pathParams: []any{controllers.CodexAccountSwitchIDParam{}},
+			resps: []respUnit{{http.StatusOK, controllers.CodexAccountSwitchResponse{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusServiceUnavailable, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}},
+		},
+		{
 			method: http.MethodPost, path: "/api/v1/agents/refresh", id: "refreshAgents", tag: "agents",
 			summary: "Refresh the cached local agent adapter catalog",
 			resps: []respUnit{

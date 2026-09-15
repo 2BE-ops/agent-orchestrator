@@ -413,6 +413,45 @@ paths:
       summary: Start a global AO Codex account switch
       tags:
       - agents
+  /api/v1/agents/codex/account-switches/{switchId}:
+    get:
+      operationId: getCodexAccountSwitch
+      parameters:
+      - description: Durable Codex account switch identifier.
+        in: path
+        name: switchId
+        required: true
+        schema:
+          description: Durable Codex account switch identifier.
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CodexAccountSwitchResponse'
+          description: OK
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Service Unavailable
+      summary: Read one durable Codex account switch
+      tags:
+      - agents
   /api/v1/agents/codex/accounts:
     get:
       operationId: getCodexAccounts

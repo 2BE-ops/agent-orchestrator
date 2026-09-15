@@ -56,10 +56,6 @@ export function codexAccountAuthorized(account: Pick<CodexAccount, "authenticati
 	return account.authentication.state === "authorized" || account.authentication.state === "not_applicable";
 }
 
-export function codexAccountSignedOut(account: Pick<CodexAccount, "authentication" | "status">): boolean {
-	return account.authentication.state === "unauthorized" || account.status === "signed_out";
-}
-
 export type CodexAuthenticationDisplay = {
 	key:
 		| "settings.codexAccounts.signedIn"

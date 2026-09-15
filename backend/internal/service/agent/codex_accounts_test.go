@@ -1306,7 +1306,7 @@ func TestEnsureCodexAccountsReconcilesRecentlyRemovedGlobalCredentialBeforeAccou
 	})
 	service := &Service{codexAccounts: manager, readiness: readiness}
 
-	view, err := service.EnsureCodexAccounts(context.Background(), nil, false, false, false)
+	view, err := service.EnsureCodexAccounts(context.Background(), nil, CodexAccountEnsureOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1380,7 +1380,7 @@ func TestEnsureCodexAccountsRetriesSavedAccountWhenGlobalCredentialDisappearsDur
 	})
 	service := &Service{codexAccounts: manager, readiness: readiness}
 
-	view, err := service.EnsureCodexAccounts(context.Background(), nil, false, false, false)
+	view, err := service.EnsureCodexAccounts(context.Background(), nil, CodexAccountEnsureOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1444,7 +1444,7 @@ func TestGlobalReconciliationRefusesAmbiguousProviderAccountID(t *testing.T) {
 	second := commitTestAccountWithCredential(t, manager.catalog, manager.pendingRoot, "1c5de3ab-82d0-4a68-a06b-8495cdeab909", testOAuthCredential("shared-provider-account", "second-access"), ports.CodexAccountObservation{Method: domain.CodexAuthMethodChatGPT})
 
 	err := manager.reconcileGlobal(context.Background())
-	var failure *codexDeviceReconciliationFailure
+	var failure *codexAccountLocalFailure
 	if !errors.As(err, &failure) || failure.reason != "global_account_ambiguous" || failure.retryable {
 		t.Fatalf("ambiguous reconciliation = %#v", err)
 	}
@@ -1915,7 +1915,7 @@ func TestCredentialActivationDoesNotOpenCodex(t *testing.T) {
 		t.Fatal("credential activation opened Codex")
 		return nil, nil
 	}}
-	err := fixture.manager.activateFromCredentialLocked(fixture.target.Snapshot.ID, filepath.Join(fixture.target.Home, codexCredentialFilename), testAPIKeyCredential("source-api-key"))
+	err := fixture.manager.activateFromCredentialLocked(context.Background(), fixture.target.Snapshot.ID, filepath.Join(fixture.target.Home, codexCredentialFilename), testAPIKeyCredential("source-api-key"))
 	if err != nil {
 		t.Fatal(err)
 	}

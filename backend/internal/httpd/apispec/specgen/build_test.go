@@ -57,8 +57,8 @@ func TestBuild_CodexSwitchContractIsRedactedAndOnlyMountedRoutesAreDocumented(t 
 	if _, ok := doc.Components.Schemas["CodexAccountSwitchSessionResponse"]; ok {
 		t.Fatal("obsolete CodexAccountSwitchSessionResponse schema remains")
 	}
-	if _, ok := doc.Paths["/api/v1/agents/codex/account-switches/{switchId}"]; ok {
-		t.Fatal("stale switch GET path remains in generated contract")
+	if _, ok := doc.Paths["/api/v1/agents/codex/account-switches/{switchId}"]; !ok {
+		t.Fatal("durable switch GET path is missing from generated contract")
 	}
 	if _, ok := doc.Paths["/api/v1/agents/codex/account-switches/{switchId}/cancel"]; ok {
 		t.Fatal("stale switch cancel path remains in generated contract")

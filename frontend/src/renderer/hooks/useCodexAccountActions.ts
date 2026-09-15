@@ -7,6 +7,7 @@ import {
 	consumeCodexAccountResetCredit,
 	deleteCodexAccount,
 	ensureCodexAccounts,
+	fetchCodexAccountSwitch,
 	logoutCodexAccount,
 	openCodexAccountLoginTerminal,
 	openCodexAccountReauthenticationTerminal,
@@ -135,7 +136,7 @@ export function useCodexAccountActions(queryClient: QueryClient) {
 	}, [beginLogin, closeLogin]);
 
 	const ensureAccount = useCallback(async (accountId: string) => {
-		const next = await ensureCodexAccounts([accountId], true);
+		const next = await ensureCodexAccounts([accountId], { includeUsage: true });
 		writeCodexAccounts(queryClient, next, "preserveMissing");
 	}, [queryClient]);
 
@@ -143,7 +144,7 @@ export function useCodexAccountActions(queryClient: QueryClient) {
 		setError(null);
 		setAuthenticationRetryAccountId(accountId);
 		try {
-			const next = await ensureCodexAccounts([accountId], true, true);
+			const next = await ensureCodexAccounts([accountId], { includeUsage: true, forceAuthentication: true });
 			writeCodexAccounts(queryClient, next, "preserveMissing");
 		} catch (cause) {
 			setError(errorMessage(cause, t("settings.codexAccounts.authenticationRetryFailed")));
@@ -157,7 +158,7 @@ export function useCodexAccountActions(queryClient: QueryClient) {
 		setError(null);
 		setDeviceRefreshPending(true);
 		try {
-			const next = await ensureCodexAccounts([], false, false, true);
+			const next = await ensureCodexAccounts([], { forceDeviceReconciliation: true });
 			writeCodexAccounts(queryClient, next, "replace");
 		} catch (cause) {
 			setError(errorMessage(cause, t("settings.codexAccounts.deviceRefreshFailed")));
@@ -177,6 +178,8 @@ export function useCodexAccountActions(queryClient: QueryClient) {
 			throw cause;
 		}
 	}, [t, writeCurrent]);
+
+	const getAccountSwitch = useCallback((switchId: string) => fetchCodexAccountSwitch(switchId), []);
 
 	const resetAccount = useCallback(async (account: CodexAccount, idempotencyKey: string) => {
 		setError(null);
@@ -215,6 +218,7 @@ export function useCodexAccountActions(queryClient: QueryClient) {
 		retryAuthentication,
 		retryDeviceRefresh,
 		switchAccount,
+		getAccountSwitch,
 		resetAccount,
 		logoutAccount,
 		deleteAccount,

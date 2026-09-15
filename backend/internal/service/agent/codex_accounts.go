@@ -474,19 +474,19 @@ func (m *codexAccountManager) ensureAuthentication(ctx context.Context, record c
 
 func (m *codexAccountManager) runAuthentication(record codexAccountRecord, call *accountAuthCall) {
 	attempted := m.now()
+	ctx, cancel := context.WithTimeout(m.ctx, codexAccountAuthTimeout)
+	defer cancel()
 	select {
 	case m.processes <- struct{}{}:
 		defer func() { <-m.processes }()
-	case <-m.ctx.Done():
-		m.finishAuthentication(record.Snapshot.ID, failedAuthentication(attempted, domain.AgentReadinessReasonAuthCheckFailed, "Authentication check stopped."), domain.CodexAuthMethodUnknown, nil, true, call)
+	case <-ctx.Done():
+		m.finishAuthentication(ctx, record.Snapshot.ID, failedAuthentication(attempted, domain.AgentReadinessReasonAuthCheckFailed, "Authentication check stopped."), domain.CodexAuthMethodUnknown, nil, true, call)
 		return
 	}
-	ctx, cancel := context.WithTimeout(m.ctx, codexAccountAuthTimeout)
-	defer cancel()
 	account := m.accountContext(record)
 	releaseGlobal, err := m.acquireGlobalRead(ctx, account)
 	if err != nil {
-		m.finishAuthentication(record.Snapshot.ID, failedAuthentication(attempted, domain.AgentReadinessReasonAuthCheckFailed, "Authentication check stopped."), domain.CodexAuthMethodUnknown, nil, true, call)
+		m.finishAuthentication(ctx, record.Snapshot.ID, failedAuthentication(attempted, domain.AgentReadinessReasonAuthCheckFailed, "Authentication check stopped."), domain.CodexAuthMethodUnknown, nil, true, call)
 		return
 	}
 	releasedGlobal := false
@@ -511,7 +511,7 @@ func (m *codexAccountManager) runAuthentication(record codexAccountRecord, call 
 			m.retryAuthenticationAfterDeviceChange(record.Snapshot.ID, call)
 			return
 		}
-		m.finishAuthentication(record.Snapshot.ID, failedAuthentication(attempted, domain.AgentReadinessReasonAuthCheckFailed, "Authentication check failed."), domain.CodexAuthMethodUnknown, nil, true, call)
+		m.finishAuthentication(ctx, record.Snapshot.ID, failedAuthentication(attempted, domain.AgentReadinessReasonAuthCheckFailed, "Authentication check failed."), domain.CodexAuthMethodUnknown, nil, true, call)
 		return
 	}
 	clientClosed := false
@@ -537,11 +537,11 @@ func (m *codexAccountManager) runAuthentication(record codexAccountRecord, call 
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			code, reason = domain.AgentReadinessReasonAuthCheckTimeout, "Authentication check timed out."
 		}
-		m.finishAuthentication(record.Snapshot.ID, failedAuthentication(attempted, code, reason), domain.CodexAuthMethodUnknown, nil, true, call)
+		m.finishAuthentication(ctx, record.Snapshot.ID, failedAuthentication(attempted, code, reason), domain.CodexAuthMethodUnknown, nil, true, call)
 		return
 	}
 	result := accountAuthenticationObservation(m.now(), observation.Authentication)
-	m.finishAuthentication(record.Snapshot.ID, result, observation.Method, observation.Email, observation.Authentication == domain.AgentAuthenticationUnknown, call)
+	m.finishAuthentication(ctx, record.Snapshot.ID, result, observation.Method, observation.Email, observation.Authentication == domain.AgentAuthenticationUnknown, call)
 }
 
 func (m *codexAccountManager) globalCredentialMissingFor(account ports.CodexAccountContext) bool {
@@ -582,7 +582,7 @@ func accountAuthenticationObservation(at time.Time, state domain.AgentAuthentica
 	}
 }
 
-func (m *codexAccountManager) finishAuthentication(id string, observation domain.AgentAuthenticationObservation, method domain.CodexAuthMethod, email *string, failed bool, call *accountAuthCall) {
+func (m *codexAccountManager) finishAuthentication(ctx context.Context, id string, observation domain.AgentAuthenticationObservation, method domain.CodexAuthMethod, email *string, failed bool, call *accountAuthCall) {
 	m.mu.Lock()
 	state := m.auth[id]
 	if !state.reauthenticationRequired {
@@ -604,7 +604,7 @@ func (m *codexAccountManager) finishAuthentication(id string, observation domain
 				if identified {
 					s.AuthMethod = method
 					s.AccountEmail = email
-					s.Label = accountLabel(id, method, email)
+					s.Label = accountLabel(email)
 				}
 			})
 			if identified {
@@ -612,7 +612,7 @@ func (m *codexAccountManager) finishAuthentication(id string, observation domain
 				// Codex supplies display metadata. Persist the first successful
 				// account/read result so a later catalog refresh or daemon restart
 				// cannot regress the label to the internal account-id fallback.
-				if err := m.catalog.updateVerifiedDescriptor(id, ports.CodexAccountObservation{Method: method, Email: email}); err != nil {
+				if err := m.catalog.updateVerifiedDescriptor(ctx, id, ports.CodexAccountObservation{Method: method, Email: email}); err != nil {
 					m.logger.Warn("Codex account display metadata could not be persisted", "accountID", id)
 				}
 			}

@@ -106,8 +106,14 @@ func (s *Service) CachedCodexAccounts(ctx context.Context) (CodexAccounts, error
 	return result, nil
 }
 
+type CodexAccountEnsureOptions struct {
+	IncludeUsage              bool
+	ForceAuthentication       bool
+	ForceDeviceReconciliation bool
+}
+
 // EnsureCodexAccounts rediscovers requested accounts and refreshes eligible observations.
-func (s *Service) EnsureCodexAccounts(ctx context.Context, ids []string, includeUsage, forceAuthentication, forceDeviceReconciliation bool) (CodexAccounts, error) {
+func (s *Service) EnsureCodexAccounts(ctx context.Context, ids []string, options CodexAccountEnsureOptions) (CodexAccounts, error) {
 	if s.codexAccounts == nil {
 		return CodexAccounts{}, apierr.Unavailable("CODEX_ACCOUNT_MANAGEMENT_UNAVAILABLE", "Codex account management is unavailable")
 	}
@@ -128,12 +134,12 @@ func (s *Service) EnsureCodexAccounts(ctx context.Context, ids []string, include
 	// auth.json from being checked through the last-known active account slot.
 	// A local reconciliation failure must not hide the saved catalog; the
 	// response carries its safe, retryable reconciliation state instead.
-	_ = s.codexAccounts.reconcileGlobalWithPolicy(ctx, forceDeviceReconciliation)
+	_ = s.codexAccounts.reconcileGlobalWithPolicy(ctx, options.ForceDeviceReconciliation)
 	installation, err := s.readiness.EnsureInstallation(ctx, []string{string(domain.HarnessCodex)}, domain.AgentReadinessPurposeDisplay)
 	if err != nil {
 		return CodexAccounts{}, err
 	}
-	result, err := s.codexAccounts.ensure(ctx, ids, includeUsage, forceAuthentication, installation[0].Installation.State)
+	result, err := s.codexAccounts.ensure(ctx, ids, options.IncludeUsage, options.ForceAuthentication, installation[0].Installation.State)
 	if err == nil && s.codexSwitches != nil {
 		if sw, ok, switchErr := s.codexSwitches.GetActiveCodexAccountSwitch(ctx); switchErr == nil && ok {
 			result.CurrentSwitch = &sw
@@ -246,13 +252,7 @@ func (s *Service) OpenCodexAccountLoginTerminal(ctx context.Context) (CodexAccou
 // retained account slot. A locally validated credential replaces that slot
 // instead of creating a duplicate account.
 func (s *Service) OpenCodexAccountReauthenticationTerminal(ctx context.Context, accountID string) (CodexAccountLoginTerminalStart, error) {
-	if s.codexAccounts == nil {
-		return CodexAccountLoginTerminalStart{}, apierr.Unavailable("CODEX_ACCOUNT_MANAGEMENT_UNAVAILABLE", "Codex account management is unavailable")
-	}
-	if s.codexSwitches != nil && s.codexSwitches.CodexAccountSwitchInProgress() {
-		return CodexAccountLoginTerminalStart{}, apierr.Conflict("CODEX_ACCOUNT_SWITCH_IN_PROGRESS", "A Codex account switch is already in progress", nil)
-	}
-	if err := s.WaitCodexAccountStoreReady(ctx); err != nil {
+	if err := s.prepareCodexAccountLogin(ctx); err != nil {
 		return CodexAccountLoginTerminalStart{}, err
 	}
 	accountID = strings.TrimSpace(accountID)
@@ -260,13 +260,6 @@ func (s *Service) OpenCodexAccountReauthenticationTerminal(ctx context.Context, 
 		if err := s.EnsureCodexDeviceAccountReconciled(ctx); err != nil {
 			return CodexAccountLoginTerminalStart{}, err
 		}
-	}
-	if err := s.requireCodexAccountInstallation(ctx); err != nil {
-		return CodexAccountLoginTerminalStart{}, err
-	}
-	capabilities := s.codexAccounts.detectCapabilities(ctx)
-	if capabilities.NativeLogin.State != domain.CodexCapabilitySupported {
-		return CodexAccountLoginTerminalStart{}, apierr.Unavailable("CODEX_ACCOUNT_MANAGEMENT_UNAVAILABLE", "Codex account management capability could not be verified")
 	}
 	return s.codexAccounts.openLoginTerminal(ctx, accountID)
 }
@@ -336,7 +329,9 @@ func (s *Service) VerifyCodexAccountLogin(ctx context.Context, operationID strin
 		// and usage warming happens independently and cannot roll the login back.
 		accountID := result.Account.ID
 		go func() {
-			_, _ = s.EnsureCodexAccounts(s.codexAccounts.ctx, []string{accountID}, true, true, true)
+			_, _ = s.EnsureCodexAccounts(s.codexAccounts.ctx, []string{accountID}, CodexAccountEnsureOptions{
+				IncludeUsage: true, ForceAuthentication: true, ForceDeviceReconciliation: true,
+			})
 		}()
 	}
 	return result, err
@@ -425,7 +420,7 @@ func (s *Service) WaitCodexAccountStoreReady(ctx context.Context) error {
 	if err == nil {
 		return nil
 	}
-	var failure *codexAccountStoreFailure
+	var failure *codexAccountLocalFailure
 	if !errors.As(err, &failure) {
 		return err
 	}
@@ -527,7 +522,7 @@ func (s *Service) PrepareCodexAccountForSwitch(ctx context.Context, switchID, ac
 	if !localCredentialIdentifiesRecord(record, latestCredential) {
 		return notPrepared(apierr.Conflict("CODEX_ACCOUNT_IDENTITY_CHANGED", "The saved Codex account no longer matches its credential. Sign in again", nil))
 	}
-	_ = s.codexAccounts.catalog.updateCredentialIdentity(record.Snapshot.ID, latestCredential)
+	_ = s.codexAccounts.catalog.updateCredentialIdentity(ctx, record.Snapshot.ID, latestCredential)
 
 	stagingDir := filepath.Join(s.codexAccounts.switchStagingRoot, switchID)
 	if err := ensurePrivateDirectory(stagingDir); err != nil {
@@ -640,7 +635,7 @@ func (s *Service) ActivatePreparedCodexAccountSwitch(ctx context.Context, source
 	if err := ctx.Err(); err != nil {
 		return notCommitted(err)
 	}
-	err := s.codexAccounts.activateFromCredentialLocked(strings.TrimSpace(targetID), filepath.Join(stagingDir, "target-auth.json"), expectedGlobal)
+	err := s.codexAccounts.activateFromCredentialLocked(ctx, strings.TrimSpace(targetID), filepath.Join(stagingDir, "target-auth.json"), expectedGlobal)
 	if err == nil {
 		s.readiness.Invalidate(string(domain.HarnessCodex), readinessInvalidateAuthentication)
 	}
@@ -699,6 +694,26 @@ func (s *Service) StartCodexAccountSwitch(ctx context.Context, cfg ports.CodexAc
 		return domain.CodexAccountSwitch{}, apierr.Unavailable("CODEX_ACCOUNT_MANAGEMENT_UNAVAILABLE", "Codex account switching is unavailable")
 	}
 	return s.codexSwitches.StartCodexAccountSwitch(ctx, cfg)
+}
+
+// GetCodexAccountSwitch returns the durable result for one switch. The UI uses
+// this journal state instead of inferring success from a reconciliation snapshot.
+func (s *Service) GetCodexAccountSwitch(ctx context.Context, id string) (domain.CodexAccountSwitch, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return domain.CodexAccountSwitch{}, apierr.Invalid("CODEX_ACCOUNT_SWITCH_ID_REQUIRED", "Codex account switch ID is required", nil)
+	}
+	if s.codexSwitches == nil {
+		return domain.CodexAccountSwitch{}, apierr.Unavailable("CODEX_ACCOUNT_MANAGEMENT_UNAVAILABLE", "Codex account switching is unavailable")
+	}
+	sw, ok, err := s.codexSwitches.GetCodexAccountSwitch(ctx, id)
+	if err != nil {
+		return domain.CodexAccountSwitch{}, err
+	}
+	if !ok {
+		return domain.CodexAccountSwitch{}, apierr.NotFound("CODEX_ACCOUNT_SWITCH_NOT_FOUND", "Codex account switch not found")
+	}
+	return sw, nil
 }
 
 // ReconcileCodexAccountSwitches starts best-effort local settlement for any

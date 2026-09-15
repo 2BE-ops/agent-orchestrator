@@ -38,13 +38,16 @@ type fakeCodexAccounts struct {
 	switchConfig        ports.CodexAccountSwitchConfig
 	switchResult        domain.CodexAccountSwitch
 	switchErr           error
+	switchReadID        string
+	switchReadResult    domain.CodexAccountSwitch
+	switchReadErr       error
 }
 
 func (f *fakeCodexAccounts) CachedCodexAccounts(context.Context) (agentsvc.CodexAccounts, error) {
 	return f.result, nil
 }
-func (f *fakeCodexAccounts) EnsureCodexAccounts(_ context.Context, ids []string, includeUsage, forceAuthentication, forceReconciliation bool) (agentsvc.CodexAccounts, error) {
-	f.ensureIDs, f.includeUsage, f.forceAuthentication, f.forceReconciliation = ids, includeUsage, forceAuthentication, forceReconciliation
+func (f *fakeCodexAccounts) EnsureCodexAccounts(_ context.Context, ids []string, options agentsvc.CodexAccountEnsureOptions) (agentsvc.CodexAccounts, error) {
+	f.ensureIDs, f.includeUsage, f.forceAuthentication, f.forceReconciliation = ids, options.IncludeUsage, options.ForceAuthentication, options.ForceDeviceReconciliation
 	return f.result, nil
 }
 func (f *fakeCodexAccounts) ConsumeCodexAccountResetCredit(_ context.Context, accountID, idempotencyKey string) (agentsvc.CodexAccounts, error) {
@@ -85,6 +88,10 @@ func (f *fakeCodexAccounts) CancelCodexAccountLogin(_ context.Context, id string
 func (f *fakeCodexAccounts) StartCodexAccountSwitch(_ context.Context, cfg ports.CodexAccountSwitchConfig) (domain.CodexAccountSwitch, error) {
 	f.switchConfig = cfg
 	return f.switchResult, f.switchErr
+}
+func (f *fakeCodexAccounts) GetCodexAccountSwitch(_ context.Context, id string) (domain.CodexAccountSwitch, error) {
+	f.switchReadID = id
+	return f.switchReadResult, f.switchReadErr
 }
 func codexAccountsFixture() agentsvc.CodexAccounts {
 	supported := domain.CodexCapabilityObservation{State: domain.CodexCapabilitySupported, ReasonCode: "supported", Reason: "available"}
@@ -339,7 +346,7 @@ func TestCodexAccountResetCreditRouteRequiresIdempotencyAndReturnsRefreshedAccou
 func TestCodexAccountSwitchRequiresIdempotencyAndRedactsPrivateIdentity(t *testing.T) {
 	fake := &fakeCodexAccounts{result: codexAccountsFixture(), switchResult: domain.CodexAccountSwitch{
 		ID: "switch-1", SourceAccountID: "source", TargetAccountID: "target", Phase: domain.CodexAccountSwitchRequested,
-		IdempotencyKey: "private-key", RequestFingerprint: "private-fingerprint",
+		IdempotencyKey: "private-key",
 	}}
 	srv := newCodexAccountServer(t, fake)
 	defer srv.Close()
@@ -352,29 +359,39 @@ func TestCodexAccountSwitchRequiresIdempotencyAndRedactsPrivateIdentity(t *testi
 	if status != http.StatusAccepted || fake.switchConfig.IdempotencyKey != "request-key" || strings.Contains(text, `"sessions"`) {
 		t.Fatalf("switch status=%d config=%#v body=%s", status, fake.switchConfig, body)
 	}
-	for _, forbidden := range []string{"private-key", "private-fingerprint"} {
+	for _, forbidden := range []string{"private-key"} {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("switch leaked %q: %s", forbidden, body)
 		}
 	}
 }
 
-func TestCodexAccountSwitchReadAndCancelRoutesAreNotRegistered(t *testing.T) {
+func TestCodexAccountSwitchReadReturnsDurableStateAndRedactsPrivateIdentity(t *testing.T) {
+	fake := &fakeCodexAccounts{result: codexAccountsFixture(), switchReadResult: domain.CodexAccountSwitch{
+		ID: "switch-1", SourceAccountID: "source", TargetAccountID: "target", Phase: domain.CodexAccountSwitchCompleted,
+		IdempotencyKey: "private-key",
+	}}
+	srv := newCodexAccountServer(t, fake)
+	defer srv.Close()
+	body, status, _ := doRequest(t, srv, http.MethodGet, "/api/v1/agents/codex/account-switches/switch-1", "")
+	text := string(body)
+	if status != http.StatusOK || fake.switchReadID != "switch-1" || !strings.Contains(text, `"phase":"completed"`) {
+		t.Fatalf("switch read status=%d id=%q body=%s", status, fake.switchReadID, body)
+	}
+	for _, forbidden := range []string{"private-key"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("switch read leaked %q: %s", forbidden, body)
+		}
+	}
+}
+
+func TestCodexAccountSwitchCancelRouteIsNotRegistered(t *testing.T) {
 	fake := &fakeCodexAccounts{result: codexAccountsFixture()}
 	srv := newCodexAccountServer(t, fake)
 	defer srv.Close()
-
-	for _, request := range []struct {
-		method string
-		path   string
-	}{
-		{method: http.MethodGet, path: "/api/v1/agents/codex/account-switches/switch-1"},
-		{method: http.MethodPost, path: "/api/v1/agents/codex/account-switches/switch-1/cancel"},
-	} {
-		_, status, _ := doRequest(t, srv, request.method, request.path, "")
-		if status != http.StatusNotFound {
-			t.Errorf("%s %s status = %d, want %d", request.method, request.path, status, http.StatusNotFound)
-		}
+	_, status, _ := doRequest(t, srv, http.MethodPost, "/api/v1/agents/codex/account-switches/switch-1/cancel", "")
+	if status != http.StatusNotFound {
+		t.Errorf("cancel status = %d, want %d", status, http.StatusNotFound)
 	}
 }
 

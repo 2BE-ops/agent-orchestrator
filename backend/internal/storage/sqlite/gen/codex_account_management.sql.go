@@ -13,7 +13,7 @@ import (
 
 const getActiveCodexAccountSwitch = `-- name: GetActiveCodexAccountSwitch :one
 SELECT id, source_account_id, target_account_id, idempotency_key,
-	   request_fingerprint, phase, failure_code,
+	   phase, failure_code,
 	   credentials_committed_at, created_at, updated_at, completed_at, source_kind
 FROM codex_account_switches
 WHERE phase NOT IN ('completed', 'failed')
@@ -28,7 +28,6 @@ func (q *Queries) GetActiveCodexAccountSwitch(ctx context.Context) (CodexAccount
 		&i.SourceAccountID,
 		&i.TargetAccountID,
 		&i.IdempotencyKey,
-		&i.RequestFingerprint,
 		&i.Phase,
 		&i.FailureCode,
 		&i.CredentialsCommittedAt,
@@ -42,7 +41,7 @@ func (q *Queries) GetActiveCodexAccountSwitch(ctx context.Context) (CodexAccount
 
 const getCodexAccountSwitch = `-- name: GetCodexAccountSwitch :one
 SELECT id, source_account_id, target_account_id, idempotency_key,
-	   request_fingerprint, phase, failure_code,
+	   phase, failure_code,
 	   credentials_committed_at, created_at, updated_at, completed_at, source_kind
 FROM codex_account_switches WHERE id = ?
 `
@@ -55,7 +54,6 @@ func (q *Queries) GetCodexAccountSwitch(ctx context.Context, id string) (CodexAc
 		&i.SourceAccountID,
 		&i.TargetAccountID,
 		&i.IdempotencyKey,
-		&i.RequestFingerprint,
 		&i.Phase,
 		&i.FailureCode,
 		&i.CredentialsCommittedAt,
@@ -69,7 +67,7 @@ func (q *Queries) GetCodexAccountSwitch(ctx context.Context, id string) (CodexAc
 
 const getCodexAccountSwitchByIdempotency = `-- name: GetCodexAccountSwitchByIdempotency :one
 SELECT id, source_account_id, target_account_id, idempotency_key,
-	   request_fingerprint, phase, failure_code,
+	   phase, failure_code,
 	   credentials_committed_at, created_at, updated_at, completed_at, source_kind
 FROM codex_account_switches WHERE idempotency_key = ?
 `
@@ -82,7 +80,6 @@ func (q *Queries) GetCodexAccountSwitchByIdempotency(ctx context.Context, idempo
 		&i.SourceAccountID,
 		&i.TargetAccountID,
 		&i.IdempotencyKey,
-		&i.RequestFingerprint,
 		&i.Phase,
 		&i.FailureCode,
 		&i.CredentialsCommittedAt,
@@ -97,22 +94,21 @@ func (q *Queries) GetCodexAccountSwitchByIdempotency(ctx context.Context, idempo
 const insertCodexAccountSwitch = `-- name: InsertCodexAccountSwitch :execrows
 INSERT INTO codex_account_switches (
 	 id, source_kind, source_account_id, target_account_id, idempotency_key,
-	 request_fingerprint, phase, failure_code,
+	 phase, failure_code,
 	 created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)
 ON CONFLICT DO NOTHING
 `
 
 type InsertCodexAccountSwitchParams struct {
-	ID                 string
-	SourceKind         string
-	SourceAccountID    string
-	TargetAccountID    string
-	IdempotencyKey     string
-	RequestFingerprint string
-	Phase              string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	ID              string
+	SourceKind      string
+	SourceAccountID string
+	TargetAccountID string
+	IdempotencyKey  string
+	Phase           string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 func (q *Queries) InsertCodexAccountSwitch(ctx context.Context, arg InsertCodexAccountSwitchParams) (int64, error) {
@@ -122,7 +118,6 @@ func (q *Queries) InsertCodexAccountSwitch(ctx context.Context, arg InsertCodexA
 		arg.SourceAccountID,
 		arg.TargetAccountID,
 		arg.IdempotencyKey,
-		arg.RequestFingerprint,
 		arg.Phase,
 		arg.CreatedAt,
 		arg.UpdatedAt,

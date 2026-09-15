@@ -19,12 +19,18 @@ export async function fetchCodexAccounts(): Promise<CodexAccountsResponse> {
 	return data as CodexAccountsResponse;
 }
 
-export async function ensureCodexAccounts(accountIds: string[] = [], includeUsage = false, forceAuthentication = false, forceDeviceReconciliation = false): Promise<CodexAccountsResponse> {
+export type EnsureCodexAccountsOptions = {
+	includeUsage?: boolean;
+	forceAuthentication?: boolean;
+	forceDeviceReconciliation?: boolean;
+};
+
+export async function ensureCodexAccounts(accountIds: string[] = [], options: EnsureCodexAccountsOptions = {}): Promise<CodexAccountsResponse> {
 	const body = {
 		accountIds,
-		includeUsage,
-		...(forceAuthentication ? { forceAuthentication } : {}),
-		...(forceDeviceReconciliation ? { forceDeviceReconciliation } : {}),
+		includeUsage: options.includeUsage ?? false,
+		...(options.forceAuthentication ? { forceAuthentication: true } : {}),
+		...(options.forceDeviceReconciliation ? { forceDeviceReconciliation: true } : {}),
 	};
 	const { data, error } = await apiClient.POST("/api/v1/agents/codex/accounts/ensure", { body });
 	if (error) throw new Error(apiErrorMessage(error));
@@ -88,6 +94,14 @@ export async function startCodexAccountSwitch(targetAccountId: string, idempoten
 	return data as CodexAccountSwitch;
 }
 
+export async function fetchCodexAccountSwitch(switchId: string): Promise<CodexAccountSwitch> {
+	const { data, error } = await apiClient.GET("/api/v1/agents/codex/account-switches/{switchId}", {
+		params: { path: { switchId } },
+	});
+	if (error) throw new Error(apiErrorMessage(error));
+	return data as CodexAccountSwitch;
+}
+
 export const codexAccountsQueryOptions = {
 	queryKey: codexAccountsQueryKey,
 	queryFn: async ({ client }: { client: QueryClient }) => {
@@ -99,20 +113,18 @@ export const codexAccountsQueryOptions = {
 };
 export function useCodexAccountsQuery(enabled = true) { return useQuery({ ...codexAccountsQueryOptions, enabled }); }
 
-export function useEnsureCodexAccounts(enabled = true, ensureOnMount = true): void {
+export function useEnsureCodexAccounts(): void {
 	const queryClient = useQueryClient();
 	useEffect(() => {
-		if (!enabled) return;
 		let active = true;
 		const ensure = () => {
 			const cached = queryClient.getQueryData(codexAccountsQueryKey);
 			const ready = cached ? Promise.resolve() : queryClient.fetchQuery(codexAccountsQueryOptions).then(() => undefined).catch(() => undefined);
 			void ready.then(() => ensureCodexAccounts()).then((next) => { if (active) writeCodexAccounts(queryClient, next, "replace"); }).catch(() => undefined);
 		};
-		if (ensureOnMount) ensure();
 		const onFocus = () => ensure();
 		const onVisibility = () => { if (document.visibilityState === "visible") ensure(); };
 		window.addEventListener("focus", onFocus); document.addEventListener("visibilitychange", onVisibility);
 		return () => { active = false; window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVisibility); };
-	}, [enabled, ensureOnMount, queryClient]);
+	}, [queryClient]);
 }

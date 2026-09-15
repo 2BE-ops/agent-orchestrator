@@ -116,16 +116,6 @@ func (s *coordinatorSwitchStoreFake) UpdateCodexAccountSwitch(_ context.Context,
 	return true, nil
 }
 
-func TestCodexAccountSwitchFingerprintIsVersionedAndStable(t *testing.T) {
-	first := codexAccountSwitchFingerprint("account-b")
-	if !strings.HasPrefix(first, "v4:") || len(first) != len("v4:")+64 {
-		t.Fatalf("fingerprint = %q", first)
-	}
-	if first != codexAccountSwitchFingerprint("account-b") || first == codexAccountSwitchFingerprint("account-c") {
-		t.Fatal("fingerprint is not stable and target-specific")
-	}
-}
-
 func TestCodexAccountSwitchCoordinatorCompletesLocalCredentialSwitch(t *testing.T) {
 	credentials := &coordinatorCredentialFake{source: domain.CodexAccountSwitchSource{Kind: domain.CodexAccountSwitchSourceManaged, AccountID: "source"}}
 	store := &coordinatorSwitchStoreFake{}

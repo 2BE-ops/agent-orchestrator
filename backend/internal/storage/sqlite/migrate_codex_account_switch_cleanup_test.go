@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func TestMigration0142RemovesRetiredCodexAccountSwitchState(t *testing.T) {
+func TestMigration0141SimplifiesCodexAccountManagement(t *testing.T) {
 	rows := []struct {
 		id, phase, failureCode, wantPhase, wantCode string
 		terminal                                    bool
@@ -17,32 +17,30 @@ func TestMigration0142RemovesRetiredCodexAccountSwitchState(t *testing.T) {
 		{id: "stop-unconfirmed", phase: "recovery_required", failureCode: "stop_unconfirmed", wantPhase: "failed", wantCode: "legacy_session_switch_retired", terminal: true},
 	}
 
-	// Building a database through the full migration history is deliberately
-	// expensive under the race detector. Build that history once, then give each
-	// legacy state an isolated copy so the one-active-switch invariant is kept.
 	for _, row := range rows {
 		t.Run(row.id, func(t *testing.T) {
-			db := openMigratedDatabaseCopy(t, 141)
+			db := openMigratedDatabaseCopy(t, 140)
 			now := time.Now().UTC().Truncate(time.Second)
+			if _, err := db.Exec(`INSERT INTO codex_active_account
+				(singleton_id, account_id, revision, activated_at, updated_at)
+				VALUES (1, 'account-a', 7, ?, ?)`, now, now); err != nil {
+				t.Fatal(err)
+			}
 			if _, err := db.Exec(`INSERT INTO codex_account_switches (
 			id, source_account_id, target_account_id, idempotency_key,
 			request_fingerprint, expected_account_revision, phase, failure_code,
-			created_at, updated_at, source_kind
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				row.id, "source", "target", row.id+"-request", "v1:"+row.id,
-				1, row.phase, row.failureCode, now, now, "managed"); err != nil {
+				1, row.phase, row.failureCode, now, now); err != nil {
 				t.Fatalf("seed %s: %v", row.id, err)
 			}
 
-			upTo(t, db, 142)
+			upTo(t, db, 141)
 
-			for _, name := range []string{"codex_account_switch_sessions", "restart_running_sessions"} {
+			for _, name := range []string{"codex_active_account", "codex_account_switch_sessions"} {
 				var count int
-				query := `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`
-				if name == "restart_running_sessions" {
-					query = `SELECT COUNT(*) FROM pragma_table_info('codex_account_switches') WHERE name = ?`
-				}
-				if err := db.QueryRow(query, name).Scan(&count); err != nil {
+				if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, name).Scan(&count); err != nil {
 					t.Fatal(err)
 				}
 				if count != 0 {
@@ -50,54 +48,25 @@ func TestMigration0142RemovesRetiredCodexAccountSwitchState(t *testing.T) {
 				}
 			}
 
-			var phase, code string
+			for _, column := range []string{"request_fingerprint", "expected_account_revision"} {
+				var count int
+				if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('codex_account_switches') WHERE name = ?`, column).Scan(&count); err != nil {
+					t.Fatal(err)
+				}
+				if count != 0 {
+					t.Fatalf("retired column %s still exists", column)
+				}
+			}
+
+			var phase, code, sourceKind string
 			var completedAt any
-			if err := db.QueryRow(`SELECT phase, failure_code, completed_at FROM codex_account_switches WHERE id = ?`, row.id).
-				Scan(&phase, &code, &completedAt); err != nil {
+			if err := db.QueryRow(`SELECT phase, failure_code, completed_at, source_kind FROM codex_account_switches WHERE id = ?`, row.id).
+				Scan(&phase, &code, &completedAt, &sourceKind); err != nil {
 				t.Fatal(err)
 			}
-			if phase != row.wantPhase || code != row.wantCode || (completedAt != nil) != row.terminal {
+			if phase != row.wantPhase || code != row.wantCode || (completedAt != nil) != row.terminal || sourceKind != "managed" {
 				t.Fatalf("switch %s = (%s,%s,%v), want (%s,%s,%v)", row.id, phase, code, completedAt != nil, row.wantPhase, row.wantCode, row.terminal)
 			}
 		})
-	}
-}
-
-func TestMigration0143RemovesActivePointerAndSwitchRevision(t *testing.T) {
-	db := openMigratedDatabaseCopy(t, 142)
-	now := time.Now().UTC().Truncate(time.Second)
-	if _, err := db.Exec(`INSERT INTO codex_active_account
-		(singleton_id, account_id, revision, activated_at, updated_at)
-		VALUES (1, 'account-a', 7, ?, ?)`, now, now); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`INSERT INTO codex_account_switches (
-		id, source_account_id, target_account_id, idempotency_key,
-		request_fingerprint, expected_account_revision, phase, failure_code,
-		created_at, updated_at, source_kind
-	) VALUES ('switch-a', 'account-a', 'account-b', 'request-a',
-		'v4:target', 7, 'completed', '', ?, ?, 'managed')`, now, now); err != nil {
-		t.Fatal(err)
-	}
-
-	upTo(t, db, 143)
-
-	var activeTable, revisionColumn int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'codex_active_account'`).Scan(&activeTable); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('codex_account_switches') WHERE name = 'expected_account_revision'`).Scan(&revisionColumn); err != nil {
-		t.Fatal(err)
-	}
-	if activeTable != 0 || revisionColumn != 0 {
-		t.Fatalf("retired state remains: active table=%d revision column=%d", activeTable, revisionColumn)
-	}
-
-	var source, target, phase string
-	if err := db.QueryRow(`SELECT source_account_id, target_account_id, phase FROM codex_account_switches WHERE id = 'switch-a'`).Scan(&source, &target, &phase); err != nil {
-		t.Fatal(err)
-	}
-	if source != "account-a" || target != "account-b" || phase != "completed" {
-		t.Fatalf("preserved switch = (%q,%q,%q)", source, target, phase)
 	}
 }

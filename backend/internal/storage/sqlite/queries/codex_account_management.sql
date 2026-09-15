@@ -1,26 +1,26 @@
 -- name: InsertCodexAccountSwitch :execrows
 INSERT INTO codex_account_switches (
 	 id, source_kind, source_account_id, target_account_id, idempotency_key,
-	 request_fingerprint, phase, failure_code,
+	 phase, failure_code,
 	 created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)
 ON CONFLICT DO NOTHING;
 
 -- name: GetCodexAccountSwitch :one
 SELECT id, source_account_id, target_account_id, idempotency_key,
-	   request_fingerprint, phase, failure_code,
+	   phase, failure_code,
 	   credentials_committed_at, created_at, updated_at, completed_at, source_kind
 FROM codex_account_switches WHERE id = ?;
 
 -- name: GetCodexAccountSwitchByIdempotency :one
 SELECT id, source_account_id, target_account_id, idempotency_key,
-	   request_fingerprint, phase, failure_code,
+	   phase, failure_code,
 	   credentials_committed_at, created_at, updated_at, completed_at, source_kind
 FROM codex_account_switches WHERE idempotency_key = ?;
 
 -- name: GetActiveCodexAccountSwitch :one
 SELECT id, source_account_id, target_account_id, idempotency_key,
-	   request_fingerprint, phase, failure_code,
+	   phase, failure_code,
 	   credentials_committed_at, created_at, updated_at, completed_at, source_kind
 FROM codex_account_switches
 WHERE phase NOT IN ('completed', 'failed')

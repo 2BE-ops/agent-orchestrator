@@ -140,9 +140,12 @@ func (m *codexAccountManager) activeAccountID() string {
 	return m.deviceAccountID
 }
 
-func (m *codexAccountManager) activateFromCredentialLocked(accountID, sourceCredential string, expectedGlobal []byte) error {
+func (m *codexAccountManager) activateFromCredentialLocked(ctx context.Context, accountID, sourceCredential string, expectedGlobal []byte) error {
 	notCommitted := func(err error) error {
 		return errors.Join(ports.ErrCodexAccountSwitchNotCommitted, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return notCommitted(err)
 	}
 	record, ok := m.catalog.record(accountID)
 	if !ok || record.Snapshot.Status != domain.CodexAccountStatusValid {
@@ -155,6 +158,9 @@ func (m *codexAccountManager) activateFromCredentialLocked(accountID, sourceCred
 	if !localCredentialIdentifiesRecord(record, targetCredential) {
 		return notCommitted(apierr.Conflict("CODEX_ACCOUNT_IDENTITY_CHANGED", "The selected Codex credential does not match this account", nil))
 	}
+	if err := ctx.Err(); err != nil {
+		return notCommitted(err)
+	}
 	globalPath := m.globalCredentialPath()
 	previousCredential, previousErr := readOpaqueCredential(globalPath)
 	if previousErr != nil && !errors.Is(previousErr, os.ErrNotExist) {
@@ -165,6 +171,9 @@ func (m *codexAccountManager) activateFromCredentialLocked(accountID, sourceCred
 		if (expectsMissing && !errors.Is(previousErr, os.ErrNotExist)) || (!expectsMissing && (previousErr != nil || !bytes.Equal(previousCredential, expectedGlobal))) {
 			return notCommitted(ports.ErrCodexGlobalAccountChanged)
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return notCommitted(err)
 	}
 	if err := writeGlobalCredentialSettled(globalPath, targetCredential); err != nil {
 		return err

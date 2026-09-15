@@ -64,6 +64,11 @@ type CodexAccountLoginIDParam struct {
 	OperationID string `path:"operationId" description:"In-memory Codex account login operation identifier."`
 }
 
+// CodexAccountSwitchIDParam documents a durable Codex account switch identifier.
+type CodexAccountSwitchIDParam struct {
+	SwitchID string `path:"switchId" description:"Durable Codex account switch identifier."`
+}
+
 // ListProjectsResponse is the body of GET /api/v1/projects.
 type ListProjectsResponse struct {
 	Projects []projectsvc.Summary `json:"projects"`

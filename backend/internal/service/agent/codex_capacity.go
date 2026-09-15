@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 )
@@ -86,31 +88,15 @@ func (c *codexCapacityCoordinator) ensureStateLocked(accountID string) *accountC
 }
 
 func (c *codexCapacityCoordinator) ensure(ctx context.Context, records []codexAccountRecord, capabilities domain.CodexAccountCapabilities, bypassBackoff bool) error {
-	var wg sync.WaitGroup
-	errCh := make(chan error, len(records))
+	group, groupCtx := errgroup.WithContext(ctx)
 	for _, record := range records {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if _, err := c.ensureOne(ctx, record, capabilities, bypassBackoff); err != nil {
-				errCh <- err
-			}
-		}()
-	}
-	done := make(chan struct{})
-	go func() { wg.Wait(); close(done) }()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-done:
-	}
-	close(errCh)
-	for err := range errCh {
-		if err != nil {
+		record := record
+		group.Go(func() error {
+			_, err := c.ensureOne(groupCtx, record, capabilities, bypassBackoff)
 			return err
-		}
+		})
 	}
-	return nil
+	return group.Wait()
 }
 
 func (c *codexCapacityCoordinator) ensureOne(ctx context.Context, record codexAccountRecord, capabilities domain.CodexAccountCapabilities, bypassBackoff bool) (domain.CodexCapacitySnapshot, error) {

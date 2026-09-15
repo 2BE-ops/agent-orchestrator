@@ -159,7 +159,6 @@ it("maps every account reason to complete native locale copy with a safe unknown
 		"settings.codexAccounts.authenticationRetryFailed",
 		"settings.codexAccounts.retryingAuthentication",
 		"settings.codexAccounts.tryAgain",
-		"settings.codexAccounts.noActiveAccount",
 		"settings.codexAccounts.deviceRefreshFailed",
 		"settings.codexAccounts.switch.unchanged",
 	];

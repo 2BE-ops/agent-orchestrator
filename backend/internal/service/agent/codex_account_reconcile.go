@@ -33,7 +33,7 @@ func (m *codexAccountManager) waitAccountStore(ctx context.Context) error {
 	call := m.accountStoreCall
 	if call == nil {
 		if m.accountStoreErr != nil {
-			var failure *codexAccountStoreFailure
+			var failure *codexAccountLocalFailure
 			if !errors.As(m.accountStoreErr, &failure) || !failure.retryable || m.now().Before(m.accountStoreNextRetry) {
 				err := m.accountStoreErr
 				m.mu.Unlock()
@@ -68,7 +68,7 @@ func (m *codexAccountManager) runAccountStoreInitialization(call *accountReconci
 		// temporarily unavailable disk or database.
 		delay := time.Second << min(m.accountStoreFailures-1, 5)
 		m.accountStoreNextRetry = m.now().Add(delay)
-		var failure *codexAccountStoreFailure
+		var failure *codexAccountLocalFailure
 		if errors.As(err, &failure) {
 			m.logger.Warn("Codex account store initialization failed", "reasonCode", failure.reason, "retryable", failure.retryable)
 		}
@@ -80,17 +80,17 @@ func (m *codexAccountManager) runAccountStoreInitialization(call *accountReconci
 	m.publish()
 }
 
-// Only allowlisted metadata crosses the API/log boundary. Provider errors can
-// contain credential bytes or paths and must never be rendered there.
-type codexAccountStoreFailure struct {
+// codexAccountLocalFailure contains only a safe category. The underlying
+// filesystem error is deliberately not retained because it can contain paths.
+type codexAccountLocalFailure struct {
 	reason    string
 	retryable bool
 }
 
-func (e *codexAccountStoreFailure) Error() string { return e.reason }
+func (e *codexAccountLocalFailure) Error() string { return e.reason }
 
 func accountStoreFailure(reason string, retryable bool) error {
-	return &codexAccountStoreFailure{reason: reason, retryable: retryable}
+	return &codexAccountLocalFailure{reason: reason, retryable: retryable}
 }
 
 func accountStoreStorageFailure(err error) error {
@@ -125,26 +125,12 @@ func (m *codexAccountManager) initializeAccountStore() error {
 	return nil
 }
 
-// codexDeviceReconciliationFailure contains only a safe category. The wrapped
-// filesystem or state error is intentionally not retained because it can
-// contain credential paths.
-type codexDeviceReconciliationFailure struct {
-	reason    string
-	retryable bool
-}
-
-func (e *codexDeviceReconciliationFailure) Error() string { return e.reason }
-
 func deviceReconciliationFailure(reason string, retryable bool) error {
-	return &codexDeviceReconciliationFailure{reason: reason, retryable: retryable}
+	return &codexAccountLocalFailure{reason: reason, retryable: retryable}
 }
 
 func deviceReconciliationStorageFailure(err error) error {
-	var localFailure *codexAccountStoreFailure
-	if errors.As(accountStoreStorageFailure(err), &localFailure) {
-		return deviceReconciliationFailure(localFailure.reason, localFailure.retryable)
-	}
-	return deviceReconciliationFailure("account_reconciliation_unavailable", true)
+	return accountStoreStorageFailure(err)
 }
 
 func (m *codexAccountManager) reconcileGlobal(ctx context.Context) error {
@@ -281,18 +267,18 @@ func (m *codexAccountManager) runGlobalReconciliation(call *accountReconcileCall
 	}
 }
 
-func classifyDeviceReconciliationFailure(err error) *codexDeviceReconciliationFailure {
-	var failure *codexDeviceReconciliationFailure
+func classifyDeviceReconciliationFailure(err error) *codexAccountLocalFailure {
+	var failure *codexAccountLocalFailure
 	if errors.As(err, &failure) {
 		return failure
 	}
 	if errors.Is(err, ports.ErrCodexGlobalAccountChanged) {
-		return &codexDeviceReconciliationFailure{reason: "global_account_changed", retryable: true}
+		return &codexAccountLocalFailure{reason: "global_account_changed", retryable: true}
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return &codexDeviceReconciliationFailure{reason: "account_reconciliation_timeout", retryable: true}
+		return &codexAccountLocalFailure{reason: "account_reconciliation_timeout", retryable: true}
 	}
-	return &codexDeviceReconciliationFailure{reason: "account_reconciliation_unavailable", retryable: true}
+	return &codexAccountLocalFailure{reason: "account_reconciliation_unavailable", retryable: true}
 }
 
 func (m *codexAccountManager) scheduleGlobalReconciliation(delay time.Duration) {
@@ -402,7 +388,7 @@ func (m *codexAccountManager) reconcileGlobalInner(ctx context.Context) error {
 		discardImport()
 		return deviceReconciliationStorageFailure(err)
 	}
-	if err := m.catalog.updateCredentialIdentity(record.Snapshot.ID, globalCredential); err != nil {
+	if err := m.catalog.updateCredentialIdentity(ctx, record.Snapshot.ID, globalCredential); err != nil {
 		discardImport()
 		return deviceReconciliationStorageFailure(err)
 	}
