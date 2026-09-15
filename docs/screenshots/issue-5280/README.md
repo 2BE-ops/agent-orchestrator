@@ -1,23 +1,25 @@
-# Composer model search review evidence
+# Desktop model search review evidence
 
-Captured from the actual `ChatComposer` and `TurnSettingsBar` components in an isolated Chromium renderer fixture with a deterministic 100-model catalog. The surrounding title and catalog note belong to the fixture. No live provider or daemon data was used.
+Captured directly from the running Electron desktop app in an isolated checkout, with its native preload bridge and local daemon connected. The empty standalone chat uses OpenCode's actual 72-model catalog. No task prompt was sent.
 
-The before capture uses `109c11ada`; the after captures use `2b668e832`. The viewport is 1100 by 720 pixels. A temporary Playwright capture test asserted filtering, selection, and query preservation while recording.
+The app runs from `/tmp/ao-5280-desktop` with scratch state under `~/.ao/dev/issue-5280`. The renderer uses `http://localhost:5173` and the daemon uses `http://127.0.0.1:55302`. These captures include the real sidebar, chat tab, and composer.
+
+For the before image, only `TurnSettingsBar.tsx` was temporarily restored to its pre-change source at `109c11ada` in the isolated desktop checkout. The after images and recording use the reviewed implementation at `2b668e832`. The final source was restored after the comparison.
 
 ## Recording
 
-[Watch or download the MP4](model-search-walkthrough.mp4).
+[Watch or download the desktop recording](desktop-search.mp4).
 
-![Recorded walkthrough of model search and keyboard navigation](model-search-walkthrough.gif)
+![Recording from the running desktop app](desktop-search.gif)
 
-The recording shows the original scroll list, searching for Model 99, returning to the query with Arrow Up and Shift+Tab, selecting the model, filtering ACP models by provider, and searching the standalone ACP picker.
+The recording shows search narrowing the catalog from 72 models to six results, Arrow Up and Shift+Tab returning to the same query, query refinement, and the empty-results state. The capture script asserted the result counts and both focus transitions.
+
+Screenshots and recording frames come from Electron's `WebContents.capturePage()` API. The recording uses 85 native frames with their original capture timing, approximately 15 seconds. Typing and keyboard navigation use Electron's native input APIs. The MP4 keeps the original resolution; the GIF is scaled for inline review.
 
 ## Screenshots
 
-- [Before: native model list without search](before-native.png)
-- [After: full native catalog with search and the type-to-narrow hint](after-native-catalog.png)
-- [After: native search narrowed to Model 99](after-native-search.png)
-- [After: ACP catalog filtered by provider](after-acp-provider.png)
-- [After: fuzzy search in the standalone ACP picker](after-acp-standalone.png)
+- [Before: desktop model list without search](desktop-before.png)
+- [After: real catalog with search and the type-to-narrow hint](desktop-catalog.png)
+- [After: desktop search narrowed to six models](desktop-filtered.png)
 
-The capture test passed. Composition handling is covered by the committed component regression tests; the recording does not simulate an operating-system input method.
+Composition handling is covered by the committed component regression tests. The native recording does not exercise an operating-system input method.
