@@ -352,7 +352,9 @@ export type BrowserViewHost = {
 	// Whether browser-owned UI was the most recently used application surface.
 	isLastUsedBrowser: () => boolean;
 	// Refresh the live page after raising the transparent shell for an overlay.
-	// Its visibility reset completes synchronously so no hidden frame is presented.
+	// Hide immediately, then restore visibility with the bounds nudge on the next
+	// tick — a same-turn hide/show can coalesce into a no-op on macOS and leave
+	// the page blank for the whole overlay lifetime.
 	refreshLastFocusedPanelSurface: () => void;
 };
 
@@ -2475,23 +2477,25 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 		isLastUsedBrowser: () => lastUsedViewId !== null && entries.has(lastUsedViewId),
 		// Reordering the transparent shell above a live page can leave either
 		// WebContentsView showing a stale compositor surface on macOS. A one-pixel
-		// bounds nudge alone is insufficient: Electron also needs a visibility reset.
-		// Complete that reset synchronously so the compositor never presents a
-		// hidden frame; only the bounds restoration waits until the next tick.
+		// bounds nudge alone is insufficient: Electron also needs a visibility
+		// reset. Hide immediately, then restore visibility together with the
+		// bounds on the next tick. A same-turn setVisible(false)+setVisible(true)
+		// can coalesce into a no-op (symptom: page stays blank until the overlay
+		// closes), which is why the restore must not run synchronously.
 		refreshLastFocusedPanelSurface: () => {
-			if (lastFocusedViewId === null) return;
-			const session = entries.get(lastFocusedViewId);
+			const targetViewId = lastFocusedViewId ?? lastUsedViewId;
+			if (targetViewId === null) return;
+			const session = entries.get(targetViewId);
 			if (!session || !session.visible) return;
 			const entry = activeEntry(session);
 			const bounds = session.bounds;
 			if (bounds.width <= 0 || bounds.height <= 0) return;
 			entry.view.setVisible?.(false);
 			applyBrowserViewBounds(entry.view, { ...bounds, height: Math.max(1, bounds.height - 1) });
-			entry.view.setVisible?.(true);
 			setTimeout(() => {
-				const current = lastFocusedViewId !== null ? entries.get(lastFocusedViewId) : undefined;
+				const current = entries.get(targetViewId);
 				if (!current || !current.visible) return;
-				applyBrowserViewBounds(activeEntry(current).view, current.bounds);
+				applyBrowserViewBounds(activeEntry(current).view, current.bounds, true);
 			}, 0);
 		},
 	};

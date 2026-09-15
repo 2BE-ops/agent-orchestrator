@@ -1801,11 +1801,11 @@ describe("native browser visibility", () => {
 	// toolbar dropdown over the browser blanked the live page to black.
 	// window-composition.ts documents the same class of bug for its own shell
 	// view — re-adding a view to reorder it can leave its *previous*
-	// compositor surface on screen until a real geometry change rebuilds it,
-	// refreshLastFocusedPanelSurface resets visibility synchronously after
-	// main.ts raises the shell, so Electron rebuilds the native surface without
-	// presenting a hidden frame while the bounds restore on the next tick.
-	it("resets visibility synchronously, then restores the last-focused panel bounds", async () => {
+	// compositor surface on screen until a real geometry change rebuilds it.
+	// Visibility must restore on the next tick with the bounds nudge: a
+	// same-turn hide/show can coalesce into a no-op and leave the page blank
+	// for the whole overlay lifetime.
+	it("hides immediately, then restores visibility with bounds on the next tick", async () => {
 		const { emit, host, invoke, view } = setupHost();
 		await invoke("browser:ensure", "sess-1");
 		emit("browser:setBounds", 1, {
@@ -1819,7 +1819,7 @@ describe("native browser visibility", () => {
 
 		host.refreshLastFocusedPanelSurface();
 		expect(view.setBounds).toHaveBeenLastCalledWith({ x: 10, y: 20, width: 320, height: 239 });
-		expect(view.setVisible.mock.calls).toEqual([[false], [true]]);
+		expect(view.setVisible.mock.calls).toEqual([[false]]);
 
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(view.setBounds).toHaveBeenLastCalledWith({ x: 10, y: 20, width: 320, height: 240 });
