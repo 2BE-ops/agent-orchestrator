@@ -3566,6 +3566,7 @@ html.sidebar-reordering * {
 .session-inspector__topbar > .browser-panel__topbar-host {
 	grid-column: 2;
 	width: 100%;
+	transform: translateX(clamp(12px, 3cqw, 24px));
 }
 
 .session-inspector__topbar--browser > .session-inspector-actions-spacer {
@@ -3598,6 +3599,7 @@ html.sidebar-reordering * {
 		grid-row: 2;
 		width: 180px;
 		justify-self: center;
+		transform: none;
 		transition: width var(--duration-fast) ease;
 	}
 

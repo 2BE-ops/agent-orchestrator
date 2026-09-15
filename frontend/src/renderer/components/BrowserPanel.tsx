@@ -782,6 +782,12 @@ export function BrowserPanelView({
 				urlEditing && "browser-panel__address-bar--editing",
 			)}
 			data-testid="browser-address-bar"
+			onFocusCapture={() => {
+				// When docked, this form is portaled into the inspector header and is
+				// therefore outside the browser-panel focus boundary below. Restore the
+				// browser shortcut target when its address input receives focus.
+				if (viewId) window.ao?.browser.notifyPanelUsed(viewId);
+			}}
 			onSubmit={submit}
 		>
 			<Popover
