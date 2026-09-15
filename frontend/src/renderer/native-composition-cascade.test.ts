@@ -124,10 +124,10 @@ describe("native-composition transparency cascade", () => {
 		expect(topbarRule?.body).toMatch(
 			/grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 240px\) minmax\(0, 1fr\)/,
 		);
-		const addressHostRule = rules().find(
-			(rule) => rule.selector === ".session-inspector__topbar > .browser-panel__topbar-host",
+		const addressBarRule = rules().find(
+			(rule) => rule.selector.endsWith(".browser-panel__topbar-host > .browser-panel__address-bar"),
 		);
-		expect(addressHostRule?.body).toMatch(/transform:\s*translateX\(clamp\(20px, 4cqw, 32px\)\)/);
+		expect(addressBarRule?.body).toMatch(/transform:\s*translateX\(clamp\(20px, 4cqw, 32px\)\)/);
 		expect(css).toMatch(
 			/\.session-inspector__topbar--browser:has\(\.browser-panel__address-bar--editing\)\s*{[^}]*clamp\(240px, 52cqw, 560px\)/,
 		);
@@ -138,7 +138,7 @@ describe("native-composition transparency cascade", () => {
 			/@container inspector \(max-width: 440px\)[\s\S]*?> \.browser-panel__topbar-host\s*{[\s\S]*?grid-row:\s*2;[\s\S]*?width:\s*180px/,
 		);
 		expect(css).toMatch(
-			/@container inspector \(max-width: 440px\)[\s\S]*?> \.browser-panel__topbar-host\s*{[\s\S]*?transform:\s*none/,
+			/@container inspector \(max-width: 440px\)[\s\S]*?> \.browser-panel__topbar-host[\s\S]*?> \.browser-panel__address-bar\s*{[\s\S]*?transform:\s*none/,
 		);
 	});
 });

@@ -3566,6 +3566,9 @@ html.sidebar-reordering * {
 .session-inspector__topbar > .browser-panel__topbar-host {
 	grid-column: 2;
 	width: 100%;
+}
+
+.session-inspector__topbar > .browser-panel__topbar-host > .browser-panel__address-bar {
 	transform: translateX(clamp(20px, 4cqw, 32px));
 }
 
@@ -3599,8 +3602,13 @@ html.sidebar-reordering * {
 		grid-row: 2;
 		width: 180px;
 		justify-self: center;
-		transform: none;
 		transition: width var(--duration-fast) ease;
+	}
+
+	.session-inspector__topbar--browser
+		> .browser-panel__topbar-host
+		> .browser-panel__address-bar {
+		transform: none;
 	}
 
 	.session-inspector__topbar--browser:has(.browser-panel__address-bar--editing)
