@@ -140,13 +140,13 @@ describe("plan", () => {
 });
 
 describe("provider state chrome", () => {
-	it("keeps a terminal provider failure once and access recovery beside the composer", () => {
+	it.each(["completion", "notification", "both"])("keeps the %s failure in chat without duplicating the auth banner", (source) => {
 		const reason = "Provider access denied.\n\nContact your administrator.";
 		const snapshot: ConversationSnapshot = {
 			...chatFixtureReauth,
 			account: { ...chatFixtureReauth.account, reauthReason: reason },
 			turns: chatFixtureReauth.turns.map((turn) =>
-				turn.id === "turn-2" ? { ...turn, state: "failed", errorMessage: reason } : turn,
+				turn.id === "turn-2" ? { ...turn, state: "failed", errorMessage: source === "notification" ? undefined : reason } : turn,
 			),
 			items: [
 				...chatFixtureReauth.items.filter(
@@ -161,7 +161,7 @@ describe("provider state chrome", () => {
 					activityKind: "system",
 					status: "failed",
 					summary: "Provider access denied.",
-					detail: { event: "provider.failure", text: "Contact your administrator.", superseded: true },
+					detail: { event: "provider.failure", text: "Contact your administrator." },
 					createdAt: "2026-08-03T00:00:00Z",
 				},
 				{
@@ -179,14 +179,22 @@ describe("provider state chrome", () => {
 			],
 			latestSequence: chatFixtureReauth.latestSequence + 2,
 		};
+		if (source !== "completion") {
+			snapshot.items.push({
+				kind: "activity", id: "terminal-error", turnId: "turn-2",
+				sequence: ++snapshot.latestSequence, revision: 1,
+				activityKind: "error", status: "failed", summary: reason,
+				createdAt: "2026-08-03T00:00:00Z",
+			});
+		}
 		const { rerender } = render(<ChatWorkspace snapshot={snapshot} />);
-		expect(screen.getByText("Provider access needs attention")).toBeInTheDocument();
+		expect(screen.queryByText("Sign in again to keep going")).not.toBeInTheDocument();
 		expect(screen.getAllByText(/Provider access denied/)).toHaveLength(1);
 		expect(screen.getByText(/Contact your administrator/)).toBeInTheDocument();
 		expect(screen.getByText("Earlier recovered warning")).toBeInTheDocument();
 
 		rerender(<ChatWorkspace snapshot={structuredClone(snapshot)} />);
-		expect(screen.getByText("Provider access needs attention")).toBeInTheDocument();
+		expect(screen.queryByText("Sign in again to keep going")).not.toBeInTheDocument();
 		expect(screen.getAllByText(/Provider access denied/)).toHaveLength(1);
 
 		rerender(
@@ -195,12 +203,12 @@ describe("provider state chrome", () => {
 			/>,
 		);
 		expect(screen.getAllByText(/Provider access denied/)).toHaveLength(1);
-		expect(screen.getByText("Session expired.")).toBeInTheDocument();
+		expect(screen.getByRole("alert")).toHaveTextContent("Session expired.");
 	});
 
 	it("keeps credential recovery available when the failure is not in loaded history", () => {
 		render(<ChatWorkspace snapshot={chatFixtureReauth} />);
-		expect(screen.getByRole("alert")).toHaveTextContent(/Sign in to continue/);
+		expect(screen.getByRole("alert")).toHaveTextContent(/Sign in again to keep going/);
 	});
 
 	it("reports a provider-side thread fault while the controller is healthy", () => {

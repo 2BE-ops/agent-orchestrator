@@ -37,6 +37,18 @@ func openConversation(t *testing.T) (*conversation, *scriptedServer) {
 	return conv.(*conversation), srv
 }
 
+func TestReadHistoryIgnoresEmptyCompletedTurnError(t *testing.T) {
+	conv, srv := openProviderFailureConversation(t)
+	srv.reply("thread/read", `{"thread":{"id":"thread-1","turns":[{"id":"turn-a","status":"completed","error":{}}]}}`)
+	events, err := conv.ReadHistory(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 || events[1].Kind != ports.ChatEventTurnCompleted || events[1].Err != nil || events[1].TurnState != "completed" {
+		t.Fatalf("empty error changed history: %#v", events)
+	}
+}
+
 func TestReadHistoryReconstructsNativeTurnsForTheChatTimeline(t *testing.T) {
 	conv, srv := openConversation(t)
 	srv.reply("thread/read", threadWithRenderedHistory)

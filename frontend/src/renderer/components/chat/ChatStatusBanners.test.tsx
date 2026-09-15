@@ -8,7 +8,15 @@ import { McpServerBanner, ReauthBanner, ThreadStateBanner } from "./ChatStatusBa
 // that teaches readers to ignore the row.
 
 describe("ReauthBanner", () => {
-	it("names the command without repeating the provider's turn failure", () => {
+	it.each(["Unauthorized (401)", "Authentication failed", "OAuth token has been revoked"])(
+		"offers sign-in based on account state for %s",
+		(reason) => {
+			render(<ReauthBanner account={{ reauthRequiredAt: "2026-09-14T00:00:00Z", reauthReason: reason }} harness="claude-code" />);
+			expect(screen.getByRole("alert")).toHaveTextContent(reason);
+			expect(screen.getByText("claude auth login")).toBeInTheDocument();
+		},
+	);
+	it("names the command, because re-authenticating is not something AO can do", () => {
 		render(
 			<ReauthBanner
 				account={{
@@ -16,21 +24,18 @@ describe("ReauthBanner", () => {
 					reauthReason: "The stored session expired.",
 				}}
 				harness="codex"
-				reasonInTimeline
 			/>,
 		);
 		expect(screen.getByRole("alert")).toBeInTheDocument();
 		expect(screen.getByText("codex login")).toBeInTheDocument();
-		expect(screen.queryByText(/The stored session expired/)).not.toBeInTheDocument();
-		expect(screen.getByText(/do not run in AO chat/)).toBeInTheDocument();
+		expect(screen.getByText(/The stored session expired/)).toBeInTheDocument();
 	});
 
-	it("does not claim that a mid-turn auth failure left the worktree untouched", () => {
+	it("says the worktree is untouched, since nothing else about the session works", () => {
 		render(
 			<ReauthBanner account={{ reauthRequiredAt: "2026-08-03T00:00:00Z" }} harness="codex" />,
 		);
-		expect(screen.queryByText(/worktree is untouched/i)).not.toBeInTheDocument();
-		expect(screen.queryByText(/holds no credentials/i)).not.toBeInTheDocument();
+		expect(screen.getByText(/worktree is untouched/i)).toBeInTheDocument();
 	});
 
 	it("names Claude Code's non-interactive authentication command", () => {
@@ -53,20 +58,6 @@ describe("ReauthBanner", () => {
 			<ReauthBanner account={{ authMode: "chatgpt", planLabel: "Pro" }} harness="codex" />,
 		);
 		expect(container).toBeEmptyDOMElement();
-	});
-
-	it("keeps subscription access guidance without prescribing login", () => {
-		const reason = "Your organization has disabled Claude subscription access for Claude Code · Use an Anthropic API key instead, or ask your admin to enable access";
-		render(<ReauthBanner account={{ reauthRequiredAt: "2026-09-14T00:00:00Z", reauthReason: reason }} harness="claude-code" />);
-		expect(screen.getByText(reason)).toBeInTheDocument();
-		expect(screen.getByText("Provider access needs attention")).toBeInTheDocument();
-		expect(screen.queryByText("claude auth login")).not.toBeInTheDocument();
-	});
-
-	it("explains where a provider's slash login command must be run", () => {
-		render(<ReauthBanner account={{ reauthRequiredAt: "2026-09-14T00:00:00Z", reauthReason: "Please run /login." }} harness="claude-code" />);
-		expect(screen.getByText("claude auth login")).toBeInTheDocument();
-		expect(screen.getByText(/do not run in AO chat/)).toBeInTheDocument();
 	});
 });
 

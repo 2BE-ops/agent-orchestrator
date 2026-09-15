@@ -50,6 +50,15 @@ func TestNormalizeTurnLifecycle(t *testing.T) {
 	}
 }
 
+func TestNormalizeCompletedTurnIgnoresEmptyError(t *testing.T) {
+	for _, payload := range []string{`{}`, `{"message":""}`, `{"message":" \t ","additionalDetails":"\n"}`} {
+		event := normalizeOne(t, "turn/completed", `{"threadId":"th1","turn":{"id":"tu1","status":"completed","error":`+payload+`}}`)
+		if event.TurnState != domain.TurnStateCompleted || event.Err != nil {
+			t.Fatalf("empty error %s changed completion: %#v", payload, event)
+		}
+	}
+}
+
 func TestNormalizeCodexFailuresUseSharedProviderCopy(t *testing.T) {
 	for _, tc := range []struct {
 		name, method, params string

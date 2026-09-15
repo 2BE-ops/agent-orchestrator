@@ -649,19 +649,23 @@ func normalizeNotification(n notification, now time.Time) []ports.ChatEvent {
 		var p codexproto.ErrorNotification
 		if err := json.Unmarshal(n.Params, &p); err == nil &&
 			(strings.TrimSpace(p.Error.Message) != "" || p.Error.AdditionalDetails != nil) {
+			failure := codexProviderFailure(p.Error)
+			if failure == nil {
+				return nil
+			}
 			if p.WillRetry && p.TurnID != "" {
 				return []ports.ChatEvent{{
 					Kind: ports.ChatEventActivityStarted, ProviderConversationID: p.ThreadID,
 					ProviderTurnID: p.TurnID, ProviderItemID: "codex-retry:" + p.ThreadID + ":" + p.TurnID,
 					ActivityKind: domain.ActivityKindSystem, ActivityStatus: domain.ActivityStatusRunning,
-					Summary: codexProviderFailure(p.Error).Error(), Detail: json.RawMessage(`{"event":"provider.failure"}`),
+					Summary: failure.Error(), Detail: json.RawMessage(`{"event":"provider.failure"}`),
 				}}
 			}
 			return []ports.ChatEvent{{
 				Kind:                   ports.ChatEventError,
 				ProviderTurnID:         p.TurnID,
 				ProviderConversationID: p.ThreadID,
-				Err:                    codexProviderFailure(p.Error),
+				Err:                    failure,
 			}}
 		}
 		return []ports.ChatEvent{{
@@ -700,6 +704,9 @@ func codexProviderFailure(turnErr codexproto.TurnError) error {
 	var cause error
 	if turnErr.CodexErrorInfo != nil && string(*turnErr.CodexErrorInfo) == `"unauthorized"` {
 		cause = ports.ErrChatAuthRequired
+	}
+	if strings.TrimSpace(turnErr.Message) == "" && strings.TrimSpace(detail) == "" && cause == nil {
+		return nil
 	}
 	return ports.NewChatProviderFailure(turnErr.Message, detail, cause)
 }

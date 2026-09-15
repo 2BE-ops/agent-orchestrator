@@ -604,9 +604,6 @@ func (c *conversation) finishPrompt(
 			}})
 		}
 	}
-	if turnErr != nil {
-		c.completeProviderFailure(turnID, true, c.emit)
-	}
 	if isCompaction {
 		if state == domain.TurnStateCompleted {
 			c.settleCompaction(turnID)

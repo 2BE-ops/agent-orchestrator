@@ -273,29 +273,16 @@ function useSmoothStreamingText(message: ConversationMessage): string {
 function TwoRowTimelineMarker({
 	message,
 	detail,
-	fullDetail = false,
 	tone = "text-muted-foreground/70",
 	detailTone = "text-muted-foreground/70",
 	action,
 }: {
 	message: string;
 	detail?: string;
-	fullDetail?: boolean;
 	tone?: string;
 	detailTone?: string;
 	action?: ReactNode;
 }) {
-	if (fullDetail) {
-		return (
-			<div className="flex min-w-0 flex-col gap-2 py-3">
-				<div className={cn("flex items-baseline justify-between gap-3 text-sm font-medium", tone)}>
-					<span>{message}</span>
-					{action}
-				</div>
-				{detail ? <div className="whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed text-foreground">{linkifiedProviderErrorText(detail)}</div> : null}
-			</div>
-		);
-	}
 	return (
 		<div className="flex min-w-0 flex-col gap-1 py-1">
 			<div className={cn("flex min-w-0 items-baseline gap-2 text-[11px]", tone)}>
@@ -358,37 +345,38 @@ export function TurnOutcome({
 		failed: { label: "The agent ran into a problem", tone: "text-destructive" },
 	}[state];
 
-	return (
-		<TwoRowTimelineMarker
-			message={copy.label}
-			detail={error}
-			fullDetail={state === "failed"}
-			tone={copy.tone}
-			detailTone={state === "failed" ? "text-destructive" : undefined}
-			action={
-				retry ? (
-					<>
-						{retry.error ? (
-							<span role="alert" className="max-w-[50%] text-pretty text-right text-[10px] leading-tight text-destructive">
-								{retry.error}
-							</span>
-						) : null}
-						<button
-							type="button"
-							onClick={retry.onRetry}
-							disabled={retry.pending || retry.disabled}
-							aria-label="Retry this turn"
-							title={retry.error ?? (retry.disabled ? "Wait for the current turn to finish" : "Send this prompt again as a new turn")}
-							data-testid="retry-turn"
-							className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50"
-						>
-							{retry.pending ? "Retrying…" : "Retry"}
-						</button>
-					</>
-				) : undefined
-			}
-		/>
-	);
+	const action = retry ? (
+		<>
+			{retry.error ? (
+				<span role="alert" className="max-w-[50%] text-pretty text-right text-[10px] leading-tight text-destructive">
+					{retry.error}
+				</span>
+			) : null}
+			<button
+				type="button"
+				onClick={retry.onRetry}
+				disabled={retry.pending || retry.disabled}
+				aria-label="Retry this turn"
+				title={retry.error ?? (retry.disabled ? "Wait for the current turn to finish" : "Send this prompt again as a new turn")}
+				data-testid="retry-turn"
+				className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50"
+			>
+				{retry.pending ? "Retrying…" : "Retry"}
+			</button>
+		</>
+	) : undefined;
+	if (state === "failed") {
+		return (
+			<div className="flex min-w-0 flex-col gap-2 py-3">
+				<div className="flex items-baseline justify-between gap-3 text-sm font-medium text-destructive">
+					<span>{copy.label}</span>
+					{action}
+				</div>
+				{error ? <div className="whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed text-foreground">{linkifiedProviderErrorText(error)}</div> : null}
+			</div>
+		);
+	}
+	return <TwoRowTimelineMarker message={copy.label} detail={error} tone={copy.tone} action={action} />;
 }
 
 function formatTokens(tokens: number): string {

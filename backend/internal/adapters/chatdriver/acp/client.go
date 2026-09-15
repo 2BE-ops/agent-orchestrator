@@ -569,7 +569,7 @@ func (c *conversation) SessionUpdate(_ context.Context, params acpsdk.SessionNot
 		update.ToolCall != nil ||
 		update.Plan != nil
 	if providerOutputResumed {
-		c.completeProviderFailure(turnID, false, emit)
+		c.completeProviderFailure(turnID, emit)
 	}
 	switch {
 	case update.AgentMessageChunk != nil:
@@ -1003,8 +1003,7 @@ func promptResponseFailure(meta map[string]any) error {
 }
 
 // AIR sends no recovery update, so output completes the active retry episode.
-// A terminal error additionally supersedes it, preserving earlier diagnostics.
-func (c *conversation) completeProviderFailure(turnID string, superseded bool, emit func(ports.ChatEvent)) {
+func (c *conversation) completeProviderFailure(turnID string, emit func(ports.ChatEvent)) {
 	c.mu.Lock()
 	if c.providerFailure == nil || c.providerFailure.ProviderTurnID != turnID {
 		c.mu.Unlock()
@@ -1016,12 +1015,6 @@ func (c *conversation) completeProviderFailure(turnID string, superseded bool, e
 
 	event.Kind = ports.ChatEventActivityCompleted
 	event.ActivityStatus = domain.ActivityStatusCompleted
-	if superseded {
-		var detail map[string]any
-		_ = json.Unmarshal(event.Detail, &detail)
-		detail["superseded"] = true
-		event.Detail, _ = json.Marshal(detail)
-	}
 	emit(event)
 }
 

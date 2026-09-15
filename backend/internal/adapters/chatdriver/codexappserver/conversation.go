@@ -149,9 +149,6 @@ func (c *conversation) Events() <-chan ports.ChatEvent { return c.events }
 func (c *conversation) pump() {
 	defer close(c.pumpDone)
 	defer close(c.events)
-	// Codex may report a non-retrying error just before turn/completed. Retain
-	// that explanation for the outcome instead of emitting a second error row.
-	terminalErrors := make(map[string]ports.ChatEvent)
 	retries := make(map[string]ports.ChatEvent)
 
 	for n := range c.conn.notifs() {
@@ -178,9 +175,9 @@ func (c *conversation) pump() {
 				threadID = c.threadID
 			}
 			key := threadID + ":" + ev.ProviderTurnID
-			if ev.Kind == ports.ChatEventError && ev.ProviderTurnID != "" {
-				terminalErrors[key] = ev
-				continue
+			if ev.Kind == ports.ChatEventError {
+				// Turn settlement will settle the running retry along with the failure.
+				delete(retries, key)
 			}
 			isRetry := ev.Kind == ports.ChatEventActivityStarted && strings.HasPrefix(ev.ProviderItemID, "codex-retry:")
 			if isRetry {
@@ -197,22 +194,14 @@ func (c *conversation) pump() {
 			recovered := !isRetry && (ev.Kind == ports.ChatEventMessageDelta || ev.Kind == ports.ChatEventMessageCompleted ||
 				ev.Kind == ports.ChatEventActivityStarted || ev.Kind == ports.ChatEventReasoningDelta || ev.Kind == ports.ChatEventPlanUpdated)
 			if completed || recovered {
-				pending, hasError := terminalErrors[key]
 				if retry, ok := retries[key]; ok {
 					retry.Kind = ports.ChatEventActivityCompleted
 					retry.ActivityStatus = domain.ActivityStatusCompleted
-					if completed && (hasError || ev.Err != nil) && ev.TurnState == domain.TurnStateFailed {
-						retry.Detail = json.RawMessage(`{"event":"provider.failure","superseded":true}`)
+					if !completed || (ev.TurnState != domain.TurnStateFailed && ev.Err == nil) {
+						c.emit(retry)
 					}
-					c.emit(retry)
 					delete(retries, key)
 				}
-				if completed && ev.TurnState == domain.TurnStateFailed && ev.Err == nil && hasError {
-					ev.Err = pending.Err
-				} else if recovered && hasError {
-					c.emit(pending)
-				}
-				delete(terminalErrors, key)
 			}
 			rootConversation := ev.ProviderConversationID == "" || ev.ProviderConversationID == c.threadID
 			if ev.Kind == ports.ChatEventTurnStarted && ev.ProviderTurnID != "" && rootConversation {
@@ -245,11 +234,6 @@ func (c *conversation) pump() {
 			c.emit(ev)
 		}
 	}
-	// A broken stream may omit completion; do not lose its last explanation.
-	for _, pending := range terminalErrors {
-		c.emit(pending)
-	}
-
 	// The connection ended. Say so explicitly rather than letting the stream go
 	// quiet: a silent channel close is indistinguishable from an idle agent.
 	state := ports.ChatEvent{Kind: ports.ChatEventControllerState, ControllerState: ports.ChatControllerStopped}

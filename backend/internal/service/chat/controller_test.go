@@ -2348,6 +2348,61 @@ func TestStandaloneProviderFailurePreservesOpaqueText(t *testing.T) {
 	}
 }
 
+func TestTerminalFailureSettlesOnlyActiveRetry(t *testing.T) {
+	for _, source := range []string{"completion", "notification", "both"} {
+		t.Run(source, func(t *testing.T) {
+			h := newHarness(t)
+			turn, err := h.svc.Send(context.Background(), testSession, ports.ChatUserMessage{
+				Text: "hello", ClientMessageID: "retry-failure-prompt", Origin: domain.MessageOriginHuman,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			retry := func(id string, kind ports.ChatEventKind, status domain.ActivityStatus) ports.ChatEvent {
+				return ports.ChatEvent{
+					Kind: kind, ProviderTurnID: turn.ProviderTurnID, ProviderItemID: id,
+					ActivityKind: domain.ActivityKindSystem, ActivityStatus: status,
+					Summary: "Retrying", Detail: json.RawMessage(`{"event":"provider.failure"}`),
+				}
+			}
+			failure := ports.NewChatProviderFailure("Request failed", "Try later", nil)
+			var completionError error
+			if source != "notification" {
+				completionError = failure
+			}
+			h.conv.emit(
+				ports.ChatEvent{Kind: ports.ChatEventTurnStarted, ProviderTurnID: turn.ProviderTurnID},
+				retry("recovered-retry", ports.ChatEventActivityStarted, domain.ActivityStatusRunning),
+				retry("recovered-retry", ports.ChatEventActivityCompleted, domain.ActivityStatusCompleted),
+				retry("active-retry", ports.ChatEventActivityStarted, domain.ActivityStatusRunning),
+			)
+			if source != "completion" {
+				h.conv.emit(ports.ChatEvent{Kind: ports.ChatEventError, ProviderTurnID: turn.ProviderTurnID, Err: failure})
+			}
+			h.conv.emit(
+				ports.ChatEvent{Kind: ports.ChatEventTurnCompleted, ProviderTurnID: turn.ProviderTurnID,
+					TurnState: domain.TurnStateFailed, Err: completionError},
+			)
+			snapshot := h.awaitSnapshot(t, func(s store.ConversationSnapshot) bool {
+				return len(s.Turns) == 1 && s.Turns[0].State == domain.TurnStateFailed
+			})
+			if got := findActivity(t, snapshot, "recovered-retry").Status; got != domain.ActivityStatusCompleted {
+				t.Fatalf("recovered retry = %s", got)
+			}
+			if got := findActivity(t, snapshot, "active-retry").Status; got != domain.ActivityStatusFailed {
+				t.Fatalf("active retry = %s", got)
+			}
+			wantError := "Request failed\n\nTry later"
+			if source == "notification" {
+				wantError = ""
+			}
+			if snapshot.Turns[0].ErrorMessage != wantError {
+				t.Fatalf("failure = %q", snapshot.Turns[0].ErrorMessage)
+			}
+		})
+	}
+}
+
 // The whole point: a message goes out, provider events come back, and the durable
 // timeline reflects them in sequence order.
 func TestProjectsAFullTurnIntoDurableRows(t *testing.T) {

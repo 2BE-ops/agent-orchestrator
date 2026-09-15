@@ -125,18 +125,17 @@ func testPromptFailureMeta(failure map[string]any) map[string]any {
 	}}}
 }
 
-func TestPromptFailureSupersedesOnlyItsActiveIncident(t *testing.T) {
+func TestPromptFailureLetsTurnSettlementCloseActiveRetry(t *testing.T) {
 	for _, tc := range []struct {
 		name, incident string
 		recovered      bool
 		promptErr      error
-		wantSuperseded bool
 	}{
-		{"same incident", "failure-1", false, nil, true},
-		{"provider advances incident ID", "earlier-warning", false, nil, true},
-		{"already recovered", "failure-1", true, nil, false},
-		{"RPC failure", "failure-1", false, errors.New("connection closed"), true},
-		{"cancelled RPC", "failure-1", false, context.Canceled, false},
+		{"same incident", "failure-1", false, nil},
+		{"provider advances incident ID", "earlier-warning", false, nil},
+		{"already recovered", "failure-1", true, nil},
+		{"RPC failure", "failure-1", false, errors.New("connection closed")},
+		{"cancelled RPC", "failure-1", false, context.Canceled},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			conv := &conversation{activeTurn: "turn-1", events: make(chan ports.ChatEvent, 16), log: slog.New(slog.DiscardHandler)}
@@ -147,25 +146,26 @@ func TestPromptFailureSupersedesOnlyItsActiveIncident(t *testing.T) {
 				t.Fatal("missing retry activity")
 			}
 			if tc.recovered {
-				conv.completeProviderFailure("turn-1", false, conv.emit)
+				conv.completeProviderFailure("turn-1", conv.emit)
 			}
 			conv.finishPrompt("turn-1", acpsdk.PromptResponse{StopReason: acpsdk.StopReasonEndTurn, Meta: testPromptFailureMeta(map[string]any{
 				"id": "failure-1", "severity": "error", "title": "Provider unavailable",
 			})}, tc.promptErr)
 			close(conv.events)
-			superseded := false
+			completions := 0
 			for event := range conv.events {
 				if event.Kind == ports.ChatEventActivityCompleted {
-					var detail struct{ Superseded bool }
-					if err := json.Unmarshal(event.Detail, &detail); err != nil {
-						t.Fatal(err)
-					}
-					superseded = detail.Superseded
+					completions++
 				}
 			}
-			if superseded != tc.wantSuperseded {
-				t.Fatalf("superseded = %v, want %v", superseded, tc.wantSuperseded)
+			want := 0
+			if tc.recovered {
+				want = 1
 			}
+			if completions != want {
+				t.Fatalf("retry completions = %d, want %d", completions, want)
+			}
+
 		})
 	}
 }
@@ -199,7 +199,7 @@ func TestRetryEpisodesKeepRecoveredDiagnosticsAndReplayIdentity(t *testing.T) {
 		meta := testPromptFailureMeta(map[string]any{"id": "reused-incident", "severity": "warning", "title": "Retrying"})
 		first, _ := conv.sessionFailureEvent("turn-1", "host:1", meta)
 		attempt, _ := conv.sessionFailureEvent("turn-1", "host:2", meta)
-		conv.completeProviderFailure("turn-1", false, conv.emit)
+		conv.completeProviderFailure("turn-1", conv.emit)
 		second, _ := conv.sessionFailureEvent("turn-1", "host:4", meta)
 		if first.ProviderItemID != "session-failure:host:1" || attempt.ProviderItemID != first.ProviderItemID || second.ProviderItemID != "session-failure:host:4" {
 			t.Fatalf("episode identities: first=%q attempt=%q second=%q", first.ProviderItemID, attempt.ProviderItemID, second.ProviderItemID)
@@ -208,19 +208,16 @@ func TestRetryEpisodesKeepRecoveredDiagnosticsAndReplayIdentity(t *testing.T) {
 			"id": "reused-incident", "severity": "error", "title": "Failed",
 		})}, nil)
 		close(conv.events)
-		settled := make(map[string]bool)
+		var settled []string
 		for event := range conv.events {
 			if event.Kind == ports.ChatEventActivityCompleted {
-				var detail struct{ Superseded bool }
-				if err := json.Unmarshal(event.Detail, &detail); err != nil {
-					t.Fatal(err)
-				}
-				settled[event.ProviderItemID] = detail.Superseded
+				settled = append(settled, event.ProviderItemID)
 			}
 		}
-		if len(settled) != 2 || settled[first.ProviderItemID] || !settled[second.ProviderItemID] {
+		if len(settled) != 1 || settled[0] != first.ProviderItemID {
 			t.Fatalf("recovered diagnostic lost: %#v", settled)
 		}
+
 	}
 }
 

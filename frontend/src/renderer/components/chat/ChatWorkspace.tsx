@@ -1066,6 +1066,13 @@ function ChatWorkspaceContent({
 	const discarded = snapshot.turns.filter((t) => t.rolledBack).length;
 
 	const brokenServers = useMemo(() => brokenMcpServers(snapshot), [snapshot]);
+	const reauthErrorInChat = snapshot.turns.some(
+		(entry) => entry.state === "failed" && Boolean(entry.errorMessage?.trim()) &&
+			entry.errorMessage?.trim() === snapshot.account?.reauthReason?.trim(),
+	) || snapshot.items.some(
+		(item) => item.kind === "activity" && item.activityKind === "error" &&
+			Boolean(item.summary.trim()) && item.summary.trim() === snapshot.account?.reauthReason?.trim(),
+	);
 	const editHumanMessage = onEditMessage;
 	const pendingApproval = useMemo(
 		() =>
@@ -1339,8 +1346,10 @@ function ChatWorkspaceContent({
 					}
 					role="tabpanel"
 				>
-					{/* Connection and tool health stay above the timeline. Provider recovery
-					    guidance lives beside the composer, with the failure on its turn. */}
+					{/* Keep account guidance here only when the error is absent from chat. */}
+					{snapshot.account && !reauthErrorInChat ? (
+						<ReauthBanner account={snapshot.account} harness={snapshot.harness} />
+					) : null}
 					<ControllerBanner
 						controller={snapshot.controller}
 						transitioning={controllerTransitioning}
@@ -1397,16 +1406,6 @@ function ChatWorkspaceContent({
 								className="mx-auto flex w-full max-w-3xl flex-col gap-2 transition-[max-width] duration-500 ease-out data-[empty]:max-w-2xl"
 							>
 								{discarded > 0 ? <RolledBackNotice count={discarded} /> : null}
-								{snapshot.account ? (
-									<ReauthBanner
-										account={snapshot.account}
-										harness={snapshot.harness}
-										reasonInTimeline={snapshot.turns.some((entry) =>
-											entry.state === "failed" && Boolean(entry.errorMessage?.trim()) &&
-											entry.errorMessage?.trim() === snapshot.account?.reauthReason?.trim(),
-										)}
-									/>
-								) : null}
 								<ChatComposer
 									key={`${draftScopeKey}:${queueEdit ? `${queueEdit.turnId}:${queueEdit.ownerId ?? queueEdit.expectedRevision ?? "legacy"}` : "composer"}`}
 									queuedDock={composerQueuedDock}
@@ -3123,22 +3122,23 @@ const TurnGroup = memo(function TurnGroup({
 	queued: boolean;
 	newHumanMessageIds: ReadonlySet<string>;
 }) {
-	const terminalFailureSupersedesProviderStatus =
+	const hasTerminalFailure =
 		group.outcome?.state === "failed" && Boolean(group.outcome.error);
 	const runs = useMemo(
 		() =>
 			runsOf(
 				group.items.filter((item) => {
 					if (item.id === group.liveProviderFailure?.id) return false;
+					if (hasTerminalFailure && item.kind === "activity" && item.activityKind === "error" && item.summary === group.outcome?.error) return false;
 					return !(
-						terminalFailureSupersedesProviderStatus &&
+						hasTerminalFailure &&
 						item.kind === "activity" &&
 						item.detail?.event === "provider.failure" &&
-						item.detail.superseded === true
+						item.status === "failed"
 					);
 				}),
 			),
-		[group.items, group.liveProviderFailure, terminalFailureSupersedesProviderStatus],
+		[group.items, group.liveProviderFailure, group.outcome?.error, hasTerminalFailure],
 	);
 	const copyableMessageId = group.outcome
 		? [...group.items]
@@ -3725,7 +3725,11 @@ function groupByTurn(snapshot: ConversationSnapshot): TimelineGroup[] {
 				turn.completedAt && turn.startedAt
 					? new Date(turn.completedAt).getTime() - new Date(turn.startedAt).getTime()
 					: undefined,
-			error: turn.errorMessage,
+			error: turn.errorMessage || (turn.state === "failed"
+				? [...group.items].reverse().find(
+					(item): item is ConversationActivity => item.kind === "activity" && item.activityKind === "error",
+				)?.summary
+				: undefined),
 		};
 	}
 
