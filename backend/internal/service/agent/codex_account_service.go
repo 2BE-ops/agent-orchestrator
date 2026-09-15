@@ -106,6 +106,7 @@ func (s *Service) CachedCodexAccounts(ctx context.Context) (CodexAccounts, error
 	return result, nil
 }
 
+// CodexAccountEnsureOptions selects the account observations refreshed by EnsureCodexAccounts.
 type CodexAccountEnsureOptions struct {
 	IncludeUsage              bool
 	ForceAuthentication       bool

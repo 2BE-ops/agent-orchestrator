@@ -26,6 +26,7 @@ type CodexAccountSwitchSource struct {
 // device state used to settle an interrupted credential switch.
 type CodexAccountSwitchInstallationState string
 
+// Local Codex account switch installation states.
 const (
 	CodexAccountSwitchTargetInstalled    CodexAccountSwitchInstallationState = "target"
 	CodexAccountSwitchSourceInstalled    CodexAccountSwitchInstallationState = "source"

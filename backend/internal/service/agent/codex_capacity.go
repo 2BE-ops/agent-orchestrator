@@ -90,7 +90,6 @@ func (c *codexCapacityCoordinator) ensureStateLocked(accountID string) *accountC
 func (c *codexCapacityCoordinator) ensure(ctx context.Context, records []codexAccountRecord, capabilities domain.CodexAccountCapabilities, bypassBackoff bool) error {
 	group, groupCtx := errgroup.WithContext(ctx)
 	for _, record := range records {
-		record := record
 		group.Go(func() error {
 			_, err := c.ensureOne(groupCtx, record, capabilities, bypassBackoff)
 			return err

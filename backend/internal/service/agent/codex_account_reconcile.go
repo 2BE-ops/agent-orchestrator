@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -512,17 +511,6 @@ func (m *codexAccountManager) importGlobalCredential(credential []byte, identity
 func credentialMatchesRecord(record codexAccountRecord, credential []byte) bool {
 	stored, err := readOpaqueCredential(filepath.Join(record.Home, codexCredentialFilename))
 	return err == nil && bytes.Equal(stored, credential)
-}
-
-func distinguishableCodexIdentity(observation ports.CodexAccountObservation) bool {
-	return observation.Method != domain.CodexAuthMethodUnknown && observation.Email != nil && safeAccountEmail(*observation.Email)
-}
-
-func sameCodexStructuredIdentity(snapshot domain.CodexAccountSnapshot, observation ports.CodexAccountObservation) bool {
-	if snapshot.AuthMethod != observation.Method || !distinguishableCodexIdentity(observation) || snapshot.AccountEmail == nil {
-		return false
-	}
-	return strings.EqualFold(strings.TrimSpace(*snapshot.AccountEmail), strings.TrimSpace(*observation.Email))
 }
 
 func (m *codexAccountManager) setManagedGlobal(accountID string) {
