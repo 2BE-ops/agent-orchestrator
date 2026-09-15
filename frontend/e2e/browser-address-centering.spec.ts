@@ -18,7 +18,7 @@ async function expectAddressShiftedRight(page: Page) {
 			const address = await page.getByTestId("browser-address-bar").boundingBox();
 			if (!inspectorTopbar || !address) return false;
 			const offset = address.x + address.width / 2 - (inspectorTopbar.x + inspectorTopbar.width / 2);
-			return offset >= 20 && offset <= 32;
+			return offset >= 32 && offset <= 48;
 		})
 		.toBe(true);
 }

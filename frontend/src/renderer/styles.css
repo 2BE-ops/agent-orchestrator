@@ -3569,7 +3569,7 @@ html.sidebar-reordering * {
 }
 
 .session-inspector__topbar > .browser-panel__topbar-host > .browser-panel__address-bar {
-	transform: translateX(clamp(20px, 4cqw, 32px));
+	transform: translateX(clamp(32px, 6cqw, 48px));
 }
 
 .session-inspector__topbar--browser > .session-inspector-actions-spacer {
