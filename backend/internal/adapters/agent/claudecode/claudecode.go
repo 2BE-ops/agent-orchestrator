@@ -249,6 +249,7 @@ func (p *Plugin) GetRestoreCommand(ctx context.Context, cfg ports.RestoreConfig)
 		SessionID:        cfg.Session.ID,
 		Metadata:         cfg.Session.Metadata,
 		Model:            cfg.Config.Model,
+		Effort:           cfg.Config.Effort,
 		Prompt:           cfg.Prompt,
 		SystemPrompt:     cfg.SystemPrompt,
 		SystemPromptFile: cfg.SystemPromptFile,

@@ -80,6 +80,7 @@ type RestoreConfig struct {
 	Metadata         map[string]string
 	WorkspacePath    string
 	Model            string
+	Effort           string
 	Prompt           string
 	SystemPrompt     string
 	SystemPromptFile string
@@ -252,6 +253,9 @@ func buildClaudeRestore(cfg RestoreConfig, identity string) ([]string, error) {
 	// Apply the caller's model selection. A blank value leaves it to Claude.
 	if model := strings.TrimSpace(cfg.Model); model != "" {
 		cmd = append(cmd, "--model", model)
+	}
+	if effort := strings.TrimSpace(cfg.Effort); effort != "" {
+		cmd = append(cmd, "--effort", effort)
 	}
 	var err error
 	cmd, err = appendClaudeSystemPrompt(cmd, cfg.SystemPromptFile, cfg.SystemPrompt)

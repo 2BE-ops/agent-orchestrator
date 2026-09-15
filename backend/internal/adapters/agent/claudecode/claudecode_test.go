@@ -690,10 +690,10 @@ func TestGetRestoreCommandReadsAgentSessionID(t *testing.T) {
 	}
 }
 
-func TestGetRestoreCommandAppendsConfiguredModel(t *testing.T) {
-	// The caller's session model selection must reach native resume (#3218).
+func TestGetRestoreCommandAppendsConfiguredModelAndEffort(t *testing.T) {
+	// The caller's per-session tuning must reach native resume (#3218).
 	cmd, ok, err := (&Plugin{resolvedBinary: "claude"}).GetRestoreCommand(context.Background(), ports.RestoreConfig{
-		Config:      ports.AgentConfig{Model: "  claude-opus-4-5  "},
+		Config:      ports.AgentConfig{Model: "  claude-opus-4-5  ", Effort: "  high  "},
 		Permissions: ports.PermissionModeBypassPermissions,
 		Session: ports.SessionRef{
 			ID:       "sess-r",
@@ -703,7 +703,7 @@ func TestGetRestoreCommandAppendsConfiguredModel(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("restore = (ok=%v, err=%v), want ok", ok, err)
 	}
-	want := []string{"claude", "--permission-mode", "bypassPermissions", "--model", "claude-opus-4-5", "--resume", "claude-native-1"}
+	want := []string{"claude", "--permission-mode", "bypassPermissions", "--model", "claude-opus-4-5", "--effort", "high", "--resume", "claude-native-1"}
 	if !reflect.DeepEqual(cmd, want) {
 		t.Fatalf("restore cmd\nwant: %#v\n got: %#v", want, cmd)
 	}
