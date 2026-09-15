@@ -77,4 +77,3 @@ export function buildWindowsAppMenuTemplate(onToggleDevTools?: () => void): Menu
 export function buildLinuxAppMenuTemplate(onToggleDevTools?: () => void): MenuItemConstructorOptions[] {
 	return buildWindowsAppMenuTemplate(onToggleDevTools);
 }
-
