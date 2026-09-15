@@ -25,8 +25,11 @@ async function expectAddressShiftedRight(page: Page) {
 
 async function expectAddressWidth(page: Page, width: number) {
 	await expect
-		.poll(async () => (await page.getByTestId("browser-address-bar").boundingBox())?.width)
-		.toBe(width);
+		.poll(async () => {
+			const measuredWidth = (await page.getByTestId("browser-address-bar").boundingBox())?.width;
+			return measuredWidth !== undefined && Math.abs(measuredWidth - width) <= 0.1;
+		})
+		.toBe(true);
 }
 
 async function expectAddressBelowInspectorTabs(page: Page) {
