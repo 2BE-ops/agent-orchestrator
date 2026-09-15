@@ -73,6 +73,9 @@ func (v *Validator) anthropicRequest(ctx context.Context, provider Provider, cre
 		return requestSpec{}, err
 	}
 	request.Header.Set("anthropic-version", anthropicAPIVersion)
+	query := request.URL.Query()
+	query.Set("limit", "1000")
+	request.URL.RawQuery = query.Encode()
 	if err := setAnthropicAuth(request, cred); err != nil {
 		return requestSpec{}, err
 	}
@@ -85,8 +88,10 @@ func (v *Validator) anthropicRequest(ctx context.Context, provider Provider, cre
 		parseModels: parseAnthropicModels,
 		// A gateway need not implement model listing, and the first-party API
 		// always does, so neither case treats an empty list as a rejection.
-		requireModels: false,
-		label:         label,
+		requireModels:                 false,
+		rateLimitProvesAuthentication: provider == ProviderFirstParty,
+		paginateAnthropic:             true,
+		label:                         label,
 	}, nil
 }
 
@@ -102,12 +107,13 @@ func setAnthropicAuth(request *http.Request, cred Credential) error {
 	switch cred.Kind {
 	case KindAPIKey:
 		request.Header.Set("x-api-key", secret)
-	case KindOAuthToken, KindAuthToken:
+	case KindOAuthToken:
 		request.Header.Set("authorization", "Bearer "+secret)
-		// OAuth tokens (subscription logins from claude.ai) may require identifying
-		// headers that API keys do not. Include them to enable the endpoint to
-		// distinguish token types, if needed.
-		request.Header.Set("user-agent", "ao-credential-validator")
+		request.Header.Set("anthropic-beta", "claude-code-20250219,oauth-2025-04-20")
+		request.Header.Set("x-app", "cli")
+		request.Header.Set("user-agent", "claude-code/2.1.220")
+	case KindAuthToken:
+		request.Header.Set("authorization", "Bearer "+secret)
 	default:
 		return fmt.Errorf("agentcreds: credential kind %q cannot authenticate to Anthropic", cred.Kind)
 	}
@@ -179,6 +185,17 @@ func parseAnthropicModels(body []byte) ([]Model, error) {
 		})
 	}
 	return models, nil
+}
+
+func anthropicPageCursor(body []byte) (bool, string, error) {
+	var payload struct {
+		HasMore bool   `json:"has_more"`
+		LastID  string `json:"last_id"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return false, "", err
+	}
+	return payload.HasMore, strings.TrimSpace(payload.LastID), nil
 }
 
 // effortOrder is the provider's own ascending order. The API reports effort as

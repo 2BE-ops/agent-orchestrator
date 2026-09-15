@@ -109,8 +109,8 @@ func (v *Validator) ValidateBedrockViaCLI(ctx context.Context, region string) Re
 		result.Detail = "the aws CLI listed no Anthropic models; this account may lack Bedrock access to Claude"
 		return result
 	}
-	result.State = StateValid
-	result.Detail = "the aws CLI resolved credentials and listed Claude models on Bedrock"
+	result.State = StateUnknown
+	result.Detail = "the aws CLI listed Claude models on Bedrock, but invocation permission was not verified"
 	return result
 }
 

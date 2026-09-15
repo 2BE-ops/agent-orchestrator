@@ -231,17 +231,23 @@ type requestSpec struct {
 	// applies to the cloud providers, where authenticating successfully says
 	// nothing about whether the account may call Claude.
 	requireModels bool
-	label         string
+	// rateLimitProvesAuthentication is true only for the first-party Anthropic
+	// endpoint, whose 429 response follows credential authentication.
+	rateLimitProvesAuthentication bool
+	// catalogOnly marks control-plane calls that can list models but cannot
+	// establish runtime invocation permission.
+	catalogOnly bool
+	// paginateAnthropic follows the models endpoint's has_more/last_id contract.
+	paginateAnthropic bool
+	label             string
 }
 
 // probe issues the request and classifies the response.
 //
-// The classification is the heart of the package, and two of its arms are
-// deliberately counter-intuitive. 429 is a pass: a rate-limited request was
-// authenticated before it was throttled, so the credential is good. And any
-// status that is neither an explicit rejection nor an explicit success is
-// Unknown rather than a failure — a 404 from a gateway that does not implement
-// model listing says nothing at all about the credential.
+// The classification is deliberately conservative. Only first-party Anthropic
+// rate limiting proves authentication; a gateway may throttle before checking
+// credentials. Any status that is neither a positive rejection nor an explicit
+// success is Unknown rather than a failure.
 func (v *Validator) probe(result Result, spec requestSpec) Result {
 	response, err := v.client.Do(spec.request)
 	if err != nil {
@@ -260,7 +266,7 @@ func (v *Validator) probe(result Result, spec requestSpec) Result {
 	}
 
 	switch response.StatusCode {
-	case http.StatusUnauthorized, http.StatusForbidden:
+	case http.StatusUnauthorized:
 		result.State = StateInvalid
 		result.Err = ErrInvalidCredential
 		result.Detail = rejectionDetail(spec.label, body)
@@ -274,9 +280,13 @@ func (v *Validator) probe(result Result, spec requestSpec) Result {
 	}
 
 	if response.StatusCode == http.StatusTooManyRequests {
-		// Throttled before a body was produced, but the request authenticated.
-		result.State = StateValid
-		result.Detail = fmt.Sprintf("%s accepted the credential (rate limited)", spec.label)
+		if spec.rateLimitProvesAuthentication {
+			result.State = StateValid
+			result.Detail = fmt.Sprintf("%s accepted the credential (rate limited)", spec.label)
+		} else {
+			result.State = StateUnknown
+			result.Detail = fmt.Sprintf("%s returned HTTP %d", spec.label, response.StatusCode)
+		}
 		return result
 	}
 
@@ -298,7 +308,17 @@ func (v *Validator) probe(result Result, spec requestSpec) Result {
 			models = nil
 		}
 		result.Models = models
-		if spec.requireModels && len(models) == 0 {
+		if parseErr == nil && spec.paginateAnthropic {
+			var pageErr error
+			result.Models, pageErr = v.followAnthropicPages(spec, body, result.Models)
+			if pageErr != nil {
+				result.State = StateUnknown
+				result.Err = pageErr
+				result.Detail = fmt.Sprintf("could not read the %s model list: %v", spec.label, pageErr)
+				return result
+			}
+		}
+		if spec.requireModels && len(result.Models) == 0 {
 			// Authenticated, but not entitled to Claude. Greenlighting this
 			// account means it fails on its first turn instead of here.
 			result.State = StateUnknown
@@ -307,9 +327,54 @@ func (v *Validator) probe(result Result, spec requestSpec) Result {
 			return result
 		}
 	}
+	if spec.catalogOnly {
+		result.State = StateUnknown
+		result.Detail = fmt.Sprintf("%s listed models, but invocation permission was not verified", spec.label)
+		return result
+	}
 	result.State = StateValid
 	result.Detail = fmt.Sprintf("%s accepted the credential", spec.label)
 	return result
+}
+
+func (v *Validator) followAnthropicPages(spec requestSpec, body []byte, models []Model) ([]Model, error) {
+	seen := map[string]struct{}{}
+	for {
+		hasMore, cursor, err := anthropicPageCursor(body)
+		if err != nil || !hasMore {
+			return models, err
+		}
+		if cursor == "" {
+			return nil, errors.New("provider reported more models without a cursor")
+		}
+		if _, duplicate := seen[cursor]; duplicate {
+			return nil, fmt.Errorf("provider repeated model cursor %q", cursor)
+		}
+		seen[cursor] = struct{}{}
+
+		request := spec.request.Clone(spec.request.Context())
+		query := request.URL.Query()
+		query.Set("after_id", cursor)
+		request.URL.RawQuery = query.Encode()
+		response, err := v.client.Do(request)
+		if err != nil {
+			return nil, err
+		}
+		pageBody, readErr := io.ReadAll(io.LimitReader(response.Body, maxBodyBytes))
+		_ = response.Body.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		if response.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("pagination returned HTTP %d", response.StatusCode)
+		}
+		pageModels, parseErr := spec.parseModels(pageBody)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		models = append(models, pageModels...)
+		body = pageBody
+	}
 }
 
 // rejectionDetail extracts the provider's own explanation for a rejection.

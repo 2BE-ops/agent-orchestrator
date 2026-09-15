@@ -35,8 +35,8 @@ func TestBedrockSigV4ProbeIsSignedAndNeverSendsTheRawKey(t *testing.T) {
 		Kind: KindAWSSigV4, Secret: "AKIAEXAMPLE\nsuper-secret-key\nsession-token", Source: "AWS_ACCESS_KEY_ID",
 		Provider: ProviderBedrock, Region: "us-east-1", BaseURL: server.URL,
 	})
-	if result.State != StateValid {
-		t.Fatalf("state = %q (%s)", result.State, result.Detail)
+	if result.State != StateUnknown || len(result.Models) != 1 {
+		t.Fatalf("state/models = %q/%v, want catalog-only unknown with one model", result.State, result.Models)
 	}
 	authorization := got.Get("Authorization")
 	if !strings.HasPrefix(authorization, "AWS4-HMAC-SHA256 ") {

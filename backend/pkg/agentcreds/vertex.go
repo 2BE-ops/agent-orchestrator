@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"golang.org/x/oauth2"
@@ -18,10 +17,10 @@ const vertexScope = "https://www.googleapis.com/auth/cloud-platform"
 
 // vertexRequest builds the Vertex AI probe.
 //
-// Vertex publishes Claude through Anthropic's publisher namespace, so the
-// model-listing endpoint is scoped to a project and region and returns
-// Vertex-format IDs (claude-opus-4-5@20251101). As with Bedrock, the listing
-// call is both the validation and the only correct catalog source.
+// Vertex publishes Claude through Anthropic's Model Garden publisher namespace.
+// The regional host selects the location, while x-goog-user-project carries the
+// quota/billing project. The listing returns Vertex-format IDs such as
+// claude-opus-4-5@20251101.
 func (v *Validator) vertexRequest(ctx context.Context, cred Credential) (requestSpec, error) {
 	region := strings.TrimSpace(cred.Region)
 	project := strings.TrimSpace(cred.Project)
@@ -49,13 +48,13 @@ func (v *Validator) vertexRequest(ctx context.Context, cred Credential) (request
 	}
 
 	base := firstNonEmpty(cred.BaseURL, fmt.Sprintf("https://%s-aiplatform.googleapis.com", region))
-	endpoint := fmt.Sprintf("%s/v1/projects/%s/locations/%s/publishers/anthropic/models",
-		strings.TrimRight(base, "/"), url.PathEscape(project), url.PathEscape(region))
+	endpoint := strings.TrimRight(base, "/") + "/v1beta1/publishers/anthropic/models"
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return requestSpec{}, err
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("x-goog-user-project", project)
 	return requestSpec{
 		request: request, parseModels: parseVertexModels,
 		// Authenticating to Google says nothing about Claude entitlement on

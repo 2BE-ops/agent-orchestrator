@@ -29,8 +29,8 @@ func TestProviderGateNeverProbesTheWrongHost(t *testing.T) {
 		Kind: KindAuthToken, Secret: "bedrock-bearer", Source: "AWS_BEARER_TOKEN_BEDROCK",
 		Provider: ProviderBedrock, Region: "us-east-1", BaseURL: bedrock.URL,
 	})
-	if result.State != StateValid {
-		t.Fatalf("state = %q (%s)", result.State, result.Detail)
+	if result.State != StateUnknown || len(result.Models) != 1 {
+		t.Fatalf("state/models = %q/%v, want catalog-only unknown with one model", result.State, result.Models)
 	}
 }
 
@@ -69,7 +69,7 @@ func TestProbesTargetModelEndpoints(t *testing.T) {
 				Kind: KindGoogleAccessToken, Secret: "k", Provider: ProviderVertex,
 				Region: "us-east5", Project: "proj",
 			},
-			wantPath: "/publishers/anthropic/models",
+			wantPath: "/v1beta1/publishers/anthropic/models",
 		},
 	}
 	for _, tc := range tests {
@@ -93,6 +93,48 @@ func TestProbesTargetModelEndpoints(t *testing.T) {
 				t.Fatalf("probe hit a billable endpoint: %q", path)
 			}
 		})
+	}
+}
+
+func TestAnthropicModelDiscoveryFollowsPagination(t *testing.T) {
+	var afterIDs []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("limit") != "1000" {
+			t.Fatalf("limit = %q, want 1000", r.URL.Query().Get("limit"))
+		}
+		after := r.URL.Query().Get("after_id")
+		afterIDs = append(afterIDs, after)
+		if after == "" {
+			_, _ = w.Write([]byte(`{"data":[{"id":"claude-first"}],"has_more":true,"last_id":"model-1"}`))
+			return
+		}
+		if after != "model-1" {
+			t.Fatalf("after_id = %q, want model-1", after)
+		}
+		_, _ = w.Write([]byte(`{"data":[{"id":"claude-second"}],"has_more":false,"last_id":"model-2"}`))
+	}))
+	defer server.Close()
+
+	result := New(server.Client()).Validate(context.Background(), Credential{
+		Kind: KindAPIKey, Secret: "k", Provider: ProviderFirstParty, BaseURL: server.URL,
+	})
+	if result.State != StateValid || len(result.Models) != 2 || len(afterIDs) != 2 {
+		t.Fatalf("result = state %q models %v requests %v", result.State, result.Models, afterIDs)
+	}
+}
+
+func TestAnthropicModelDiscoveryRejectsRepeatedCursor(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		_, _ = w.Write([]byte(`{"data":[{"id":"claude-first"}],"has_more":true,"last_id":"same"}`))
+	}))
+	defer server.Close()
+	result := New(server.Client()).Validate(context.Background(), Credential{
+		Kind: KindAPIKey, Secret: "k", Provider: ProviderFirstParty, BaseURL: server.URL,
+	})
+	if result.State != StateUnknown || requests != 2 {
+		t.Fatalf("state/requests = %q/%d, want unknown after two requests", result.State, requests)
 	}
 }
 
@@ -198,8 +240,12 @@ func TestValidationReturnsThatProvidersModelIDs(t *testing.T) {
 			cred := tc.cred
 			cred.BaseURL = server.URL
 			result := New(server.Client()).Validate(context.Background(), cred)
-			if result.State != StateValid {
-				t.Fatalf("state = %q (%s)", result.State, result.Detail)
+			wantState := StateValid
+			if tc.cred.Provider == ProviderBedrock {
+				wantState = StateUnknown
+			}
+			if result.State != wantState {
+				t.Fatalf("state = %q (%s), want %q", result.State, result.Detail, wantState)
 			}
 			if len(result.Models) != 1 || result.Models[0].ID != tc.want {
 				t.Fatalf("models = %v, want exactly [%s]", result.Models, tc.want)

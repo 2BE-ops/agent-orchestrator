@@ -65,7 +65,7 @@ func (v *Validator) bedrockRequest(ctx context.Context, cred Credential) (reques
 		request: request, parseModels: parseBedrockModels,
 		// Valid AWS credentials with no Bedrock entitlement return 200 and an
 		// empty or non-Anthropic list. Status alone is not the verdict.
-		requireModels: true, label: "AWS Bedrock",
+		requireModels: true, catalogOnly: true, label: "AWS Bedrock",
 	}, nil
 }
 

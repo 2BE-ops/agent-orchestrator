@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-// The classification table is the core of the package, and two of its rows are
-// the ones most likely to be "corrected" into bugs later: 429 is a pass, and
-// an unrecognized status is unknown rather than a failure.
+// The classification table is the core of the package. First-party 429 proves
+// authentication, while permission failures and unrecognized statuses remain
+// unknown rather than locking out a potentially valid principal.
 func TestClassification(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -21,7 +21,7 @@ func TestClassification(t *testing.T) {
 		{"ok", http.StatusOK, `{"data":[{"id":"claude-opus-4-5"}]}`, StateValid},
 		{"rate limited still authenticated", http.StatusTooManyRequests, ``, StateValid},
 		{"unauthorized", http.StatusUnauthorized, `{"error":{"message":"API key is invalid."}}`, StateInvalid},
-		{"forbidden", http.StatusForbidden, `{"error":{"message":"no access"}}`, StateInvalid},
+		{"forbidden is permission evidence only", http.StatusForbidden, `{"error":{"message":"no access"}}`, StateUnknown},
 		{"server error says nothing about the credential", http.StatusInternalServerError, ``, StateUnknown},
 		{"not found says nothing about the credential", http.StatusNotFound, ``, StateUnknown},
 		{"bad gateway says nothing about the credential", http.StatusBadGateway, ``, StateUnknown},
@@ -42,6 +42,19 @@ func TestClassification(t *testing.T) {
 				t.Fatalf("state = %q (%s), want %q", result.State, result.Detail, tc.want)
 			}
 		})
+	}
+}
+
+func TestGatewayRateLimitDoesNotProveAuthentication(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+	result := New(server.Client()).Validate(context.Background(), Credential{
+		Kind: KindAPIKey, Secret: "garbage", Provider: ProviderGateway, BaseURL: server.URL,
+	})
+	if result.State != StateUnknown {
+		t.Fatalf("gateway 429 state = %q, want unknown", result.State)
 	}
 }
 
@@ -75,6 +88,12 @@ func TestHeaderFollowsCredentialKind(t *testing.T) {
 			}
 			if got.Header.Get("anthropic-version") != anthropicAPIVersion {
 				t.Fatal("every first-party request must carry anthropic-version")
+			}
+			if tc.kind == KindOAuthToken {
+				if got.Header.Get("anthropic-beta") != "claude-code-20250219,oauth-2025-04-20" ||
+					got.Header.Get("x-app") != "cli" || !contains(got.Header.Get("user-agent"), "claude-code/") {
+					t.Fatalf("OAuth headers = %#v, want Claude Code request contract", got)
+				}
 			}
 		})
 	}

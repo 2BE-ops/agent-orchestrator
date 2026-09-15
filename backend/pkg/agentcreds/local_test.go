@@ -72,8 +72,8 @@ func TestBedrockViaCLISucceedsWhenTheChainResolves(t *testing.T) {
 		return []byte(`{"modelSummaries":[{"modelId":"anthropic.claude-opus-4-5-v1:0","providerName":"Anthropic"}]}`), nil
 	})
 	result := validator.ValidateBedrockViaCLI(context.Background(), "us-east-1")
-	if result.State != StateValid {
-		t.Fatalf("state = %q (%s)", result.State, result.Detail)
+	if result.State != StateUnknown {
+		t.Fatalf("state = %q (%s), want catalog-only unknown", result.State, result.Detail)
 	}
 	if len(result.Models) != 1 {
 		t.Fatalf("models = %+v", result.Models)
@@ -133,8 +133,8 @@ func TestValidateLocalFallsBackToTheCLIForChainCredentials(t *testing.T) {
 	if !called {
 		t.Fatal("chain-sourced Bedrock credentials must be delegated to the aws CLI")
 	}
-	if result.State != StateValid {
-		t.Fatalf("state = %q (%s)", result.State, result.Detail)
+	if result.State != StateUnknown || len(result.Models) != 1 {
+		t.Fatalf("state/models = %q/%v, want catalog-only unknown with one model", result.State, result.Models)
 	}
 }
 

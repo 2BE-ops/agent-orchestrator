@@ -433,16 +433,18 @@ func ProviderModels(ctx context.Context, binary string, env map[string]string) (
 	if result.State == "" {
 		result = claudeValidator().ValidateLocal(probeCtx, reported, opts)
 	}
-	if result.State != agentcreds.StateValid {
+	if result.State != agentcreds.StateValid && !(result.Provider == agentcreds.ProviderBedrock && len(result.Models) > 0) {
 		return nil, fmt.Errorf("claude-code: model discovery: %s", result.Detail)
 	}
 	if len(result.Models) == 0 {
 		return nil, errors.New("claude-code: provider reported no Claude models")
 	}
 
-	// The probe already proved this credential works, so record the verdict
-	// instead of discarding it — discovery and validation refresh each other.
-	claudeAuthCache.put(result)
+	// Cache only a verified auth verdict. Bedrock's control-plane list is useful
+	// catalog data but does not prove that the principal may invoke a model.
+	if result.State == agentcreds.StateValid {
+		claudeAuthCache.put(result)
+	}
 
 	models := make([]ports.AgentModelInfo, 0, len(result.Models))
 	for _, model := range result.Models {
