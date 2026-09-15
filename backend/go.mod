@@ -2,6 +2,8 @@ module github.com/aoagents/agent-orchestrator/backend
 
 go 1.25.7
 
+replace cloud.google.com/go v0.34.0 => cloud.google.com/go v0.110.10
+
 require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/aymanbagabas/go-pty v0.2.3
