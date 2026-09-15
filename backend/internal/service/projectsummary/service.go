@@ -33,6 +33,7 @@ type ReportOutputFact struct {
 type ReportFact struct {
 	ID          string
 	SessionID   domain.SessionID
+	ProjectID   domain.ProjectID
 	State       string
 	Note        string
 	Message     string
