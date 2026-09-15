@@ -185,6 +185,18 @@ describe.each(["native", "ACP submenu", "ACP standalone"] as const)("%s model se
 		expect(screen.getAllByRole("menuitemradio")).toHaveLength(1);
 	});
 
+	it("keeps Space as the select key on a focused result", async () => {
+		const { user, onChange, open } = setup();
+		await open();
+		const search = screen.getByRole("searchbox", { name: "Search models" });
+		await user.type(search, "Model 99");
+		await user.keyboard("{ArrowDown}");
+		expect(screen.getByRole("menuitemradio", { name: "Model 99" })).toHaveFocus();
+		await user.keyboard(" ");
+		expect(onChange).toHaveBeenCalledOnce();
+		expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+	});
+
 	it.each(["ArrowUp", "ArrowDown"])("keeps %s available for input-method candidate selection", async (key) => {
 		const { user, onChange, open } = setup();
 		await open();

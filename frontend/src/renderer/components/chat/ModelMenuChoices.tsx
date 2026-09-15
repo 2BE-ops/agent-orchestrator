@@ -93,9 +93,10 @@ export function ModelMenuChoices<T extends { id: string; label: string; provider
 							searchRef.current.focus();
 							return;
 						}
-						if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+						if (event.key.length === 1 && event.key !== " " && !event.ctrlKey && !event.metaKey && !event.altKey) {
 							// Narrow the catalog instead of letting the menu's typeahead jump
-							// to whichever row starts with the typed character.
+							// to whichever row starts with the typed character. Space stays
+							// with the menu, where it selects the focused row.
 							event.preventDefault();
 							event.stopPropagation();
 							searchRef.current.focus();
