@@ -263,6 +263,10 @@ func TestResolveProvider(t *testing.T) {
 		{name: "reported wins", reported: "bedrock", want: ProviderBedrock, wantOK: true},
 		{name: "vertex", reported: "vertex", want: ProviderVertex, wantOK: true},
 		{name: "foundry", reported: "foundry", want: ProviderFoundry, wantOK: true},
+		{
+			name: "project provider overrides stale CLI report", reported: "firstParty",
+			env: map[string]string{"CLAUDE_CODE_USE_BEDROCK": "1"}, want: ProviderBedrock, wantOK: true,
+		},
 		{name: "empty defaults to first party", want: ProviderFirstParty, wantOK: true},
 		{
 			name: "bedrock inferred from env when the CLI could not be asked",

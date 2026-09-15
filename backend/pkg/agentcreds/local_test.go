@@ -13,29 +13,31 @@ import (
 func TestChainDelegationNeverProducesARejection(t *testing.T) {
 	tests := []struct {
 		name   string
-		runner commandRunner
+		runner providerCommandRunner
 	}{
 		{
 			name: "cli is not installed",
-			runner: func(context.Context, string, ...string) ([]byte, error) {
-				return nil, errors.New("executable file not found in $PATH")
+			runner: func(context.Context, commandInvocation, string, ...string) (commandOutput, error) {
+				return commandOutput{}, errors.New("executable file not found in $PATH")
 			},
 		},
 		{
 			name: "cli fails",
-			runner: func(context.Context, string, ...string) ([]byte, error) {
-				return []byte("Unable to locate credentials"), errors.New("exit status 255")
+			runner: func(context.Context, commandInvocation, string, ...string) (commandOutput, error) {
+				return commandOutput{Stderr: []byte("Unable to locate credentials")}, errors.New("exit status 255")
 			},
 		},
 		{
 			name: "cli times out",
-			runner: func(context.Context, string, ...string) ([]byte, error) {
-				return nil, context.DeadlineExceeded
+			runner: func(context.Context, commandInvocation, string, ...string) (commandOutput, error) {
+				return commandOutput{}, context.DeadlineExceeded
 			},
 		},
 		{
-			name:   "cli returns nothing useful",
-			runner: func(context.Context, string, ...string) ([]byte, error) { return []byte("  "), nil },
+			name: "cli returns nothing useful",
+			runner: func(context.Context, commandInvocation, string, ...string) (commandOutput, error) {
+				return commandOutput{Stdout: []byte("  ")}, nil
+			},
 		},
 	}
 	for _, tc := range tests {
@@ -55,7 +57,7 @@ func TestChainDelegationNeverProducesARejection(t *testing.T) {
 
 // The happy path: aws resolves the chain and lists Claude models.
 func TestBedrockViaCLISucceedsWhenTheChainResolves(t *testing.T) {
-	validator := newWithCommandRunner(nil, func(_ context.Context, name string, args ...string) ([]byte, error) {
+	validator := newWithCommandRunner(nil, func(_ context.Context, _ commandInvocation, name string, args ...string) (commandOutput, error) {
 		if name != "aws" {
 			t.Fatalf("ran %q, want aws", name)
 		}
@@ -69,7 +71,7 @@ func TestBedrockViaCLISucceedsWhenTheChainResolves(t *testing.T) {
 		if contains(joined, "invoke-model") || contains(joined, "bedrock-runtime") {
 			t.Fatalf("args = %v, must never call a billable endpoint", args)
 		}
-		return []byte(`{"modelSummaries":[{"modelId":"anthropic.claude-opus-4-5-v1:0","providerName":"Anthropic"}]}`), nil
+		return commandOutput{Stdout: []byte(`{"modelSummaries":[{"modelId":"anthropic.claude-opus-4-5-v1:0","providerName":"Anthropic"}]}`)}, nil
 	})
 	result := validator.ValidateBedrockViaCLI(context.Background(), "us-east-1")
 	if result.State != StateUnknown {
@@ -83,8 +85,8 @@ func TestBedrockViaCLISucceedsWhenTheChainResolves(t *testing.T) {
 // An account that authenticates but has no Claude entitlement is Unknown, not
 // valid — the same rule the direct probe applies.
 func TestBedrockViaCLIWithoutClaudeAccessIsUnknown(t *testing.T) {
-	validator := newWithCommandRunner(nil, func(context.Context, string, ...string) ([]byte, error) {
-		return []byte(`{"modelSummaries":[]}`), nil
+	validator := newWithCommandRunner(nil, func(context.Context, commandInvocation, string, ...string) (commandOutput, error) {
+		return commandOutput{Stdout: []byte(`{"modelSummaries":[]}`)}, nil
 	})
 	result := validator.ValidateBedrockViaCLI(context.Background(), "us-east-1")
 	if result.State != StateUnknown {
@@ -102,14 +104,14 @@ func TestVertexViaCLIProbesWithTheResolvedToken(t *testing.T) {
 	defer server.Close()
 
 	validator := newWithCommandRunner(server.Client(),
-		func(_ context.Context, name string, args ...string) ([]byte, error) {
+		func(_ context.Context, _ commandInvocation, name string, args ...string) (commandOutput, error) {
 			if name != "gcloud" {
 				t.Fatalf("ran %q, want gcloud", name)
 			}
-			return []byte("ya29.chain-resolved-token\n"), nil
+			return commandOutput{Stdout: []byte("ya29.chain-resolved-token\n")}, nil
 		},
 	)
-	result := validator.validateVertexViaCLI(context.Background(), "proj", "us-east5", server.URL)
+	result := validator.validateVertexViaCLI(context.Background(), "proj", "us-east5", server.URL, commandInvocation{})
 	if result.State != StateValid {
 		t.Fatalf("state = %q (%s)", result.State, result.Detail)
 	}
@@ -118,17 +120,43 @@ func TestVertexViaCLIProbesWithTheResolvedToken(t *testing.T) {
 	}
 }
 
+func TestVertexViaCLIUsesStdoutAndProjectCommandContext(t *testing.T) {
+	var probeAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		probeAuth = r.Header.Get("Authorization")
+		_, _ = w.Write([]byte(`{"publisherModels":[{"name":"publishers/anthropic/models/claude-x"}]}`))
+	}))
+	defer server.Close()
+
+	validator := newWithCommandRunner(server.Client(), func(_ context.Context, invocation commandInvocation, name string, _ ...string) (commandOutput, error) {
+		if name != "gcloud" || invocation.WorkingDir != "/project" || invocation.Env["CLOUDSDK_CONFIG"] != "/project/gcloud" {
+			t.Fatalf("command = %q invocation = %#v", name, invocation)
+		}
+		return commandOutput{Stdout: []byte("ya29.stdout-token\n"), Stderr: []byte("warning: quota project missing\n")}, nil
+	})
+	result := validator.validateVertexViaCLI(context.Background(), "proj", "us-east5", server.URL, commandInvocation{
+		WorkingDir: "/project", Env: map[string]string{"CLOUDSDK_CONFIG": "/project/gcloud"},
+	})
+	if result.State != StateValid || probeAuth != "Bearer ya29.stdout-token" {
+		t.Fatalf("state/auth = %q/%q", result.State, probeAuth)
+	}
+}
+
 // End to end: an unreadable Bedrock credential falls through to the CLI rather
 // than reporting that the user has no credentials.
 func TestValidateLocalFallsBackToTheCLIForChainCredentials(t *testing.T) {
 	called := false
-	validator := newWithCommandRunner(nil, func(context.Context, string, ...string) ([]byte, error) {
+	validator := newWithCommandRunner(nil, func(_ context.Context, invocation commandInvocation, name string, _ ...string) (commandOutput, error) {
 		called = true
-		return []byte(`{"modelSummaries":[{"modelId":"anthropic.claude-x","providerName":"Anthropic"}]}`), nil
+		if name != "aws" || invocation.WorkingDir != "/project" || invocation.Env["AWS_PROFILE"] != "sso" {
+			t.Fatalf("command = %q invocation = %#v", name, invocation)
+		}
+		return commandOutput{Stdout: []byte(`{"modelSummaries":[{"modelId":"anthropic.claude-x","providerName":"Anthropic"}]}`)}, nil
 	})
+	projectEnv := map[string]string{"AWS_PROFILE": "sso", "AWS_REGION": "us-east-1"}
 	result := validator.ValidateLocal(context.Background(), "bedrock", ResolveOptions{
 		// An SSO profile: real credentials, none of them readable here.
-		Env: envFrom(map[string]string{"AWS_PROFILE": "sso", "AWS_REGION": "us-east-1"}),
+		Env: envFrom(projectEnv), WorkingDir: "/project", CommandEnv: projectEnv,
 	})
 	if !called {
 		t.Fatal("chain-sourced Bedrock credentials must be delegated to the aws CLI")
@@ -140,9 +168,9 @@ func TestValidateLocalFallsBackToTheCLIForChainCredentials(t *testing.T) {
 
 // The provider gate, end to end: an unrecognized provider probes nothing.
 func TestValidateLocalStaysSilentForAnUnknownProvider(t *testing.T) {
-	validator := newWithCommandRunner(nil, func(context.Context, string, ...string) ([]byte, error) {
+	validator := newWithCommandRunner(nil, func(context.Context, commandInvocation, string, ...string) (commandOutput, error) {
 		t.Fatal("an unknown provider must not run anything")
-		return nil, nil
+		return commandOutput{}, nil
 	})
 	result := validator.ValidateLocal(context.Background(), "some-future-provider", ResolveOptions{Env: envFrom(nil)})
 	if result.State != StateUnknown {

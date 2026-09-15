@@ -172,6 +172,24 @@ func TestCLIReportVerdict(t *testing.T) {
 	}
 }
 
+func TestClaudeAuthReportUsesProjectContext(t *testing.T) {
+	previous := claudeAuthCommand
+	claudeAuthCommand = func(_ context.Context, binary, workingDir string, env map[string]string) ([]byte, error) {
+		if binary != "/opt/claude" || workingDir != "/project" || env["CLAUDE_CODE_USE_VERTEX"] != "1" {
+			t.Fatalf("command context = binary %q dir %q env %#v", binary, workingDir, env)
+		}
+		return []byte(`{"loggedIn":true,"apiProvider":"vertex"}`), nil
+	}
+	t.Cleanup(func() { claudeAuthCommand = previous })
+
+	report, ok := (&Plugin{}).claudeCLIAuthReport(context.Background(), "/opt/claude", "/project", map[string]string{
+		"CLAUDE_CODE_USE_VERTEX": "1",
+	})
+	if !ok || report.APIProvider != "vertex" {
+		t.Fatalf("report = %#v, parsed = %v", report, ok)
+	}
+}
+
 func TestParseAuthReportSurfacesDiagnostics(t *testing.T) {
 	report, ok := ParseAuthReport([]byte(
 		`{"loggedIn":true,"apiKeySource":"ANTHROPIC_API_KEY","apiProvider":"firstParty","authMethod":"claude.ai","subscriptionType":"pro"}`,
@@ -420,7 +438,7 @@ func TestProviderModelsReuseTheValidatedAuthResponse(t *testing.T) {
 		t.Fatalf("verdict = %+v, want the provider acceptance", verdict)
 	}
 
-	models, err := ProviderModels(context.Background(), "", nil)
+	models, err := ProviderModels(context.Background(), "", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -459,15 +477,18 @@ func TestProviderModelsUsesCLIReportedProvider(t *testing.T) {
 	})
 
 	previous := claudeModelAuthReport
-	claudeModelAuthReport = func(_ context.Context, binary string) (claudeAuthReport, bool) {
+	claudeModelAuthReport = func(_ context.Context, binary, workingDir string, gotEnv map[string]string) (claudeAuthReport, bool) {
 		if binary != "/opt/claude" {
 			t.Fatalf("binary = %q, want /opt/claude", binary)
+		}
+		if workingDir != "/workspace" || gotEnv["AWS_REGION"] != "us-east-1" {
+			t.Fatalf("discovery context = %q %#v", workingDir, gotEnv)
 		}
 		return claudeAuthReport{APIProvider: "bedrock"}, true
 	}
 	t.Cleanup(func() { claudeModelAuthReport = previous })
 
-	models, err := ProviderModels(context.Background(), "/opt/claude", env)
+	models, err := ProviderModels(context.Background(), "/opt/claude", "/workspace", env)
 	if err != nil {
 		t.Fatal(err)
 	}

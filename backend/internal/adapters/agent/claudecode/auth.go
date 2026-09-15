@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/processenv"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	aoprocess "github.com/aoagents/agent-orchestrator/backend/internal/process"
 	"github.com/aoagents/agent-orchestrator/backend/pkg/agentcreds"
@@ -96,7 +97,7 @@ func (p *Plugin) authVerdict(ctx context.Context) (authVerdict, error) {
 	// It also carries diagnostics no other rung has — apiKeySource names an
 	// env var shadowing a subscription, authMethod separates a claude.ai login
 	// from a setup-token — so it runs for those even when rung 2 answers.
-	report, cliOK := p.claudeCLIAuthReport(ctx, binary)
+	report, cliOK := p.claudeCLIAuthReport(ctx, binary, "", nil)
 
 	// Rungs 1 and 2 — the provider gate and the network probe. This is the
 	// only rung that can prove a credential works, so it is the only one
@@ -240,11 +241,11 @@ func (r claudeAuthReport) verdict() authVerdict {
 // claudeCLIAuthReport runs the CLI probe under a hard timeout. ok=false means
 // the probe could not answer — a timeout, an exec failure, or a version whose
 // output this build cannot parse — and the caller falls to the next rung.
-func (p *Plugin) claudeCLIAuthReport(ctx context.Context, binary string) (claudeAuthReport, bool) {
+func (p *Plugin) claudeCLIAuthReport(ctx context.Context, binary, workingDir string, env map[string]string) (claudeAuthReport, bool) {
 	probeCtx, cancel := context.WithTimeout(ctx, claudeAuthProbeTimeout)
 	defer cancel()
 
-	out, err := aoprocess.CommandContext(probeCtx, binary, "auth", "status").CombinedOutput()
+	out, err := claudeAuthCommand(probeCtx, binary, workingDir, env)
 	if probeCtx.Err() != nil {
 		return claudeAuthReport{}, false
 	}
@@ -252,6 +253,15 @@ func (p *Plugin) claudeCLIAuthReport(ctx context.Context, binary string) (claude
 	// credentials, so the exit code is not consulted: only parsable output is.
 	_ = err
 	return claudeAuthReportFromOutput(out)
+}
+
+var claudeAuthCommand = func(ctx context.Context, binary, workingDir string, env map[string]string) ([]byte, error) {
+	cmd := aoprocess.CommandContext(ctx, binary, "auth", "status")
+	if strings.TrimSpace(workingDir) != "" {
+		cmd.Dir = workingDir
+	}
+	cmd.Env = processenv.Merge(env)
+	return cmd.CombinedOutput()
 }
 
 // claudeAuthReportFromOutput extracts the JSON object the CLI prints, which may
@@ -385,8 +395,8 @@ func ParseAuthReport(out []byte) (AuthReport, bool) {
 	}, true
 }
 
-var claudeModelAuthReport = func(ctx context.Context, binary string) (claudeAuthReport, bool) {
-	return (&Plugin{}).claudeCLIAuthReport(ctx, binary)
+var claudeModelAuthReport = func(ctx context.Context, binary, workingDir string, env map[string]string) (claudeAuthReport, bool) {
+	return (&Plugin{}).claudeCLIAuthReport(ctx, binary, workingDir, env)
 }
 
 // ProviderModels returns the Claude model IDs the configured provider actually
@@ -400,8 +410,8 @@ var claudeModelAuthReport = func(ctx context.Context, binary string) (claudeAuth
 //
 // An error means the provider could not be asked. Callers must fall back to
 // their static list rather than presenting an empty picker.
-func ProviderModels(ctx context.Context, binary string, env map[string]string) ([]ports.AgentModelInfo, error) {
-	opts := agentcreds.ResolveOptions{AllowKeychain: true}
+func ProviderModels(ctx context.Context, binary, workingDir string, env map[string]string) ([]ports.AgentModelInfo, error) {
+	opts := agentcreds.ResolveOptions{AllowKeychain: true, WorkingDir: workingDir, CommandEnv: env}
 	if len(env) > 0 {
 		// Prefer the session's own environment so a project-scoped provider or
 		// key is reflected, falling back to the daemon's for anything unset.
@@ -415,7 +425,7 @@ func ProviderModels(ctx context.Context, binary string, env map[string]string) (
 
 	reported := ""
 	if strings.TrimSpace(binary) != "" {
-		if report, ok := claudeModelAuthReport(ctx, binary); ok {
+		if report, ok := claudeModelAuthReport(ctx, binary, workingDir, env); ok {
 			reported = report.APIProvider
 		}
 	}

@@ -182,7 +182,7 @@ const maxBodyBytes = 256 << 10
 // New.
 type Validator struct {
 	client  *http.Client
-	execCmd commandRunner
+	execCmd providerCommandRunner
 }
 
 // New builds a Validator.
@@ -190,7 +190,7 @@ func New(client *http.Client) *Validator {
 	if client == nil {
 		client = &http.Client{Timeout: DefaultTimeout}
 	}
-	return &Validator{client: client, execCmd: execCommand}
+	return &Validator{client: client, execCmd: execProviderCommand}
 }
 
 // Validate probes the credential against its provider and classifies the

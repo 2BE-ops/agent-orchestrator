@@ -30,11 +30,11 @@ func (v *Validator) ValidateLocal(ctx context.Context, reportedProvider string, 
 		// chain only the provider's own CLI can resolve.
 		switch provider {
 		case ProviderBedrock:
-			return v.ValidateBedrockViaCLI(ctx, opts.env("AWS_REGION"))
+			return v.validateBedrockViaCLI(ctx, opts.env("AWS_REGION"), opts.commandInvocation())
 		case ProviderVertex:
 			project := firstNonEmpty(opts.env("ANTHROPIC_VERTEX_PROJECT_ID"), opts.env("GOOGLE_CLOUD_PROJECT"))
 			region := firstNonEmpty(opts.env("CLOUD_ML_REGION"), opts.env("GOOGLE_CLOUD_REGION"), "us-east5")
-			return v.ValidateVertexViaCLI(ctx, project, region)
+			return v.validateVertexViaCLI(ctx, project, region, "", opts.commandInvocation())
 		default:
 			return Result{
 				State: StateUnknown, Provider: provider, CheckedAt: time.Now(),
@@ -63,11 +63,11 @@ func (v *Validator) ValidateLocal(ctx context.Context, reportedProvider string, 
 	if result.State == StateUnknown && result.Err != nil && !errors.Is(result.Err, ErrInvalidCredential) {
 		switch provider {
 		case ProviderBedrock:
-			if cliResult := v.ValidateBedrockViaCLI(ctx, cred.Region); cliResult.State != StateUnknown {
+			if cliResult := v.validateBedrockViaCLI(ctx, cred.Region, opts.commandInvocation()); cliResult.State != StateUnknown {
 				return cliResult
 			}
 		case ProviderVertex:
-			if cliResult := v.ValidateVertexViaCLI(ctx, cred.Project, cred.Region); cliResult.State != StateUnknown {
+			if cliResult := v.validateVertexViaCLI(ctx, cred.Project, cred.Region, "", opts.commandInvocation()); cliResult.State != StateUnknown {
 				return cliResult
 			}
 		}

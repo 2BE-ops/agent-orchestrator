@@ -471,7 +471,7 @@ func Run() error {
 		// from whichever provider is configured. An error here is expected and
 		// harmless: discovery falls back to the static aliases.
 		ClaudeModels: func(listCtx context.Context, request ports.AgentModelDiscoveryRequest) ([]ports.AgentModelInfo, error) {
-			return claudecodeagent.ProviderModels(listCtx, request.Binary, request.Env)
+			return claudecodeagent.ProviderModels(listCtx, request.Binary, request.WorkingDir, request.Env)
 		},
 	}
 	// Build the multi-tracker dispatching to both GitHub and GitLab once,

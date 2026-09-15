@@ -46,6 +46,14 @@ type ResolveOptions struct {
 	Runner commandRunner
 	// GOOS overrides platform detection, for tests.
 	GOOS string
+	// WorkingDir and CommandEnv reproduce the project launch context for AWS and
+	// gcloud credential-chain commands.
+	WorkingDir string
+	CommandEnv map[string]string
+}
+
+func (o ResolveOptions) commandInvocation() commandInvocation {
+	return commandInvocation{WorkingDir: o.WorkingDir, Env: o.CommandEnv}
 }
 
 func (o ResolveOptions) env(name string) string {
@@ -66,13 +74,10 @@ func (o ResolveOptions) goos() string {
 //
 // It is a gate, not a guess: an unrecognized apiProvider yields ok=false so
 // the caller stays silent rather than probing api.anthropic.com with a
-// credential that belongs to Bedrock. The value should come from the CLI's own
-// reported apiProvider where available; the env fallbacks below only apply
-// when the CLI could not be asked.
+// credential that belongs to Bedrock. Explicit project environment selects the
+// provider first because it is also what launch will use; only then may the
+// CLI's report refine an otherwise implicit provider choice.
 func ResolveProvider(reported string, opts ResolveOptions) (Provider, bool) {
-	if trimmed := strings.TrimSpace(reported); trimmed != "" {
-		return ParseProvider(trimmed)
-	}
 	switch {
 	case opts.env("CLAUDE_CODE_USE_BEDROCK") != "":
 		return ProviderBedrock, true
@@ -82,9 +87,11 @@ func ResolveProvider(reported string, opts ResolveOptions) (Provider, bool) {
 		return ProviderFoundry, true
 	case opts.env("ANTHROPIC_BASE_URL") != "":
 		return ProviderGateway, true
-	default:
-		return ProviderFirstParty, true
 	}
+	if trimmed := strings.TrimSpace(reported); trimmed != "" {
+		return ParseProvider(trimmed)
+	}
+	return ProviderFirstParty, true
 }
 
 // ResolveLocal finds the credential Claude Code will use for the given

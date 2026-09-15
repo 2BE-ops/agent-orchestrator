@@ -95,7 +95,7 @@ func New(plugin claudePlugin, log *slog.Logger, onAuthRejected func()) ports.Cha
 			var models []ports.AgentModelInfo
 			if _, preserve := claudeACPModelConfig(cfg.Env); !preserve {
 				var modelErr error
-				models, modelErr = claudecode.ProviderModels(ctx, claudeBinary, cfg.Env)
+				models, modelErr = claudecode.ProviderModels(ctx, claudeBinary, cfg.WorkspacePath, cfg.Env)
 				if modelErr != nil && log != nil {
 					log.Debug("Claude provider model discovery unavailable; using ACP defaults", "error", modelErr)
 				}

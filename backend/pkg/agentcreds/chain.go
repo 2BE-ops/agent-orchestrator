@@ -1,9 +1,13 @@
 package agentcreds
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 )
@@ -26,8 +30,7 @@ import (
 // non-zero exit — all Unknown, never a rejection. The runtime 401 handler
 // remains the real coverage for this tier; this only buys earliness.
 
-// commandRunner runs an external command and returns its combined output.
-// It is an indirection so tests never execute a real CLI.
+// commandRunner is the narrow keychain helper seam.
 type commandRunner func(ctx context.Context, name string, args ...string) ([]byte, error)
 
 func execCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
@@ -38,7 +41,56 @@ func execCommand(ctx context.Context, name string, args ...string) ([]byte, erro
 	return exec.CommandContext(ctx, path, args...).CombinedOutput()
 }
 
-func newWithCommandRunner(client *http.Client, runner commandRunner) *Validator {
+type commandInvocation struct {
+	WorkingDir string
+	Env        map[string]string
+}
+
+type commandOutput struct {
+	Stdout []byte
+	Stderr []byte
+}
+
+type providerCommandRunner func(context.Context, commandInvocation, string, ...string) (commandOutput, error)
+
+func execProviderCommand(ctx context.Context, invocation commandInvocation, name string, args ...string) (commandOutput, error) {
+	path, err := exec.LookPath(name)
+	if err != nil {
+		return commandOutput{}, err
+	}
+	cmd := exec.CommandContext(ctx, path, args...)
+	cmd.Dir = strings.TrimSpace(invocation.WorkingDir)
+	cmd.Env = commandEnvironment(invocation.Env)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	return commandOutput{Stdout: stdout.Bytes(), Stderr: stderr.Bytes()}, err
+}
+
+func commandEnvironment(overrides map[string]string) []string {
+	if len(overrides) == 0 {
+		return os.Environ()
+	}
+	values := make(map[string]string, len(os.Environ())+len(overrides))
+	for _, entry := range os.Environ() {
+		key, _, ok := strings.Cut(entry, "=")
+		if ok {
+			values[key] = entry
+		}
+	}
+	for key, value := range overrides {
+		values[key] = key + "=" + value
+	}
+	out := make([]string, 0, len(values))
+	for _, entry := range values {
+		out = append(out, entry)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func newWithCommandRunner(client *http.Client, runner providerCommandRunner) *Validator {
 	v := New(client)
 	if runner != nil {
 		v.execCmd = runner
@@ -52,19 +104,19 @@ func newWithCommandRunner(client *http.Client, runner commandRunner) *Validator 
 // account impersonation, workload identity federation — so one command turns
 // an unresolvable credential into an ordinary bearer token.
 func (v *Validator) ValidateVertexViaCLI(ctx context.Context, project, region string) Result {
-	return v.validateVertexViaCLI(ctx, project, region, "")
+	return v.validateVertexViaCLI(ctx, project, region, "", commandInvocation{})
 }
 
-func (v *Validator) validateVertexViaCLI(ctx context.Context, project, region, baseURL string) Result {
+func (v *Validator) validateVertexViaCLI(ctx context.Context, project, region, baseURL string, invocation commandInvocation) Result {
 	result := Result{Provider: ProviderVertex, Source: "gcloud", CheckedAt: time.Now()}
-	out, err := v.execCmd(ctx, "gcloud", "auth", "print-access-token")
+	out, err := v.execCmd(ctx, invocation, "gcloud", "auth", "print-access-token")
 	if err != nil {
 		result.State = StateUnknown
 		result.Detail = "gcloud is unavailable, so Vertex credentials could not be resolved"
-		result.Err = err
+		result.Err = commandDiagnosticError(err, out.Stderr)
 		return result
 	}
-	token := strings.TrimSpace(lastNonEmptyLine(string(out)))
+	token := strings.TrimSpace(lastNonEmptyLine(string(out.Stdout)))
 	if token == "" {
 		result.State = StateUnknown
 		result.Detail = "gcloud returned no access token"
@@ -84,19 +136,23 @@ func (v *Validator) validateVertexViaCLI(ctx context.Context, project, region, b
 // conflates "credentials refused" with "no CLI config", "wrong profile", and
 // "network down", and this layer must never manufacture a lockout.
 func (v *Validator) ValidateBedrockViaCLI(ctx context.Context, region string) Result {
+	return v.validateBedrockViaCLI(ctx, region, commandInvocation{})
+}
+
+func (v *Validator) validateBedrockViaCLI(ctx context.Context, region string, invocation commandInvocation) Result {
 	result := Result{Provider: ProviderBedrock, Source: "aws", CheckedAt: time.Now()}
 	args := []string{"bedrock", "list-foundation-models", "--by-provider", "anthropic", "--output", "json"}
 	if strings.TrimSpace(region) != "" {
 		args = append(args, "--region", region)
 	}
-	out, err := v.execCmd(ctx, "aws", args...)
+	out, err := v.execCmd(ctx, invocation, "aws", args...)
 	if err != nil {
 		result.State = StateUnknown
 		result.Detail = "the aws CLI is unavailable or could not list Bedrock models"
-		result.Err = err
+		result.Err = commandDiagnosticError(err, out.Stderr)
 		return result
 	}
-	models, parseErr := parseBedrockModels(out)
+	models, parseErr := parseBedrockModels(out.Stdout)
 	if parseErr != nil {
 		result.State = StateUnknown
 		result.Detail = "the aws CLI returned output this build could not read"
@@ -112,6 +168,14 @@ func (v *Validator) ValidateBedrockViaCLI(ctx context.Context, region string) Re
 	result.State = StateUnknown
 	result.Detail = "the aws CLI listed Claude models on Bedrock, but invocation permission was not verified"
 	return result
+}
+
+func commandDiagnosticError(err error, stderr []byte) error {
+	detail := strings.TrimSpace(string(stderr))
+	if detail == "" {
+		return err
+	}
+	return fmt.Errorf("%w: %s", err, detail)
 }
 
 func lastNonEmptyLine(text string) string {
