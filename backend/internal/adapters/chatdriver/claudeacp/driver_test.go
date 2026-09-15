@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	acpsdk "github.com/coder/acp-go-sdk"
+
 	acpdriver "github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/acp"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 )
@@ -261,5 +263,35 @@ func TestPreflightBlocksAConfirmedRejection(t *testing.T) {
 	_, err = New(rejectedClaudePlugin{binary: executable}, nil).Probe(context.Background())
 	if !errors.Is(err, ports.ErrChatAuthRequired) {
 		t.Fatalf("Probe error = %v, want ErrChatAuthRequired", err)
+	}
+}
+
+func TestClaudePromptResponseFailureRequiresStructuredLoginAction(t *testing.T) {
+	response := acpsdk.PromptResponse{
+		StopReason: acpsdk.StopReasonEndTurn,
+		Meta: map[string]any{"jetbrains": map[string]any{"air": map[string]any{
+			"version": float64(1),
+			"sessionFailure": map[string]any{
+				"id": "auth-expired", "severity": "error",
+				"title":   "Your login has expired.",
+				"details": "Run /login to sign in again.",
+				"actions": []any{"login"},
+			},
+		}}},
+	}
+
+	err := claudePromptResponseFailure(response)
+	if !errors.Is(err, ports.ErrChatAuthRequired) {
+		t.Fatalf("error = %v, want ErrChatAuthRequired", err)
+	}
+}
+
+func TestClaudePromptResponseFailureIgnoresAssistantAuthProse(t *testing.T) {
+	response := acpsdk.PromptResponse{
+		StopReason: acpsdk.StopReasonEndTurn,
+		Meta:       map[string]any{"assistantMessage": "Your OAuth token has expired; please run /login."},
+	}
+	if err := claudePromptResponseFailure(response); err != nil {
+		t.Fatalf("assistant prose classified as terminal auth failure: %v", err)
 	}
 }

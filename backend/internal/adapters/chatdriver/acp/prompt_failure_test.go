@@ -47,6 +47,9 @@ func TestACPDriverPromptResponseFailure(t *testing.T) {
 				Harness:      domain.HarnessClaudeCode,
 				Capabilities: ports.ChatCapabilities{ports.ChatCapabilityStreaming: true},
 				Launch:       func(context.Context, LaunchConfig) (Launch, error) { return Launch{Command: "fake"}, nil },
+				PromptResponseFailure: func(response acpsdk.PromptResponse) error {
+					return promptResponseFailure(response.Meta)
+				},
 				OnAuthRejected: func() {
 					authRejected++
 				},
@@ -149,7 +152,10 @@ func TestPromptFailureLetsTurnSettlementCloseActiveRetry(t *testing.T) {
 		{"cancelled RPC", "failure-1", false, context.Canceled},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			conv := &conversation{activeTurn: "turn-1", events: make(chan ports.ChatEvent, 16), log: slog.New(slog.DiscardHandler)}
+			conv := &conversation{
+				activeTurn: "turn-1", events: make(chan ports.ChatEvent, 16), log: slog.New(slog.DiscardHandler),
+				promptResponseFailure: func(response acpsdk.PromptResponse) error { return promptResponseFailure(response.Meta) },
+			}
 			_, ok := conv.sessionFailureEvent("turn-1", "", testPromptFailureMeta(map[string]any{
 				"id": tc.incident, "severity": "warning", "title": "Retrying",
 			}))
@@ -206,7 +212,10 @@ func TestPromptResponseFailureIgnoresNonErrors(t *testing.T) {
 
 func TestRetryEpisodesKeepRecoveredDiagnosticsAndReplayIdentity(t *testing.T) {
 	for range 2 { // Replaying the same host events reconstructs the same row IDs.
-		conv := &conversation{activeTurn: "turn-1", events: make(chan ports.ChatEvent, 16), log: slog.New(slog.DiscardHandler)}
+		conv := &conversation{
+			activeTurn: "turn-1", events: make(chan ports.ChatEvent, 16), log: slog.New(slog.DiscardHandler),
+			promptResponseFailure: func(response acpsdk.PromptResponse) error { return promptResponseFailure(response.Meta) },
+		}
 		meta := testPromptFailureMeta(map[string]any{"id": "reused-incident", "severity": "warning", "title": "Retrying"})
 		first, _ := conv.sessionFailureEvent("turn-1", "host:1", meta)
 		attempt, _ := conv.sessionFailureEvent("turn-1", "host:2", meta)
@@ -244,7 +253,8 @@ func TestACPReplayedPromptFailure(t *testing.T) {
 			}
 			conv := &conversation{
 				activeTurn: "durable-turn", events: make(chan ports.ChatEvent, 16),
-				log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+				log:                   slog.New(slog.NewTextHandler(io.Discard, nil)),
+				promptResponseFailure: func(response acpsdk.PromptResponse) error { return promptResponseFailure(response.Meta) },
 			}
 			if replay {
 				payload, err := json.Marshal(map[string]any{"eventId": "host:1", "result": response})
@@ -291,4 +301,25 @@ func TestACPReplayedPromptFailure(t *testing.T) {
 			}
 		}
 	}
+}
+
+// promptResponseFailure is a test binding used to exercise the generic
+// provider callback without placing Claude's vendor contract in production ACP
+// code.
+func promptResponseFailure(meta map[string]any) error {
+	failure := sessionFailure(meta)
+	if failure["severity"] != "error" {
+		return nil
+	}
+	title, _ := failure["title"].(string)
+	details, _ := failure["details"].(string)
+	var cause error
+	if actions, ok := failure["actions"].([]any); ok {
+		for _, action := range actions {
+			if action == "login" {
+				cause = ports.ErrChatAuthRequired
+			}
+		}
+	}
+	return ports.NewChatProviderFailure(title, details, cause)
 }

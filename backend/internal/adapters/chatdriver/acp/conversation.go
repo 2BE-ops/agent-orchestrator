@@ -126,7 +126,8 @@ type conversation struct {
 	ignorePromptResult bool
 	// onAuthRejected corrects cached auth state when the provider rejects the
 	// credential mid-turn. Nil when the binding does not supply one.
-	onAuthRejected func()
+	onAuthRejected        func()
+	promptResponseFailure func(acpsdk.PromptResponse) error
 
 	contextTokens     int64
 	contextWindow     int64
@@ -607,10 +608,11 @@ func (c *conversation) finishPrompt(
 		}
 	} else {
 		state = turnState(resp.StopReason)
-		if failure := promptResponseFailure(resp.Meta); failure != nil &&
-			state != domain.TurnStateInterrupted && !interruptedLocally {
-			state = domain.TurnStateFailed
-			turnErr = failure
+		if c.promptResponseFailure != nil && state != domain.TurnStateInterrupted && !interruptedLocally {
+			if failure := c.promptResponseFailure(resp); failure != nil {
+				state = domain.TurnStateFailed
+				turnErr = failure
+			}
 		}
 		if resp.Usage != nil {
 			cached := 0
