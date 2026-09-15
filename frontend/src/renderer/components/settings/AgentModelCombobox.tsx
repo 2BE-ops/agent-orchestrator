@@ -118,6 +118,7 @@ export function AgentModelCombobox({
 	const [search, setSearch] = useState("");
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [effortMenuOpen, setEffortMenuOpen] = useState(false);
+	const [awaitingEffort, setAwaitingEffort] = useState(false);
 	const [refreshFailed, setRefreshFailed] = useState(false);
 	const [sessionRecentModels, setSessionRecentModels] = useState<Record<string, string[]>>({});
 	const recentKey = recentScope ?? "";
@@ -193,6 +194,7 @@ export function AgentModelCombobox({
 		selectModel(item.id);
 		setSearch("");
 		setEffortMenuOpen(openEffort);
+		setAwaitingEffort(openEffort);
 		if (!openEffort) setMenuOpen(false);
 	};
 
@@ -205,6 +207,7 @@ export function AgentModelCombobox({
 					setSearch("");
 					setRefreshFailed(false);
 					setEffortMenuOpen(false);
+					setAwaitingEffort(false);
 				}
 			}}
 		>
@@ -372,7 +375,9 @@ export function AgentModelCombobox({
 				{showEffort && tuning && (
 					<div className="shrink-0">
 						<DropdownMenuSeparator />
-						<OptionMenuSub open={effortMenuOpen} onOpenChange={setEffortMenuOpen}>
+						<OptionMenuSub open={effortMenuOpen} onOpenChange={(open) => {
+							if (open || !awaitingEffort) setEffortMenuOpen(open);
+						}}>
 							<OptionMenuSubTrigger label={t("settings.models.reasoningEffort", { defaultValue: "Reasoning effort" })} value={currentEffortLabel} />
 							<OptionMenuSubContent>
 								{["", ...(effortModel?.efforts ?? [])].map((effort) => (
@@ -380,6 +385,7 @@ export function AgentModelCombobox({
 										active={effort === tuning.effort} onSelect={() => {
 											tuning.onEffortChange(effort);
 											setEffortMenuOpen(false);
+											setAwaitingEffort(false);
 											setMenuOpen(false);
 										}} className="gap-3 text-xs">
 										{effort ? effortLabel(effort) : t("settings.models.providerDefault")}

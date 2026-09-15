@@ -47,7 +47,12 @@ describe("AgentModelCombobox", () => {
 		await userEvent.click(screen.getByRole("menuitem", { name: "Plain" }));
 		expect(picker).toHaveTextContent("Plain · Provider default");
 		expect(screen.queryByRole("menuitemradio", { name: "High" })).not.toBeInTheDocument();
-		expect(screen.getByRole("menuitemradio", { name: "Provider default" })).toHaveAttribute("aria-checked", "true");
+		const providerDefault = screen.getByRole("menuitemradio", { name: "Provider default" });
+		expect(providerDefault).toHaveAttribute("aria-checked", "true");
+		await userEvent.hover(screen.getByRole("menuitem", { name: "Capable" }));
+		expect(screen.getByRole("menuitemradio", { name: "Low" })).toBeInTheDocument();
+		await userEvent.hover(providerDefault);
+		expect(screen.getByRole("menuitemradio", { name: "Low" })).toBeInTheDocument();
 		await userEvent.click(screen.getByRole("menuitemradio", { name: "Low" }));
 		expect(picker).toHaveTextContent("Plain · Low");
 		expect(screen.queryByRole("menuitem", { name: "Plain" })).not.toBeInTheDocument();
