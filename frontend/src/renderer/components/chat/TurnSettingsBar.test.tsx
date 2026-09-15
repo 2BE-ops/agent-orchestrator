@@ -102,7 +102,7 @@ describe.each(["native", "ACP submenu", "ACP standalone"] as const)("%s model se
 		expect(screen.getAllByRole("menuitemradio")).toHaveLength(count);
 		if (count === 10) {
 			expect(screen.getByRole("searchbox", { name: "Search models" })).toBeInTheDocument();
-			expect(screen.getByText(/type to narrow/)).toBeInTheDocument();
+			expect(screen.getByText("Showing 10 of 10 matching models", { exact: true })).toBeInTheDocument();
 		} else {
 			expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
 		}

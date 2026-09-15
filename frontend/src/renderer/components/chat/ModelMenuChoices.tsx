@@ -106,7 +106,6 @@ export function ModelMenuChoices<T extends { id: string; label: string; provider
 						visible: matches.length.toLocaleString(),
 						total: matches.length.toLocaleString(),
 					})}
-					{query === "" ? t("settings.models.typeToNarrow") : ""}
 				</p>
 			)}
 		</div>
