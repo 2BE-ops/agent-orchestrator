@@ -260,7 +260,7 @@ func TestPreflightBlocksAConfirmedRejection(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("AO_CLAUDE_ACP_COMMAND", executable)
-	_, err = New(rejectedClaudePlugin{binary: executable}, nil).Probe(context.Background())
+	_, err = New(rejectedClaudePlugin{binary: executable}, nil, nil).Probe(context.Background())
 	if !errors.Is(err, ports.ErrChatAuthRequired) {
 		t.Fatalf("Probe error = %v, want ErrChatAuthRequired", err)
 	}
@@ -293,5 +293,14 @@ func TestClaudePromptResponseFailureIgnoresAssistantAuthProse(t *testing.T) {
 	}
 	if err := claudePromptResponseFailure(response); err != nil {
 		t.Fatalf("assistant prose classified as terminal auth failure: %v", err)
+	}
+}
+
+func TestClaudeAuthRejectionNotifiesDaemon(t *testing.T) {
+	called := 0
+	callback := claudeAuthRejected(func() { called++ })
+	callback()
+	if called != 1 {
+		t.Fatalf("daemon callback calls = %d, want 1", called)
 	}
 }

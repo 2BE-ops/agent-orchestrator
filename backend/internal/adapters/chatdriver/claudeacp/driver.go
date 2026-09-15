@@ -38,7 +38,7 @@ type claudePlugin interface {
 // New constructs the Claude Code ACP driver over the existing Claude agent
 // plugin. The plugin remains the canonical discovery/auth implementation for
 // both Chat and TUI modes.
-func New(plugin claudePlugin, log *slog.Logger) ports.ChatDriver {
+func New(plugin claudePlugin, log *slog.Logger, onAuthRejected func()) ports.ChatDriver {
 	return &checkpointDriver{plugin: plugin, ChatDriver: acpdriver.New(acpdriver.Config{
 		Harness: domain.HarnessClaudeCode,
 		// A live rejection is the ground truth that outranks any cached
@@ -46,7 +46,7 @@ func New(plugin claudePlugin, log *slog.Logger) ports.ChatDriver {
 		// only auth correction that works for credential sources AO cannot
 		// read at all — the Bedrock and Vertex chains — because it needs no
 		// credential, no network call, and no provider knowledge.
-		OnAuthRejected:        claudecode.InvalidateAuthCache,
+		OnAuthRejected:        claudeAuthRejected(onAuthRejected),
 		PromptResponseFailure: claudePromptResponseFailure,
 		Capabilities: ports.ChatCapabilities{
 			ports.ChatCapabilityStreaming:    true,
@@ -111,6 +111,15 @@ func New(plugin claudePlugin, log *slog.Logger) ports.ChatDriver {
 		SessionMode:    claudeSessionMode,
 		SessionOptions: claudeSessionOptions,
 	}, log)}
+}
+
+func claudeAuthRejected(notifyDaemon func()) func() {
+	return func() {
+		claudecode.InvalidateAuthCache()
+		if notifyDaemon != nil {
+			notifyDaemon()
+		}
+	}
 }
 
 func claudePromptResponseFailure(response acpsdk.PromptResponse) error {
