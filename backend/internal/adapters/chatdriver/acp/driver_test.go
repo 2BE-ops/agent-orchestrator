@@ -675,6 +675,7 @@ type fakeAgent struct {
 	customPrompt        func(ctx context.Context, params acpsdk.PromptRequest) (acpsdk.PromptResponse, error)
 	mode                string
 	modeNotFound        bool // SetSessionMode returns -32601
+	modeRequiresOption  SessionOption
 	configNotFound      bool // SetSessionConfigOption returns -32601
 	configErr           error
 	newSessionUpdates   []acpsdk.SessionUpdate
@@ -965,6 +966,12 @@ func (a *fakeAgent) SetSessionConfigOption(_ context.Context, params acpsdk.SetS
 }
 func (a *fakeAgent) SetSessionMode(_ context.Context, params acpsdk.SetSessionModeRequest) (acpsdk.SetSessionModeResponse, error) {
 	a.mu.Lock()
+	if required := a.modeRequiresOption; required.ID != "" && a.options[required.ID] != required.Value {
+		a.mu.Unlock()
+		return acpsdk.SetSessionModeResponse{}, acpsdk.NewInternalError(map[string]any{
+			"details": "Mode auto is not available in this session",
+		})
+	}
 	if a.modeNotFound {
 		a.mu.Unlock()
 		return acpsdk.SetSessionModeResponse{}, acpsdk.NewMethodNotFound("session/set_mode")
@@ -1890,6 +1897,50 @@ func TestACPDriverKeepsPermissionPolicyWhenLaterTurnSettingFails(t *testing.T) {
 	conv.mu.Unlock()
 	if mode != ports.PermissionModeDefault {
 		t.Fatalf("permission mode after rejected settings = %q, want %q", mode, ports.PermissionModeDefault)
+	}
+}
+
+func TestACPDriverAppliesModelBeforeModelDependentMode(t *testing.T) {
+	agent := &fakeAgent{modeRequiresOption: SessionOption{
+		ID: "model", Value: "claude-opus-4-6",
+	}}
+	driver := New(Config{
+		Harness: domain.HarnessClaudeCode,
+		Probe:   func(context.Context) error { return nil },
+		Launch:  func(context.Context, LaunchConfig) (Launch, error) { return Launch{Command: "fake"}, nil },
+		SessionMode: func(permission ports.PermissionMode) string {
+			if ports.NormalizePermissionMode(permission) == ports.PermissionModeAuto {
+				return "auto"
+			}
+			return ""
+		},
+		SessionOptions: func(settings ports.ChatTurnSettings) []SessionOption {
+			return []SessionOption{
+				{ID: "model", Value: settings.Model},
+				{ID: "effort", Value: settings.Effort},
+			}
+		},
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	driver.useTestProcess(fakeSpawn(agent))
+
+	opened, err := driver.Start(context.Background(), ports.ChatStartConfig{
+		WorkspacePath: t.TempDir(),
+		Model:         "claude-opus-4-6",
+		Effort:        "low",
+		Permissions:   ports.PermissionModeAuto,
+	})
+	if err != nil {
+		t.Fatalf("Start with a model-dependent Auto mode: %v", err)
+	}
+	defer opened.Close()
+
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	if agent.mode != "auto" {
+		t.Fatalf("mode = %q, want auto", agent.mode)
+	}
+	if agent.options["model"] != "claude-opus-4-6" || agent.options["effort"] != "low" {
+		t.Fatalf("options = %v, want selected model and effort", agent.options)
 	}
 }
 
