@@ -1346,9 +1346,9 @@ function ChatWorkspaceContent({
 					}
 					role="tabpanel"
 				>
-					{/* Keep account guidance here only when the error is absent from chat. */}
-					{snapshot.account && !reauthErrorInChat ? (
-						<ReauthBanner account={snapshot.account} harness={snapshot.harness} />
+					{/* Keep sign-in guidance available without repeating the error from chat. */}
+					{snapshot.account ? (
+						<ReauthBanner account={snapshot.account} harness={snapshot.harness} reasonInTimeline={reauthErrorInChat} />
 					) : null}
 					<ControllerBanner
 						controller={snapshot.controller}

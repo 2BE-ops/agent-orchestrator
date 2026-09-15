@@ -140,7 +140,7 @@ describe("plan", () => {
 });
 
 describe("provider state chrome", () => {
-	it.each(["completion", "notification", "both"])("keeps the %s failure in chat without duplicating the auth banner", (source) => {
+	it.each(["completion", "notification", "both"])("keeps the %s failure in chat while preserving sign-in guidance", (source) => {
 		const reason = "Provider access denied.\n\nContact your administrator.";
 		const snapshot: ConversationSnapshot = {
 			...chatFixtureReauth,
@@ -188,13 +188,17 @@ describe("provider state chrome", () => {
 			});
 		}
 		const { rerender } = render(<ChatWorkspace snapshot={snapshot} />);
-		expect(screen.queryByText("Sign in again to keep going")).not.toBeInTheDocument();
+		expect(screen.getByRole("alert")).toHaveTextContent("Sign in again to keep going");
+		expect(screen.getByRole("alert")).toHaveTextContent("login");
+		expect(screen.getByRole("alert")).not.toHaveTextContent("Provider access denied");
 		expect(screen.getAllByText(/Provider access denied/)).toHaveLength(1);
 		expect(screen.getByText(/Contact your administrator/)).toBeInTheDocument();
 		expect(screen.getByText("Earlier recovered warning")).toBeInTheDocument();
 
 		rerender(<ChatWorkspace snapshot={structuredClone(snapshot)} />);
-		expect(screen.queryByText("Sign in again to keep going")).not.toBeInTheDocument();
+		expect(screen.getByRole("alert")).toHaveTextContent("Sign in again to keep going");
+		expect(screen.getByRole("alert")).toHaveTextContent("login");
+		expect(screen.getByRole("alert")).not.toHaveTextContent("Provider access denied");
 		expect(screen.getAllByText(/Provider access denied/)).toHaveLength(1);
 
 		rerender(
