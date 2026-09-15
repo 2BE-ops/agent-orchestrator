@@ -5806,9 +5806,13 @@ func TestSpawn_RejectsUnsupportedClaudeTUIEffortBeforeSessionRow(t *testing.T) {
 	}}})
 
 	_, _, _, err := m.Spawn(ctx, ports.SpawnConfig{
-		ProjectID: "mer", Kind: domain.KindWorker, Harness: domain.HarnessClaudeCode,
+		ProjectID:     "mer",
+		Kind:          domain.KindWorker,
+		Harness:       domain.HarnessClaudeCode,
 		RequestedMode: domain.SessionModeTUI,
-		AgentConfig:   ports.AgentConfig{Model: "sonnet", Effort: "max"},
+		AgentConfig: ports.AgentConfig{
+			Model: "sonnet", Effort: "max",
+		},
 		EffortOverride: true,
 	})
 	if !errors.Is(err, ports.ErrUnsupportedEffort) {

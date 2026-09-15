@@ -443,7 +443,7 @@ func ProviderModels(ctx context.Context, binary, workingDir string, env map[stri
 	if result.State == "" {
 		result = claudeValidator().ValidateLocal(probeCtx, reported, opts)
 	}
-	if result.State != agentcreds.StateValid && !(result.Provider == agentcreds.ProviderBedrock && len(result.Models) > 0) {
+	if result.State != agentcreds.StateValid && (result.Provider != agentcreds.ProviderBedrock || len(result.Models) == 0) {
 		return nil, fmt.Errorf("claude-code: model discovery: %s", result.Detail)
 	}
 	if len(result.Models) == 0 {
