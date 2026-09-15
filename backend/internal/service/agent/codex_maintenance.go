@@ -27,6 +27,15 @@ func (s *Service) RefreshCodexInstallation(ctx context.Context) error {
 			return errors.Join(readinessErr, err)
 		}
 		for _, record := range records {
+			if record.ProjectID != "" && s.projects != nil {
+				project, ok, err := s.projects.GetProject(ctx, record.ProjectID)
+				if err != nil {
+					return errors.Join(readinessErr, err)
+				}
+				if !ok || !project.ArchivedAt.IsZero() {
+					continue
+				}
+			}
 			projects[record.ProjectID] = true
 		}
 	}

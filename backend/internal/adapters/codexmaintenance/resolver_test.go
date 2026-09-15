@@ -71,6 +71,21 @@ func (f *fixture) pkg(root string) {
 	f.files[root+"/bin/codex.js"] = "#!/usr/bin/env node\n"
 }
 
+func generatedSHShim(target string) string {
+	return "#!/bin/sh\n" +
+		`basedir=$(dirname "$(echo "$0" | sed -e 's,\\,/,g')")` + "\n\n" +
+		"case `uname` in\n    *CYGWIN*|*MINGW*|*MSYS*)\n        if command -v cygpath > /dev/null 2>&1; then\n            basedir=`cygpath -w \"$basedir\"`\n        fi\n    ;;\nesac\n\n" +
+		"exec node \"$basedir/" + target + "\" \"$@\"\n"
+}
+
+func generatedCMDShim(target string) string {
+	return "@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT /b\r\n:start\r\nSETLOCAL\r\nCALL :find_dp0\r\nnode \"%dp0%\\" + target + "\" %*\r\n"
+}
+
+func generatedPowerShellShim(target string) string {
+	return "#!/usr/bin/env pwsh\n$basedir=Split-Path $MyInvocation.MyCommand.Definition -Parent\n$ret=0\n& node \"$basedir/" + target + "\" $args\n$ret=$LASTEXITCODE\nexit $ret\n"
+}
+
 func TestOwnershipAndCommands(t *testing.T) {
 	for _, goos := range []string{"darwin", "linux", "windows"} {
 		t.Run(goos+"/standalone", func(t *testing.T) {
@@ -110,7 +125,7 @@ func TestOwnershipAndCommands(t *testing.T) {
 			root := prefix + "/lib/node_modules/@openai/codex"
 			if goos == "windows" {
 				root = prefix + "/node_modules/@openai/codex"
-				f.files[selected] = "@ECHO off\n\"%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js\" %*"
+				f.files[selected] = generatedCMDShim(`node_modules\@openai\codex\bin\codex.js`)
 			} else {
 				f.links[selected] = root + "/bin/codex.js"
 			}
@@ -282,6 +297,24 @@ func TestManualAndChangedOwnership(t *testing.T) {
 	}
 }
 
+func TestCustomWrapperWithUnusedPackageFallbackIsManualOnly(t *testing.T) {
+	selected, prefix := "/custom/bin/codex", "/custom"
+	f := newFixture("linux", selected)
+	root := prefix + "/lib/node_modules/@openai/codex"
+	f.pkg(root)
+	f.files[selected] = "#!/bin/sh\nbasedir=$(dirname \"$0\")\nif [ -x \"$basedir/pinned-codex\" ]; then\n  exec \"$basedir/pinned-codex\" \"$@\"\nfi\nexec node \"$basedir/../lib/node_modules/@openai/codex/bin/codex.js\" \"$@\"\n"
+	f.tools["npm"] = "/custom/bin/npm"
+	f.replies["/custom/bin/npm root -g --prefix "+prefix] = prefix + "/lib/node_modules"
+
+	installation, err := f.r.Resolve(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(installation.Command.Argv) != 0 || installation.Source != "unknown" {
+		t.Fatalf("custom wrapper authorized an unused fallback installation: %+v", installation)
+	}
+}
+
 type transportFunc func(*http.Request) (*http.Response, error)
 
 func (f transportFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
@@ -329,9 +362,9 @@ func TestFingerprintTracksUnchangedShimAndReplacedPayload(t *testing.T) {
 
 func TestWindowsPackageShimsAndNativePayload(t *testing.T) {
 	for _, tc := range []struct{ name, script string }{
-		{"codex.cmd", "@ECHO off\n\"%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js\" %*"},
-		{"codex.ps1", "$basedir=Split-Path $MyInvocation.MyCommand.Definition -Parent\n& node \"$basedir/node_modules/@openai/codex/bin/codex.js\" $args"},
-		{"codex", "#!/bin/sh\nbasedir=$(dirname \"$0\")\nexec node \"$basedir/node_modules/@openai/codex/bin/codex.js\" \"$@\""},
+		{"codex.cmd", generatedCMDShim(`node_modules\@openai\codex\bin\codex.js`)},
+		{"codex.ps1", generatedPowerShellShim("node_modules/@openai/codex/bin/codex.js")},
+		{"codex", generatedSHShim("node_modules/@openai/codex/bin/codex.js")},
 		{"node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

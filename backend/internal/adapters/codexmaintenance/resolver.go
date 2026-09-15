@@ -238,9 +238,11 @@ func (r *Resolver) shimTarget(ctx context.Context, p string) string {
 		return ""
 	}
 	text := string(data)
-	// npm/cmd-shim and pnpm generate these signatures. Do not infer ownership
-	// just because a nearby package happens to exist.
-	if !strings.Contains(text, "basedir=") && !strings.Contains(text, "@ECHO off") && !strings.Contains(text, "$basedir=") {
+	// npm/cmd-shim and pnpm generate these complete scaffolds. A custom wrapper
+	// may mention a package-managed Codex only as a fallback while executing a
+	// different binary, so a nearby reference alone is not ownership proof.
+	shimKind := generatedPackageShimKind(text)
+	if shimKind == "" {
 		return ""
 	}
 	matches := shimReference.FindAllStringSubmatch(text, -1)
@@ -252,7 +254,52 @@ func (r *Resolver) shimTarget(ctx context.Context, p string) string {
 		}
 		target = resolved
 	}
+	if target == "" || !shimExecutionLinesMatchTarget(text, shimKind) {
+		return ""
+	}
 	return target
+}
+
+func generatedPackageShimKind(text string) string {
+	switch {
+	case strings.HasPrefix(text, "#!/bin/sh\n") &&
+		strings.Contains(text, `basedir=$(dirname "$(echo "$0" | sed -e 's,\\,/,g')")`) &&
+		strings.Contains(text, "case `uname` in") && strings.Contains(text, "cygpath"):
+		return "sh"
+	case strings.HasPrefix(text, "@ECHO off") && strings.Contains(text, "GOTO start") &&
+		strings.Contains(text, "CALL :find_dp0") && strings.Contains(text, "SETLOCAL"):
+		return "cmd"
+	case strings.HasPrefix(text, "#!/usr/bin/env pwsh\n") &&
+		strings.Contains(text, "$basedir=Split-Path $MyInvocation.MyCommand.Definition -Parent") &&
+		strings.Contains(text, "$LASTEXITCODE"):
+		return "pwsh"
+	default:
+		return ""
+	}
+}
+
+func shimExecutionLinesMatchTarget(text, kind string) bool {
+	invocations := 0
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		invokes := false
+		switch kind {
+		case "sh":
+			invokes = strings.HasPrefix(line, "exec ")
+		case "cmd":
+			invokes = strings.Contains(line, "%*")
+		case "pwsh":
+			invokes = strings.Contains(line, "& ") && strings.Contains(line, "$args")
+		}
+		if !invokes {
+			continue
+		}
+		if !shimReference.MatchString(line) {
+			return false
+		}
+		invocations++
+	}
+	return invocations > 0
 }
 
 func (r *Resolver) tool(ctx context.Context, name, adjacent string) string {

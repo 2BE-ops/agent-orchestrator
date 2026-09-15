@@ -521,12 +521,13 @@ func (r *Runtime) Destroy(ctx context.Context, handle ports.RuntimeHandle) error
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && killSessionMissingOutput(string(out)) {
-			r.forgetSessionSocket(id)
 			return nil
 		}
 		return fmt.Errorf("tmux runtime: destroy session %s: %w", id, err)
 	}
-	r.forgetSessionSocket(id)
+	// Keep the resolved socket route as a tombstone for exact post-destroy
+	// verification and idempotent retries. Create overwrites it if the same id
+	// is ever reused; the cache lives only for this daemon process.
 	return nil
 }
 
@@ -1097,12 +1098,6 @@ func (r *Runtime) socketForSession(ctx context.Context, id string) (string, erro
 func (r *Runtime) rememberSessionSocket(id, socketName string) {
 	r.socketMu.Lock()
 	r.sessionSockets[id] = socketName
-	r.socketMu.Unlock()
-}
-
-func (r *Runtime) forgetSessionSocket(id string) {
-	r.socketMu.Lock()
-	delete(r.sessionSockets, id)
 	r.socketMu.Unlock()
 }
 

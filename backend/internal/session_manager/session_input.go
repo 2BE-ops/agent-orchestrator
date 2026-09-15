@@ -59,6 +59,10 @@ func (m *Manager) AcquireSessionInput(id domain.SessionID) (release func(), ok b
 // execution: it cannot establish that a retained shell consumed pending input.
 // Unrelated terminal input stays open.
 func (m *Manager) ReserveTerminalInput(ctx context.Context, terminalIDs []string) (func(), error) {
+	return m.reserveTerminalInput(ctx, terminalIDs, agentOperationProviderUpdate)
+}
+
+func (m *Manager) reserveTerminalInput(ctx context.Context, terminalIDs []string, kind agentOperationKind) (func(), error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -68,7 +72,7 @@ func (m *Manager) ReserveTerminalInput(ctx context.Context, terminalIDs []string
 	release := func() {
 		once.Do(func() {
 			for i := len(acquired) - 1; i >= 0; i-- {
-				m.endAgentOperation(acquired[i], agentOperationProviderUpdate)
+				m.endAgentOperation(acquired[i], kind)
 			}
 		})
 	}
@@ -78,7 +82,7 @@ func (m *Manager) ReserveTerminalInput(ctx context.Context, terminalIDs []string
 			continue
 		}
 		seen[id] = true
-		if err := m.beginAgentOperation(ctx, id, agentOperationProviderUpdate); err != nil {
+		if err := m.beginAgentOperation(ctx, id, kind); err != nil {
 			release()
 			return nil, err
 		}
