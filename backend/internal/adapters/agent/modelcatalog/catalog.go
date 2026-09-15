@@ -213,10 +213,10 @@ func discoverClaudeCatalog(
 
 	if list != nil {
 		if models, err := list(ctx, request); err == nil && len(models) > 0 {
-			normalized := normalizeClaudeProviderModels(models)
+			normalized := normalize(models)
 			if len(normalized) > 0 {
 				base.Models = applyClaudeConfiguredDefault(
-					normalize(normalized), request.WorkingDir, request.Env)
+					normalized, request.WorkingDir, request.Env)
 				base.Source = "provider"
 				return base
 			}
@@ -226,93 +226,6 @@ func discoverClaudeCatalog(
 	base.Models = applyClaudeConfiguredDefault(normalize(claudeCodeModels()), request.WorkingDir, request.Env)
 	return base
 }
-
-// normalizeClaudeProviderModels cleans provider rows for the picker, keeping
-// each model's own effort levels attached to it.
-func normalizeClaudeProviderModels(models []ports.AgentModelInfo) []ports.AgentModelInfo {
-	cleaned := make([]ports.AgentModelInfo, 0, len(models))
-	seen := make(map[string]struct{}, len(models))
-	for _, model := range models {
-		id := strings.TrimSpace(model.ID)
-		if id == "" {
-			continue
-		}
-		if _, duplicate := seen[id]; duplicate {
-			continue
-		}
-		seen[id] = struct{}{}
-		// The provider's own display name is preferred, minus the vendor
-		// prefix it carries ("Claude Opus 5"): inside a Claude model picker
-		// every row would repeat it, which costs width and tells the reader
-		// nothing they did not already know.
-		label := strings.TrimPrefix(strings.TrimSpace(model.Label), "Claude ")
-		if label == "" {
-			label = claudeModelLabel(id)
-		}
-		cleaned = append(cleaned, ports.AgentModelInfo{ID: id, Label: label, Efforts: model.Efforts})
-	}
-	return cleaned
-}
-
-// claudeModelLabel turns a provider model ID into something readable without
-// pretending to understand it. Every provider spells these differently, so the
-// rule is deliberately shallow: strip the vendor and version decoration each
-// one adds, title-case the family, and fall back to the raw ID whenever the
-// shape is unfamiliar. Showing an unmodified ID is always acceptable; showing
-// a wrong friendly name is not.
-func claudeModelLabel(id string) string {
-	trimmed := id
-	// Bedrock: [region.]anthropic.claude-opus-4-5-v1:0
-	if index := strings.Index(trimmed, "anthropic."); index >= 0 {
-		trimmed = trimmed[index+len("anthropic."):]
-	}
-	if index := strings.Index(trimmed, ":"); index >= 0 {
-		trimmed = trimmed[:index]
-	}
-	trimmed = strings.TrimSuffix(trimmed, "-v1")
-	// Vertex: claude-opus-4-5@20251101; first-party: claude-opus-4-5-20251101
-	if index := strings.Index(trimmed, "@"); index >= 0 {
-		trimmed = trimmed[:index]
-	}
-	if !strings.HasPrefix(trimmed, "claude-") {
-		return id
-	}
-	parts := strings.Split(strings.TrimPrefix(trimmed, "claude-"), "-")
-	if len(parts) == 0 || parts[0] == "" {
-		return id
-	}
-	family := parts[0]
-	label := strings.ToUpper(family[:1]) + family[1:]
-	version := make([]string, 0, 2)
-	for _, part := range parts[1:] {
-		// Stop at a date stamp; the family plus version is the useful part.
-		if len(part) >= 8 && isAllDigits(part) {
-			break
-		}
-		if isAllDigits(part) {
-			version = append(version, part)
-			continue
-		}
-		break
-	}
-	if len(version) > 0 {
-		label += " " + strings.Join(version, ".")
-	}
-	return label
-}
-
-func isAllDigits(value string) bool {
-	if value == "" {
-		return false
-	}
-	for _, r := range value {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
-}
-
 func applyClaudeConfiguredDefault(models []ports.AgentModelInfo, workingDir string, env map[string]string) []ports.AgentModelInfo {
 	configured := claudeCodeResolvedModel(workingDir, env)
 	if configured == "" {

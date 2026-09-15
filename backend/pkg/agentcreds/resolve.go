@@ -25,9 +25,6 @@ import (
 // Env is an environment lookup, injectable for tests.
 type Env func(string) string
 
-// OSEnv reads the real process environment.
-func OSEnv(name string) string { return os.Getenv(name) }
-
 // ResolveOptions tunes local credential discovery.
 type ResolveOptions struct {
 	// Env reads environment variables. Defaults to the process environment.
@@ -288,7 +285,9 @@ func resolveVertex(opts ResolveOptions) (Credential, bool) {
 		if cred.Project == "" {
 			// A service-account key names its own project, which saves the
 			// user from having to set a second variable.
-			var key serviceAccountKey
+			var key struct {
+				ProjectID string `json:"project_id"`
+			}
 			if json.Unmarshal(data, &key) == nil {
 				cred.Project = key.ProjectID
 			}

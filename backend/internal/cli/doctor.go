@@ -524,7 +524,7 @@ func (c *commandContext) checkClaudeAuth(ctx context.Context) doctorCheck {
 	// do not compete for a single timeout.
 	probeCtx, cancel := context.WithTimeout(ctx, agentcreds.DefaultTimeout)
 	defer cancel()
-	result := doctorCredentialValidator().ValidateLocal(
+	result := agentcreds.New(nil).ValidateLocal(
 		probeCtx, report.APIProvider, agentcreds.ResolveOptions{AllowKeychain: true})
 	switch result.State {
 	case agentcreds.StateValid:
@@ -553,11 +553,6 @@ func (c *commandContext) checkClaudeAuth(ctx context.Context) doctorCheck {
 			suffix, result.Detail, shadow),
 	}
 }
-
-// doctorCredentialValidator builds the validator used by the auth check. It is
-// a variable so tests can point it at a local server: doctor's own tests must
-// never reach a real provider, nor read the developer's real credentials.
-var doctorCredentialValidator = func() *agentcreds.Validator { return agentcreds.New() }
 
 func providerLabel(provider agentcreds.Provider) string {
 	switch provider {

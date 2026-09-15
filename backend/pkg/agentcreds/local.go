@@ -3,6 +3,7 @@ package agentcreds
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 // ValidateLocal runs the whole local story: decide the provider, resolve the
@@ -17,7 +18,7 @@ func (v *Validator) ValidateLocal(ctx context.Context, reportedProvider string, 
 		// An apiProvider this build does not recognize. Probing anything now
 		// would mean guessing which host should receive the credential.
 		return Result{
-			State: StateUnknown, CheckedAt: v.now(),
+			State: StateUnknown, CheckedAt: time.Now(),
 			Detail: "the configured API provider is not one this build can validate",
 		}
 	}
@@ -36,7 +37,7 @@ func (v *Validator) ValidateLocal(ctx context.Context, reportedProvider string, 
 			return v.ValidateVertexViaCLI(ctx, project, region)
 		default:
 			return Result{
-				State: StateUnknown, Provider: provider, CheckedAt: v.now(),
+				State: StateUnknown, Provider: provider, CheckedAt: time.Now(),
 				Detail: "no credential could be resolved for this provider",
 			}
 		}

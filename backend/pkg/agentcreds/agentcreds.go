@@ -129,16 +129,6 @@ func (c Credential) Fingerprint() string {
 	return hex.EncodeToString(sum[:])[:12]
 }
 
-// Fingerprint returns sha256(secret)[:12], or "" for an empty secret.
-func Fingerprint(secret string) string {
-	secret = strings.TrimSpace(secret)
-	if secret == "" {
-		return ""
-	}
-	sum := sha256.Sum256([]byte(secret))
-	return hex.EncodeToString(sum[:])[:12]
-}
-
 // Model is one model a provider reported, with the capabilities that differ
 // per model and therefore cannot be hardcoded.
 type Model struct {
@@ -177,9 +167,6 @@ type Result struct {
 	Err error
 }
 
-// Valid reports whether the provider accepted the credential.
-func (r Result) Valid() bool { return r.State == StateValid }
-
 // anthropicAPIVersion is required on every first-party request.
 const anthropicAPIVersion = "2023-06-01"
 
@@ -194,44 +181,16 @@ const maxBodyBytes = 256 << 10
 // Validator performs credential probes. The zero value is not usable; call
 // New.
 type Validator struct {
-	client   *http.Client
-	now      func() time.Time
-	execCmd  commandRunner
-	endpoint endpointOverrides
-}
-
-// Option configures a Validator.
-type Option func(*Validator)
-
-// WithHTTPClient sets the HTTP client used for probes.
-func WithHTTPClient(client *http.Client) Option {
-	return func(v *Validator) {
-		if client != nil {
-			v.client = client
-		}
-	}
-}
-
-// WithClock replaces the clock, for tests.
-func WithClock(now func() time.Time) Option {
-	return func(v *Validator) {
-		if now != nil {
-			v.now = now
-		}
-	}
+	client  *http.Client
+	execCmd commandRunner
 }
 
 // New builds a Validator.
-func New(opts ...Option) *Validator {
-	v := &Validator{
-		client:  &http.Client{Timeout: DefaultTimeout},
-		now:     time.Now,
-		execCmd: execCommand,
+func New(client *http.Client) *Validator {
+	if client == nil {
+		client = &http.Client{Timeout: DefaultTimeout}
 	}
-	for _, opt := range opts {
-		opt(v)
-	}
-	return v
+	return &Validator{client: client, execCmd: execCommand}
 }
 
 // Validate probes the credential against its provider and classifies the
@@ -243,7 +202,7 @@ func (v *Validator) Validate(ctx context.Context, cred Credential) Result {
 		Provider:    cred.Provider,
 		Source:      cred.Source,
 		Fingerprint: cred.Fingerprint(),
-		CheckedAt:   v.now(),
+		CheckedAt:   time.Now(),
 	}
 	provider := cred.Provider
 	if provider == "" {

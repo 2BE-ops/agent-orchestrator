@@ -120,41 +120,12 @@ func TestClaudeProviderModelsAreDeduped(t *testing.T) {
 	}
 }
 
-// Labels are cosmetic, so the rule stays shallow: an unfamiliar shape must show
-// its raw ID rather than a confidently wrong friendly name.
-func TestClaudeModelLabel(t *testing.T) {
-	tests := []struct {
-		id   string
-		want string
-	}{
-		{"claude-opus-4-5-20251101", "Opus 4.5"},
-		{"claude-sonnet-4-5-20250929", "Sonnet 4.5"},
-		{"us.anthropic.claude-opus-4-5-v1:0", "Opus 4.5"},
-		{"anthropic.claude-haiku-4-5-v1:0", "Haiku 4.5"},
-		{"claude-opus-4-5@20251101", "Opus 4.5"},
-		{"claude-haiku-4-5", "Haiku 4.5"},
-		// Unfamiliar shapes fall back to the ID itself.
-		{"some-future-model", "some-future-model"},
-		{"gpt-4o", "gpt-4o"},
-		{"claude-", "claude-"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.id, func(t *testing.T) {
-			if got := claudeModelLabel(tc.id); got != tc.want {
-				t.Fatalf("claudeModelLabel(%q) = %q, want %q", tc.id, got, tc.want)
-			}
-		})
-	}
-}
-
-// Every row in a Claude picker would otherwise begin with "Claude", which
-// costs width and tells the reader nothing.
-func TestProviderDisplayNamesDropTheRedundantVendorPrefix(t *testing.T) {
+func TestProviderModelsPreserveProviderLabelsAndFallBackToRawIDs(t *testing.T) {
 	list := func(context.Context, ports.AgentModelDiscoveryRequest) ([]ports.AgentModelInfo, error) {
 		return []ports.AgentModelInfo{
 			{ID: "claude-opus-5", Label: "Claude Opus 5", Efforts: []string{"low", "max"}},
 			{ID: "claude-sonnet-4-5-20250929", Label: "Claude Sonnet 4.5"},
-			// No display name: the derived label is used instead.
+			// No display name: the raw provider ID is the honest fallback.
 			{ID: "claude-haiku-4-5-20251001"},
 		}, nil
 	}
@@ -163,14 +134,14 @@ func TestProviderDisplayNamesDropTheRedundantVendorPrefix(t *testing.T) {
 	for _, model := range catalog.Models {
 		labels[model.ID] = model.Label
 	}
-	if labels["claude-opus-5"] != "Opus 5" {
-		t.Fatalf("label = %q, want %q", labels["claude-opus-5"], "Opus 5")
+	if labels["claude-opus-5"] != "Claude Opus 5" {
+		t.Fatalf("label = %q, want provider label", labels["claude-opus-5"])
 	}
-	if labels["claude-sonnet-4-5-20250929"] != "Sonnet 4.5" {
-		t.Fatalf("label = %q, want %q", labels["claude-sonnet-4-5-20250929"], "Sonnet 4.5")
+	if labels["claude-sonnet-4-5-20250929"] != "Claude Sonnet 4.5" {
+		t.Fatalf("label = %q, want provider label", labels["claude-sonnet-4-5-20250929"])
 	}
-	if labels["claude-haiku-4-5-20251001"] != "Haiku 4.5" {
-		t.Fatalf("derived label = %q, want %q", labels["claude-haiku-4-5-20251001"], "Haiku 4.5")
+	if labels["claude-haiku-4-5-20251001"] != "claude-haiku-4-5-20251001" {
+		t.Fatalf("fallback label = %q, want raw model ID", labels["claude-haiku-4-5-20251001"])
 	}
 }
 

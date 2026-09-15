@@ -23,14 +23,13 @@ func TestProviderGateNeverProbesTheWrongHost(t *testing.T) {
 	}))
 	defer bedrock.Close()
 
-	validator := New(WithHTTPClient(bedrock.Client()))
-	validator.endpoint.anthropic = anthropic.URL
+	validator := New(bedrock.Client())
 
 	result := validator.Validate(context.Background(), Credential{
 		Kind: KindAuthToken, Secret: "bedrock-bearer", Source: "AWS_BEARER_TOKEN_BEDROCK",
 		Provider: ProviderBedrock, Region: "us-east-1", BaseURL: bedrock.URL,
 	})
-	if !result.Valid() {
+	if result.State != StateValid {
 		t.Fatalf("state = %q (%s)", result.State, result.Detail)
 	}
 }
@@ -85,7 +84,7 @@ func TestProbesTargetModelEndpoints(t *testing.T) {
 
 			cred := tc.cred
 			cred.BaseURL = server.URL
-			New(WithHTTPClient(server.Client())).Validate(context.Background(), cred)
+			New(server.Client()).Validate(context.Background(), cred)
 			if !strings.HasSuffix(path, tc.wantPath) {
 				t.Fatalf("probed %q, want a path ending in %q", path, tc.wantPath)
 			}
@@ -133,7 +132,7 @@ func TestCloudProvidersRequireClaudeEntitlement(t *testing.T) {
 
 			cred := tc.cred
 			cred.BaseURL = server.URL
-			result := New(WithHTTPClient(server.Client())).Validate(context.Background(), cred)
+			result := New(server.Client()).Validate(context.Background(), cred)
 			if result.State != StateUnknown {
 				t.Fatalf("state = %q (%s), want unknown — a 200 without Claude access is not a pass",
 					result.State, result.Detail)
@@ -150,7 +149,7 @@ func TestGatewayToleratesAMissingModelEndpoint(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result := New(WithHTTPClient(server.Client())).Validate(context.Background(), Credential{
+	result := New(server.Client()).Validate(context.Background(), Credential{
 		Kind: KindAPIKey, Secret: "k", Provider: ProviderGateway, BaseURL: server.URL,
 	})
 	if result.State != StateUnknown {
@@ -198,8 +197,8 @@ func TestValidationReturnsThatProvidersModelIDs(t *testing.T) {
 
 			cred := tc.cred
 			cred.BaseURL = server.URL
-			result := New(WithHTTPClient(server.Client())).Validate(context.Background(), cred)
-			if !result.Valid() {
+			result := New(server.Client()).Validate(context.Background(), cred)
+			if result.State != StateValid {
 				t.Fatalf("state = %q (%s)", result.State, result.Detail)
 			}
 			if len(result.Models) != 1 || result.Models[0].ID != tc.want {
@@ -228,10 +227,10 @@ func TestFoundryHeaderFollowsKind(t *testing.T) {
 			}))
 			defer server.Close()
 
-			result := New(WithHTTPClient(server.Client())).Validate(context.Background(), Credential{
+			result := New(server.Client()).Validate(context.Background(), Credential{
 				Kind: tc.kind, Secret: "foundry-secret", Provider: ProviderFoundry, BaseURL: server.URL,
 			})
-			if !result.Valid() {
+			if result.State != StateValid {
 				t.Fatalf("state = %q (%s)", result.State, result.Detail)
 			}
 			if got.Get(tc.wantHeader) != tc.wantValue {
@@ -244,7 +243,7 @@ func TestFoundryHeaderFollowsKind(t *testing.T) {
 // Foundry needs a resource name to build a URL at all. Missing one is Unknown,
 // not a rejection.
 func TestFoundryWithoutAResourceIsUnknown(t *testing.T) {
-	result := New().Validate(context.Background(), Credential{
+	result := New(nil).Validate(context.Background(), Credential{
 		Kind: KindAzureAPIKey, Secret: "k", Provider: ProviderFoundry,
 	})
 	if result.State != StateUnknown {
@@ -255,7 +254,7 @@ func TestFoundryWithoutAResourceIsUnknown(t *testing.T) {
 // A credential kind that cannot authenticate to a provider is a programming
 // error, and must surface as Unknown rather than as a bogus rejection.
 func TestMismatchedKindAndProviderIsUnknown(t *testing.T) {
-	result := New().Validate(context.Background(), Credential{
+	result := New(nil).Validate(context.Background(), Credential{
 		Kind: KindAWSSigV4, Secret: "a\nb", Provider: ProviderFirstParty,
 	})
 	if result.State != StateUnknown {

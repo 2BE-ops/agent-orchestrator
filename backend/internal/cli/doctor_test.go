@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/registry"
-	"github.com/aoagents/agent-orchestrator/backend/pkg/agentcreds"
 )
 
 func TestDoctorChecksGitVersion(t *testing.T) {
@@ -819,11 +818,6 @@ func stubDoctorValidator(t *testing.T, handler http.HandlerFunc) {
 	}
 	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-doctor-test")
 	t.Setenv("ANTHROPIC_BASE_URL", server.URL)
-	previous := doctorCredentialValidator
-	doctorCredentialValidator = func() *agentcreds.Validator {
-		return agentcreds.New(agentcreds.WithHTTPClient(server.Client()))
-	}
-	t.Cleanup(func() { doctorCredentialValidator = previous })
 }
 
 func claudeAuthContext(t *testing.T, cliOutput string) *commandContext {

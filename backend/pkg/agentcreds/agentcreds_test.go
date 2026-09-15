@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 )
 
 // The classification table is the core of the package, and two of its rows are
@@ -35,7 +34,7 @@ func TestClassification(t *testing.T) {
 			}))
 			defer server.Close()
 
-			result := New(WithHTTPClient(server.Client())).Validate(context.Background(), Credential{
+			result := New(server.Client()).Validate(context.Background(), Credential{
 				Kind: KindAPIKey, Secret: "sk-ant-test", Source: "ANTHROPIC_API_KEY",
 				Provider: ProviderFirstParty, BaseURL: server.URL,
 			})
@@ -68,7 +67,7 @@ func TestHeaderFollowsCredentialKind(t *testing.T) {
 			}))
 			defer server.Close()
 
-			New(WithHTTPClient(server.Client())).Validate(context.Background(), Credential{
+			New(server.Client()).Validate(context.Background(), Credential{
 				Kind: tc.kind, Secret: "secret-value", Provider: ProviderFirstParty, BaseURL: server.URL,
 			})
 			if got.Header.Get(tc.wantHeader) != tc.wantValue {
@@ -90,7 +89,7 @@ func TestEmptySecretIsNeverProbed(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result := New(WithHTTPClient(server.Client())).Validate(context.Background(), Credential{
+	result := New(server.Client()).Validate(context.Background(), Credential{
 		Kind: KindAPIKey, Secret: "   ", Provider: ProviderFirstParty, BaseURL: server.URL,
 	})
 	if result.State != StateUnknown {
@@ -107,7 +106,7 @@ func TestRejectionCarriesTheProviderMessage(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result := New(WithHTTPClient(server.Client())).Validate(context.Background(), Credential{
+	result := New(server.Client()).Validate(context.Background(), Credential{
 		Kind: KindOAuthToken, Secret: "sk-ant-oat01-x", Provider: ProviderFirstParty, BaseURL: server.URL,
 	})
 	if result.State != StateInvalid {
@@ -143,23 +142,23 @@ func TestIsResolverBug(t *testing.T) {
 	}
 }
 
-func TestFingerprintIsShortAndNotTheSecret(t *testing.T) {
+func TestCredentialFingerprintIsShortAndNotTheSecret(t *testing.T) {
 	const secret = "sk-ant-api03-a-very-long-and-secret-value"
-	fingerprint := Fingerprint(secret)
+	fingerprint := (Credential{Secret: secret}).Fingerprint()
 	if len(fingerprint) != 12 {
 		t.Fatalf("fingerprint = %q, want 12 characters", fingerprint)
 	}
 	if contains(fingerprint, "sk-ant") || contains(secret, fingerprint) {
 		t.Fatal("the fingerprint must not reveal any part of the secret")
 	}
-	if Fingerprint("") != "" || Fingerprint("  ") != "" {
+	if (Credential{}).Fingerprint() != "" || (Credential{Secret: "  "}).Fingerprint() != "" {
 		t.Fatal("an empty secret has no fingerprint")
 	}
-	secondFingerprint := Fingerprint(secret)
+	secondFingerprint := (Credential{Secret: secret}).Fingerprint()
 	if fingerprint != secondFingerprint {
 		t.Fatal("fingerprints must be stable")
 	}
-	if Fingerprint(secret) == Fingerprint(secret+"x") {
+	if (Credential{Secret: secret}).Fingerprint() == (Credential{Secret: secret + "x"}).Fingerprint() {
 		t.Fatal("a changed secret must change the fingerprint")
 	}
 }
@@ -188,14 +187,6 @@ func TestCredentialFingerprintScopesCacheIdentityToProviderConfiguration(t *test
 			}
 		})
 	}
-
-	cache := NewCache(time.Minute)
-	cache.Put("claude-code", Result{State: StateValid, Fingerprint: base.Fingerprint()})
-	otherProvider := base
-	otherProvider.Provider = ProviderFirstParty
-	if _, ok := cache.Get("claude-code", otherProvider.Fingerprint()); ok {
-		t.Fatal("a verdict for one provider configuration must miss for another")
-	}
 }
 
 func contains(haystack, needle string) bool {
@@ -222,10 +213,10 @@ func TestUnparsableBodyDoesNotRetractAnAcceptance(t *testing.T) {
 			}))
 			defer server.Close()
 
-			result := New(WithHTTPClient(server.Client())).Validate(context.Background(), Credential{
+			result := New(server.Client()).Validate(context.Background(), Credential{
 				Kind: KindAPIKey, Secret: "k", Provider: ProviderFirstParty, BaseURL: server.URL,
 			})
-			if !result.Valid() {
+			if result.State != StateValid {
 				t.Fatalf("state = %q (%s), want valid", result.State, result.Detail)
 			}
 			if len(result.Models) != 0 {
@@ -243,7 +234,7 @@ func TestUnparsableBodyIsUnknownWhereEntitlementMatters(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result := New(WithHTTPClient(server.Client())).Validate(context.Background(), Credential{
+	result := New(server.Client()).Validate(context.Background(), Credential{
 		Kind: KindAuthToken, Secret: "k", Provider: ProviderBedrock,
 		Region: "us-east-1", BaseURL: server.URL,
 	})

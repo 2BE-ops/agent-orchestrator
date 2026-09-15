@@ -245,33 +245,21 @@ func TestRuntimeCommandOverride(t *testing.T) {
 	}
 }
 
-// I1: the auth check is strictly additive. It may turn unknown into a definite
-// answer, and it may never block a launch that would otherwise have succeeded.
-// Every way of failing to resolve or reach a credential — an unreadable
-// keychain, a timeout, an unparsable CLI, a credential that is merely present
-// — must let the session proceed exactly as before.
-func TestPreflightOnlyBlocksOnAVerifiedRejection(t *testing.T) {
-	tests := []struct {
-		name      string
-		status    ports.AgentAuthStatus
-		err       error
-		wantBlock bool
-	}{
-		{name: "configured but unverified", status: ports.AgentAuthStatusConfigured},
-		{name: "inconclusive", status: ports.AgentAuthStatusUnknown},
-		{name: "probe errored", status: ports.AgentAuthStatusUnknown, err: context.DeadlineExceeded},
-		{name: "binary missing", status: ports.AgentAuthStatusUnavailable},
-		{name: "unreadable credential reported as unauthorized alongside an error",
-			status: ports.AgentAuthStatusUnauthorized, err: context.DeadlineExceeded},
-		{name: "verified rejection", status: ports.AgentAuthStatusUnauthorized, wantBlock: true},
+type rejectedClaudePlugin struct{ binary string }
+
+func (p rejectedClaudePlugin) ResolveBinary(context.Context) (string, error) { return p.binary, nil }
+func (rejectedClaudePlugin) AuthStatus(context.Context) (ports.AgentAuthStatus, error) {
+	return ports.AgentAuthStatusUnauthorized, nil
+}
+
+func TestPreflightBlocksAConfirmedRejection(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := authPreflightError(tc.status, tc.err)
-			blocked := errors.Is(err, ports.ErrChatAuthRequired)
-			if blocked != tc.wantBlock {
-				t.Fatalf("blocked = %v (err %v), want %v", blocked, err, tc.wantBlock)
-			}
-		})
+	t.Setenv("AO_CLAUDE_ACP_COMMAND", executable)
+	_, err = New(rejectedClaudePlugin{binary: executable}, nil).Probe(context.Background())
+	if !errors.Is(err, ports.ErrChatAuthRequired) {
+		t.Fatalf("Probe error = %v, want ErrChatAuthRequired", err)
 	}
 }

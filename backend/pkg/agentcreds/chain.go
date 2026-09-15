@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // Chain-sourced credentials.
@@ -38,13 +39,12 @@ func execCommand(ctx context.Context, name string, args ...string) ([]byte, erro
 	return exec.CommandContext(ctx, path, args...).CombinedOutput()
 }
 
-// WithCommandRunner replaces the external-command runner, for tests.
-func WithCommandRunner(runner commandRunner) Option {
-	return func(v *Validator) {
-		if runner != nil {
-			v.execCmd = runner
-		}
+func newWithCommandRunner(client *http.Client, runner commandRunner) *Validator {
+	v := New(client)
+	if runner != nil {
+		v.execCmd = runner
 	}
+	return v
 }
 
 // ValidateVertexViaCLI asks gcloud for an access token and probes with it.
@@ -53,7 +53,11 @@ func WithCommandRunner(runner commandRunner) Option {
 // account impersonation, workload identity federation — so one command turns
 // an unresolvable credential into an ordinary bearer token.
 func (v *Validator) ValidateVertexViaCLI(ctx context.Context, project, region string) Result {
-	result := Result{Provider: ProviderVertex, Source: "gcloud", CheckedAt: v.now()}
+	return v.validateVertexViaCLI(ctx, project, region, "")
+}
+
+func (v *Validator) validateVertexViaCLI(ctx context.Context, project, region, baseURL string) Result {
+	result := Result{Provider: ProviderVertex, Source: "gcloud", CheckedAt: time.Now()}
 	out, err := v.execCmd(ctx, "gcloud", "auth", "print-access-token")
 	if err != nil {
 		result.State = StateUnknown
@@ -69,7 +73,7 @@ func (v *Validator) ValidateVertexViaCLI(ctx context.Context, project, region st
 	}
 	return v.Validate(ctx, Credential{
 		Kind: KindGoogleAccessToken, Secret: token, Source: "gcloud",
-		Provider: ProviderVertex, Project: project, Region: region,
+		Provider: ProviderVertex, Project: project, Region: region, BaseURL: baseURL,
 	})
 }
 
@@ -81,7 +85,7 @@ func (v *Validator) ValidateVertexViaCLI(ctx context.Context, project, region st
 // conflates "credentials refused" with "no CLI config", "wrong profile", and
 // "network down", and this layer must never manufacture a lockout.
 func (v *Validator) ValidateBedrockViaCLI(ctx context.Context, region string) Result {
-	result := Result{Provider: ProviderBedrock, Source: "aws", CheckedAt: v.now()}
+	result := Result{Provider: ProviderBedrock, Source: "aws", CheckedAt: time.Now()}
 	args := []string{"bedrock", "list-foundation-models", "--by-provider", "anthropic", "--output", "json"}
 	if strings.TrimSpace(region) != "" {
 		args = append(args, "--region", region)

@@ -47,16 +47,6 @@ func ParseProvider(value string) (Provider, bool) {
 	}
 }
 
-// endpointOverrides redirects a provider's base URL, for tests. Production
-// code leaves every field empty.
-type endpointOverrides struct {
-	anthropic string
-	bedrock   string
-	vertex    string
-	foundry   string
-	sts       string
-}
-
 // requestFor builds the authenticated request for one provider.
 func (v *Validator) requestFor(ctx context.Context, provider Provider, cred Credential) (requestSpec, error) {
 	switch provider {
@@ -77,7 +67,7 @@ func (v *Validator) requestFor(ctx context.Context, provider Provider, cred Cred
 // gateway fronting it. All five first-party credential sources share this one
 // request and differ only in which header carries the secret.
 func (v *Validator) anthropicRequest(ctx context.Context, provider Provider, cred Credential) (requestSpec, error) {
-	base := firstNonEmpty(cred.BaseURL, v.endpoint.anthropic, "https://api.anthropic.com")
+	base := firstNonEmpty(cred.BaseURL, "https://api.anthropic.com")
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+"/v1/models", http.NoBody)
 	if err != nil {
 		return requestSpec{}, err
@@ -132,9 +122,6 @@ func (v *Validator) foundryRequest(ctx context.Context, cred Credential) (reques
 		return requestSpec{}, fmt.Errorf("agentcreds: no Foundry secret from %s", cred.Source)
 	}
 	base := cred.BaseURL
-	if base == "" {
-		base = v.endpoint.foundry
-	}
 	if base == "" {
 		resource := strings.TrimSpace(cred.Resource)
 		if resource == "" {

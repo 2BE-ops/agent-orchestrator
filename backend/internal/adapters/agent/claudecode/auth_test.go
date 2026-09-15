@@ -60,22 +60,8 @@ func TestLocalAuthVerdictPrefersOAuthTokenOverAPIKey(t *testing.T) {
 	if verdict.Credential != "CLAUDE_CODE_OAUTH_TOKEN" {
 		t.Fatalf("credential = %q, want CLAUDE_CODE_OAUTH_TOKEN", verdict.Credential)
 	}
-	if verdict.Fingerprint != ports.CredentialFingerprint("oauth-token") {
+	if verdict.Fingerprint != (agentcreds.Credential{Secret: "oauth-token"}).Fingerprint() {
 		t.Fatalf("fingerprint is not the winning credential's")
-	}
-}
-
-func TestFingerprintNeverLeaksTheSecret(t *testing.T) {
-	const secret = "sk-ant-super-secret-value"
-	fingerprint := ports.CredentialFingerprint(secret)
-	if len(fingerprint) != 12 {
-		t.Fatalf("fingerprint = %q, want 12 hex characters", fingerprint)
-	}
-	if fingerprint == secret || len(fingerprint) >= len(secret) {
-		t.Fatal("fingerprint must be shorter than and unequal to the secret")
-	}
-	if ports.CredentialFingerprint("  ") != "" {
-		t.Fatal("an empty credential has no fingerprint")
 	}
 }
 
@@ -263,8 +249,8 @@ func TestOnlyTheProbeCanAuthorize(t *testing.T) {
 			if verdict.Verified != wantVerified {
 				t.Fatalf("verified = %v, want %v", verdict.Verified, wantVerified)
 			}
-			if verdict.Verified && verdict.Source != ports.AuthSourceProbe {
-				t.Fatalf("source = %q, want %q", verdict.Source, ports.AuthSourceProbe)
+			if verdict.Verified && verdict.Source != authSourceProbe {
+				t.Fatalf("source = %q, want %q", verdict.Source, authSourceProbe)
 			}
 		})
 	}
@@ -282,13 +268,14 @@ func TestUnknownProbeResultIsNeverVerified(t *testing.T) {
 // The runtime 401 handler drops the cached verdict; the provider has just
 // contradicted it.
 func TestInvalidateAuthCacheClearsTheStoredVerdict(t *testing.T) {
-	result := agentcreds.Result{State: agentcreds.StateValid, Fingerprint: agentcreds.Fingerprint("k")}
-	claudeAuthCache.Put(claudeAgentID, result)
-	if _, ok := claudeAuthCache.Get(claudeAgentID, agentcreds.Fingerprint("k")); !ok {
+	fingerprint := (agentcreds.Credential{Secret: "k"}).Fingerprint()
+	result := agentcreds.Result{State: agentcreds.StateValid, Fingerprint: fingerprint}
+	claudeAuthCache.put(result)
+	if _, ok := claudeAuthCache.get(fingerprint); !ok {
 		t.Fatal("expected the verdict to be cached")
 	}
 	InvalidateAuthCache()
-	if _, ok := claudeAuthCache.Get(claudeAgentID, agentcreds.Fingerprint("k")); ok {
+	if _, ok := claudeAuthCache.get(fingerprint); ok {
 		t.Fatal("a runtime rejection must clear the cached verdict")
 	}
 }
@@ -301,7 +288,7 @@ func withStubValidator(t *testing.T, handler http.HandlerFunc) *httptest.Server 
 	t.Cleanup(server.Close)
 	previous := claudeValidator
 	claudeValidator = func() *agentcreds.Validator {
-		return agentcreds.New(agentcreds.WithHTTPClient(server.Client()))
+		return agentcreds.New(server.Client())
 	}
 	t.Cleanup(func() { claudeValidator = previous })
 	return server
@@ -325,7 +312,7 @@ func TestProbeAuthorizesOnlyOnAProviderAcceptance(t *testing.T) {
 	if verdict.State != ports.AgentAuthStatusAuthorized {
 		t.Fatalf("state = %q, want authorized", verdict.State)
 	}
-	if !verdict.Verified || verdict.Source != ports.AuthSourceProbe {
+	if !verdict.Verified || verdict.Source != authSourceProbe {
 		t.Fatalf("a provider acceptance must be a verified probe verdict: %+v", verdict)
 	}
 }
@@ -394,7 +381,7 @@ func TestProbeAnswersFromCacheWithoutReprobing(t *testing.T) {
 	InvalidateAuthCache()
 	t.Cleanup(InvalidateAuthCache)
 
-	claudeAuthCache.Put(claudeAgentID, agentcreds.Result{
+	claudeAuthCache.put(agentcreds.Result{
 		State: agentcreds.StateValid, Source: "ANTHROPIC_API_KEY",
 		Fingerprint: (agentcreds.Credential{
 			Kind: agentcreds.KindAPIKey, Secret: "sk-ant-cached", Provider: agentcreds.ProviderFirstParty,
@@ -465,7 +452,7 @@ func TestProviderModelsUsesCLIReportedProvider(t *testing.T) {
 	if !ok {
 		t.Fatal("bedrock credential did not resolve")
 	}
-	claudeAuthCache.Put(claudeAgentID, agentcreds.Result{
+	claudeAuthCache.put(agentcreds.Result{
 		State: agentcreds.StateValid, Provider: agentcreds.ProviderBedrock,
 		Fingerprint: cred.Fingerprint(),
 		Models:      []agentcreds.Model{{ID: "anthropic.claude-opus-v1"}},

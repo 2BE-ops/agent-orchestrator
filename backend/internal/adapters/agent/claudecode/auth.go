@@ -51,27 +51,40 @@ var claudeCredentialEnv = []string{
 	"ANTHROPIC_AUTH_TOKEN",
 }
 
+type authVerdict struct {
+	State       ports.AgentAuthStatus
+	Verified    bool
+	Source      string
+	Credential  string
+	Fingerprint string
+	CheckedAt   time.Time
+}
+
+const (
+	authSourceProbe  = "probe"
+	authSourceCLI    = "cli"
+	authSourceLocal  = "local"
+	authSourceBinary = "binary"
+)
+
 // AuthStatus reports Claude Code's authentication state without starting a
-// session. It is the AgentAuthChecker projection of AuthVerdict.
+// session.
 func (p *Plugin) AuthStatus(ctx context.Context) (ports.AgentAuthStatus, error) {
-	verdict, err := p.AuthVerdict(ctx)
+	verdict, err := p.authVerdict(ctx)
 	return verdict.State, err
 }
 
-// AuthVerdict runs the ladder and reports the state together with the
-// provenance that produced it, so callers can tell a proven verdict from a
-// guessed one.
-func (p *Plugin) AuthVerdict(ctx context.Context) (ports.AuthVerdict, error) {
+func (p *Plugin) authVerdict(ctx context.Context) (authVerdict, error) {
 	// Rung 0 — installed? A missing binary is not an auth failure; saying so
 	// would point the user at a login when they need an install.
 	binary, err := p.claudeBinary(ctx)
 	if err != nil {
 		if errors.Is(err, ports.ErrAgentBinaryNotFound) {
-			return ports.AuthVerdict{
-				State: ports.AgentAuthStatusUnavailable, Source: ports.AuthSourceBinary, CheckedAt: time.Now(),
+			return authVerdict{
+				State: ports.AgentAuthStatusUnavailable, Source: authSourceBinary, CheckedAt: time.Now(),
 			}, nil
 		}
-		return unknownVerdict(ports.AuthSourceBinary), err
+		return unknownVerdict(authSourceBinary), err
 	}
 
 	// Rung 3 runs first among the evidence rungs, even though rung 2 outranks
@@ -113,7 +126,7 @@ func (p *Plugin) AuthVerdict(ctx context.Context) (ports.AuthVerdict, error) {
 // reach a conclusion. Only a definite provider answer stops the ladder here,
 // which is what keeps the whole check additive — it can convert an Unknown
 // into a real verdict, and can never manufacture a worse one.
-func (p *Plugin) probeVerdict(ctx context.Context, report claudeAuthReport, cliOK bool) (ports.AuthVerdict, bool) {
+func (p *Plugin) probeVerdict(ctx context.Context, report claudeAuthReport, cliOK bool) (authVerdict, bool) {
 	reported := ""
 	if cliOK {
 		reported = report.APIProvider
@@ -128,7 +141,7 @@ func (p *Plugin) probeVerdict(ctx context.Context, report claudeAuthReport, cliO
 	}
 	provider, ok := agentcreds.ResolveProvider(reported, opts)
 	if !ok {
-		return ports.AuthVerdict{}, false
+		return authVerdict{}, false
 	}
 	cred, found := agentcreds.ResolveLocal(ctx, provider, opts)
 
@@ -136,7 +149,7 @@ func (p *Plugin) probeVerdict(ctx context.Context, report claudeAuthReport, cliO
 	// credential's fingerprint: a verdict about a credential the agent no
 	// longer uses is not evidence about anything.
 	if found {
-		if cached, hit := p.authCache().Get(claudeAgentID, cred.Fingerprint()); hit {
+		if cached, hit := p.authCache().get(cred.Fingerprint()); hit {
 			return verdictFromResult(cached), true
 		}
 	}
@@ -144,21 +157,20 @@ func (p *Plugin) probeVerdict(ctx context.Context, report claudeAuthReport, cliO
 	probeCtx, cancel := context.WithTimeout(ctx, agentcreds.DefaultTimeout)
 	defer cancel()
 	result := claudeValidator().ValidateLocal(probeCtx, reported, opts)
-	// Cache all verdicts, including inconclusive ones, so repeated failures do not
-	// re-pay the full probe cost. The caller (the ladder) will handle StateUnknown
-	// by falling through to the next rung.
-	p.authCache().Put(claudeAgentID, result)
+	// Cache only decisive verdicts. An inconclusive probe must be retried later
+	// instead of turning one transient failure into minutes of stale silence.
+	p.authCache().put(result)
 	if result.State == agentcreds.StateUnknown {
-		return ports.AuthVerdict{}, false
+		return authVerdict{}, false
 	}
 	return verdictFromResult(result), true
 }
 
 // verdictFromResult projects a provider verdict onto AO's vocabulary. Only
 // this function may produce a verified verdict.
-func verdictFromResult(result agentcreds.Result) ports.AuthVerdict {
-	verdict := ports.AuthVerdict{
-		Source:      ports.AuthSourceProbe,
+func verdictFromResult(result agentcreds.Result) authVerdict {
+	verdict := authVerdict{
+		Source:      authSourceProbe,
 		Verified:    true,
 		Credential:  result.Source,
 		Fingerprint: result.Fingerprint,
@@ -176,25 +188,22 @@ func verdictFromResult(result agentcreds.Result) ports.AuthVerdict {
 	return verdict
 }
 
-// claudeAgentID keys this adapter's cache entry.
-const claudeAgentID = "claude-code"
-
 // claudeValidator builds the credential validator. It is a variable so tests
 // can point the probe at a local server: a unit test must never be able to
 // reach api.anthropic.com, both because that makes it flaky and because a test
 // machine's real credentials are not the test's business.
-var claudeValidator = func() *agentcreds.Validator { return agentcreds.New() }
+var claudeValidator = func() *agentcreds.Validator { return agentcreds.New(nil) }
 
 // authCache returns the process-wide verdict cache. It is package-level
 // because the verdict is about the machine's credentials, not about any one
 // plugin instance, and the readiness coordinator builds fresh adapters.
-func (p *Plugin) authCache() *agentcreds.Cache { return claudeAuthCache }
+func (p *Plugin) authCache() *authCache { return claudeAuthCache }
 
-var claudeAuthCache = agentcreds.NewCache(agentcreds.DefaultCacheTTL)
+var claudeAuthCache = newAuthCache(defaultAuthCacheTTL)
 
 // InvalidateAuthCache drops the cached verdict. The runtime 401 handler calls
 // it: the provider has just contradicted whatever was stored.
-func InvalidateAuthCache() { claudeAuthCache.Invalidate(claudeAgentID) }
+func InvalidateAuthCache() { claudeAuthCache.invalidate() }
 
 // claudeAuthReport is the parsed shape of `claude auth status --json`. Only
 // LoggedIn drives the verdict; the rest is diagnostics.
@@ -208,9 +217,9 @@ type claudeAuthReport struct {
 
 // verdict maps a CLI report onto a verdict. loggedIn:true is credentials
 // present, not credentials valid — hence configured, never authorized.
-func (r claudeAuthReport) verdict() ports.AuthVerdict {
-	verdict := ports.AuthVerdict{
-		Source:     ports.AuthSourceCLI,
+func (r claudeAuthReport) verdict() authVerdict {
+	verdict := authVerdict{
+		Source:     authSourceCLI,
 		Credential: strings.TrimSpace(r.APIKeySource),
 		CheckedAt:  time.Now(),
 	}
@@ -262,26 +271,26 @@ func claudeAuthReportFromOutput(out []byte) (claudeAuthReport, bool) {
 
 // claudeLocalAuthVerdict is rung 4: environment variables, then ~/.claude.json.
 // It reports what is configured. It can never report authorized.
-func claudeLocalAuthVerdict(ctx context.Context) (ports.AuthVerdict, error) {
+func claudeLocalAuthVerdict(ctx context.Context) (authVerdict, error) {
 	if err := ctx.Err(); err != nil {
-		return unknownVerdict(ports.AuthSourceLocal), err
+		return unknownVerdict(authSourceLocal), err
 	}
 	for _, name := range claudeCredentialEnv {
 		value := strings.TrimSpace(os.Getenv(name))
 		if value == "" {
 			continue
 		}
-		return ports.AuthVerdict{
+		return authVerdict{
 			State:       ports.AgentAuthStatusConfigured,
-			Source:      ports.AuthSourceLocal,
+			Source:      authSourceLocal,
 			Credential:  name,
-			Fingerprint: ports.CredentialFingerprint(value),
+			Fingerprint: agentcreds.Credential{Secret: value}.Fingerprint(),
 			CheckedAt:   time.Now(),
 		}, nil
 	}
 	cfgPath, err := claudeConfigPath()
 	if err != nil {
-		return unknownVerdict(ports.AuthSourceLocal), err
+		return unknownVerdict(authSourceLocal), err
 	}
 	return claudeConfigAuthVerdict(cfgPath)
 }
@@ -290,24 +299,24 @@ func claudeLocalAuthVerdict(ctx context.Context) (ports.AuthVerdict, error) {
 // ~/.claude.json. userID in particular is written once at first login and is
 // never removed on logout or revocation, so it says only "this machine has
 // signed in at some point" — a configured signal, never an authorized one.
-func claudeConfigAuthVerdict(path string) (ports.AuthVerdict, error) {
-	configured := ports.AuthVerdict{
-		State: ports.AgentAuthStatusConfigured, Source: ports.AuthSourceLocal,
+func claudeConfigAuthVerdict(path string) (authVerdict, error) {
+	configured := authVerdict{
+		State: ports.AgentAuthStatusConfigured, Source: authSourceLocal,
 		Credential: "claude-config", CheckedAt: time.Now(),
 	}
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return unknownVerdict(ports.AuthSourceLocal), nil
+		return unknownVerdict(authSourceLocal), nil
 	}
 	if err != nil {
-		return unknownVerdict(ports.AuthSourceLocal), err
+		return unknownVerdict(authSourceLocal), err
 	}
 	if strings.TrimSpace(string(data)) == "" {
-		return unknownVerdict(ports.AuthSourceLocal), nil
+		return unknownVerdict(authSourceLocal), nil
 	}
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal(data, &root); err != nil {
-		return unknownVerdict(ports.AuthSourceLocal), err
+		return unknownVerdict(authSourceLocal), err
 	}
 	var hasSubscription bool
 	if raw := root["hasAvailableSubscription"]; len(raw) > 0 {
@@ -323,11 +332,11 @@ func claudeConfigAuthVerdict(path string) (ports.AuthVerdict, error) {
 	var oauthAccount map[string]any
 	if raw := root["oauthAccount"]; len(raw) > 0 {
 		if err := json.Unmarshal(raw, &oauthAccount); err != nil {
-			return unknownVerdict(ports.AuthSourceLocal), err
+			return unknownVerdict(authSourceLocal), err
 		}
 	}
 	if len(oauthAccount) == 0 {
-		return unknownVerdict(ports.AuthSourceLocal), nil
+		return unknownVerdict(authSourceLocal), nil
 	}
 	if hasSubscription {
 		return configured, nil
@@ -335,11 +344,11 @@ func claudeConfigAuthVerdict(path string) (ports.AuthVerdict, error) {
 	if accountUUID, ok := oauthAccount["accountUuid"].(string); ok && strings.TrimSpace(accountUUID) != "" {
 		return configured, nil
 	}
-	return unknownVerdict(ports.AuthSourceLocal), nil
+	return unknownVerdict(authSourceLocal), nil
 }
 
-func unknownVerdict(source string) ports.AuthVerdict {
-	return ports.AuthVerdict{State: ports.AgentAuthStatusUnknown, Source: source, CheckedAt: time.Now()}
+func unknownVerdict(source string) authVerdict {
+	return authVerdict{State: ports.AgentAuthStatusUnknown, Source: source, CheckedAt: time.Now()}
 }
 
 // AuthReport is the diagnostic half of `claude auth status`, exported for
@@ -415,7 +424,7 @@ func ProviderModels(ctx context.Context, binary string, env map[string]string) (
 	result := agentcreds.Result{}
 	if provider, ok := agentcreds.ResolveProvider(reported, opts); ok {
 		if cred, found := agentcreds.ResolveLocal(probeCtx, provider, opts); found {
-			if cached, hit := claudeAuthCache.Get(claudeAgentID, cred.Fingerprint()); hit &&
+			if cached, hit := claudeAuthCache.get(cred.Fingerprint()); hit &&
 				cached.State == agentcreds.StateValid && len(cached.Models) > 0 {
 				result = cached
 			}
@@ -433,7 +442,7 @@ func ProviderModels(ctx context.Context, binary string, env map[string]string) (
 
 	// The probe already proved this credential works, so record the verdict
 	// instead of discarding it — discovery and validation refresh each other.
-	claudeAuthCache.Put(claudeAgentID, result)
+	claudeAuthCache.put(result)
 
 	models := make([]ports.AgentModelInfo, 0, len(result.Models))
 	for _, model := range result.Models {
