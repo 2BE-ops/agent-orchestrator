@@ -170,3 +170,5 @@ const makeStyles = (t: Theme) =>
 	StyleSheet.create({
 		center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: t.bgBase },
 	});
+
+export { RouteErrorBoundary as ErrorBoundary } from "../../lib/RouteErrorBoundary";
