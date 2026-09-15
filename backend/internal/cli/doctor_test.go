@@ -161,6 +161,9 @@ func TestDoctorChecksHarnessVersions(t *testing.T) {
 		case "/bin/git":
 			return []byte("git version 2.43.0\n"), nil
 		case "/bin/claude", "/bin/codex", "/bin/muse":
+			if name == "/bin/claude" && len(args) == 2 && args[0] == "auth" && args[1] == "status" {
+				return []byte(`{"loggedIn":false}`), nil
+			}
 			if len(args) == 1 && args[0] == "--version" {
 				if name == "/bin/muse" {
 					return []byte("Muse Code 0.1.0 (0.1.0-R708.1)\n"), nil

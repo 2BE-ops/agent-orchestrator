@@ -376,6 +376,10 @@ func ParseAuthReport(out []byte) (AuthReport, bool) {
 	}, true
 }
 
+var claudeModelAuthReport = func(ctx context.Context, binary string) (claudeAuthReport, bool) {
+	return (&Plugin{}).claudeCLIAuthReport(ctx, binary)
+}
+
 // ProviderModels returns the Claude model IDs the configured provider actually
 // serves, in that provider's own ID format.
 //
@@ -387,10 +391,6 @@ func ParseAuthReport(out []byte) (AuthReport, bool) {
 //
 // An error means the provider could not be asked. Callers must fall back to
 // their static list rather than presenting an empty picker.
-var claudeModelAuthReport = func(ctx context.Context, binary string) (claudeAuthReport, bool) {
-	return (&Plugin{}).claudeCLIAuthReport(ctx, binary)
-}
-
 func ProviderModels(ctx context.Context, binary string, env map[string]string) ([]ports.AgentModelInfo, error) {
 	opts := agentcreds.ResolveOptions{AllowKeychain: true}
 	if len(env) > 0 {
