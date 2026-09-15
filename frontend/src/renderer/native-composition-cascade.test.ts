@@ -127,7 +127,7 @@ describe("native-composition transparency cascade", () => {
 		const addressHostRule = rules().find(
 			(rule) => rule.selector === ".session-inspector__topbar > .browser-panel__topbar-host",
 		);
-		expect(addressHostRule?.body).toMatch(/transform:\s*translateX\(clamp\(12px, 3cqw, 24px\)\)/);
+		expect(addressHostRule?.body).toMatch(/transform:\s*translateX\(clamp\(20px, 4cqw, 32px\)\)/);
 		expect(css).toMatch(
 			/\.session-inspector__topbar--browser:has\(\.browser-panel__address-bar--editing\)\s*{[^}]*clamp\(240px, 52cqw, 560px\)/,
 		);
