@@ -8252,9 +8252,6 @@ components:
           type: string
         canUpdate:
           type: boolean
-        checkedAt:
-          format: date-time
-          type: string
         path:
           type: string
         realPath:
@@ -8284,7 +8281,6 @@ components:
       - updateAvailable
       - canUpdate
       - stale
-      - checkedAt
       - runningSessions
       type: object
     CompactConversationResponse:

@@ -22,19 +22,18 @@ var ErrInstallationChanged = errors.New("selected Codex installation changed; re
 type CodexUpdateAdvisory struct {
 	scope            string
 	reviewerHandles  []string
-	Path             string    `json:"path"`
-	RealPath         string    `json:"realPath"`
-	Version          string    `json:"version"`
-	Source           string    `json:"source"`
-	VersionSource    string    `json:"versionSource"`
-	AvailableVersion string    `json:"availableVersion,omitempty"`
-	UpdateAvailable  bool      `json:"updateAvailable"`
-	CanUpdate        bool      `json:"canUpdate"`
-	Token            string    `json:"token,omitempty"`
-	Stale            bool      `json:"stale"`
-	Warning          string    `json:"warning,omitempty"`
-	CheckedAt        time.Time `json:"checkedAt"`
-	RunningSessions  int       `json:"runningSessions"`
+	Path             string `json:"path"`
+	RealPath         string `json:"realPath"`
+	Version          string `json:"version"`
+	Source           string `json:"source"`
+	VersionSource    string `json:"versionSource"`
+	AvailableVersion string `json:"availableVersion,omitempty"`
+	UpdateAvailable  bool   `json:"updateAvailable"`
+	CanUpdate        bool   `json:"canUpdate"`
+	Token            string `json:"token,omitempty"`
+	Stale            bool   `json:"stale"`
+	Warning          string `json:"warning,omitempty"`
+	RunningSessions  int    `json:"runningSessions"`
 }
 
 func newer(a, b string) bool {
@@ -104,7 +103,7 @@ func advisoryFor(i ports.CodexInstallation, latest string) CodexUpdateAdvisory {
 	return CodexUpdateAdvisory{scope: i.Scope, Path: i.Path, RealPath: i.RealPath, Version: i.Version,
 		Source: i.Source, VersionSource: i.VersionSource, AvailableVersion: latest,
 		UpdateAvailable: outdated, CanUpdate: outdated && len(i.Command.Argv) > 0,
-		Token: i.Fingerprint, Warning: i.Warning, CheckedAt: time.Now().UTC()}
+		Token: i.Fingerprint, Warning: i.Warning}
 }
 
 func (s *Service) withCodexSessions(ctx context.Context, a CodexUpdateAdvisory) (CodexUpdateAdvisory, error) {

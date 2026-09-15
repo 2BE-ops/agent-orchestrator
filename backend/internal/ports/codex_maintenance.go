@@ -6,7 +6,7 @@ import "context"
 // for Codex launches. Command is never populated from an HTTP request.
 type CodexInstallation struct {
 	Path, RealPath, Version, Source, Scope, Fingerprint string
-	VersionSource, AvailableVersion, Warning            string
+	VersionSource, Warning                              string
 	Command                                             InstallCommand
 }
 

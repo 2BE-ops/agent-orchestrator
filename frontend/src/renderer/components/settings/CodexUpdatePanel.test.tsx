@@ -9,7 +9,7 @@ import { CodexUpdatePanel } from "./CodexUpdatePanel";
 const advisory: components["schemas"]["CodexUpdateAdvisory"] = {
 	path: "/selected/codex", realPath: "/owning/npm/codex.js", source: "npm", version: "1.0.0",
 	versionSource: "npm", availableVersion: "1.1.0", updateAvailable: true, canUpdate: true,
-	token: "verified-owner", stale: false, checkedAt: "2026-09-10T00:00:00Z", runningSessions: 0,
+	token: "verified-owner", stale: false, runningSessions: 0,
 };
 function setup(value = advisory, job?: components["schemas"]["InstallJob"]) {
 	vi.spyOn(apiClient, "GET").mockResolvedValue({ data: value } as never);

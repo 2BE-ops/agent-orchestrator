@@ -2872,8 +2872,6 @@ export interface components {
         CodexUpdateAdvisory: {
             availableVersion?: string;
             canUpdate: boolean;
-            /** Format: date-time */
-            checkedAt: string;
             path: string;
             realPath: string;
             runningSessions: number;
