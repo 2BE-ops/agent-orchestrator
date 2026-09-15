@@ -549,6 +549,10 @@ export function BrowserPanelView({
 				window.ao?.browser.notifyPanelUsed(viewId);
 				urlInputRef.current?.focus();
 				urlInputRef.current?.select();
+				requestAnimationFrame(() => {
+					urlInputRef.current?.focus();
+					urlInputRef.current?.select();
+				});
 			}),
 		[viewId],
 	);
@@ -1105,10 +1109,17 @@ export function BrowserPanelView({
 				if (topbarHost && event.relatedTarget instanceof Node && topbarHost.contains(event.relatedTarget)) {
 					return;
 				}
-				// relatedTarget is null when focus leaves the document entirely — e.g.
-				// into the native page after a shortcut-driven tab close. That is the
-				// deepest browser context, so keep the shortcut target.
-				if (!event.relatedTarget) return;
+				// relatedTarget is null or body/documentElement when focus leaves the
+				// document entirely (e.g. into the native page after a shortcut-driven
+				// tab close) or when an unmounting element drops focus to document.body.
+				// That is still browser context, so keep the shortcut target.
+				if (
+					!event.relatedTarget ||
+					event.relatedTarget === document.body ||
+					event.relatedTarget === document.documentElement
+				) {
+					return;
+				}
 				window.ao?.browser.notifyPanelBlur(viewId);
 			}}
 			onFocusCapture={() => {

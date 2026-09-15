@@ -640,6 +640,27 @@ describe("browser shortcut routing", () => {
 		});
 	});
 
+	it("closes tab from shell shortcut and keeps focus on browser replacement", async () => {
+		const { emitShellBeforeInput, host, invoke, send, shellSend } = setupHost();
+		const state = await invoke("browser:ensure", "sess-1");
+		send("browser:panelUsed", 1, state.viewId);
+		emitShellBeforeInput({ key: "t", control: true });
+		await vi.waitFor(async () => {
+			const tabs = (await invoke("browser:getTabs", state.viewId)) as unknown as BrowserTabsState;
+			expect(tabs.tabs).toHaveLength(2);
+		});
+		shellSend.mockClear();
+		const closeEvent = emitShellBeforeInput({ key: "w", control: true });
+		expect(closeEvent.preventDefault).toHaveBeenCalled();
+		expect(shellSend).toHaveBeenCalledWith("browser:focusLocation", state.viewId);
+		expect(host.isLastUsedBrowser()).toBe(true);
+		await vi.waitFor(async () => {
+			const tabs = (await invoke("browser:getTabs", state.viewId)) as unknown as BrowserTabsState;
+			expect(tabs.tabs).toHaveLength(1);
+		});
+		expect(host.isLastUsedBrowser()).toBe(true);
+	});
+
 	it("routes shell key input to the browser only while its panel is last used", async () => {
 		const { emitShellBeforeInput, host, invoke, send, shellSend } = setupHost();
 		const state = await invoke("browser:ensure", "sess-1");

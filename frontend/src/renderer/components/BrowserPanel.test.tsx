@@ -491,6 +491,31 @@ describe("BrowserPanel", () => {
 		expect(window.ao!.browser.notifyPanelBlur).not.toHaveBeenCalled();
 	});
 
+	it("does not clear the browser shortcut target when focus blurs to body or leaves into native page", () => {
+		render(
+			<BrowserPanel
+				active
+				onTogglePopOut={() => undefined}
+				poppedOut={false}
+				session={session}
+			/>,
+		);
+		const panel = screen.getByTestId("browser-panel");
+		vi.mocked(window.ao!.browser.notifyPanelBlur).mockClear();
+
+		fireEvent.blur(panel, { relatedTarget: document.body });
+		expect(window.ao!.browser.notifyPanelBlur).not.toHaveBeenCalled();
+
+		fireEvent.blur(panel, { relatedTarget: null });
+		expect(window.ao!.browser.notifyPanelBlur).not.toHaveBeenCalled();
+
+		const outside = document.createElement("button");
+		document.body.appendChild(outside);
+		fireEvent.blur(panel, { relatedTarget: outside });
+		expect(window.ao!.browser.notifyPanelBlur).toHaveBeenCalledWith("42:sess-1");
+		outside.remove();
+	});
+
 	it("reopens the most recently closed tab for a matching shortcut request", () => {
 		hookState.closedTabs = [
 			{ id: "latest", url: "http://localhost:5173/latest", title: "Latest" },
