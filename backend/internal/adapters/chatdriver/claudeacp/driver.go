@@ -142,6 +142,15 @@ func claudeACPLaunchEnv(
 	// This prevents the adapter's optional native Claude package from becoming
 	// a second installation managed by AO.
 	env["CLAUDE_CODE_EXECUTABLE"] = binary
+	selected := strings.TrimSpace(selectedModel)
+	if _, configured := input["ANTHROPIC_CUSTOM_MODEL_OPTION"]; selected != "" &&
+		!configured && strings.TrimSpace(os.Getenv("ANTHROPIC_CUSTOM_MODEL_OPTION")) == "" {
+		// availableModels restricts Claude Code's built-in picker but does not
+		// make every provider-discovered API ID a selectable SDK model. The
+		// custom option is the supported bridge for the one API model AO is
+		// actually starting this session with.
+		env["ANTHROPIC_CUSTOM_MODEL_OPTION"] = selected
+	}
 	config, preserve := claudeACPModelConfig(input)
 	if preserve {
 		return env
@@ -160,7 +169,7 @@ func claudeACPLaunchEnv(
 		seen[id] = struct{}{}
 		ids = append(ids, id)
 	}
-	if selected := strings.TrimSpace(selectedModel); selected != "" {
+	if selected != "" {
 		if _, exists := seen[selected]; !exists {
 			ids = append(ids, selected)
 		}

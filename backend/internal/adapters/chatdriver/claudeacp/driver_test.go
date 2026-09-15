@@ -103,6 +103,33 @@ func TestClaudeACPLaunchEnvAdvertisesSelectedModelWithoutProviderCatalog(t *test
 	}
 }
 
+func TestClaudeACPLaunchEnvAddsSelectedProviderModelAsCustomOption(t *testing.T) {
+	t.Setenv("CLAUDE_MODEL_CONFIG", "")
+	t.Setenv("ANTHROPIC_CUSTOM_MODEL_OPTION", "")
+	env := claudeACPLaunchEnv(
+		nil,
+		"/opt/claude",
+		"claude-fable-5",
+		[]ports.AgentModelInfo{{ID: "claude-fable-5"}},
+	)
+	if got := env["ANTHROPIC_CUSTOM_MODEL_OPTION"]; got != "claude-fable-5" {
+		t.Fatalf("ANTHROPIC_CUSTOM_MODEL_OPTION = %q, want selected provider model", got)
+	}
+}
+
+func TestClaudeACPLaunchEnvPreservesExplicitCustomModelOption(t *testing.T) {
+	t.Setenv("ANTHROPIC_CUSTOM_MODEL_OPTION", "")
+	env := claudeACPLaunchEnv(
+		map[string]string{"ANTHROPIC_CUSTOM_MODEL_OPTION": "team-model"},
+		"/opt/claude",
+		"claude-fable-5",
+		[]ports.AgentModelInfo{{ID: "claude-fable-5"}},
+	)
+	if got := env["ANTHROPIC_CUSTOM_MODEL_OPTION"]; got != "team-model" {
+		t.Fatalf("ANTHROPIC_CUSTOM_MODEL_OPTION = %q, want explicit user value preserved", got)
+	}
+}
+
 func TestClaudeACPModelConfigSkipsDiscoveryWhenUserConfigurationMustBePreserved(t *testing.T) {
 	t.Setenv("CLAUDE_MODEL_CONFIG", "")
 	tests := []struct {
