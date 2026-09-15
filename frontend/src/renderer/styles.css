@@ -1153,6 +1153,18 @@ button.settings-row-bar {
 		color: var(--color-text-settings-row);
 		outline: none;
 	}
+
+	/* The clear affordance is secondary to the query itself, so it recedes
+	   until pointed at. */
+	&::-webkit-search-cancel-button {
+		opacity: 0.4;
+		cursor: pointer;
+		transition: opacity var(--duration-fast) ease-out;
+	}
+
+	&::-webkit-search-cancel-button:hover {
+		opacity: 1;
+	}
 }
 
 @utility settings-row-value {
