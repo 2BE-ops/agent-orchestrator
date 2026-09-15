@@ -3555,7 +3555,7 @@ html.sidebar-reordering * {
 }
 
 .session-inspector__topbar--browser:has(.browser-panel__address-bar--editing) {
-	grid-template-columns: minmax(0, 1fr) clamp(240px, 58cqw, 640px) minmax(0, 1fr);
+	grid-template-columns: minmax(0, 1fr) clamp(240px, 52cqw, 560px) minmax(0, 1fr);
 }
 
 .session-inspector__topbar--browser > .session-inspector__tablist {

@@ -129,6 +129,9 @@ describe("native-composition transparency cascade", () => {
 		);
 		expect(addressHostRule?.body).toMatch(/transform:\s*translateX\(clamp\(12px, 3cqw, 24px\)\)/);
 		expect(css).toMatch(
+			/\.session-inspector__topbar--browser:has\(\.browser-panel__address-bar--editing\)\s*{[^}]*clamp\(240px, 52cqw, 560px\)/,
+		);
+		expect(css).toMatch(
 			/@container inspector \(max-width: 440px\)[\s\S]*?\.session-inspector__topbar--browser\s*{[\s\S]*?grid-template-rows:\s*var\(--size-inspector-tabs\) var\(--size-inspector-tabs\)/,
 		);
 		expect(css).toMatch(
