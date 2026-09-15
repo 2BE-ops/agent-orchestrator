@@ -314,6 +314,71 @@ func TestSend_SteerTransportFailureExposesRetryHandle(t *testing.T) {
 	}
 }
 
+func TestSend_SteerMalformedSuccessExposesRetryHandle(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{name: "missing body"},
+		{name: "truncated body", body: `{"outcome":"steered"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := setConfigEnv(t)
+			var req conversationMessageAPIRequest
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasPrefix(r.URL.Path, "/internal/") {
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
+				_ = json.NewDecoder(r.Body).Decode(&req)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusAccepted)
+				_, _ = io.WriteString(w, tt.body)
+			}))
+			t.Cleanup(srv.Close)
+			writeRunFileFor(t, cfg, srv)
+
+			_, _, err := executeCLI(t, Deps{ProcessAlive: func(int) bool { return true }},
+				"send", "--session", "demo-1", "--steer", "--message", "correction")
+			if err == nil || req.ClientMessageID == "" {
+				t.Fatalf("err = %v clientMessageId = %q", err, req.ClientMessageID)
+			}
+			if !strings.Contains(err.Error(), "outcome is unknown") ||
+				!strings.Contains(err.Error(), "--client-message-id "+req.ClientMessageID) {
+				t.Fatalf("err = %q, want safe retry handle %q", err, req.ClientMessageID)
+			}
+		})
+	}
+}
+
+func TestSend_SteerServerFailureExposesRetryHandle(t *testing.T) {
+	cfg := setConfigEnv(t)
+	var req conversationMessageAPIRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/internal/") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, `{"error":"internal","code":"INTERNAL","message":"server failed"}`)
+	}))
+	t.Cleanup(srv.Close)
+	writeRunFileFor(t, cfg, srv)
+
+	_, _, err := executeCLI(t, Deps{ProcessAlive: func(int) bool { return true }},
+		"send", "--session", "demo-1", "--steer", "--message", "correction")
+	if err == nil || req.ClientMessageID == "" {
+		t.Fatalf("err = %v clientMessageId = %q", err, req.ClientMessageID)
+	}
+	if !strings.Contains(err.Error(), "outcome is unknown") ||
+		!strings.Contains(err.Error(), "--client-message-id "+req.ClientMessageID) {
+		t.Fatalf("err = %q, want safe retry handle %q", err, req.ClientMessageID)
+	}
+}
+
 func TestSend_SteerRecoverOnlyReusesHandleWithoutMessage(t *testing.T) {
 	cfg := setConfigEnv(t)
 	var req conversationMessageAPIRequest

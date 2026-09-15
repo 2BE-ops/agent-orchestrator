@@ -107,7 +107,8 @@ func (c *commandContext) steerMessage(
 	}, &result)
 	if err != nil {
 		var responseErr apiResponseError
-		if errors.As(err, &responseErr) && responseErr.ErrorBody.Code == "CHAT_STEER_UNCERTAIN" {
+		hasResponseErr := errors.As(err, &responseErr)
+		if hasResponseErr && responseErr.ErrorBody.Code == "CHAT_STEER_UNCERTAIN" {
 			if recoverOnly {
 				return fmt.Errorf("%w; delivery handle %s remains unresolved and was not resent", err, clientMessageID)
 			}
@@ -115,7 +116,7 @@ func (c *commandContext) steerMessage(
 				"%w; recover this delivery without resending it: ao send --session %s --steer --recover-only --client-message-id %s",
 				err, strings.TrimPrefix(sessionPath, "sessions/"), clientMessageID)
 		}
-		if errors.Is(err, errDaemonUnavailable) {
+		if errors.Is(err, errDaemonUnavailable) || !hasResponseErr || responseErr.StatusCode >= 500 {
 			return fmt.Errorf(
 				"%w; outcome is unknown for delivery handle %s; retry safely with --client-message-id %s",
 				err, clientMessageID, clientMessageID)
