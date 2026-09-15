@@ -22,6 +22,17 @@ type CodexAccountSwitchSource struct {
 	AccountID string
 }
 
+// CodexAccountSwitchInstallationState is the conclusively observed local
+// device state used to settle an interrupted credential switch.
+type CodexAccountSwitchInstallationState string
+
+const (
+	CodexAccountSwitchTargetInstalled    CodexAccountSwitchInstallationState = "target"
+	CodexAccountSwitchSourceInstalled    CodexAccountSwitchInstallationState = "source"
+	CodexAccountSwitchCredentialMissing  CodexAccountSwitchInstallationState = "missing"
+	CodexAccountSwitchExternalCredential CodexAccountSwitchInstallationState = "external"
+)
+
 // CodexAccountSwitchPhase is the durable global credential-switch phase.
 type CodexAccountSwitchPhase string
 

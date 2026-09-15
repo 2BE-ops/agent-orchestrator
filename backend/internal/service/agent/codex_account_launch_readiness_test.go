@@ -207,8 +207,8 @@ func TestLaunchFallsBackToNativeReadinessOnTransientProtectedFailure(t *testing.
 	if latest.Snapshot.Authentication.State == domain.AgentAuthenticationUnauthorized {
 		t.Fatalf("transient provider failure signed the account out = %#v", latest.Snapshot.Authentication)
 	}
-	if latest.Snapshot.Authentication.Freshness != domain.AgentReadinessStale || latest.Snapshot.Authentication.ReasonCode != domain.AgentReadinessReasonAuthCheckFailed {
-		t.Fatalf("transient provider failure was not exposed as a retryable verification failure = %#v", latest.Snapshot.Authentication)
+	if latest.Snapshot.Authentication.State != domain.AgentAuthenticationAuthorized || latest.Snapshot.Authentication.Freshness != domain.AgentReadinessFresh {
+		t.Fatalf("transient capacity failure changed authentication = %#v", latest.Snapshot.Authentication)
 	}
 }
 
@@ -265,7 +265,7 @@ func TestAuthorizedInactiveAccountDoesNotMaskTheActiveAccount(t *testing.T) {
 	}
 }
 
-func TestSuccessfulReauthenticationRestoresLaunchReadiness(t *testing.T) {
+func TestSuccessfulReauthenticationKeepsCapacitySeparateFromLaunchReadiness(t *testing.T) {
 	fixture := newCodexLaunchReadinessFixture(t)
 	fixture.ensureSettings()
 
@@ -278,8 +278,8 @@ func TestSuccessfulReauthenticationRestoresLaunchReadiness(t *testing.T) {
 		t.Fatalf("Settings did not recover after reauthentication = %#v", active.Authentication)
 	}
 	launch, ok := fixture.service.structuredCodexAuthentication(context.Background(), string(domain.HarnessCodex), domain.AgentReadinessPurposeLaunch)
-	if !ok || launch.State != domain.AgentAuthenticationAuthorized {
-		t.Fatalf("launch readiness after reauthentication = %#v (structured=%t)", launch, ok)
+	if ok {
+		t.Fatalf("capacity success became a structured authentication decision = %#v", launch)
 	}
 }
 

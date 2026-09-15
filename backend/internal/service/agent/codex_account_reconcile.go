@@ -165,8 +165,8 @@ func (m *codexAccountManager) reconcileGlobalWithPolicy(ctx context.Context, for
 		// Stop routing the last-known active slot through the global home until
 		// this attempt has matched the current credential. Otherwise an external
 		// A -> B login can write B's observations into A's saved slot. Keep the
-		// last matched device account for presentation only so a fast local check
-		// does not make the active row disappear and reappear in Settings.
+		// last matched device account only as a safety hint for mutation routing;
+		// the API/UI must not present it as active until this check verifies it.
 		m.deferredAccountID = m.deviceAccountID
 		m.deviceCredentialPresent = false
 		started = true

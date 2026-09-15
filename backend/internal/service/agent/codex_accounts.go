@@ -96,17 +96,19 @@ type accountReconcileCall struct {
 	err  error
 }
 type accountLoginOperation struct {
-	snapshot        domain.CodexAccountLoginOperation
-	targetAccountID string
-	deviceState     codexFileState
-	pendingDir      string
-	home            string
-	terminalHandle  string
-	terminalTitle   string
-	terminalCreated time.Time
-	closing         bool
-	committing      bool
-	commitDone      chan struct{}
+	snapshot                 domain.CodexAccountLoginOperation
+	targetAccountID          string
+	deviceState              codexFileState
+	startingGlobalCredential []byte
+	targetWasActive          bool
+	pendingDir               string
+	home                     string
+	terminalHandle           string
+	terminalTitle            string
+	terminalCreated          time.Time
+	closing                  bool
+	committing               bool
+	commitDone               chan struct{}
 }
 
 type codexAccountManager struct {
@@ -628,49 +630,17 @@ func (m *codexAccountManager) finishAuthentication(ctx context.Context, id strin
 	m.publish()
 }
 
-// confirmAuthentication records the strongest authentication evidence AO has:
-// a protected Codex account call succeeded for this isolated account home.
-func (m *codexAccountManager) confirmAuthentication(id string) {
-	now := m.now()
-	m.mu.Lock()
-	state := m.auth[id]
-	if state == nil {
-		state = &accountAuthState{}
-		m.auth[id] = state
-	}
-	state.reauthenticationRequired = false
-	state.invalidated = false
-	state.launchVerified = true
-	state.failures = 0
-	state.nextRetryAt = time.Time{}
-	m.mu.Unlock()
-	m.catalog.updateSnapshot(id, func(snapshot *domain.CodexAccountSnapshot) {
-		snapshot.Authentication = successfulAuthentication(now, domain.AgentAuthenticationAuthorized, domain.AgentReadinessReasonAuthorized, "Codex is signed in.")
-	})
-	m.authenticationChanged()
-}
+type codexAuthenticationEvidence uint8
 
-func (m *codexAccountManager) recordProtectedAuthenticationFailure(id string, attempted time.Time, code, reason string) {
-	m.mu.Lock()
-	state := m.auth[id]
-	if state == nil {
-		state = &accountAuthState{}
-		m.auth[id] = state
+const codexAuthenticationCredentialRejected codexAuthenticationEvidence = 1
+
+// recordProtectedAuthenticationEvidence is the single owner for authentication
+// conclusions learned by other protected Codex calls. Capacity only reports the
+// typed rejection; it never refreshes credentials or mutates authentication.
+func (m *codexAccountManager) recordProtectedAuthenticationEvidence(id string, evidence codexAuthenticationEvidence) {
+	if evidence == codexAuthenticationCredentialRejected {
+		m.requireReauthentication(id)
 	}
-	if state.reauthenticationRequired {
-		m.mu.Unlock()
-		return
-	}
-	m.catalog.updateSnapshot(id, func(snapshot *domain.CodexAccountSnapshot) {
-		preserveAuthenticationFailure(&snapshot.Authentication, failedAuthentication(attempted, code, reason))
-	})
-	state.invalidated = true
-	state.failures++
-	if state.failures <= len(defaultReadinessRetryDelays) {
-		state.nextRetryAt = m.now().Add(defaultReadinessRetryDelays[state.failures-1])
-	}
-	m.mu.Unlock()
-	m.authenticationChanged()
 }
 
 func (m *codexAccountManager) authenticationVerification(id string) (verified, reauthenticationRequired bool) {

@@ -266,16 +266,9 @@ func (c *codexCapacityCoordinator) runRead(record codexAccountRecord, call *capa
 		c.retryAfterDeviceChange(record.Snapshot.ID, call)
 		return
 	}
-	source := "direct"
 	if errors.Is(err, ports.ErrCodexOAuthTokenRevoked) {
-		refreshCtx, refreshCancel := context.WithTimeout(c.ctx, codexAccountAuthTimeout)
-		observation, err = c.refreshRevokedTokenAndRetry(refreshCtx, record, client)
-		refreshCancel()
-		source = "refresh_retry"
-		if errors.Is(err, ports.ErrCodexOAuthTokenRevoked) {
-			c.finishReauthenticationRequired(record.Snapshot.ID, attemptedAt, call)
-			return
-		}
+		c.finishCredentialRejected(record.Snapshot.ID, attemptedAt, call)
+		return
 	}
 	if err != nil {
 		code, reason := classifyCodexCapacityReadFailure(err)
@@ -283,7 +276,7 @@ func (c *codexCapacityCoordinator) runRead(record codexAccountRecord, call *capa
 		return
 	}
 	observation.Partial = false
-	c.finishSuccess(record.Snapshot.ID, observation, attemptedAt, call, source)
+	c.finishSuccess(record.Snapshot.ID, observation, attemptedAt, call, "direct")
 }
 
 func (c *codexCapacityCoordinator) retryAfterDeviceChange(accountID string, call *capacityReadCall) {
@@ -302,36 +295,8 @@ func (c *codexCapacityCoordinator) retryAfterDeviceChange(accountID string, call
 	c.publish(accountID, &result)
 }
 
-func (c *codexCapacityCoordinator) refreshRevokedTokenAndRetry(ctx context.Context, record codexAccountRecord, client ports.CodexAccountClient) (ports.CodexCapacityObservation, error) {
-	releaseMutation, err := c.manager.acquireAccountMutation(ctx)
-	if err != nil {
-		return ports.CodexCapacityObservation{}, err
-	}
-	defer releaseMutation()
-	return c.refreshRevokedTokenAndRetryLocked(ctx, record, client)
-}
-
-// refreshRevokedTokenAndRetryLocked refreshes and retries while the caller owns
-// the account-mutation gate.
-func (c *codexCapacityCoordinator) refreshRevokedTokenAndRetryLocked(ctx context.Context, record codexAccountRecord, client ports.CodexAccountClient) (ports.CodexCapacityObservation, error) {
-	refreshed, err := client.Read(ctx, true)
-	if err != nil {
-		return ports.CodexCapacityObservation{}, err
-	}
-	if refreshed.Authentication == domain.AgentAuthenticationUnauthorized {
-		// account/read can return no account after refresh even when the token is
-		// accepted by protected methods. Retry the protected call and let that
-		// result decide.
-		return client.ReadCapacity(ctx)
-	}
-	if refreshed.Authentication != domain.AgentAuthenticationAuthorized || !sameCodexStructuredIdentity(record.Snapshot, refreshed) {
-		return ports.CodexCapacityObservation{}, ports.ErrCodexCapacityProviderUnavailable
-	}
-	return client.ReadCapacity(ctx)
-}
-
-func (c *codexCapacityCoordinator) finishReauthenticationRequired(accountID string, attemptedAt time.Time, call *capacityReadCall) {
-	c.manager.requireReauthentication(accountID)
+func (c *codexCapacityCoordinator) finishCredentialRejected(accountID string, attemptedAt time.Time, call *capacityReadCall) {
+	c.manager.recordProtectedAuthenticationEvidence(accountID, codexAuthenticationCredentialRejected)
 	c.mu.Lock()
 	state := c.ensureStateLocked(accountID)
 	if state.call == call {
@@ -340,7 +305,7 @@ func (c *codexCapacityCoordinator) finishReauthenticationRequired(accountID stri
 	}
 	result := state.snapshot
 	c.mu.Unlock()
-	c.logger.Info("Codex account capacity read completed", "account_id", accountID, "trigger", "capacity", "source", "refresh_retry", "duration_ms", c.now().Sub(attemptedAt).Milliseconds(), "outcome", result.State, "failure_category", "oauth_token_revoked")
+	c.logger.Info("Codex account capacity read completed", "account_id", accountID, "trigger", "capacity", "source", "direct", "duration_ms", c.now().Sub(attemptedAt).Milliseconds(), "outcome", result.State, "failure_category", "oauth_token_revoked")
 }
 
 func classifyCodexCapacityReadFailure(err error) (string, string) {
@@ -383,7 +348,6 @@ func (c *codexCapacityCoordinator) finishSuccess(accountID string, observation p
 	generation := state.generation
 	result := state.snapshot
 	c.mu.Unlock()
-	c.manager.confirmAuthentication(accountID)
 	c.scheduleResetInvalidation(accountID, generation, result)
 	c.logger.Info("Codex account capacity updated", "account_id", accountID, "trigger", "capacity", "source", source, "duration_ms", receivedAt.Sub(attemptedAt).Milliseconds(), "outcome", result.State, "classification", map[bool]string{true: "partial", false: "full"}[observation.Partial])
 }
@@ -418,14 +382,6 @@ func (c *codexCapacityCoordinator) finishFailure(accountID string, attemptedAt t
 	}
 	result := state.snapshot
 	c.mu.Unlock()
-	authCode, authReason := domain.AgentReadinessReasonAuthCheckFailed, "Could not verify Codex sign-in."
-	switch code {
-	case domain.CodexCapacityReasonCheckTimeout:
-		authCode, authReason = domain.AgentReadinessReasonAuthCheckTimeout, "The Codex sign-in check timed out."
-	case domain.CodexCapacityReasonCheckInconclusive:
-		authCode, authReason = domain.AgentReadinessReasonAuthCheckInconclusive, "Could not verify Codex sign-in."
-	}
-	c.manager.recordProtectedAuthenticationFailure(accountID, attemptedAt, authCode, authReason)
 	c.publish(accountID, &result)
 	c.logger.Info("Codex account capacity read completed", "account_id", accountID, "trigger", "capacity", "source", "direct", "duration_ms", c.now().Sub(attemptedAt).Milliseconds(), "outcome", result.State, "failure_category", code, "next_retry_at", nextRetryAt)
 }

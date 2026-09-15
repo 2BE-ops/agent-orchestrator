@@ -45,7 +45,7 @@ describe("mergeCodexAccounts", () => {
 		]);
 	});
 
-	it("keeps the last matched active row stable during a targeted reconciliation check", () => {
+	it("shows no active row until local reconciliation verifies device ownership", () => {
 		const current = response([
 			account("a", "2026-01-02T00:00:00Z", true),
 			account("b", "2026-01-01T00:00:00Z"),
@@ -64,8 +64,8 @@ describe("mergeCodexAccounts", () => {
 		const merged = mergeCodexAccounts(current, incoming, "preserveMissing");
 
 		expect(merged.accounts.map(({ id, active }) => [id, active])).toEqual([
-			["a", true],
 			["b", false],
+			["a", false],
 		]);
 	});
 

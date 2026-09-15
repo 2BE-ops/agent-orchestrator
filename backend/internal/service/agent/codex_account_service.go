@@ -256,10 +256,8 @@ func (s *Service) OpenCodexAccountReauthenticationTerminal(ctx context.Context, 
 		return CodexAccountLoginTerminalStart{}, err
 	}
 	accountID = strings.TrimSpace(accountID)
-	if s.codexAccounts.activeAccountID() == accountID {
-		if err := s.EnsureCodexDeviceAccountReconciled(ctx); err != nil {
-			return CodexAccountLoginTerminalStart{}, err
-		}
+	if err := s.EnsureCodexDeviceAccountReconciled(ctx); err != nil {
+		return CodexAccountLoginTerminalStart{}, err
 	}
 	return s.codexAccounts.openLoginTerminal(ctx, accountID)
 }
@@ -281,11 +279,13 @@ func (s *Service) LogoutCodexAccount(ctx context.Context, accountID string) (Cod
 		return CodexAccounts{}, err
 	}
 	accountID = strings.TrimSpace(accountID)
-	// Reconcile every logout locally first. The cached active projection may be
-	// stale after an external Codex login/logout, and native logout must never be
-	// sent to the wrong credential home.
-	if err := s.EnsureCodexDeviceAccountReconciled(ctx); err != nil {
-		return CodexAccounts{}, err
+	// Only the verified or last-known device owner needs global reconciliation.
+	// An inactive account logs out through its isolated AO home even when the
+	// device-global credential cannot currently be inspected.
+	if s.codexAccounts.accountMayOwnDeviceCredential(accountID) {
+		if err := s.EnsureCodexDeviceAccountReconciled(ctx); err != nil {
+			return CodexAccounts{}, err
+		}
 	}
 	if err := s.codexAccounts.logout(ctx, accountID); err != nil {
 		return CodexAccounts{}, err
@@ -308,7 +308,13 @@ func (s *Service) DeleteCodexAccount(ctx context.Context, accountID string) (Cod
 	if err := s.WaitCodexAccountStoreReady(ctx); err != nil {
 		return CodexAccounts{}, err
 	}
-	if err := s.codexAccounts.deleteAccount(ctx, strings.TrimSpace(accountID)); err != nil {
+	accountID = strings.TrimSpace(accountID)
+	if s.codexAccounts.accountMayOwnDeviceCredential(accountID) {
+		if err := s.EnsureCodexDeviceAccountReconciled(ctx); err != nil {
+			return CodexAccounts{}, err
+		}
+	}
+	if err := s.codexAccounts.deleteAccount(ctx, accountID); err != nil {
 		return CodexAccounts{}, err
 	}
 	return s.CachedCodexAccounts(ctx)
@@ -560,40 +566,69 @@ func (s *Service) PrepareCodexAccountForSwitch(ctx context.Context, switchID, ac
 	return source, nil
 }
 
-// ConfirmCodexAccountSwitchTarget confirms the installed bytes against the
-// staged target (or the saved target for a legacy journal).
-func (s *Service) ConfirmCodexAccountSwitchTarget(ctx context.Context, switchID, accountID string) error {
+// InspectCodexAccountSwitch classifies the stable device credential against
+// the staged target and source. An error means local inspection was
+// inconclusive and the durable switch fence must be retained.
+func (s *Service) InspectCodexAccountSwitch(ctx context.Context, switchID string, sourceKind domain.CodexAccountSwitchSourceKind, sourceAccountID, accountID string) (domain.CodexAccountSwitchInstallationState, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if s.codexAccounts == nil {
-		return apierr.Unavailable("CODEX_ACCOUNT_MANAGEMENT_UNAVAILABLE", "Codex account management is unavailable")
+		return "", apierr.Unavailable("CODEX_ACCOUNT_MANAGEMENT_UNAVAILABLE", "Codex account management is unavailable")
+	}
+	switchID = strings.TrimSpace(switchID)
+	if !isCanonicalUUIDv4(switchID) {
+		return "", apierr.Invalid("INVALID_CODEX_ACCOUNT_ID", "Invalid Codex account switch identifier", nil)
 	}
 	accountID = strings.TrimSpace(accountID)
-	record, ok := s.codexAccounts.catalog.record(accountID)
-	if !ok || record.Snapshot.Status != domain.CodexAccountStatusValid {
-		return apierr.NotFound("CODEX_ACCOUNT_NOT_FOUND", "Codex account not found")
-	}
 	if err := s.codexAccounts.validateGlobalCredentialStore(); err != nil {
-		return apierr.NotImplemented("CODEX_GLOBAL_CREDENTIAL_STORE_UNSUPPORTED", "Device-global Codex account switching requires file-backed credentials")
+		return "", apierr.NotImplemented("CODEX_GLOBAL_CREDENTIAL_STORE_UNSUPPORTED", "Device-global Codex account switching requires file-backed credentials")
 	}
 	globalPath := s.codexAccounts.globalCredentialPath()
-	globalCredential, admitted, credentialErr := readCodexFileState(globalPath, false)
-	latestCredential, latest, latestErr := readCodexFileState(globalPath, false)
+	globalCredential, admitted, credentialErr := readCodexFileState(globalPath, true)
+	if credentialErr != nil {
+		return "", credentialErr
+	}
+	latestCredential, latest, latestErr := readCodexFileState(globalPath, true)
+	if latestErr != nil || !sameCodexFileState(admitted, latest) || !bytes.Equal(globalCredential, latestCredential) {
+		return "", errors.Join(ports.ErrCodexGlobalAccountChanged, latestErr)
+	}
+	if !admitted.exists {
+		return domain.CodexAccountSwitchCredentialMissing, nil
+	}
 	targetCredential, targetErr := readOpaqueCredential(filepath.Join(s.codexAccounts.switchStagingRoot, switchID, "target-auth.json"))
-	if targetErr != nil {
-		targetCredential, targetErr = readOpaqueCredential(filepath.Join(record.Home, codexCredentialFilename))
+	targetFromStaging := targetErr == nil
+	var targetRecord codexAccountRecord
+	if targetErr != nil && !errors.Is(targetErr, os.ErrNotExist) {
+		return "", targetErr
 	}
-	if credentialErr != nil || latestErr != nil || !sameCodexFileState(admitted, latest) ||
-		targetErr != nil || !bytes.Equal(globalCredential, latestCredential) || !bytes.Equal(latestCredential, targetCredential) ||
-		!localCredentialIdentifiesRecord(record, latestCredential) {
-		return apierr.Conflict("CODEX_GLOBAL_ACCOUNT_CHANGED", "The device Codex account changed", nil)
+	if !targetFromStaging {
+		if record, ok := s.codexAccounts.catalog.record(accountID); ok && record.Snapshot.Status == domain.CodexAccountStatusValid {
+			targetRecord = record
+			targetCredential, targetErr = readOpaqueCredential(filepath.Join(record.Home, codexCredentialFilename))
+			if targetErr != nil && !errors.Is(targetErr, os.ErrNotExist) {
+				return "", targetErr
+			}
+		}
 	}
-	if err := ctx.Err(); err != nil {
-		return err
+	if targetErr == nil && bytes.Equal(globalCredential, targetCredential) && (targetFromStaging || localCredentialIdentifiesRecord(targetRecord, globalCredential)) {
+		return domain.CodexAccountSwitchTargetInstalled, nil
 	}
-	_ = writePrivateFileAtomic(filepath.Join(record.Home, codexCredentialFilename), globalCredential)
-	s.codexAccounts.setManagedGlobal(accountID)
-	s.codexAccounts.invalidateCredentialEvidence(accountID)
-	s.readiness.Invalidate(string(domain.HarnessCodex), readinessInvalidateAuthentication)
-	return nil
+	if sourceKind != domain.CodexAccountSwitchSourceNone {
+		sourceCredential, sourceErr := readOpaqueCredential(filepath.Join(s.codexAccounts.switchStagingRoot, switchID, "source-auth.json"))
+		if sourceErr == nil && bytes.Equal(globalCredential, sourceCredential) {
+			return domain.CodexAccountSwitchSourceInstalled, nil
+		}
+		if sourceErr != nil && !errors.Is(sourceErr, os.ErrNotExist) {
+			return "", sourceErr
+		}
+		if sourceAccountID = strings.TrimSpace(sourceAccountID); sourceAccountID != "" {
+			if source, found := s.codexAccounts.catalog.record(sourceAccountID); found && localCredentialIdentifiesRecord(source, globalCredential) {
+				return domain.CodexAccountSwitchSourceInstalled, nil
+			}
+		}
+	}
+	return domain.CodexAccountSwitchExternalCredential, nil
 }
 
 // ActivatePreparedCodexAccountSwitch performs the single compare-and-swap

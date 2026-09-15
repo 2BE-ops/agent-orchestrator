@@ -25,8 +25,11 @@ func (m *codexAccountManager) openLoginTerminal(ctx context.Context, targetAccou
 		return CodexAccountLoginTerminalStart{}, apierr.Unavailable("CODEX_ACCOUNT_MANAGEMENT_UNAVAILABLE", "Codex login terminal is unavailable")
 	}
 	targetAccountID = strings.TrimSpace(targetAccountID)
-	_, deviceState, deviceErr := readCodexFileState(m.globalCredentialPath(), true)
+	deviceCredential, deviceState, deviceErr := readCodexFileState(m.globalCredentialPath(), true)
 	if deviceErr != nil {
+		if targetAccountID != "" {
+			return CodexAccountLoginTerminalStart{}, apierr.Unavailable("CODEX_ACCOUNT_RECONCILIATION_UNAVAILABLE", "The device Codex account could not be refreshed")
+		}
 		// Normal Add remains available when the device store cannot be inspected,
 		// but it must never auto-activate based on an unsafe absence assumption.
 		deviceState.exists = true
@@ -45,6 +48,7 @@ func (m *codexAccountManager) openLoginTerminal(ctx context.Context, targetAccou
 	} else if record, ok := m.catalog.record(targetAccountID); ok && record.Snapshot.AccountEmail != nil && safeAccountEmail(*record.Snapshot.AccountEmail) {
 		loginReason = "Sign in with " + strings.TrimSpace(*record.Snapshot.AccountEmail) + ". A different account will not be saved."
 	}
+	targetWasActive := targetAccountID != "" && m.activeAccountID() == targetAccountID
 	snapshot := domain.CodexAccountLoginOperation{OperationID: id, AccountID: targetAccountID, Status: domain.CodexAccountLoginPending, ReasonCode: domain.CodexAccountLoginReasonPending, Reason: loginReason, ExpiresAt: now.Add(codexAccountLoginLifetime)}
 	m.mu.Lock()
 	if m.login != nil && !terminalLoginStatus(m.login.snapshot.Status) {
@@ -52,7 +56,13 @@ func (m *codexAccountManager) openLoginTerminal(ctx context.Context, targetAccou
 		return CodexAccountLoginTerminalStart{}, apierr.Conflict("CODEX_ACCOUNT_LOGIN_IN_PROGRESS", "A Codex account login is already in progress", nil)
 	}
 	previous := m.login
-	m.login = &accountLoginOperation{snapshot: snapshot, targetAccountID: targetAccountID, deviceState: deviceState}
+	m.login = &accountLoginOperation{
+		snapshot:                 snapshot,
+		targetAccountID:          targetAccountID,
+		deviceState:              deviceState,
+		startingGlobalCredential: bytes.Clone(deviceCredential),
+		targetWasActive:          targetWasActive,
+	}
 	m.mu.Unlock()
 	if previous != nil {
 		m.cleanupLoginFiles(previous)
@@ -197,17 +207,16 @@ func (m *codexAccountManager) verifyLogin(ctx context.Context, operationID strin
 		if !targetFound || !loginCredentialIdentifiesRecord(target, identity, pendingCredential) {
 			return m.finishLogin(operationID, domain.CodexAccountLoginFailed, domain.CodexAccountLoginReasonFailed, "Sign in with the same Codex account to replace its credentials.", nil), nil
 		}
+		currentGlobal, currentState, currentErr := readCodexFileState(m.globalCredentialPath(), true)
+		if currentErr != nil || !sameCodexFileState(op.deviceState, currentState) || !bytes.Equal(op.startingGlobalCredential, currentGlobal) {
+			return m.finishLoginRetryable(operationID), nil
+		}
 		credential := pendingCredential
-		if m.activeAccountID() == targetAccountID {
-			expectedGlobal, verifyErr := m.activeAccountCredentialLocked(target)
-			if verifyErr != nil {
-				reason := "The device Codex account could not be confirmed. Try again."
-				if errors.Is(verifyErr, ports.ErrCodexGlobalAccountChanged) {
-					reason = "The device Codex account changed. Try again."
+		if op.targetWasActive {
+			if activateErr := m.activateFromCredentialLocked(ctx, targetAccountID, filepath.Join(home, codexCredentialFilename), op.startingGlobalCredential); activateErr != nil {
+				if errors.Is(activateErr, ports.ErrCodexGlobalAccountChanged) {
+					return m.finishLoginRetryable(operationID), nil
 				}
-				return m.finishLogin(operationID, domain.CodexAccountLoginFailed, domain.CodexAccountLoginReasonFailed, reason, nil), nil
-			}
-			if activateErr := m.activateFromCredentialLocked(ctx, targetAccountID, filepath.Join(home, codexCredentialFilename), expectedGlobal); activateErr != nil {
 				return m.finishLogin(operationID, domain.CodexAccountLoginFailed, domain.CodexAccountLoginReasonFailed, "The account was verified but could not be activated.", nil), nil
 			}
 			record, _ = m.catalog.record(targetAccountID)
@@ -289,30 +298,6 @@ func (m *codexAccountManager) verifyLogin(ctx context.Context, operationID strin
 		_ = m.terminal.CloseShellTerminal(context.WithoutCancel(ctx), terminalHandle)
 	}
 	return result, nil
-}
-
-// activeAccountCredentialLocked captures the exact device bytes an active
-// re-login may replace. Identity is established locally and provider failures
-// cannot block the commit.
-func (m *codexAccountManager) activeAccountCredentialLocked(record codexAccountRecord) ([]byte, error) {
-	globalPath := m.globalCredentialPath()
-	credential, admitted, err := readCodexFileState(globalPath, false)
-	if err != nil {
-		return nil, err
-	}
-	latestCredential, latest, latestErr := readCodexFileState(globalPath, false)
-	if latestErr != nil {
-		return nil, latestErr
-	}
-	if !sameCodexFileState(admitted, latest) || !bytes.Equal(credential, latestCredential) {
-		return nil, ports.ErrCodexGlobalAccountChanged
-	}
-	identity, identityErr := parseCodexCredentialIdentity(latestCredential)
-	matched, match := m.matchGlobalCredentialForReconciliation(latestCredential, identity, identityErr)
-	if match != codexCredentialMatchManaged || matched.Snapshot.ID != record.Snapshot.ID {
-		return nil, ports.ErrCodexGlobalAccountChanged
-	}
-	return latestCredential, nil
 }
 
 func loginCredentialIdentifiesRecord(record codexAccountRecord, identity codexCredentialIdentity, credential []byte) bool {

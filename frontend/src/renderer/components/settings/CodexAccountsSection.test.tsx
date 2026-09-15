@@ -831,7 +831,7 @@ it("deletes a signed-out account after confirmation", async () => {
 	expect(screen.getByText("active@example.com")).toBeInTheDocument();
 });
 
-it("explains an invalid sign-in and deletes it after local logout", async () => {
+it("deletes an invalid sign-in with one daemon-owned request", async () => {
 	const invalidAuthentication = { ...authentication, state: "unauthorized", reasonCode: "unauthorized", reason: "Codex needs authentication." };
 	const invalidAccount = {
 		...activeAccount,
@@ -839,19 +839,10 @@ it("explains an invalid sign-in and deletes it after local logout", async () => 
 		capacity: { ...capacity, state: "unknown", plan: null, usedPercent: null, remainingPercent: null, overall: null },
 	};
 	const invalidResponse = { ...accountResponse, accounts: [invalidAccount, inactiveAccount] };
-	const signedOutAccount = {
-		...invalidAccount,
-		active: false,
-		status: "signed_out",
-		reasonCode: "account_signed_out",
-		reason: "This Codex account is signed out.",
-	};
-	const signedOutResponse = { ...accountResponse, activeAccountId: undefined, accountRevision: 4, accounts: [signedOutAccount, inactiveAccount] };
-	const deletedResponse = { ...signedOutResponse, accounts: [inactiveAccount] };
+	const deletedResponse = { ...accountResponse, activeAccountId: undefined, accountRevision: 4, accounts: [inactiveAccount] };
 	getMock.mockResolvedValue({ data: invalidResponse });
 	postMock.mockImplementation((path: string) => {
 		if (path === "/api/v1/agents/codex/accounts/ensure") return Promise.resolve({ data: invalidResponse });
-		if (path === "/api/v1/agents/codex/accounts/{accountId}/logout") return Promise.resolve({ data: signedOutResponse });
 		return Promise.resolve({ data: {} });
 	});
 	deleteMock.mockResolvedValue({ data: deletedResponse });
@@ -867,14 +858,14 @@ it("explains an invalid sign-in and deletes it after local logout", async () => 
 	const dialog = await screen.findByRole("dialog");
 	fireEvent.click(within(dialog).getByRole("button", { name: "Delete account" }));
 
-	await waitFor(() => expect(postMock).toHaveBeenCalledWith(
-		"/api/v1/agents/codex/accounts/{accountId}/logout",
-		{ params: { path: { accountId: invalidAccount.id } } },
-	));
 	await waitFor(() => expect(deleteMock).toHaveBeenCalledWith(
 		"/api/v1/agents/codex/accounts/{accountId}",
 		{ params: { path: { accountId: invalidAccount.id } } },
 	));
+	expect(postMock).not.toHaveBeenCalledWith(
+		"/api/v1/agents/codex/accounts/{accountId}/logout",
+		expect.anything(),
+	);
 	await waitFor(() => expect(screen.queryByText("active@example.com")).not.toBeInTheDocument());
 });
 

@@ -15,12 +15,15 @@ import (
 
 func (m *codexAccountManager) logout(ctx context.Context, accountID string) error {
 	accountID = strings.TrimSpace(accountID)
-	exclusive, err := m.acquireGlobalMutation(ctx)
-	if err != nil {
-		return err
-	}
-	if exclusive != nil {
-		defer exclusive.Release()
+	active := m.activeAccountID() == accountID
+	if active {
+		exclusive, err := m.acquireGlobalMutation(ctx)
+		if err != nil {
+			return err
+		}
+		if exclusive != nil {
+			defer exclusive.Release()
+		}
 	}
 	release, err := m.acquireAccountMutation(ctx)
 	if err != nil {
@@ -35,7 +38,7 @@ func (m *codexAccountManager) logout(ctx context.Context, accountID string) erro
 	if record.Snapshot.Status == domain.CodexAccountStatusSignedOut {
 		return nil
 	}
-	active := m.activeAccountID() == accountID
+	active = m.activeAccountID() == accountID
 	credentialPath := filepath.Join(record.Home, codexCredentialFilename)
 	logoutHome := record.Home
 	logoutCredentialPath := credentialPath
@@ -105,13 +108,22 @@ func (m *codexAccountManager) logout(ctx context.Context, accountID string) erro
 }
 
 func (m *codexAccountManager) deleteAccount(ctx context.Context, accountID string) error {
+	accountID = strings.TrimSpace(accountID)
+	record, ok := m.catalog.record(accountID)
+	if !ok || (record.Snapshot.Status != domain.CodexAccountStatusValid && record.Snapshot.Status != domain.CodexAccountStatusSignedOut) {
+		return apierr.NotFound("CODEX_ACCOUNT_NOT_FOUND", "Codex account not found")
+	}
+	if record.Snapshot.Status == domain.CodexAccountStatusValid {
+		if err := m.logout(ctx, accountID); err != nil {
+			return err
+		}
+	}
 	release, err := m.acquireAccountMutation(ctx)
 	if err != nil {
 		return err
 	}
 	defer release()
-	accountID = strings.TrimSpace(accountID)
-	record, ok := m.catalog.record(accountID)
+	record, ok = m.catalog.record(accountID)
 	if !ok || (record.Snapshot.Status != domain.CodexAccountStatusValid && record.Snapshot.Status != domain.CodexAccountStatusSignedOut) {
 		return apierr.NotFound("CODEX_ACCOUNT_NOT_FOUND", "Codex account not found")
 	}
@@ -138,6 +150,25 @@ func (m *codexAccountManager) activeAccountID() string {
 		return ""
 	}
 	return m.deviceAccountID
+}
+
+func (m *codexAccountManager) accountMayOwnDeviceCredential(accountID string) bool {
+	accountID = strings.TrimSpace(accountID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.reconciliation.ActiveAccountVerified {
+		return accountID != "" && accountID == m.deviceAccountID
+	}
+	lastKnownDeviceAccountID := m.deferredAccountID
+	if lastKnownDeviceAccountID == "" {
+		lastKnownDeviceAccountID = m.deviceAccountID
+	}
+	if lastKnownDeviceAccountID == "" {
+		// Without any local ownership result, every saved account is potentially
+		// the device owner. Reconcile before choosing a logout home.
+		return accountID != ""
+	}
+	return accountID != "" && accountID == lastKnownDeviceAccountID
 }
 
 func (m *codexAccountManager) activateFromCredentialLocked(ctx context.Context, accountID, sourceCredential string, expectedGlobal []byte) error {

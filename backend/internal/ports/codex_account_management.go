@@ -50,7 +50,7 @@ type CodexAccountCredentialManager interface {
 	BeginCodexAccountMutation(context.Context) error
 	EndCodexAccountMutation()
 	PrepareCodexAccountForSwitch(context.Context, string, string) (domain.CodexAccountSwitchSource, error)
-	ConfirmCodexAccountSwitchTarget(context.Context, string, string) error
+	InspectCodexAccountSwitch(context.Context, string, domain.CodexAccountSwitchSourceKind, string, string) (domain.CodexAccountSwitchInstallationState, error)
 	ActivatePreparedCodexAccountSwitch(context.Context, domain.CodexAccountSwitchSourceKind, string, string) error
 	CleanupCodexAccountSwitch(context.Context, string) error
 	CleanupInactiveCodexAccountSwitches(context.Context, string) error
