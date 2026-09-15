@@ -42,7 +42,9 @@ export function ModelMenuChoices<T extends { id: string; label: string; provider
 		<div className="flex min-h-0 max-h-[calc(var(--size-select-menu-max)-var(--space-2)*2)] flex-col">
 			{showSearch && (
 				<div
-					className="relative shrink-0 p-1"
+					// No inline padding: the field then shares the menu rows' silhouette,
+					// since their highlight spans the same content box.
+					className="relative shrink-0 pb-1"
 					onClick={(event) => event.stopPropagation()}
 					onKeyDown={(event) => {
 						if (event.nativeEvent.isComposing) {
@@ -59,19 +61,21 @@ export function ModelMenuChoices<T extends { id: string; label: string; provider
 						}
 					}}
 				>
-					<Search
-						className="pointer-events-none absolute left-3.5 top-1/2 size-icon-sm -translate-y-1/2 text-settings-muted"
-						aria-hidden="true"
-					/>
-					<input
-						ref={searchRef}
-						type="search"
-						aria-label={t("settings.models.searchAria", { label: "models" })}
-						value={search}
-						onChange={(event) => setSearch(event.target.value)}
-						placeholder={t("settings.models.searchModelsOrProvidersPlaceholder")}
-						className="menu-search-input h-control-form! pl-8!"
-					/>
+					<div className="relative">
+						<Search
+							className="pointer-events-none absolute left-3 top-1/2 size-icon-sm -translate-y-1/2 text-settings-muted"
+							aria-hidden="true"
+						/>
+						<input
+							ref={searchRef}
+							type="search"
+							aria-label={t("settings.models.searchAria", { label: "models" })}
+							value={search}
+							onChange={(event) => setSearch(event.target.value)}
+							placeholder={t("settings.models.searchModelsOrProvidersPlaceholder")}
+							className="menu-search-input h-control-form! rounded-[10px] pl-8!"
+						/>
+					</div>
 				</div>
 			)}
 			<div className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden">
@@ -87,6 +91,15 @@ export function ModelMenuChoices<T extends { id: string; label: string; provider
 							event.preventDefault();
 							event.stopPropagation();
 							searchRef.current.focus();
+							return;
+						}
+						if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+							// Narrow the catalog instead of letting the menu's typeahead jump
+							// to whichever row starts with the typed character.
+							event.preventDefault();
+							event.stopPropagation();
+							searchRef.current.focus();
+							setSearch((current) => current + event.key);
 						}
 					}}
 				>

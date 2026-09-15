@@ -172,6 +172,19 @@ describe.each(["native", "ACP submenu", "ACP standalone"] as const)("%s model se
 		expect(screen.getByRole("menuitemradio", { name: "Model 99" })).toHaveFocus();
 	});
 
+	it("narrows the query when typing on a focused result instead of jumping rows", async () => {
+		const { user, open } = setup();
+		await open();
+		const search = screen.getByRole("searchbox", { name: "Search models" });
+		await user.type(search, "Model 9");
+		await user.keyboard("{ArrowDown}");
+		expect(screen.getAllByRole("menuitemradio")[0]).toHaveFocus();
+		await user.keyboard("9");
+		expect(search).toHaveFocus();
+		expect(search).toHaveValue("Model 99");
+		expect(screen.getAllByRole("menuitemradio")).toHaveLength(1);
+	});
+
 	it.each(["ArrowUp", "ArrowDown"])("keeps %s available for input-method candidate selection", async (key) => {
 		const { user, onChange, open } = setup();
 		await open();
