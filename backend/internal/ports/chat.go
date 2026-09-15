@@ -74,6 +74,9 @@ var (
 	// but cannot replay that context as typed history. ACP session/resume has this
 	// property; session/load is required when a caller needs a transcript replay.
 	ErrChatHistoryUnavailable = errors.New("chat conversation history replay is unavailable")
+	// ErrChatCapabilityUnavailable means an explicit tuning value was requested
+	// but the provider did not advertise the matching live capability.
+	ErrChatCapabilityUnavailable = errors.New("chat model capability unavailable")
 )
 
 // ChatHistoryMismatchDimension identifies the exact durable checkpoint fact a
@@ -281,8 +284,8 @@ type ChatStartConfig struct {
 	PrepareEnv func(context.Context) (map[string]string, error)
 	// Model is optional; empty defers to the provider's configured default.
 	Model string
-	// Effort is the reasoning level to spend, from the selected model's own
-	// advertised levels. Empty defers to the provider's configured default.
+	// Effort is an optional provider-advertised model tuning value; empty
+	// defers to the provider's configured default.
 	Effort string
 	// Permissions is AO's existing per-session approval policy. Drivers map it
 	// onto their provider's native approval and sandbox settings.
