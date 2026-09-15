@@ -33,7 +33,10 @@ func TestClaudeCatalogPrefersProviderModels(t *testing.T) {
 			{ID: "us.anthropic.claude-sonnet-4-5-v1:0"},
 		}, nil
 	}
-	catalog := discoverClaudeCatalog(context.Background(), claudeRequest(t), list)
+	catalog, err := discoverClaudeCatalog(context.Background(), claudeRequest(t), list)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if catalog.Source != "provider" {
 		t.Fatalf("source = %q, want provider", catalog.Source)
 	}
@@ -49,7 +52,7 @@ func TestClaudeCatalogPrefersProviderModels(t *testing.T) {
 
 // Discovery must never empty the picker. Every way of failing to reach the
 // provider falls back to the aliases that shipped before.
-func TestClaudeCatalogFallsBackWhenTheProviderCannotBeAsked(t *testing.T) {
+func TestClaudeCatalogReturnsStaticFallbackWithProviderError(t *testing.T) {
 	tests := []struct {
 		name string
 		list ClaudeModelListFunc
@@ -88,7 +91,7 @@ func TestClaudeCatalogFallsBackWhenTheProviderCannotBeAsked(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			catalog := discoverClaudeCatalog(context.Background(), claudeRequest(t), tc.list)
+			catalog, err := discoverClaudeCatalog(context.Background(), claudeRequest(t), tc.list)
 			if len(catalog.Models) == 0 {
 				t.Fatal("the picker must never be emptied by a discovery failure")
 			}
@@ -102,6 +105,9 @@ func TestClaudeCatalogFallsBackWhenTheProviderCannotBeAsked(t *testing.T) {
 			if !ids["sonnet"] || !ids["opus"] {
 				t.Fatalf("fallback lost the static aliases: %+v", catalog.Models)
 			}
+			if tc.list != nil && err == nil {
+				t.Fatal("provider discovery failure was suppressed")
+			}
 		})
 	}
 }
@@ -114,7 +120,10 @@ func TestClaudeProviderModelsAreDeduped(t *testing.T) {
 			{ID: " claude-haiku-4-5 "},
 		}, nil
 	}
-	catalog := discoverClaudeCatalog(context.Background(), claudeRequest(t), list)
+	catalog, err := discoverClaudeCatalog(context.Background(), claudeRequest(t), list)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(catalog.Models) != 2 {
 		t.Fatalf("models = %+v, want duplicates collapsed and whitespace trimmed", catalog.Models)
 	}
@@ -129,7 +138,10 @@ func TestProviderModelsPreserveProviderLabelsAndFallBackToRawIDs(t *testing.T) {
 			{ID: "claude-haiku-4-5-20251001"},
 		}, nil
 	}
-	catalog := discoverClaudeCatalog(context.Background(), claudeRequest(t), list)
+	catalog, err := discoverClaudeCatalog(context.Background(), claudeRequest(t), list)
+	if err != nil {
+		t.Fatal(err)
+	}
 	labels := map[string]string{}
 	for _, model := range catalog.Models {
 		labels[model.ID] = model.Label
@@ -154,7 +166,10 @@ func TestProviderEffortsSurviveNormalization(t *testing.T) {
 			{ID: "claude-sonnet-4-5-20250929"},
 		}, nil
 	}
-	catalog := discoverClaudeCatalog(context.Background(), claudeRequest(t), list)
+	catalog, err := discoverClaudeCatalog(context.Background(), claudeRequest(t), list)
+	if err != nil {
+		t.Fatal(err)
+	}
 	got := map[string]int{}
 	for _, model := range catalog.Models {
 		got[model.ID] = len(model.Efforts)

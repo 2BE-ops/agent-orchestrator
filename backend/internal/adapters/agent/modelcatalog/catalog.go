@@ -155,7 +155,7 @@ type ClaudeModelListFunc func(context.Context, ports.AgentModelDiscoveryRequest)
 // Discover uses the agent-owned model surface configured for this adapter.
 func (d Discoverer) Discover(ctx context.Context, request ports.AgentModelDiscoveryRequest) (ports.AgentModelCatalog, error) {
 	if request.AgentID == "claude-code" {
-		return discoverClaudeCatalog(ctx, request, d.ClaudeModels), nil
+		return discoverClaudeCatalog(ctx, request, d.ClaudeModels)
 	}
 	if request.AgentID == "muse" {
 		return Base(request.AgentID), nil
@@ -197,34 +197,36 @@ func claudeCodeModels() []ports.AgentModelInfo {
 // the three, so the only way to offer correct IDs is to ask the provider that
 // will serve them, which is exactly what the credential probe already does.
 //
-// Discovery must never fail: an unreachable provider, a chain-sourced
-// credential, or an account with no entitlement all fall back to the static
-// list, which is what shipped before. A model picker that empties itself
-// because the network blipped is worse than one showing slightly stale
-// aliases.
+// The static aliases travel with a discovery error so the service can prefer a
+// last-known-good provider catalog. With no cache, the aliases still keep the
+// picker usable while accurately remaining stale/unverified.
 func discoverClaudeCatalog(
 	ctx context.Context,
 	request ports.AgentModelDiscoveryRequest,
 	list ClaudeModelListFunc,
-) ports.AgentModelCatalog {
+) (ports.AgentModelCatalog, error) {
 	base := Base(request.AgentID)
 	base.Source = "catalog"
 	base.FetchedAt = time.Now().UTC()
 
 	if list != nil {
-		if models, err := list(ctx, request); err == nil && len(models) > 0 {
-			normalized := normalize(models)
-			if len(normalized) > 0 {
-				base.Models = applyClaudeConfiguredDefault(
-					normalized, request.WorkingDir, request.Env)
-				base.Source = "provider"
-				return base
-			}
+		models, err := list(ctx, request)
+		if err != nil {
+			base.Models = applyClaudeConfiguredDefault(normalize(claudeCodeModels()), request.WorkingDir, request.Env)
+			return base, fmt.Errorf("claude-code model discovery: %w", err)
 		}
+		normalized := normalize(models)
+		if len(normalized) > 0 {
+			base.Models = applyClaudeConfiguredDefault(normalized, request.WorkingDir, request.Env)
+			base.Source = "provider"
+			return base, nil
+		}
+		base.Models = applyClaudeConfiguredDefault(normalize(claudeCodeModels()), request.WorkingDir, request.Env)
+		return base, errors.New("claude-code model discovery returned no models")
 	}
 
 	base.Models = applyClaudeConfiguredDefault(normalize(claudeCodeModels()), request.WorkingDir, request.Env)
-	return base
+	return base, nil
 }
 func applyClaudeConfiguredDefault(models []ports.AgentModelInfo, workingDir string, env map[string]string) []ports.AgentModelInfo {
 	configured := claudeCodeResolvedModel(workingDir, env)
@@ -262,7 +264,7 @@ func Discover(ctx context.Context, agentID, binary, workingDir string, env map[s
 		// This package-level entry point has no injected provider lister, so it
 		// yields the static aliases. Daemon wiring uses Discoverer, which does.
 		return discoverClaudeCatalog(
-			ctx, ports.AgentModelDiscoveryRequest{AgentID: agentID, WorkingDir: workingDir, Env: env}, nil), nil
+			ctx, ports.AgentModelDiscoveryRequest{AgentID: agentID, WorkingDir: workingDir, Env: env}, nil)
 	}
 	if agentID == "muse" {
 		return base, nil
@@ -524,10 +526,10 @@ func BinaryVersion(ctx context.Context, binary string) string {
 	return fmt.Sprintf("%x", hash.Sum(nil)[:8])
 }
 
-// CatalogFingerprint hashes every discovery input for an agent: the resolved
-// executable, plus the configuration values the adapter reads. A cached catalog
-// stays valid only while this is unchanged, so configuration AO reads during
-// discovery must be represented here or an edit would never take effect.
+// CatalogFingerprint hashes stable discovery inputs for adapters whose cache
+// can be validated locally. Claude provider catalogs are always revalidated by
+// the service because account and credential-chain state is not fully
+// fingerprintable.
 func CatalogFingerprint(ctx context.Context, agentID, binary, workingDir string, env map[string]string) string {
 	binaryVersion := BinaryVersion(ctx, binary)
 	config := discoveryConfigInputs(agentID, workingDir, env)
@@ -546,54 +548,10 @@ func CatalogFingerprint(ctx context.Context, agentID, binary, workingDir string,
 // discoveryConfigInputs returns the configuration an agent's discovery consults,
 // or "" when the catalog depends on the binary alone.
 func discoveryConfigInputs(agentID, workingDir string, env map[string]string) string {
-	if agentID == "claude-code" {
-		return "config=" + claudeCodeDiscoveryFingerprint(workingDir, env)
-	}
 	if config := configDiscoveryFingerprint(agentID, workingDir, env); config != "" {
 		return "config=" + config
 	}
 	return ""
-}
-
-func claudeCodeDiscoveryFingerprint(workingDir string, env map[string]string) string {
-	hash := sha256.New()
-	_, _ = hash.Write([]byte("model\x00" + claudeCodeResolvedModel(workingDir, env) + "\x00"))
-	keys := []string{
-		"CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
-		"ANTHROPIC_BASE_URL", "ANTHROPIC_FOUNDRY_BASE_URL", "ANTHROPIC_FOUNDRY_RESOURCE",
-		"AWS_REGION", "AWS_DEFAULT_REGION",
-		"ANTHROPIC_VERTEX_PROJECT_ID", "GOOGLE_CLOUD_PROJECT", "CLOUD_ML_REGION", "GOOGLE_CLOUD_REGION",
-		"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
-		"ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_FOUNDRY_AUTH_TOKEN",
-		"AWS_BEARER_TOKEN_BEDROCK", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
-		"GOOGLE_OAUTH_ACCESS_TOKEN", "GOOGLE_APPLICATION_CREDENTIALS",
-	}
-	for _, key := range keys {
-		value, present := env[key]
-		if !present {
-			value = os.Getenv(key)
-		}
-		_, _ = hash.Write([]byte(key + "\x00" + strings.TrimSpace(value) + "\x00"))
-	}
-	for _, path := range claudeCodeSettingsPaths(workingDir) {
-		raw, err := readModelConfig(path)
-		if err != nil {
-			continue
-		}
-		_, _ = hash.Write([]byte(path))
-		_, _ = hash.Write([]byte{0})
-		_, _ = hash.Write(raw)
-		_, _ = hash.Write([]byte{0})
-	}
-	if credentialPath, present := env["GOOGLE_APPLICATION_CREDENTIALS"]; !present {
-		credentialPath = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
-		if raw, err := readModelConfig(strings.TrimSpace(credentialPath)); err == nil {
-			_, _ = hash.Write(raw)
-		}
-	} else if raw, err := readModelConfig(strings.TrimSpace(credentialPath)); err == nil {
-		_, _ = hash.Write(raw)
-	}
-	return fmt.Sprintf("%x", hash.Sum(nil)[:8])
 }
 
 func catalog(agentID, source string, entryMode ports.CustomModelEntryMode, at time.Time, models ...ports.AgentModelInfo) ports.AgentModelCatalog {
