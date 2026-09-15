@@ -652,11 +652,11 @@ describe("browser shortcut routing", () => {
 		shellSend.mockClear();
 		const closeEvent = emitShellBeforeInput({ key: "w", control: true });
 		expect(closeEvent.preventDefault).toHaveBeenCalled();
-		expect(shellSend).toHaveBeenCalledWith("browser:focusLocation", state.viewId);
 		expect(host.isLastUsedBrowser()).toBe(true);
 		await vi.waitFor(async () => {
 			const tabs = (await invoke("browser:getTabs", state.viewId)) as unknown as BrowserTabsState;
 			expect(tabs.tabs).toHaveLength(1);
+			expect(shellSend).toHaveBeenCalledWith("browser:focusLocation", state.viewId);
 		});
 		expect(host.isLastUsedBrowser()).toBe(true);
 	});

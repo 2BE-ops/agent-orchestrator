@@ -794,7 +794,7 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 			lastUsedViewId = session.viewId;
 			shellWebContents.send("browser:pageFocus", session.viewId);
 		});
-		attachBrowserShortcuts(view.webContents, () => session);
+		attachBrowserShortcuts(view.webContents, () => session, true);
 		// A newly-created WebContentsView reports about:blank before its renderer
 		// has actually been initialized. CDP commands can hang until that initial
 		// document has completed, so make readiness explicit for every tab.
@@ -1204,7 +1204,13 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 
 	const focusLocation = (session: BrowserSessionEntry): void => {
 		lastUsedViewId = session.viewId;
-		shellWebContents.focus();
+		if (typeof shellWebContents.isFocused === "function") {
+			if (!shellWebContents.isFocused()) {
+				shellWebContents.focus();
+			}
+		} else {
+			shellWebContents.focus();
+		}
 		shellWebContents.send("browser:focusLocation", session.viewId);
 	};
 	const reopenClosedTab = (session: BrowserSessionEntry): void => {
@@ -1213,6 +1219,7 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 	function attachBrowserShortcuts(
 		contents: Pick<WebContents, "on">,
 		getSession: () => BrowserSessionEntry | undefined,
+		isNativePage: boolean,
 	): void {
 		contents.on("before-input-event", (event, input) => {
 			if (input.type !== "keyDown" || options.isKeybindingRecording?.()) return;
@@ -1249,7 +1256,7 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 				return;
 			}
 			const closingTabId = session.activeTabId;
-			if (session.tabs.size > 1) {
+			if (isNativePage && session.tabs.size > 1) {
 				// The focused view is about to be destroyed asynchronously. Move OS
 				// focus to its replacement synchronously — making it visible first
 				// so the focus sticks — or a fast second ⌘W lands in focus limbo
@@ -1264,21 +1271,7 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 					else replacement.view.webContents.focus();
 				}
 			}
-			void closeUserTab(session, closingTabId)
-				.then(() => {
-					lastUsedViewId = session.viewId;
-					if (session.tabs.has(session.activeTabId)) {
-						const current = activeEntry(session);
-						lastUsedViewId = session.viewId;
-						lastFocusedViewId = session.viewId;
-						// Blank tabs hide their native surface, so native focus cannot
-						// stick — fall back to the omnibox (a handled surface) instead
-						// of leaving focus in limbo where ⌘W hits menu Close.
-						if (isBlankBrowserEntry(current)) focusLocation(session);
-						else current.view.webContents.focus();
-					}
-				})
-				.catch(() => undefined);
+			void closeUserTab(session, closingTabId).catch(() => undefined);
 		});
 	}
 
@@ -1286,7 +1279,7 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 		attachBrowserShortcuts(shellWebContents, () => {
 			if (lastUsedViewId === null) return undefined;
 			return entries.get(lastUsedViewId);
-		});
+		}, false);
 	}
 
 	function agentBrowserTargets(session: BrowserSessionEntry): AgentBrowserTargetProvider {

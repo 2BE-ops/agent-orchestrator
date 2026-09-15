@@ -547,12 +547,11 @@ export function BrowserPanelView({
 				// takes focus — otherwise the next ⌘T/⌘W falls through to terminal
 				// shortcuts and yank focus to the main pane.
 				window.ao?.browser.notifyPanelUsed(viewId);
+				if (document.activeElement === urlInputRef.current) {
+					return;
+				}
 				urlInputRef.current?.focus();
 				urlInputRef.current?.select();
-				requestAnimationFrame(() => {
-					urlInputRef.current?.focus();
-					urlInputRef.current?.select();
-				});
 			}),
 		[viewId],
 	);
