@@ -1915,6 +1915,8 @@ type SteerConversationResponse struct {
 	ActivityID string `json:"activityId,omitempty"`
 }
 
+// SteerOrSendConversationResponse reports the single durable outcome selected by
+// the atomic steer-or-send operation.
 type SteerOrSendConversationResponse struct {
 	Outcome        string           `json:"outcome" enum:"steered,sent"`
 	TurnID         string           `json:"turnId,omitempty"`

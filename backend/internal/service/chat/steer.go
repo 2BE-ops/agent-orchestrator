@@ -70,6 +70,8 @@ type SteerResult struct {
 	ActivityID string
 }
 
+// SteerOrSendResult identifies whether one atomic request joined an active turn
+// or opened a normal turn while the conversation was idle.
 type SteerOrSendResult struct {
 	Steered   bool
 	Duplicate bool
@@ -132,6 +134,8 @@ func (s *Service) RecoverSteer(ctx context.Context, id domain.SessionID, clientM
 	return replaySteerDelivery(delivery, delivery.RequestJSON)
 }
 
+// SteerOrSend routes one idempotent request through the session's live Chat
+// controller without exposing a state-check race to the caller.
 func (s *Service) SteerOrSend(
 	ctx context.Context,
 	id domain.SessionID,
@@ -446,6 +450,8 @@ func (c *Controller) steerLocked(ctx context.Context, msg ports.ChatUserMessage)
 	return SteerResult{ProviderTurnID: landed, ActivityID: activityID}, nil
 }
 
+// SteerOrSend selects and persists one delivery outcome while holding the same
+// lock used by ordinary sends and steering.
 func (c *Controller) SteerOrSend(
 	ctx context.Context,
 	msg ports.ChatUserMessage,

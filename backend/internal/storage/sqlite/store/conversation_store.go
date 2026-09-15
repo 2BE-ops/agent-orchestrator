@@ -878,6 +878,8 @@ func (s *Store) appendUserMessage(
 	return true, nil
 }
 
+// ConversationMessageByClientID finds the durable normal-message outcome for an
+// idempotent client delivery handle.
 func (s *Store) ConversationMessageByClientID(
 	ctx context.Context,
 	conversationID, clientMessageID string,
