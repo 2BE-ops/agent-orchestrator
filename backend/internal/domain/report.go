@@ -2,11 +2,43 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
+
+const reportDeliveryPrefix = `<ao-report-delivery id="`
+
+// WrapReportDelivery marks an AO-authored report batch so provider prompt
+// hooks can correlate semantic acceptance with its durable delivery identity.
+func WrapReportDelivery(id, message string) string {
+	return fmt.Sprintf("%s%s\">\n%s\n</ao-report-delivery>", reportDeliveryPrefix, id, message)
+}
+
+// ReportDeliveryID returns the durable identity from an AO report envelope.
+// Delivery ids are generated internally and deliberately restricted so a
+// malformed prompt cannot manufacture markup or an unbounded correlation key.
+func ReportDeliveryID(message string) (string, bool) {
+	message = strings.TrimSpace(message)
+	if !strings.HasPrefix(message, reportDeliveryPrefix) {
+		return "", false
+	}
+	rest := strings.TrimPrefix(message, reportDeliveryPrefix)
+	end := strings.Index(rest, `">`)
+	if end <= 0 || end > 128 {
+		return "", false
+	}
+	id := rest[:end]
+	for _, r := range id {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == ':' || r == '-' || r == '_') {
+			return "", false
+		}
+	}
+	return id, true
+}
 
 const (
 	// MaxReportTextCharacters is the hard limit for free-form messages and structured notes.

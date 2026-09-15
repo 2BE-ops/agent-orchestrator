@@ -75,7 +75,10 @@ forces fresh installation and authentication checks before printing.
 `AO_PROJECT_ID`, `AO_SESSION_ID` (by fetching the current session from the
 daemon), then the current working directory matched against registered project
 paths. If `AO_SESSION_ID` is set but the session cannot be fetched, pass
-`--project` explicitly.
+`--project` explicitly. Use `ao spawn --standalone --agent <agent> --name
+<name>` to launch a worker in an AO-managed plain directory without resolving
+or registering a project. Standalone sessions do not support orchestrator,
+branch, issue, or PR-claim options.
 
 Agent switching is initially available only for worker sessions whose source
 and target harnesses are Claude Code or Codex. The main command
@@ -126,10 +129,10 @@ remain pending when none is active. AO never spawns an orchestrator to deliver
 a report.
 
 Scheduled delivery and exact same-turn user-message piggyback use Chat's
-durable semantic message boundary. TUI exposes raw terminal input and does not
-provide an acceptance boundary, so AO keeps those reports durable rather than
-injecting terminal keystrokes. A future semantic TUI input contract can extend
-the same outbox without changing report ingestion.
+durable semantic message boundary. Supported TUIs acknowledge delivery only
+after their native prompt hook reports acceptance of the exact durable batch
+identity. A successful terminal write is never acknowledgement. Reports remain
+pending for TUI adapters that cannot expose this semantic boundary.
 
 `GET /api/v1/reports?projectId=<id>` is the read-only persisted report
 projection. Consumers such as Project Summary can read ordered report facts
@@ -143,6 +146,9 @@ warns-but-continues for unauthorized or unknown observations; daemon session
 creation repeats launch validation and native launch remains authoritative.
 `--skip-agent-check` suppresses only the CLI warnings and early check, never the
 daemon validation.
+
+Standalone spawns require `--agent` because there is no project configuration
+from which to resolve a default harness.
 
 `ao preview` resolves its session from the `AO_SESSION_ID` environment variable
 (it is meant to run inside a session), not a flag. With no argument it
