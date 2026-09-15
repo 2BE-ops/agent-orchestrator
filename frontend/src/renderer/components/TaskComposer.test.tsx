@@ -246,6 +246,36 @@ describe("TaskComposer", () => {
 		expect(h.post).not.toHaveBeenCalled();
 	});
 
+	it("allows a fresh launch recheck when cached readiness is unauthorized", async () => {
+		h.get.mockImplementation(async (path: string) => {
+			if (path.includes("/models")) {
+				return { data: { agent: "codex", selectionMode: "text", models: [], allowCustom: true } };
+			}
+			return { data: { status: "ok", project: { agent: "codex", config: {} } } };
+		});
+		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		queryClient.setQueryData(agentReadinessQueryKey, {
+			agents: [agentReadiness("codex", "Codex", { authentication: "unauthorized" })],
+		});
+		h.ensureTargetedReadiness.mockResolvedValueOnce({
+			agents: [agentReadiness("codex", "Codex", { authentication: "authorized" })],
+		});
+		h.post.mockResolvedValueOnce({ data: { session: { id: "worker-1" } } });
+
+		render(
+			<Wrap queryClient={queryClient}>
+				<TaskComposer projectId="proj-1" onCreated={vi.fn()} />
+			</Wrap>,
+		);
+		await waitFor(() => expect(screen.getByTestId("agent-field")).toHaveAttribute("data-value", "codex"));
+		const submit = screen.getByRole("button", { name: "Start task" });
+		expect(submit).toBeEnabled();
+		fireEvent.click(submit);
+
+		await waitFor(() => expect(h.ensureTargetedReadiness).toHaveBeenCalledWith(["codex"], "launch"));
+		await waitFor(() => expect(h.post).toHaveBeenCalled());
+	});
+
 	it("waits for and caches targeted readiness after a binary launch failure", async () => {
 		h.get.mockImplementation(async (path: string) => {
 			if (path.includes("/models")) {

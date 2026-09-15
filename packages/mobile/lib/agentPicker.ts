@@ -31,8 +31,7 @@ export function availabilityOf(agent: AgentInfo, catalog: AgentCatalog): AgentAv
 	if (!installed) return "needs-install";
 	const authorized =
 		catalog.authorized.some((a) => a.id === agent.id) ||
-		installed.authStatus === "authorized" ||
-		installed.authStatus === "configured";
+		installed.authStatus === "authorized";
 	if (authorized) return "authorized";
 	// Absent is treated as unknown: the daemon could not determine credential
 	// state, which is not the same as knowing the agent is unusable.
