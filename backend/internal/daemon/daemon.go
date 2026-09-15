@@ -61,7 +61,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systemcheck"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systeminstall"
 	usagesvc "github.com/aoagents/agent-orchestrator/backend/internal/service/usage"
-	"github.com/aoagents/agent-orchestrator/backend/internal/session_manager"
+	sessionmanager "github.com/aoagents/agent-orchestrator/backend/internal/session_manager"
 	"github.com/aoagents/agent-orchestrator/backend/internal/skillassets"
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite"
 	"github.com/aoagents/agent-orchestrator/backend/internal/terminal"
