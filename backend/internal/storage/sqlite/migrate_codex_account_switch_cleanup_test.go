@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func TestMigration0141SimplifiesCodexAccountManagement(t *testing.T) {
+func TestMigration0146SimplifiesCodexAccountManagement(t *testing.T) {
 	rows := []struct {
 		id, phase, failureCode, wantPhase, wantCode string
 		terminal                                    bool
@@ -36,7 +36,7 @@ func TestMigration0141SimplifiesCodexAccountManagement(t *testing.T) {
 				t.Fatalf("seed %s: %v", row.id, err)
 			}
 
-			upTo(t, db, 141)
+			upTo(t, db, 146)
 
 			for _, name := range []string{"codex_active_account", "codex_account_switch_sessions"} {
 				var count int

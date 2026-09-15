@@ -527,6 +527,7 @@ func (c chatLauncher) StartChat(ctx context.Context, cfg sessionmanager.ChatStar
 		WorkspacePath:           cfg.WorkspacePath,
 		Env:                     cfg.Env,
 		Model:                   cfg.Model,
+		Effort:                  cfg.Effort,
 		Permissions:             cfg.Permissions,
 		SystemPrompt:            cfg.SystemPrompt,
 		AdditionalDirectories:   cfg.AdditionalDirectories,
@@ -536,6 +537,7 @@ func (c chatLauncher) StartChat(ctx context.Context, cfg sessionmanager.ChatStar
 		ProviderScopeID:         cfg.ProviderScopeID,
 		ControllerGeneration:    cfg.ControllerGeneration,
 		RequireNativeHistory:    cfg.RequireNativeHistory,
+		HistoryPolicy:           cfg.HistoryPolicy,
 		SkipNativeHistoryImport: cfg.SkipNativeHistoryImport,
 		ControllerReady: func(out chatsvc.StartResult) (chatsvc.ControllerCommit, error) {
 			if cfg.ControllerReady == nil {
