@@ -193,13 +193,6 @@ func New(client *http.Client) *Validator {
 	return &Validator{client: client, execCmd: execCommand}
 }
 
-// WithHTTPClient preserves source compatibility for the Cloud module while it
-// consumes this package through the repository workspace. New callers pass the
-// client directly to New; this is not a functional option.
-//
-// Deprecated: pass client directly to New.
-func WithHTTPClient(client *http.Client) *http.Client { return client }
-
 // Validate probes the credential against its provider and classifies the
 // response. It never returns an error for a rejected credential — that is a
 // Result with StateInvalid. A returned error means the question could not be
