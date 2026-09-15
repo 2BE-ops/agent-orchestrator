@@ -122,7 +122,3 @@ func (v *Validator) googleAccessTokenFromServiceAccount(ctx context.Context, key
 	}
 	return token.AccessToken, nil
 }
-
-func readLimited(response *http.Response) ([]byte, error) {
-	return readAllLimited(response, maxBodyBytes)
-}

@@ -196,6 +196,7 @@ func New(client *http.Client) *Validator {
 // WithHTTPClient preserves source compatibility for the Cloud module while it
 // consumes this package through the repository workspace. New callers pass the
 // client directly to New; this is not a functional option.
+//
 // Deprecated: pass client directly to New.
 func WithHTTPClient(client *http.Client) *http.Client { return client }
 

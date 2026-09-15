@@ -2,7 +2,6 @@ package agentcreds
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -123,8 +122,4 @@ func lastNonEmptyLine(text string) string {
 		}
 	}
 	return ""
-}
-
-func readAllLimited(response *http.Response, limit int64) ([]byte, error) {
-	return io.ReadAll(io.LimitReader(response.Body, limit))
 }
