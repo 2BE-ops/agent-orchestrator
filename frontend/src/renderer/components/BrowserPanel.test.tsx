@@ -451,6 +451,46 @@ describe("BrowserPanel", () => {
 		expect(window.ao!.browser.notifyPanelUsed).toHaveBeenCalledWith("42:sess-1");
 	});
 
+	it("keeps browser shortcuts targeted when the portaled address bar receives focus", () => {
+		const topbarHost = document.createElement("div");
+		document.body.appendChild(topbarHost);
+		render(
+			<BrowserPanel
+				active
+				onTogglePopOut={() => undefined}
+				poppedOut={false}
+				session={session}
+				topbarHost={topbarHost}
+			/>,
+		);
+		vi.mocked(window.ao!.browser.notifyPanelUsed).mockClear();
+
+		fireEvent.focus(screen.getByRole("textbox", { name: /browser url/i }));
+
+		expect(window.ao!.browser.notifyPanelUsed).toHaveBeenCalledWith("42:sess-1");
+	});
+
+	it("does not clear the browser shortcut target when focus moves into the portaled address bar", () => {
+		const topbarHost = document.createElement("div");
+		document.body.appendChild(topbarHost);
+		render(
+			<BrowserPanel
+				active
+				onTogglePopOut={() => undefined}
+				poppedOut={false}
+				session={session}
+				topbarHost={topbarHost}
+			/>,
+		);
+		const panel = screen.getByTestId("browser-panel");
+		const input = screen.getByRole("textbox", { name: /browser url/i });
+		vi.mocked(window.ao!.browser.notifyPanelBlur).mockClear();
+
+		fireEvent.blur(panel, { relatedTarget: input });
+
+		expect(window.ao!.browser.notifyPanelBlur).not.toHaveBeenCalled();
+	});
+
 	it("reopens the most recently closed tab for a matching shortcut request", () => {
 		hookState.closedTabs = [
 			{ id: "latest", url: "http://localhost:5173/latest", title: "Latest" },

@@ -541,6 +541,12 @@ export function BrowserPanelView({
 		() =>
 			window.ao?.browser.onFocusLocation((targetViewId) => {
 				if (targetViewId !== viewId) return;
+				// ⌘T/Ctrl+T focuses the omnibox after opening a tab. When the bar is
+				// portaled into the inspector header it sits outside the panel focus
+				// boundary, so restore the browser shortcut target before the input
+				// takes focus — otherwise the next ⌘T/⌘W falls through to terminal
+				// shortcuts and yank focus to the main pane.
+				window.ao?.browser.notifyPanelUsed(viewId);
 				urlInputRef.current?.focus();
 				urlInputRef.current?.select();
 			}),
@@ -817,6 +823,12 @@ export function BrowserPanelView({
 				urlEditing && "browser-panel__address-bar--editing",
 			)}
 			data-testid="browser-address-bar"
+			onFocusCapture={() => {
+				// When docked, this form is portaled into the inspector header and is
+				// therefore outside the browser-panel focus boundary below. Restore the
+				// browser shortcut target when its address input receives focus.
+				if (viewId) window.ao?.browser.notifyPanelUsed(viewId);
+			}}
 			onSubmit={submit}
 		>
 			<Popover
@@ -1087,9 +1099,17 @@ export function BrowserPanelView({
 			data-browser-native-page={navState.url ? "live" : "empty"}
 			data-testid="browser-panel"
 			onBlurCapture={(event: FocusEvent<HTMLDivElement>) => {
-				if (viewId && !event.currentTarget.contains(event.relatedTarget)) {
-					window.ao?.browser.notifyPanelBlur(viewId);
+				if (!viewId || event.currentTarget.contains(event.relatedTarget)) return;
+				// Focus moving into the portaled omnibox is still browser chrome — do
+				// not drop the shortcut target or ⌘T/⌘W will create/close terminals.
+				if (topbarHost && event.relatedTarget instanceof Node && topbarHost.contains(event.relatedTarget)) {
+					return;
 				}
+				// relatedTarget is null when focus leaves the document entirely — e.g.
+				// into the native page after a shortcut-driven tab close. That is the
+				// deepest browser context, so keep the shortcut target.
+				if (!event.relatedTarget) return;
+				window.ao?.browser.notifyPanelBlur(viewId);
 			}}
 			onFocusCapture={() => {
 				if (viewId) window.ao?.browser.notifyPanelUsed(viewId);
