@@ -22,9 +22,12 @@ AO sends structured events in a few broad categories:
 - The GitHub organization or account that owns a project's configured remote,
   recorded on project-add events. Only the owner segment is sent, never the
   repository name, path, or URL. For a personal repository this owner is the
-  user's own GitHub username, so this particular value is not anonymous. We use
-  it to understand which organizations and developers get the most value from
-  AO, so we can prioritize improvements and reach out for feedback
+  user's own GitHub username, so this particular value is not anonymous. A
+  workspace project holds several repositories: AO sends their owner only when
+  every one of them shares it, along with a count of how many distinct owners
+  the workspace spans. We use this to understand which organizations and
+  developers get the most value from AO, so we can prioritize improvements and
+  reach out for feedback
 - Whether that owner is a personal account or an organization, sent alongside
   it as `User` or `Organization`. When telemetry is enabled, the daemon asks
   GitHub's public `GET /users/{owner}` endpoint for that classification as a
@@ -63,13 +66,15 @@ Product telemetry is designed not to include:
 - API keys, access tokens, passwords, or other credentials
 - Names, email addresses, or account identities
 
-The GitHub owner segment described under "What AO sends" is the one
-GitHub-derived value AO does send. It is limited to the owning
-organization or account and never includes the repository, path, or URL. It is
-read only from `github.com` remotes: a remote on a self-hosted GitHub
-Enterprise host names a different, private namespace, so its owner is not
-recorded at all. A remote that embeds a token or username — as credential
-helpers write them — still contributes nothing but the owner segment.
+The GitHub owner segment described under "What AO sends", the owner type sent
+alongside it, and the workspace owner count are the only GitHub-derived values
+AO does send. They are limited to the owning organization or account, whether
+that owner is a user or an organization, and how many distinct owners a
+workspace spans; none of them include the repository, path, or URL. The owner is
+read only from `github.com` remotes: a remote on a self-hosted GitHub Enterprise
+host names a different, private namespace, so its owner is not recorded at all.
+A remote that embeds a token or username — as credential helpers write them —
+still contributes nothing but the owner segment.
 
 The optional website waitlist is separate from product telemetry. If you submit
 an email address, company role, and social profile there, they are used to manage
