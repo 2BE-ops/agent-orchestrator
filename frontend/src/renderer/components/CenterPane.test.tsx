@@ -814,6 +814,25 @@ describe("CenterPane toolbar session label", () => {
 		expect(screen.getByRole("tab", { name: "README.md" })).toHaveAttribute("aria-selected", "true");
 	});
 
+	it("removes the active highlight from the reviewer while a workspace file is selected", () => {
+		renderCenterPane({
+			session: worker,
+			reviewerTerminal: { handleId: "review-sess-1", harness: "codex" },
+			terminalTarget: { kind: "reviewer", handleId: "review-sess-1", harness: "codex", sessionId: worker.id },
+			workspaceActiveTabKey: "file:README.md",
+			workspaceTabs: [
+				{
+					key: "file:README.md",
+					content: <button aria-selected="true" role="tab">README.md</button>,
+					onSelect: vi.fn(),
+				},
+			],
+		});
+
+		expect(screen.getByRole("tab", { name: "Reviewer" })).toHaveAttribute("aria-selected", "false");
+		expect(screen.getByRole("tab", { name: "README.md" })).toHaveAttribute("aria-selected", "true");
+	});
+
 	it("cycles from the session terminal to its next shell tab", () => {
 		const [shell] = makeShells(1);
 		const onSelectShellTerminal = vi.fn();
