@@ -166,6 +166,7 @@ func run(logger *slog.Logger) error {
 	}
 	pullRequestSocketPath := filepath.Join(dataDir, "ao-pull-request.sock")
 	reviewSocketPath := filepath.Join(dataDir, "ao-review.sock")
+	checkpointSocketPath := filepath.Join(dataDir, "ao-checkpoint.sock")
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	started := make(chan error, 1)
@@ -234,14 +235,20 @@ func run(logger *slog.Logger) error {
 		rehydrateSession(runCtx, logger, client, bootstrap, workspace, dataDir)
 		close(rehydrateDone)
 		transportSupervisor.MarkWorkspaceReady()
-		// Begin durable-restore checkpointing now that the checkout and the git
-		// credential helper are in place. Bound to runCtx: it stops on shutdown.
-		newCheckpointer(client, bootstrap, workspace, dataDir, logger).run(runCtx)
+		// Serve durable-restore checkpointing now that the checkout and the git
+		// credential helper are in place. The capture is triggered by the agent's
+		// turn-completion (Stop) hook via this unix socket, not a timer. Bound to
+		// runCtx: it stops on shutdown.
+		cp := newCheckpointer(client, bootstrap, workspace, dataDir, logger)
+		if err := runCheckpointBridge(runCtx, checkpointSocketPath, cp.checkpoint, logger); err != nil &&
+			runCtx.Err() == nil {
+			logger.Warn("checkpoint bridge stopped", "error", err)
+		}
 	}()
 	go func() {
 		if err := startInteractiveAgent(
 			runCtx, logger, client, bootstrap, workspace, dataDir,
-			pullRequestSocketPath, reviewSocketPath, &transportSupervisor, rehydrateDone,
+			pullRequestSocketPath, reviewSocketPath, checkpointSocketPath, &transportSupervisor, rehydrateDone,
 		); err != nil && runCtx.Err() == nil {
 			logger.Error("background coding-agent startup failed", "error", err)
 		}
@@ -305,7 +312,7 @@ func startInteractiveAgent(
 	logger *slog.Logger,
 	client *client,
 	bootstrap worker.BootstrapResponse,
-	workspace, dataDir, pullRequestSocketPath, reviewSocketPath string,
+	workspace, dataDir, pullRequestSocketPath, reviewSocketPath, checkpointSocketPath string,
 	transportSupervisor *workertransport.Supervisor,
 	rehydrateDone <-chan struct{},
 ) error {
@@ -336,6 +343,7 @@ func startInteractiveAgent(
 	agentCommand.Env["AO_SESSION_ID"] = bootstrap.SessionID
 	agentCommand.Env["AO_PROJECT_ID"] = bootstrap.Launch.ProjectID
 	agentCommand.Env["AO_SESSION_KIND"] = bootstrap.Launch.Kind
+	agentCommand.Env["AO_CHECKPOINT_SOCKET"] = checkpointSocketPath
 	agentCommand.Env["AO_PULL_REQUEST_SOCKET"] = pullRequestSocketPath
 	agentCommand.Env["AO_PULL_REQUEST_HELP"] = "curl --unix-socket $AO_PULL_REQUEST_SOCKET " +
 		`-X POST http://localhost/pull-request -H 'Content-Type: application/json' ` +

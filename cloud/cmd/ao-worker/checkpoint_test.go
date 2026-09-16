@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,23 +20,47 @@ func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-func TestCheckpointThrottle(t *testing.T) {
-	now := time.Unix(0, 0)
-	cp := &checkpointer{interval: checkpointMinInterval, now: func() time.Time { return now }}
+// The checkpoint bridge is the event trigger: a POST from the Stop hook runs one
+// checkpoint. There is no timer; capture fires on turn completion.
+func TestCheckpointBridgeRunsOnPoke(t *testing.T) {
+	socket := filepath.Join(t.TempDir(), "cp.sock")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	if !cp.due() {
-		t.Fatal("first checkpoint must be due")
+	ran := make(chan struct{}, 8)
+	go func() {
+		_ = runCheckpointBridge(ctx, socket, func(context.Context) { ran <- struct{}{} }, discardLogger())
+	}()
+
+	httpClient := &http.Client{Transport: &http.Transport{
+		DialContext: func(c context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(c, "unix", socket)
+		},
+	}}
+	// Retry the first poke until the bridge has bound its socket.
+	var lastErr error
+	for i := 0; i < 50; i++ {
+		req, _ := http.NewRequest(http.MethodPost, "http://localhost/checkpoint", nil)
+		resp, err := httpClient.Do(req)
+		if err == nil {
+			if resp.StatusCode != http.StatusAccepted {
+				t.Fatalf("poke status = %d, want 202", resp.StatusCode)
+			}
+			_ = resp.Body.Close()
+			lastErr = nil
+			break
+		}
+		lastErr = err
+		time.Sleep(10 * time.Millisecond)
 	}
-	if cp.due() {
-		t.Fatal("an immediate second checkpoint must be throttled")
+	if lastErr != nil {
+		t.Fatalf("poke never reached the bridge: %v", lastErr)
 	}
-	now = now.Add(checkpointMinInterval - time.Nanosecond)
-	if cp.due() {
-		t.Fatal("a checkpoint just under the interval must be throttled")
-	}
-	now = now.Add(time.Nanosecond)
-	if !cp.due() {
-		t.Fatal("a checkpoint at the interval boundary must be due")
+
+	select {
+	case <-ran:
+	case <-time.After(2 * time.Second):
+		t.Fatal("checkpoint did not run on poke")
 	}
 }
 
