@@ -34,7 +34,7 @@ import {
 	useState,
 	type ReactNode,
 } from "react";
-import Markdown, { type Components } from "react-markdown";
+import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { WrapText } from "lucide-react";
 import { cn } from "../../lib/utils";
@@ -117,7 +117,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({
 					muted ? "text-[13px] text-muted-foreground" : "text-sm text-foreground",
 				)}
 			>
-				<Markdown remarkPlugins={PLUGINS} components={COMPONENTS}>
+				<Markdown remarkPlugins={PLUGINS} components={COMPONENTS} urlTransform={chatUrlTransform}>
 					{text}
 				</Markdown>
 			</div>
@@ -235,13 +235,17 @@ function MarkdownLink({ href, children }: { href?: string; children?: ReactNode 
 					void openLinkInSystemBrowser(href);
 				}
 			}}
-			target="_blank"
+			target={sessionLink ? undefined : "_blank"}
 			rel="noreferrer noopener"
 			className="text-markdown-link underline decoration-markdown-link/45 underline-offset-2 transition-colors hover:text-markdown-link-hover hover:decoration-markdown-link-hover/75"
 		>
 			{children}
 		</AppLink>
 	);
+}
+
+function chatUrlTransform(url: string): string {
+	return isSessionLink(url) ? url : defaultUrlTransform(url);
 }
 
 /**
