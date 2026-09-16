@@ -108,9 +108,25 @@ func ownerSegment(path string) string {
 	return owner
 }
 
-// isGitHubLogin reports whether s has the shape of a GitHub user or org name.
-// The check keeps path noise (escapes, dot segments, query strings) out of the
-// exported property; it does not prove the account exists.
+// isGitHubLogin reports whether s has the shape of a GitHub login (a user or
+// org name). Its job is to keep path noise — dot segments, percent escapes,
+// stray query strings — out of the exported property, not to prove the account
+// exists.
+//
+// GitHub's rule, per its username-normalization documentation: a login "can
+// only contain alphanumeric characters and dashes", cannot begin or end with a
+// dash, cannot contain two consecutive dashes, and is at most 39 characters.
+// Any non-alphanumeric character is normalized to a dash, so an underscore can
+// never reach a real login and is rejected here.
+//
+// This matches that rule on every point but one: two consecutive dashes are
+// deliberately tolerated. That constraint is stated for names GitHub normalizes
+// at signup, and whether it was ever applied retroactively to older accounts is
+// not something this code can establish. The two errors are not symmetric —
+// wrongly rejecting a real owner silently loses the attribution this parser
+// exists to recover, whereas letting "a--b" through costs nothing, since the
+// host is already known to be github.com and the segment is the owner by
+// construction.
 func isGitHubLogin(s string) bool {
 	if s == "" || len(s) > maxGitHubOwnerLen {
 		return false
@@ -120,7 +136,7 @@ func isGitHubLogin(s string) bool {
 	}
 	for _, c := range s {
 		alnum := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
-		if !alnum && c != '-' && c != '_' {
+		if !alnum && c != '-' {
 			return false
 		}
 	}

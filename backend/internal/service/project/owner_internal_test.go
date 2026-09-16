@@ -52,8 +52,11 @@ func TestGithubOwner(t *testing.T) {
 		{"scp-leading-slash", "git@github.com:/aoagents/x.git", "aoagents"},
 		{"double-slash-path", "https://github.com//aoagents/x.git", "aoagents"},
 		{"deep-path", "https://github.com/aoagents/x/tree/main", "aoagents"},
-		{"underscore-owner", "https://github.com/some_user/x.git", "some_user"},
 		{"hyphen-owner", "https://github.com/some-org/x.git", "some-org"},
+		// Deliberate tolerance, not an oversight: GitHub forbids consecutive
+		// dashes at signup, but this filter errs toward keeping a real owner
+		// rather than toward matching the signup form. See isGitHubLogin.
+		{"consecutive-dashes-tolerated", "https://github.com/some--org/x.git", "some--org"},
 
 		// --- rejected: not github.com ---
 		{"empty", "", ""},
@@ -87,6 +90,11 @@ func TestGithubOwner(t *testing.T) {
 		{"space-in-owner", "https://github.com/two words/x.git", ""},
 		{"owner-leading-hyphen", "https://github.com/-aoagents/x.git", ""},
 		{"owner-trailing-hyphen", "https://github.com/aoagents-/x.git", ""},
+		// GitHub normalizes every non-alphanumeric character to a dash, so no
+		// real login contains one of these.
+		{"owner-underscore", "https://github.com/some_user/x.git", ""},
+		{"owner-dot", "https://github.com/some.user/x.git", ""},
+		{"owner-plus", "https://github.com/some+user/x.git", ""},
 		{"owner-too-long", "https://github.com/" + longName(40) + "/x.git", ""},
 	}
 	for _, tc := range cases {
