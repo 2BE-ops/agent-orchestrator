@@ -32,6 +32,7 @@ func TestNativeForkHandoffRetainsEachExchangeOnce(t *testing.T) {
 		wantCopies                int
 	}{
 		{"copied ancestry", "thread-A", "alpha remembered", 1},
+		{"retained approval record", "thread-A", "alpha remembered", 1},
 		{"persisted history omits item IDs", "thread-A", "alpha remembered", 1},
 		{"indirect ancestry", "thread-middle", "alpha remembered", 1},
 		{"unrelated identical history", "unrelated", "alpha remembered", 2},
@@ -63,6 +64,16 @@ func TestNativeForkHandoffRetainsEachExchangeOnce(t *testing.T) {
 			before, err := svc.Snapshot(ctx, rec.ID)
 			if err != nil || len(before.Messages) != 2 {
 				t.Fatalf("source snapshot: %+v, %v", before, err)
+			}
+			if tc.name == "retained approval record" {
+				if err := st.UpsertActivity(ctx, before.Conversation.ID, before.Turns[0].ProviderTurnID,
+					domain.ConversationActivity{ID: "prior-approval", Kind: domain.ActivityKindApproval, Status: domain.ActivityStatusCompleted, Summary: "Approved pwd"}, now); err != nil {
+					t.Fatal(err)
+				}
+				before, err = svc.Snapshot(ctx, rec.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			if err := svc.StopChat(ctx, rec.ID); err != nil {
 				t.Fatal(err)
@@ -156,16 +167,21 @@ func TestNativeForkHandoffRetainsEachExchangeOnce(t *testing.T) {
 				if !reflect.DeepEqual(texts, want) {
 					t.Fatalf("visible history = %q, want %q", texts, want)
 				}
-				var boundaries, commands int
+				var boundaries, commands, approvals int
 				for _, activity := range got.Activities {
 					if activity.Kind == domain.ActivityKindCommand {
 						commands++
+					} else if activity.Kind == domain.ActivityKindApproval {
+						approvals++
 					} else {
 						boundaries++
 					}
 				}
 				if boundaries != 1 || commands != tc.wantCopies {
 					t.Fatalf("boundaries=%d commands=%d, want 1/%d", boundaries, commands, tc.wantCopies)
+				}
+				if tc.name == "retained approval record" && approvals != 1 {
+					t.Fatalf("retained approvals=%d, want 1", approvals)
 				}
 			}
 			assertSnapshot()

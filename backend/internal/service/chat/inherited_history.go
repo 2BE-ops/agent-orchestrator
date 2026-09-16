@@ -67,13 +67,21 @@ func (s *Service) withoutInheritedHistory(ctx context.Context, provider ports.Ch
 }
 
 func omitCopiedPrefix(events, mapped []ports.ChatEvent, rows ConversationRows) []ports.ChatEvent {
-	index := indexNativeHistoryTurns(rows.Turns, rows.Messages, rows.Activities)
+	// Approval/input records belong to AO's interaction history, not the native
+	// transcript. Keep those rows, but do not require Codex to replay them.
+	activities := make([]domain.ConversationActivity, 0, len(rows.Activities))
+	for _, activity := range rows.Activities {
+		if activity.Kind != domain.ActivityKindApproval && activity.Kind != domain.ActivityKindUserInput {
+			activities = append(activities, activity)
+		}
+	}
+	index := indexNativeHistoryTurns(rows.Turns, rows.Messages, activities)
 	if index == nil {
 		return events
 	}
 	copied := make(map[string]bool)
 	var candidate *nativeHistoryTurn
-	messages, activities := map[string]int{}, map[string]int{}
+	messages, replayActivities := map[string]int{}, map[string]int{}
 	ambiguous := false
 	for i, event := range mapped {
 		// Codex may omit item IDs in persisted history. Its native turn identity
@@ -94,18 +102,18 @@ func omitCopiedPrefix(events, mapped []ports.ChatEvent, rows ConversationRows) [
 			messages[fingerprint]++
 		}
 		if event.Kind == ports.ChatEventActivityCompleted {
-			activities[nativeHistoryActivityFingerprint(event.ActivityKind, event.ActivityStatus, event.Summary, event.Detail)]++
+			replayActivities[nativeHistoryActivityFingerprint(event.ActivityKind, event.ActivityStatus, event.Summary, event.Detail)]++
 		}
 		if event.Kind != ports.ChatEventTurnCompleted {
 			continue
 		}
 		if candidate == nil || ambiguous || candidate.state != domain.TurnStateCompleted ||
 			(event.TurnState != domain.TurnStateCompleted && event.TurnState != domain.TurnStateRecovered) ||
-			!maps.Equal(messages, candidate.messages) || !maps.Equal(activities, candidate.activities) {
+			!maps.Equal(messages, candidate.messages) || !maps.Equal(replayActivities, candidate.activities) {
 			break
 		}
 		copied[events[i].ProviderTurnID] = true
-		candidate, messages, activities = nil, map[string]int{}, map[string]int{}
+		candidate, messages, replayActivities = nil, map[string]int{}, map[string]int{}
 	}
 	filtered := make([]ports.ChatEvent, 0, len(events))
 	for _, event := range events {

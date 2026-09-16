@@ -370,9 +370,9 @@ func TestBranchActivationScopesNativeHistoryFacts(t *testing.T) {
 					meta.NativeTranscriptPath != "/old/transcript.jsonl" {
 					t.Fatalf("same native owner lost checkpoint: %+v", meta)
 				}
-			} else if meta.LatestUserPrompt != "" || !meta.LatestUserPromptAt.IsZero() ||
+			} else if meta.LatestUserPrompt != "" || !meta.LatestUserPromptAt.Equal(testNow) ||
 				meta.LatestAssistantUpdate != "" || !meta.LatestAssistantUpdateAt.IsZero() || meta.NativeTranscriptPath != "" {
-				t.Fatalf("new native owner inherited checkpoint: %+v", meta)
+				t.Fatalf("new native owner inherited checkpoint or lost last human activity time: %+v", meta)
 			}
 		})
 	}
