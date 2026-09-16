@@ -4592,12 +4592,12 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 	container-name: browser-annotation;
 	container-type: inline-size;
 	display: flex;
-	height: 40px;
 	align-items: center;
 	gap: 2px;
 	flex-shrink: 0;
 	min-width: 0;
-	padding: var(--space-1);
+	overflow: hidden;
+	padding: 0 var(--space-1);
 	background: var(--bg);
 }
 
@@ -4606,9 +4606,10 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 	display: flex;
 	width: 100%;
 	min-width: 0;
-	height: 100%;
+	height: calc(var(--size-control-md) + 2 * var(--space-1));
 	align-items: center;
 	gap: 2px;
+	padding-block: var(--space-1);
 	background: transparent;
 }
 
@@ -4671,7 +4672,7 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 	background: color-mix(in srgb, var(--color-border) 78%, transparent);
 }
 
-.browser-panel__toolbar.browser-panel__toolbar--annotation button {
+.browser-panel__toolbar.browser-panel__toolbar--annotation button:not(.browser-panel__annotation-send) {
 	border-radius: var(--radius-md);
 	box-shadow: none;
 	transform: none;
@@ -4684,8 +4685,8 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 		opacity var(--duration-fast) ease;
 }
 
-.browser-panel__toolbar.browser-panel__toolbar--annotation button:not(:disabled):hover,
-.browser-panel__toolbar.browser-panel__toolbar--annotation button:not(:disabled):active {
+.browser-panel__toolbar.browser-panel__toolbar--annotation button:not(.browser-panel__annotation-send):not(:disabled):hover,
+.browser-panel__toolbar.browser-panel__toolbar--annotation button:not(.browser-panel__annotation-send):not(:disabled):active {
 	box-shadow: none;
 	transform: none;
 	translate: none;
@@ -4713,16 +4714,16 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 }
 
 .browser-panel__toolbar--annotation .browser-panel__annotation-send {
-	min-width: 52px;
-	box-shadow: none;
+	height: var(--size-control-md);
+	gap: var(--space-1_5);
+	padding-inline: var(--space-2_5);
+	font-size: var(--font-size-sm);
+	font-weight: var(--font-weight-medium);
 }
 
 .browser-panel__annotation-send-count {
-	margin-left: 1px;
-	padding-left: var(--space-1_5);
-	border-left: 1px solid color-mix(in srgb, currentColor 28%, transparent);
-	font-size: var(--font-size-xs);
 	font-variant-numeric: tabular-nums;
+	opacity: 0.8;
 }
 
 @container browser-annotation (max-width: 30rem) {

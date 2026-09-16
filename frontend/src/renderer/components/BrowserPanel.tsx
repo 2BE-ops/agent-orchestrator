@@ -13,6 +13,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
 	DndContext,
 	DragOverlay,
@@ -387,6 +388,7 @@ export function BrowserPanelView({
 	topbarHost,
 }: BrowserPanelProps & { annotationQueue: BrowserAnnotationQueueModel; browserView: BrowserViewModel }) {
 	const { t } = useTranslation();
+	const prefersReducedMotion = useReducedMotion();
 	const {
 		viewId,
 		navState,
@@ -978,32 +980,8 @@ export function BrowserPanelView({
 		</div>
 	);
 	const annotationToolbar = (
-		<div
-			className="browser-panel__annotation-row"
-			data-testid="browser-annotation-toolbar"
-		>
-			<div className="browser-panel__toolbar browser-panel__toolbar--annotation">
+		<div className="browser-panel__toolbar browser-panel__toolbar--annotation">
 			<div className="browser-panel__annotation-actions browser-panel__annotation-actions--leading">
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<Button
-							aria-label={t("browser.annotationExitMode")}
-							onClick={() => {
-								cancelPicking();
-								void setAnnotationMode(false);
-							}}
-							size="icon-sm"
-							type="button"
-							variant="ghost"
-						>
-							<X aria-hidden="true" className="size-icon-base" />
-						</Button>
-					</TooltipTrigger>
-					<TooltipContent data-browser-native-overlay="true" side="bottom">
-						{t("browser.annotationExit")}
-					</TooltipContent>
-				</Tooltip>
-				<span aria-hidden="true" className="browser-panel__annotation-separator" />
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<Button
@@ -1090,7 +1068,6 @@ export function BrowserPanelView({
 						<span className="browser-panel__annotation-send-count">{annotationState.count}</span>
 					) : null}
 				</Button>
-			</div>
 			</div>
 		</div>
 	);
@@ -1473,7 +1450,25 @@ export function BrowserPanelView({
 				</DropdownMenu>
 				</div>
 			</div>
-			{annotationMode ? annotationToolbar : null}
+			<AnimatePresence initial={false}>
+				{annotationMode ? (
+					<motion.div
+						key="annotation-toolbar"
+						className="browser-panel__annotation-row"
+						data-testid="browser-annotation-toolbar"
+						initial={prefersReducedMotion ? false : { height: 0, opacity: 0 }}
+						animate={{ height: "auto", opacity: 1 }}
+						exit={prefersReducedMotion ? undefined : { height: 0, opacity: 0 }}
+						transition={
+							prefersReducedMotion
+								? { duration: 0 }
+								: { duration: 0.18, ease: [0.22, 1, 0.36, 1] }
+						}
+					>
+						{annotationToolbar}
+					</motion.div>
+				) : null}
+			</AnimatePresence>
 			<div className="browser-panel__body flex min-h-0 flex-1 overflow-hidden">
 				<div
 					className="browser-panel__viewport relative min-h-0 flex-1 overflow-hidden"

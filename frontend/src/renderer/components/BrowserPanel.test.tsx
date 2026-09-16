@@ -1218,6 +1218,7 @@ describe("BrowserPanel", () => {
 		expect(screen.getByTestId("browser-toolbar")).toBeInTheDocument();
 		const annotationToolbar = screen.getByTestId("browser-annotation-toolbar");
 		expect(annotationToolbar.querySelector(".browser-panel__toolbar--annotation")).not.toBeNull();
+		expect(screen.queryByRole("button", { name: "Exit annotation mode" })).not.toBeInTheDocument();
 		expect(screen.getByText("example.test")).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "Send annotations" })).toHaveTextContent("2");
 		expect(screen.getByRole("button", { name: "Send annotations" })).toHaveClass(
