@@ -2930,6 +2930,40 @@ describe("browser annotation IPC", () => {
 		expect(webContents.focus).not.toHaveBeenCalled();
 	});
 
+	it("drops an open draft when annotation mode is turned off, but keeps saved batch annotations", async () => {
+		const { invoke, send, sent, webContents } = setupHost();
+		await invoke("browser:ensure", "sess-1");
+		await invoke("browser:navigate", { viewId: "1:sess-1", url: "http://localhost:4173/" });
+		await invoke("browser:annotation:setMode", { viewId: "1:sess-1", enabled: true });
+		const session = {
+			...annotationSession(),
+			annotations: submittedAnnotationSession().annotations,
+		};
+		send("browser:annotation:state", 99, session);
+		webContents.send.mockClear();
+
+		await invoke("browser:annotation:setMode", { viewId: "1:sess-1", enabled: false });
+
+		expect(sent).toContainEqual({
+			channel: "browser:annotation:state",
+			payload: { viewId: "1:sess-1", count: 1, screenshotCount: 0, hasDraft: false },
+		});
+		const disablePayload = webContents.send.mock.calls.findLast(
+			([channel, payload]) => channel === "browser:annotation:setMode" && payload?.enabled === false,
+		)?.[1] as { enabled: boolean; session?: BrowserAnnotationSession } | undefined;
+		expect(disablePayload?.session?.draft).toBeUndefined();
+		expect(disablePayload?.session?.annotations).toEqual(session.annotations);
+
+		webContents.send.mockClear();
+		await invoke("browser:annotation:setMode", { viewId: "1:sess-1", enabled: true });
+
+		const enablePayload = webContents.send.mock.calls.find(
+			([channel, payload]) => channel === "browser:annotation:setMode" && payload?.enabled === true,
+		)?.[1] as { enabled: boolean; session?: BrowserAnnotationSession } | undefined;
+		expect(enablePayload?.session?.draft).toBeUndefined();
+		expect(enablePayload?.session?.annotations).toHaveLength(1);
+	});
+
 	it("preserves and restores an unfinished annotation when the toolbar reloads the page", async () => {
 		const { invoke, send, sent, webContents, webContentsListeners } = setupHost();
 		await invoke("browser:ensure", "sess-1");

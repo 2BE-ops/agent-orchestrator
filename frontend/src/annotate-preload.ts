@@ -47,6 +47,8 @@ const COMPOSER_CONTROL = 28;
 const COMPOSER_RADIUS = 8;
 const COMMENT_ACTION_ROW_HEIGHT = COMPOSER_GAP + COMPOSER_CONTROL;
 const COMMENT_CHROME_VERTICAL = COMPOSER_PAD * 2;
+/** Extra pixels outside the target on each side while a selection is active. */
+const SELECTED_OUTSET_PX = 2;
 const MARKDOWN_TARGETS =
 	"h1, h2, h3, h4, h5, h6, p, ul, ol, li, blockquote, pre, table, th, td, figure, figcaption, img, hr, details, summary";
 
@@ -97,11 +99,19 @@ const SUPPORTED_ADJUSTMENT_PROPERTIES = new Set(ADJUSTMENTS.map((item) => item.p
 
 ipcRenderer.on("browser:annotation:setMode", (_event, input: BrowserAnnotationPageMode) => {
 	if (input?.theme) theme = input.theme;
+	const nextEnabled = Boolean(input?.enabled);
+	// Clear any in-progress composer before applying the stored session when
+	// leaving mode, so a stale draft from main cannot reopen the input.
+	if (!nextEnabled) clearOpenDraft();
 	if (input?.session && samePage(input.session.page.url, window.location.href)) session = input.session;
 	else if (!samePage(session.page.url, window.location.href)) session = createBrowserAnnotationSession(window.location.href, document.title || undefined);
+	if (!nextEnabled && session.draft) {
+		delete session.draft;
+		emitState();
+	}
 	sanitizeSessionAdjustments();
 	applyAllAdjustments();
-	setEnabled(Boolean(input?.enabled), "disabled");
+	setEnabled(nextEnabled, "disabled");
 });
 
 ipcRenderer.on("browser:annotation:action", (_event, action: string) => {
@@ -127,9 +137,14 @@ function setEnabled(next: boolean, reason: BrowserAnnotationCancelReason): void 
 		if (next) renderAll();
 		return;
 	}
+	// Leaving mode drops any open composer/selection. Saved batch annotations
+	// stay on the session. Main also strips draft on disable so re-entry does
+	// not restore a selection; reload-while-enabled can still rehydrate draft.
+	if (!next) clearOpenDraft();
 	enabled = next;
 	hoveredElement = null;
 	selectedElement = null;
+	composerAnchorRect = null;
 	if (next) {
 		if (session.draft) {
 			selectedElement = resolveTarget(session.draft.target);
@@ -139,11 +154,25 @@ function setEnabled(next: boolean, reason: BrowserAnnotationCancelReason): void 
 		installListeners();
 		renderAll();
 	} else {
-		composerAnchorRect = null;
 		removeListeners();
 		cleanupOverlay();
 		if (reason !== "disabled") ipcRenderer.send("browser:annotation:cancel", { reason });
 	}
+}
+
+/** Close an in-progress composer without removing saved batch annotations. */
+function clearOpenDraft(): void {
+	const draft = session.draft;
+	if (!draft) return;
+	const element = selectedElement ?? resolveTarget(draft.target);
+	if (element) restoreAdjustments(element, draft.adjustments);
+	if (draft.id) applyAllAdjustments();
+	delete session.draft;
+	adjustmentLocks = emptyAdjustmentLocks();
+	composerAnchorRect = null;
+	selectedElement = null;
+	hoveredElement = null;
+	emitState();
 }
 
 function installListeners(): void {
@@ -221,14 +250,7 @@ function openComposer(element: Element, annotation?: BrowserSavedAnnotation): vo
 }
 
 function closeComposer(): void {
-	if (selectedElement && session.draft) restoreAdjustments(selectedElement, session.draft.adjustments);
-	if (session.draft?.id) applyAllAdjustments();
-	delete session.draft;
-	adjustmentLocks = emptyAdjustmentLocks();
-	composerAnchorRect = null;
-	selectedElement = null;
-	hoveredElement = null;
-	emitState();
+	clearOpenDraft();
 	renderAll();
 }
 
@@ -351,9 +373,36 @@ function renderAll(): void {
 function renderHover(): void {
 	const highlight = ensureOverlay().querySelector<HTMLElement>(".hover");
 	if (!highlight) return;
-	if (!hoveredElement || session.draft) { highlight.hidden = true; return; }
-	positionBox(highlight, hoveredElement.getBoundingClientRect());
+	const target = session.draft
+		? (selectedElement ?? resolveTarget(session.draft.target))
+		: hoveredElement;
+	if (!target) {
+		highlight.hidden = true;
+		highlight.classList.remove("hover--selected");
+		return;
+	}
+	const selecting = Boolean(session.draft);
+	const rect = target.getBoundingClientRect();
+	const wasHidden = highlight.hidden;
+	const alreadySelected = highlight.classList.contains("hover--selected");
 	highlight.hidden = false;
+	if (selecting) {
+		// Ease from flush bounds to a constant 2px outset once per selection.
+		if (wasHidden || !alreadySelected) {
+			highlight.classList.remove("hover--selected");
+			positionBox(highlight, rect, 0);
+			requestAnimationFrame(() => {
+				if (!session.draft) return;
+				highlight.classList.add("hover--selected");
+				positionBox(highlight, target.getBoundingClientRect(), SELECTED_OUTSET_PX);
+			});
+		} else {
+			positionBox(highlight, rect, SELECTED_OUTSET_PX);
+		}
+	} else {
+		highlight.classList.remove("hover--selected");
+		positionBox(highlight, rect, 0);
+	}
 }
 
 function renderMarkers(): void {
@@ -790,11 +839,11 @@ function copyRect(rect: AnnotationRectLike): AnnotationRectLike {
 	return { left: rect.left, top: rect.top, bottom: rect.bottom };
 }
 
-function positionBox(box: HTMLElement, rect: DOMRect): void {
-	box.style.left = `${Math.max(0, rect.left)}px`;
-	box.style.top = `${Math.max(0, rect.top)}px`;
-	box.style.width = `${Math.max(0, rect.width)}px`;
-	box.style.height = `${Math.max(0, rect.height)}px`;
+function positionBox(box: HTMLElement, rect: DOMRect, outset = 0): void {
+	box.style.left = `${Math.max(0, rect.left - outset)}px`;
+	box.style.top = `${Math.max(0, rect.top - outset)}px`;
+	box.style.width = `${Math.max(0, rect.width + outset * 2)}px`;
+	box.style.height = `${Math.max(0, rect.height + outset * 2)}px`;
 }
 
 function resizeAndPositionComposer(form: HTMLFormElement, textarea: HTMLTextAreaElement, rect: AnnotationRectLike): void {
@@ -886,7 +935,11 @@ function overlayStyles(): string {
 			font-family:"Geist Variable",system-ui,sans-serif;
 			color:var(--fg);
 		}
-		.hover{position:fixed;box-sizing:border-box;border:2px solid #4d8dff;border-radius:var(--radius);background:rgba(77,141,255,.10);pointer-events:none}
+		.hover{
+			position:fixed;box-sizing:border-box;border:2px solid #4d8dff;border-radius:var(--radius);
+			background:rgba(77,141,255,.10);pointer-events:none;
+			transition:left 180ms ease,top 180ms ease,width 180ms ease,height 180ms ease;
+		}
 		.marker{
 			position:fixed;width:20px;height:20px;border:2px solid var(--bg);border-radius:50%;
 			background:#74b98a;color:#101512;padding:0;

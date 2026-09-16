@@ -1872,6 +1872,15 @@ export function createBrowserViewHost(options: BrowserViewHostOptions): BrowserV
 		if (!browserSession) return;
 		assertProfileStable(browserSession);
 		const entry = activeEntry(browserSession);
+		if (!input.enabled) {
+			// Drop the open composer when leaving annotation mode. Keep saved
+			// batch annotations/markers so they reappear on the next entry.
+			const stored = annotationSessionFor(entry);
+			if (stored?.draft) {
+				delete stored.draft;
+				pushAnnotationState(options, entry, stored);
+			}
+		}
 		entry.annotationEnabled = input.enabled;
 		if (input.theme) entry.annotationTheme = input.theme;
 		const annotationSession = annotationSessionFor(entry);

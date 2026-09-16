@@ -234,4 +234,59 @@ describe("annotation adjustment preload", () => {
 			value: "89px",
 		}));
 	});
+
+	it("keeps the selection highlight visible with a 2px outset while annotating", async () => {
+		const button = setElementBounds(document.createElement("button"), { left: 20, top: 30, width: 140, height: 36 });
+		button.id = "selected-box";
+		button.textContent = "Continue";
+		document.body.appendChild(button);
+
+		const styles = overlayRoot().querySelector("style")?.textContent ?? "";
+		expect(styles).toContain("transition:left 180ms ease,top 180ms ease,width 180ms ease,height 180ms ease");
+		expect(styles).not.toContain("transform:scale(1.1)");
+
+		clickPage(button);
+		const highlight = overlayRoot().querySelector<HTMLElement>(".hover");
+		expect(highlight?.hidden).toBe(false);
+		await vi.waitFor(() => {
+			expect(highlight?.classList.contains("hover--selected")).toBe(true);
+			expect(highlight?.style.left).toBe("18px");
+			expect(highlight?.style.top).toBe("28px");
+			expect(highlight?.style.width).toBe("144px");
+			expect(highlight?.style.height).toBe("40px");
+		});
+	});
+
+	it("clears open selection when re-entering annotation mode but keeps batch markers", () => {
+		const button = setElementBounds(document.createElement("button"), { left: 20, top: 30, width: 140, height: 36 });
+		button.id = "persist-batch";
+		button.textContent = "Continue";
+		document.body.appendChild(button);
+
+		clickPage(button);
+		const note = overlayRoot().querySelector<HTMLTextAreaElement>(".composer-note")!;
+		note.value = "keep this in the batch";
+		note.dispatchEvent(new Event("input", { bubbles: true }));
+		note.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+		expect(latestSession().annotations).toHaveLength(1);
+		expect(latestSession().draft).toBeUndefined();
+		expect(overlayRoot().querySelectorAll(".marker")).toHaveLength(1);
+
+		clickPage(button);
+		expect(overlayRoot().querySelector(".composer")).not.toBeNull();
+		expect(latestSession().draft).toBeDefined();
+
+		// Main strips draft synchronously on disable, then re-sends the batch.
+		const leaving = structuredClone(latestSession());
+		delete leaving.draft;
+		setMode(false, leaving);
+		expect(document.querySelector("[data-ao-annotation-root]")).toBeNull();
+
+		setMode(true, leaving);
+
+		expect(overlayRoot().querySelector(".composer")).toBeNull();
+		expect(latestSession().draft).toBeUndefined();
+		expect(latestSession().annotations).toHaveLength(1);
+		expect(overlayRoot().querySelectorAll(".marker")).toHaveLength(1);
+	});
 });
