@@ -2001,6 +2001,7 @@
 	"session.interfaceSwitchFailed": "Impossible de changer d’interface",
 	"session.dismissInterfaceSwitchError": "Fermer l’erreur de changement d’interface",
 	"session.dismissInterfaceSwitchNotice": "Fermer",
+<<<<<<< HEAD
 	"chat.draft.acceptedMessage": "Le contenu a été accepté, mais son brouillon local doit encore être effacé.",
 	"chat.draft.steerRestart": "AO ne peut pas déterminer si ce contenu a déjà été transmis à l’agent. Réessayez avec le même identifiant de livraison, ou abandonnez la récupération pour le modifier. Un nouvel envoi après abandon peut créer un doublon.",
 	"chat.draft.sendRestart": "La livraison du message n’a pas été confirmée. Réessayez avec le même identifiant de livraison ; le brouillon reste verrouillé jusqu’à confirmation.",
@@ -2053,4 +2054,16 @@
 	"chat.edit.abandonRecovery": "Abandonner la récupération de la modification",
 	"settings.harness.summary": "{{installed}} of {{total}} installed",
 	"shell.goHome": "Aller à l’accueil"
+=======
+	"settings.cloudAgents.github.title": "GitHub private repositories",
+	"settings.cloudAgents.github.connected": "Connected",
+	"settings.cloudAgents.github.notConnected": "Not connected",
+	"settings.cloudAgents.github.tokenLabel": "GitHub token",
+	"settings.cloudAgents.github.tokenHint": "Optional. Paste a GitHub personal access token with access to private repositories. It is encrypted and used only by Cloud workers when cloning GitHub repositories.",
+	"settings.cloudAgents.github.save": "Save token",
+	"settings.cloudAgents.github.saving": "Saving…",
+	"settings.cloudAgents.github.remove": "Remove",
+	"settings.cloudAgents.github.errorSave": "Could not save the GitHub token.",
+	"settings.cloudAgents.github.errorRemove": "Could not remove the GitHub token."
+>>>>>>> e5f4db7fe (fix: downgrade read-only token to soft warning and fix locale CI tests)
 }

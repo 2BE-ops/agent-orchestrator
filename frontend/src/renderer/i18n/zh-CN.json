@@ -1954,6 +1954,7 @@
 	"session.interfaceSwitchFailed": "无法切换界面",
 	"session.dismissInterfaceSwitchError": "关闭界面切换错误提示",
 	"session.dismissInterfaceSwitchNotice": "关闭",
+<<<<<<< HEAD
 	"chat.draft.acceptedMessage": "内容已被接受，但仍需清除本地草稿。",
 	"chat.draft.steerRestart": "AO 无法确定代理是否已收到此内容。请使用相同的投递 ID 安全重试，或放弃恢复后再编辑。放弃后再次发送可能导致重复投递。",
 	"chat.draft.sendRestart": "消息投递尚未确认。请使用相同的投递 ID 重试；确认前草稿将保持锁定。",
@@ -2006,4 +2007,16 @@
 	"chat.edit.abandonRecovery": "放弃编辑恢复",
 	"settings.harness.summary": "{{installed}} of {{total}} installed",
 	"shell.goHome": "返回主页"
+=======
+	"settings.cloudAgents.github.title": "GitHub private repositories",
+	"settings.cloudAgents.github.connected": "Connected",
+	"settings.cloudAgents.github.notConnected": "Not connected",
+	"settings.cloudAgents.github.tokenLabel": "GitHub token",
+	"settings.cloudAgents.github.tokenHint": "Optional. Paste a GitHub personal access token with access to private repositories. It is encrypted and used only by Cloud workers when cloning GitHub repositories.",
+	"settings.cloudAgents.github.save": "Save token",
+	"settings.cloudAgents.github.saving": "Saving…",
+	"settings.cloudAgents.github.remove": "Remove",
+	"settings.cloudAgents.github.errorSave": "Could not save the GitHub token.",
+	"settings.cloudAgents.github.errorRemove": "Could not remove the GitHub token."
+>>>>>>> e5f4db7fe (fix: downgrade read-only token to soft warning and fix locale CI tests)
 }

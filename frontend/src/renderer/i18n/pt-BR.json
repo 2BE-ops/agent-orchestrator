@@ -2001,6 +2001,7 @@
 	"session.interfaceSwitchFailed": "Não foi possível alternar a interface",
 	"session.dismissInterfaceSwitchError": "Dispensar erro de troca de interface",
 	"session.dismissInterfaceSwitchNotice": "Dispensar",
+<<<<<<< HEAD
 	"chat.draft.acceptedMessage": "O conteúdo foi aceito, mas seu rascunho local ainda precisa ser apagado.",
 	"chat.draft.steerRestart": "O AO não consegue determinar se o agente já recebeu este conteúdo. Tente novamente com o mesmo ID de entrega ou abandone a recuperação para editá-lo. Enviar novamente após abandonar pode duplicá-lo.",
 	"chat.draft.sendRestart": "A entrega da mensagem não foi confirmada. Tente novamente com o mesmo ID de entrega; o rascunho ficará bloqueado até a confirmação.",
@@ -2053,4 +2054,16 @@
 	"chat.edit.abandonRecovery": "Abandonar recuperação da edição",
 	"settings.harness.summary": "{{installed}} of {{total}} installed",
 	"shell.goHome": "Ir para o início"
+=======
+	"settings.cloudAgents.github.title": "GitHub private repositories",
+	"settings.cloudAgents.github.connected": "Connected",
+	"settings.cloudAgents.github.notConnected": "Not connected",
+	"settings.cloudAgents.github.tokenLabel": "GitHub token",
+	"settings.cloudAgents.github.tokenHint": "Optional. Paste a GitHub personal access token with access to private repositories. It is encrypted and used only by Cloud workers when cloning GitHub repositories.",
+	"settings.cloudAgents.github.save": "Save token",
+	"settings.cloudAgents.github.saving": "Saving…",
+	"settings.cloudAgents.github.remove": "Remove",
+	"settings.cloudAgents.github.errorSave": "Could not save the GitHub token.",
+	"settings.cloudAgents.github.errorRemove": "Could not remove the GitHub token."
+>>>>>>> e5f4db7fe (fix: downgrade read-only token to soft warning and fix locale CI tests)
 }
