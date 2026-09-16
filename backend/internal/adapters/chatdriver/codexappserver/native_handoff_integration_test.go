@@ -169,11 +169,12 @@ func TestNativeForkHandoffRetainsEachExchangeOnce(t *testing.T) {
 				}
 				var boundaries, commands, approvals int
 				for _, activity := range got.Activities {
-					if activity.Kind == domain.ActivityKindCommand {
+					switch activity.Kind {
+					case domain.ActivityKindCommand:
 						commands++
-					} else if activity.Kind == domain.ActivityKindApproval {
+					case domain.ActivityKindApproval:
 						approvals++
-					} else {
+					default:
 						boundaries++
 					}
 				}
