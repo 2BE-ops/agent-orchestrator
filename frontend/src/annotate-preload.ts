@@ -963,19 +963,15 @@ function overlayStyles(): string {
 			background:color-mix(in oklch,var(--muted) 70%,transparent);color:var(--fg);
 			padding:0 30px 0 8px;font:400 12px/17px "Geist Variable",system-ui,sans-serif;
 		}
-		.field input[data-unit],.field input.color-picker+.color-value,.color-value,.unit{
-			font-family:"Geist Mono Variable",ui-monospace,monospace;font-variant-numeric:tabular-nums;
-		}
-		.field input[data-unit]{font:400 12px/17px "Geist Mono Variable",ui-monospace,monospace}
+		.field input[data-unit]{font:400 12px/17px "Geist Mono Variable",ui-monospace,monospace;font-variant-numeric:tabular-nums}
 		.property-textarea{
 			height:46px;resize:none;padding:6px 28px 6px 8px;scrollbar-width:none;
-			font:400 12px/17px "Geist Variable",system-ui,sans-serif;
 		}
 		.field select{padding-right:42px}
 		.field input[data-unit]{padding-right:46px}
 		.unit{
 			position:absolute;right:30px;color:var(--muted-fg);
-			font:400 10px/1 "Geist Mono Variable",ui-monospace,monospace;pointer-events:none;
+			font:400 10px/1 "Geist Mono Variable",ui-monospace,monospace;font-variant-numeric:tabular-nums;pointer-events:none;
 		}
 		.field--color{gap:8px;padding-right:28px}
 		.field input.color-picker{
@@ -986,7 +982,7 @@ function overlayStyles(): string {
 		.color-picker::-webkit-color-swatch{border:1px solid var(--border);border-radius:6px}
 		.color-value{
 			min-width:0;overflow:hidden;color:var(--fg);
-			font:400 12px/1 "Geist Mono Variable",ui-monospace,monospace;
+			font:400 12px/1 "Geist Mono Variable",ui-monospace,monospace;font-variant-numeric:tabular-nums;
 			text-overflow:ellipsis;white-space:nowrap;
 		}
 		.reset-button{
