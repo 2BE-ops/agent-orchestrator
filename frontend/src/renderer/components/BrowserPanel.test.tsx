@@ -1218,7 +1218,11 @@ describe("BrowserPanel", () => {
 		expect(screen.queryByTestId("browser-tab-bar")).not.toBeInTheDocument();
 		expect(screen.getByText("example.test")).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "Send annotations" })).toHaveTextContent("2");
-		expect(screen.getByRole("button", { name: "Send annotations" }).className).toMatch(/browser-panel__annotation-send/);
+		expect(screen.getByRole("button", { name: "Send annotations" })).toHaveClass(
+			"browser-panel__annotation-send",
+			"bg-primary",
+			"text-primary-foreground",
+		);
 
 		await userEvent.click(screen.getByRole("button", { name: "Take a screenshot" }));
 		expect(hookState.annotationAction).toHaveBeenCalledWith("capture");

@@ -40,6 +40,13 @@ const ADJUSTMENT_WIDTH = 316;
 const ADJUSTMENT_MAX_HEIGHT = 400;
 const COMMENT_TEXTAREA_MIN_HEIGHT = 36;
 const COMMENT_MAX_HEIGHT = 360;
+/** Keep in sync with overlayStyles --pad / --gap / --control / --radius. */
+const COMPOSER_PAD = 8;
+const COMPOSER_GAP = 8;
+const COMPOSER_CONTROL = 28;
+const COMPOSER_RADIUS = 8;
+const COMMENT_ACTION_ROW_HEIGHT = COMPOSER_GAP + COMPOSER_CONTROL;
+const COMMENT_CHROME_VERTICAL = COMPOSER_PAD * 2;
 const MARKDOWN_TARGETS =
 	"h1, h2, h3, h4, h5, h6, p, ul, ol, li, blockquote, pre, table, th, td, figure, figcaption, img, hr, details, summary";
 
@@ -804,14 +811,13 @@ function resizeAndPositionComposer(form: HTMLFormElement, textarea: HTMLTextArea
 	} else {
 		form.style.maxHeight = "none";
 		textarea.style.height = "0px";
-		// Expanded actions: 8px gap above a 28px control row.
-		const actionHeight = form.classList.contains("composer--expanded") ? 36 : 0;
+		// Expanded actions: gap above a control-sized button row (see COMPOSER_*).
+		const actionHeight = form.classList.contains("composer--expanded") ? COMMENT_ACTION_ROW_HEIGHT : 0;
 		const spaceAbove = rect.top - PROMPT_GAP - PROMPT_GUTTER;
 		const spaceBelow = viewportHeight - PROMPT_GUTTER - rect.bottom - PROMPT_GAP;
 		const availableHeight = Math.max(spaceAbove, spaceBelow);
 		const maxComposerHeight = Math.max(86, Math.min(COMMENT_MAX_HEIGHT, availableHeight));
-		// Composer chrome uses equal 8px padding on every side.
-		const maxTextareaHeight = Math.max(COMMENT_TEXTAREA_MIN_HEIGHT, maxComposerHeight - actionHeight - 16);
+		const maxTextareaHeight = Math.max(COMMENT_TEXTAREA_MIN_HEIGHT, maxComposerHeight - actionHeight - COMMENT_CHROME_VERTICAL);
 		const naturalHeight = Math.max(COMMENT_TEXTAREA_MIN_HEIGHT, textarea.scrollHeight);
 		textarea.style.height = `${Math.min(maxTextareaHeight, naturalHeight)}px`;
 		textarea.style.overflowY = naturalHeight > maxTextareaHeight ? "auto" : "hidden";
@@ -873,10 +879,10 @@ function overlayStyles(): string {
 			--accent:${vars.accent};
 			--accent-fg:${vars.accentForeground};
 			--danger:${vars.destructive};
-			--radius:8px;
-			--control:28px;
-			--pad:8px;
-			--gap:8px;
+			--radius:${COMPOSER_RADIUS}px;
+			--control:${COMPOSER_CONTROL}px;
+			--pad:${COMPOSER_PAD}px;
+			--gap:${COMPOSER_GAP}px;
 			font-family:"Geist Variable",system-ui,sans-serif;
 			color:var(--fg);
 		}
@@ -895,7 +901,7 @@ function overlayStyles(): string {
 		}
 		button:hover{background:color-mix(in oklch,var(--muted) 88%,var(--fg))}
 		button:disabled{opacity:.5;cursor:default}
-		button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+		button:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--accent)}
 		.primary{background:var(--accent);color:var(--accent-fg)}
 		.primary:hover{background:color-mix(in oklch,var(--accent) 88%,var(--fg))}
 		.danger{color:var(--danger)}
@@ -999,8 +1005,10 @@ function overlayStyles(): string {
 			transform:translate(-50%,-50%);border:1px solid var(--border);border-radius:6px;
 			background:var(--bg);color:var(--muted-fg);padding:0;box-shadow:0 1px 3px rgba(0,0,0,.2);
 		}
+		.link-button:hover{background:var(--bg);color:var(--fg)}
 		.link-button svg{width:11px;height:11px}
 		.link-button--active{border-color:#4d8dff;background:color-mix(in oklch,#4d8dff 22%,var(--bg));color:#78a8ff}
+		.link-button--active:hover{border-color:#4d8dff;background:color-mix(in oklch,#4d8dff 22%,var(--bg));color:#78a8ff}
 		.spacing-section{border-bottom:1px solid var(--border);padding:0 12px}
 		.spacing-section summary{
 			cursor:pointer;color:var(--muted-fg);font-size:12px;font-weight:500;

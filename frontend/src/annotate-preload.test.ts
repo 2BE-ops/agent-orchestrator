@@ -112,7 +112,10 @@ describe("annotation adjustment preload", () => {
 		expect(styles).not.toContain("border-radius:999px");
 		expect(styles).not.toContain('font:700 10px "Geist Mono Variable"');
 		expect(styles).toContain('font:600 10px/1 "Geist Variable"');
-		expect(styles).toContain('font:400 12px/17px "Geist Mono Variable"');
+		expect(styles).toMatch(/\.field input,\.field select,\.property-textarea\{[^}]*Geist Variable/);
+		expect(styles).toMatch(/\.field input\[data-unit\]\{[^}]*Geist Mono Variable/);
+		expect(styles).toContain("button:focus-visible{outline:none;box-shadow:inset");
+		expect(styles).toContain(".link-button--active:hover{");
 	});
 
 	it("applies a picked text color live to the element that paints nested text", () => {
