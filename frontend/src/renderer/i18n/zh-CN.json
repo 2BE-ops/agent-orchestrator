@@ -2003,5 +2003,9 @@
 	"chat.draftDiscard.stay": "留下",
 	"chat.draftDiscard.leaveAnyway": "仍然离开",
 	"chat.edit.abandonRecovery": "放弃编辑恢复",
-	"settings.harness.summary": "{{installed}} of {{total}} installed"
+	"settings.harness.summary": "{{installed}} of {{total}} installed",
+	"executionContext.active": "活跃",
+	"executionContext.configured": "已配置",
+	"executionContext.title": "执行上下文",
+	"executionContext.loading": "正在加载项目上下文…"
 }
