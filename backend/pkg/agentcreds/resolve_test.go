@@ -267,6 +267,10 @@ func TestResolveProvider(t *testing.T) {
 			name: "project provider overrides stale CLI report", reported: "firstParty",
 			env: map[string]string{"CLAUDE_CODE_USE_BEDROCK": "1"}, want: ProviderBedrock, wantOK: true,
 		},
+		{name: "false bedrock flag is disabled", reported: "vertex", env: map[string]string{"CLAUDE_CODE_USE_BEDROCK": "false"}, want: ProviderVertex, wantOK: true},
+		{name: "foundry requires its flag", env: map[string]string{"ANTHROPIC_FOUNDRY_API_KEY": "stale"}, want: ProviderFirstParty, wantOK: true},
+		{name: "foundry flag selects foundry", env: map[string]string{"CLAUDE_CODE_USE_FOUNDRY": "1", "ANTHROPIC_FOUNDRY_API_KEY": "key"}, want: ProviderFoundry, wantOK: true},
+		{name: "conflicting project providers are rejected", env: map[string]string{"CLAUDE_CODE_USE_BEDROCK": "1", "CLAUDE_CODE_USE_VERTEX": "true"}, wantOK: false},
 		{name: "empty defaults to first party", want: ProviderFirstParty, wantOK: true},
 		{
 			name: "bedrock inferred from env when the CLI could not be asked",
@@ -322,6 +326,36 @@ func TestResolveBedrockCredentialShapes(t *testing.T) {
 		Env: envFrom(map[string]string{"AWS_PROFILE": "sso-profile"}),
 	}); ok {
 		t.Fatal("an SSO profile must not resolve to a readable credential")
+	}
+}
+
+func TestCloudProviderCredentialsCarryEndpointOverrides(t *testing.T) {
+	bedrock, ok := ResolveLocal(context.Background(), ProviderBedrock, ResolveOptions{Env: envFrom(map[string]string{
+		"AWS_BEARER_TOKEN_BEDROCK": "token", "AWS_REGION": "us-east-1", "ANTHROPIC_BEDROCK_BASE_URL": "https://bedrock.proxy",
+	})})
+	if !ok || bedrock.BaseURL != "https://bedrock.proxy" {
+		t.Fatalf("bedrock credential = %+v", bedrock)
+	}
+	vertex, ok := ResolveLocal(context.Background(), ProviderVertex, ResolveOptions{Env: envFrom(map[string]string{
+		"GOOGLE_OAUTH_ACCESS_TOKEN": "token", "GOOGLE_CLOUD_PROJECT": "p", "ANTHROPIC_VERTEX_BASE_URL": "https://vertex.proxy",
+	})})
+	if !ok || vertex.BaseURL != "https://vertex.proxy" {
+		t.Fatalf("vertex credential = %+v", vertex)
+	}
+}
+
+func TestResolveLocalObservesCanceledContextBeforeCredentialFileRead(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, ok := ResolveLocal(ctx, ProviderFirstParty, ResolveOptions{
+		Env: envFrom(nil), ConfigDir: t.TempDir(), GOOS: "linux",
+	}); ok {
+		t.Fatal("canceled credentials-file resolution must not return a credential")
+	}
+	if _, ok := ResolveLocal(ctx, ProviderVertex, ResolveOptions{Env: envFrom(map[string]string{
+		"GOOGLE_APPLICATION_CREDENTIALS": filepath.Join(t.TempDir(), "key.json"),
+	})}); ok {
+		t.Fatal("canceled resolution must not return a credential")
 	}
 }
 

@@ -134,6 +134,24 @@ func TestVertexRejectedKeyExchangeIsInvalid(t *testing.T) {
 	}
 }
 
+func TestVertexOAuthConfigurationErrorIsUnknown(t *testing.T) {
+	privateKeyPEM, _ := generateTestRSAKey(t)
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"invalid_scope","error_description":"scope is not supported"}`))
+	}))
+	defer tokenServer.Close()
+
+	result := New(tokenServer.Client()).Validate(context.Background(), Credential{
+		Kind:     KindGoogleServiceAccount,
+		Secret:   serviceAccountJSON(t, "probe@example.iam.gserviceaccount.com", privateKeyPEM, "p", tokenServer.URL),
+		Provider: ProviderVertex, Region: "us-east5", Project: "p", BaseURL: "http://127.0.0.1:1",
+	})
+	if result.State != StateUnknown {
+		t.Fatalf("state = %q (%s), want unknown", result.State, result.Detail)
+	}
+}
+
 func generateTestRSAKey(t *testing.T) (pemString string, key *rsa.PrivateKey) {
 	t.Helper()
 	// 1024 bits: this is a throwaway test key, and larger sizes make the suite

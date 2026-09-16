@@ -2,6 +2,7 @@ package claudecode
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -42,6 +43,14 @@ func TestAuthStatusDoesNotTrustUnvalidatedAPIKey(t *testing.T) {
 				t.Fatal("fingerprint must be set so a credential change invalidates the cache")
 			}
 		})
+	}
+}
+
+func TestClaudeConfigAuthVerdictObservesCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := claudeConfigAuthVerdict(ctx, filepath.Join(t.TempDir(), "config.json")); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
 	}
 }
 
@@ -88,7 +97,7 @@ func TestConfigAuthVerdictNeverReportsAuthorized(t *testing.T) {
 			if err := os.WriteFile(path, []byte(tc.content), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			verdict, err := claudeConfigAuthVerdict(path)
+			verdict, err := claudeConfigAuthVerdict(context.Background(), path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -103,7 +112,7 @@ func TestConfigAuthVerdictNeverReportsAuthorized(t *testing.T) {
 }
 
 func TestConfigAuthVerdictMissingFileIsUnknown(t *testing.T) {
-	verdict, err := claudeConfigAuthVerdict(filepath.Join(t.TempDir(), "absent.json"))
+	verdict, err := claudeConfigAuthVerdict(context.Background(), filepath.Join(t.TempDir(), "absent.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +224,7 @@ func TestUnreadableLocalStateDegradesToUnknownNotUnauthorized(t *testing.T) {
 	if err := os.WriteFile(path, []byte("{not json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	verdict, _ := claudeConfigAuthVerdict(path)
+	verdict, _ := claudeConfigAuthVerdict(context.Background(), path)
 	if verdict.State == ports.AgentAuthStatusUnauthorized {
 		t.Fatal("a parse failure is our bug, not the user's missing credential")
 	}
@@ -494,5 +503,20 @@ func TestProviderModelsUsesCLIReportedProvider(t *testing.T) {
 	}
 	if len(models) != 1 || models[0].ID != "anthropic.claude-opus-v1" {
 		t.Fatalf("models = %+v, want the Bedrock catalog", models)
+	}
+}
+
+func TestProviderModelsUsesConfiguredFoundryDeployments(t *testing.T) {
+	InvalidateAuthCache()
+	models, err := ProviderModels(context.Background(), "", "/workspace", map[string]string{
+		"CLAUDE_CODE_USE_FOUNDRY":        "1",
+		"ANTHROPIC_FOUNDRY_API_KEY":      "key",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL": "sonnet-deployment",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 || models[0].ID != "sonnet-deployment" {
+		t.Fatalf("models = %+v", models)
 	}
 }

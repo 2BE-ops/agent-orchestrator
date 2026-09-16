@@ -109,8 +109,7 @@ func (v *Validator) googleAccessTokenFromServiceAccount(ctx context.Context, key
 	token, err := config.TokenSource(tokenCtx).Token()
 	if err != nil {
 		var retrieveErr *oauth2.RetrieveError
-		if errors.As(err, &retrieveErr) && retrieveErr.Response != nil &&
-			(retrieveErr.Response.StatusCode == http.StatusUnauthorized || retrieveErr.Response.StatusCode == http.StatusBadRequest) {
+		if errors.As(err, &retrieveErr) && googleOAuthCredentialRejected(retrieveErr) {
 			return "", fmt.Errorf("%w: Google rejected the service account key: %s",
 				ErrInvalidCredential, providerErrorMessage(retrieveErr.Body))
 		}
@@ -120,4 +119,28 @@ func (v *Validator) googleAccessTokenFromServiceAccount(ctx context.Context, key
 		return "", fmt.Errorf("agentcreds: token exchange returned no access token")
 	}
 	return token.AccessToken, nil
+}
+
+func googleOAuthCredentialRejected(err *oauth2.RetrieveError) bool {
+	if err == nil || err.Response == nil {
+		return false
+	}
+	if err.Response.StatusCode == http.StatusUnauthorized {
+		return true
+	}
+	if err.Response.StatusCode != http.StatusBadRequest {
+		return false
+	}
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(err.Body, &payload) != nil {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(payload.Error)) {
+	case "invalid_grant", "invalid_client", "unauthorized_client":
+		return true
+	default:
+		return false
+	}
 }

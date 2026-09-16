@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"sort"
+	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/processenv"
 )
 
 // Chain-sourced credentials.
@@ -54,13 +56,14 @@ type commandOutput struct {
 type providerCommandRunner func(context.Context, commandInvocation, string, ...string) (commandOutput, error)
 
 func execProviderCommand(ctx context.Context, invocation commandInvocation, name string, args ...string) (commandOutput, error) {
-	path, err := exec.LookPath(name)
+	environment := processenv.Merge(invocation.Env)
+	path, err := lookPathInEnvironment(name, environment)
 	if err != nil {
 		return commandOutput{}, err
 	}
 	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Dir = strings.TrimSpace(invocation.WorkingDir)
-	cmd.Env = commandEnvironment(invocation.Env)
+	cmd.Env = environment
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -68,26 +71,25 @@ func execProviderCommand(ctx context.Context, invocation commandInvocation, name
 	return commandOutput{Stdout: stdout.Bytes(), Stderr: stderr.Bytes()}, err
 }
 
-func commandEnvironment(overrides map[string]string) []string {
-	if len(overrides) == 0 {
-		return os.Environ()
+func lookPathInEnvironment(name string, environment []string) (string, error) {
+	if strings.ContainsRune(name, os.PathSeparator) {
+		return exec.LookPath(name)
 	}
-	values := make(map[string]string, len(os.Environ())+len(overrides))
-	for _, entry := range os.Environ() {
-		key, _, ok := strings.Cut(entry, "=")
-		if ok {
-			values[key] = entry
+	var searchPath string
+	for _, entry := range environment {
+		key, value, ok := strings.Cut(entry, "=")
+		if ok && strings.EqualFold(key, "PATH") {
+			searchPath = value
+			break
 		}
 	}
-	for key, value := range overrides {
-		values[key] = key + "=" + value
+	for _, dir := range filepath.SplitList(searchPath) {
+		candidate := filepath.Join(dir, name)
+		if path, err := exec.LookPath(candidate); err == nil {
+			return path, nil
+		}
 	}
-	out := make([]string, 0, len(values))
-	for _, entry := range values {
-		out = append(out, entry)
-	}
-	sort.Strings(out)
-	return out
+	return "", &exec.Error{Name: name, Err: exec.ErrNotFound}
 }
 
 func newWithCommandRunner(client *http.Client, runner providerCommandRunner) *Validator {

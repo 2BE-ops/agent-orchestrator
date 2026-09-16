@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -79,6 +81,22 @@ func TestBedrockViaCLISucceedsWhenTheChainResolves(t *testing.T) {
 	}
 	if len(result.Models) != 1 {
 		t.Fatalf("models = %+v", result.Models)
+	}
+}
+
+func TestProviderCommandResolvesExecutableFromProjectPATH(t *testing.T) {
+	dir := t.TempDir()
+	name := "ao-provider-helper"
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf project-helper"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, err := execProviderCommand(context.Background(), commandInvocation{Env: map[string]string{"PATH": dir}}, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out.Stdout) != "project-helper" {
+		t.Fatalf("stdout = %q", out.Stdout)
 	}
 }
 
@@ -166,6 +184,18 @@ func TestValidateLocalFallsBackToTheCLIForChainCredentials(t *testing.T) {
 	}
 }
 
+func TestValidateLocalPreservesBedrockCLICatalogAfterDirectProbeBuildFailure(t *testing.T) {
+	validator := newWithCommandRunner(nil, func(context.Context, commandInvocation, string, ...string) (commandOutput, error) {
+		return commandOutput{Stdout: []byte(`{"modelSummaries":[{"modelId":"anthropic.claude-x","providerName":"Anthropic"}]}`)}, nil
+	})
+	result := validator.ValidateLocal(context.Background(), "bedrock", ResolveOptions{Env: envFrom(map[string]string{
+		"AWS_ACCESS_KEY_ID": "AKIA", "AWS_SECRET_ACCESS_KEY": "secret",
+	})})
+	if result.State != StateUnknown || len(result.Models) != 1 {
+		t.Fatalf("state/models = %q/%v, want catalog-only unknown with one model", result.State, result.Models)
+	}
+}
+
 // The provider gate, end to end: an unrecognized provider probes nothing.
 func TestValidateLocalStaysSilentForAnUnknownProvider(t *testing.T) {
 	validator := newWithCommandRunner(nil, func(context.Context, commandInvocation, string, ...string) (commandOutput, error) {
@@ -177,6 +207,25 @@ func TestValidateLocalStaysSilentForAnUnknownProvider(t *testing.T) {
 		t.Fatalf("state = %q, want unknown", result.State)
 	}
 }
+
+func TestValidateLocalUsesConfiguredFoundryDeploymentsWithoutHTTPProbe(t *testing.T) {
+	validator := New(&http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("Foundry discovery must not call an unsupported models endpoint")
+		return nil, errors.New("unreachable")
+	})})
+	result := validator.ValidateLocal(context.Background(), "", ResolveOptions{Env: envFrom(map[string]string{
+		"CLAUDE_CODE_USE_FOUNDRY": "1", "ANTHROPIC_FOUNDRY_API_KEY": "key",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL": "sonnet-deployment",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":   "opus-deployment",
+	})})
+	if result.State != StateUnknown || len(result.Models) != 2 {
+		t.Fatalf("state/models = %q/%v", result.State, result.Models)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) { return f(request) }
 
 // I2, end to end: a malformed probe is our bug and must be downgraded to
 // unknown rather than reported as the user's credential being rejected.

@@ -54,11 +54,6 @@ func TestProbesTargetModelEndpoints(t *testing.T) {
 			wantPath: "/v1/models",
 		},
 		{
-			name:     "foundry",
-			cred:     Credential{Kind: KindAzureAPIKey, Secret: "k", Provider: ProviderFoundry, Resource: "r"},
-			wantPath: "/v1/models",
-		},
-		{
 			name:     "bedrock",
 			cred:     Credential{Kind: KindAuthToken, Secret: "k", Provider: ProviderBedrock, Region: "us-east-1"},
 			wantPath: "/foundation-models",
@@ -254,35 +249,16 @@ func TestValidationReturnsThatProvidersModelIDs(t *testing.T) {
 	}
 }
 
-// Foundry accepts either credential shape, under different headers.
-func TestFoundryHeaderFollowsKind(t *testing.T) {
-	tests := []struct {
-		kind       Kind
-		wantHeader string
-		wantValue  string
-	}{
-		{KindAzureAPIKey, "Api-Key", "foundry-secret"},
-		{KindAuthToken, "Authorization", "Bearer foundry-secret"},
-	}
-	for _, tc := range tests {
-		t.Run(string(tc.kind), func(t *testing.T) {
-			var got http.Header
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				got = r.Header.Clone()
-				_, _ = w.Write([]byte(`{"data":[{"id":"claude-opus-4-5"}]}`))
-			}))
-			defer server.Close()
-
-			result := New(server.Client()).Validate(context.Background(), Credential{
-				Kind: tc.kind, Secret: "foundry-secret", Provider: ProviderFoundry, BaseURL: server.URL,
-			})
-			if result.State != StateValid {
-				t.Fatalf("state = %q (%s)", result.State, result.Detail)
-			}
-			if got.Get(tc.wantHeader) != tc.wantValue {
-				t.Fatalf("%s = %q, want %q", tc.wantHeader, got.Get(tc.wantHeader), tc.wantValue)
-			}
-		})
+func TestFoundryDoesNotProbeAnUnsupportedModelsEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("Foundry has no models endpoint")
+	}))
+	defer server.Close()
+	result := New(server.Client()).Validate(context.Background(), Credential{
+		Kind: KindAzureAPIKey, Secret: "foundry-secret", Provider: ProviderFoundry, BaseURL: server.URL,
+	})
+	if result.State != StateUnknown {
+		t.Fatalf("state = %q, want unknown", result.State)
 	}
 }
 

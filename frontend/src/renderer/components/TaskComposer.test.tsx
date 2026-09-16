@@ -222,7 +222,7 @@ describe("TaskComposer", () => {
 		);
 	});
 
-	it("blocks submission when targeted readiness confirms the selected agent is unauthorized", async () => {
+	it("treats out-of-context readiness as advisory for a project launch", async () => {
 		h.get.mockImplementation(async (path: string) => {
 			if (path.includes("/models")) {
 				return { data: { agent: "codex", selectionMode: "text", models: [], allowCustom: true } };
@@ -231,19 +231,20 @@ describe("TaskComposer", () => {
 		});
 		const unauthorized = agentReadiness("codex", "Codex", { authentication: "unauthorized" });
 		h.ensureTargetedReadiness.mockResolvedValueOnce({ agents: [unauthorized] });
-		h.post.mockResolvedValueOnce({ data: { workerId: "should-not-spawn" } });
+		h.post.mockResolvedValueOnce({ data: { workerId: "worker-1" } });
+		const onCreated = vi.fn();
 
 		render(
 			<Wrap>
-				<TaskComposer projectId="proj-1" onCreated={vi.fn()} />
+				<TaskComposer projectId="proj-1" onCreated={onCreated} />
 			</Wrap>,
 		);
 		await waitFor(() => expect(screen.getByTestId("agent-field")).toHaveAttribute("data-value", "codex"));
 		fireEvent.click(screen.getByRole("button", { name: "Start task" }));
 
-		expect(await screen.findByText("Codex is not authorized. Check settings to authenticate.")).toBeInTheDocument();
-		expect(h.ensureTargetedReadiness).toHaveBeenCalledWith(["codex"], "launch");
-		expect(h.post).not.toHaveBeenCalled();
+		await waitFor(() => expect(h.ensureTargetedReadiness).toHaveBeenCalledWith(["codex"], "launch"));
+		await waitFor(() => expect(h.post).toHaveBeenCalled());
+		expect(onCreated).toHaveBeenCalledWith("worker-1");
 	});
 
 	it("allows a fresh launch recheck when cached readiness is unauthorized", async () => {

@@ -139,6 +139,21 @@ func TestRejectionCarriesTheProviderMessage(t *testing.T) {
 	}
 }
 
+func TestRejectionDetailRedactsTheSubmittedCredential(t *testing.T) {
+	const secret = "secret-that-must-not-escape"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":{"message":"authorization ` + secret + ` was rejected"}}`))
+	}))
+	defer server.Close()
+	result := New(server.Client()).Validate(context.Background(), Credential{
+		Kind: KindAPIKey, Secret: secret, Provider: ProviderGateway, BaseURL: server.URL,
+	})
+	if contains(result.Detail, secret) {
+		t.Fatalf("detail leaked submitted credential: %q", result.Detail)
+	}
+}
+
 // A resolver bug must be recognizable so it can be downgraded to unknown.
 func TestIsResolverBug(t *testing.T) {
 	bugs := []string{

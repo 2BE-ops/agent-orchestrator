@@ -269,7 +269,7 @@ func (v *Validator) probe(result Result, spec requestSpec) Result {
 	case http.StatusUnauthorized:
 		result.State = StateInvalid
 		result.Err = ErrInvalidCredential
-		result.Detail = rejectionDetail(spec.label, body)
+		result.Detail = rejectionDetail(spec.label, body, spec.request)
 		return result
 	case http.StatusOK, http.StatusTooManyRequests:
 		// Fall through to the entitlement check below.
@@ -383,8 +383,16 @@ func (v *Validator) followAnthropicPages(spec requestSpec, body []byte, models [
 // credential class — "API key is invalid.", "OAuth access token is invalid.",
 // "Invalid bearer token" — which is what makes an actionable error possible
 // instead of a generic "auth failed".
-func rejectionDetail(label string, body []byte) string {
+func rejectionDetail(label string, body []byte, request *http.Request) string {
 	if message := providerErrorMessage(body); message != "" {
+		for _, header := range []string{"Authorization", "X-Api-Key", "Api-Key"} {
+			if request != nil {
+				if secret := strings.TrimSpace(request.Header.Get(header)); secret != "" {
+					message = strings.ReplaceAll(message, secret, "[redacted]")
+					message = strings.ReplaceAll(message, strings.TrimPrefix(secret, "Bearer "), "[redacted]")
+				}
+			}
+		}
 		return fmt.Sprintf("%s rejected the credential: %s", label, message)
 	}
 	return fmt.Sprintf("%s rejected the credential", label)

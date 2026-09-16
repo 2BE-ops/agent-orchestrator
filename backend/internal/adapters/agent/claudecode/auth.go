@@ -302,23 +302,29 @@ func claudeLocalAuthVerdict(ctx context.Context) (authVerdict, error) {
 	if err != nil {
 		return unknownVerdict(authSourceLocal), err
 	}
-	return claudeConfigAuthVerdict(cfgPath)
+	return claudeConfigAuthVerdict(ctx, cfgPath)
 }
 
 // claudeConfigAuthVerdict reads the durable markers Claude Code writes into
 // ~/.claude.json. userID in particular is written once at first login and is
 // never removed on logout or revocation, so it says only "this machine has
 // signed in at some point" — a configured signal, never an authorized one.
-func claudeConfigAuthVerdict(path string) (authVerdict, error) {
+func claudeConfigAuthVerdict(ctx context.Context, path string) (authVerdict, error) {
 	configured := authVerdict{
 		State: ports.AgentAuthStatusConfigured, Source: authSourceLocal,
 		Credential: "claude-config", CheckedAt: time.Now(),
+	}
+	if err := ctx.Err(); err != nil {
+		return unknownVerdict(authSourceLocal), err
 	}
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return unknownVerdict(authSourceLocal), nil
 	}
 	if err != nil {
+		return unknownVerdict(authSourceLocal), err
+	}
+	if err := ctx.Err(); err != nil {
 		return unknownVerdict(authSourceLocal), err
 	}
 	if strings.TrimSpace(string(data)) == "" {
@@ -443,7 +449,7 @@ func ProviderModels(ctx context.Context, binary, workingDir string, env map[stri
 	if result.State == "" {
 		result = claudeValidator().ValidateLocal(probeCtx, reported, opts)
 	}
-	if result.State != agentcreds.StateValid && (result.Provider != agentcreds.ProviderBedrock || len(result.Models) == 0) {
+	if result.State != agentcreds.StateValid && len(result.Models) == 0 {
 		return nil, fmt.Errorf("claude-code: model discovery: %s", result.Detail)
 	}
 	if len(result.Models) == 0 {

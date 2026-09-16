@@ -1,8 +1,11 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,6 +16,36 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 )
+
+func TestRecheckAgentLogsFailure(t *testing.T) {
+	var logs lockedBuffer
+	svc := NewWithDeps(Deps{Logger: slog.New(slog.NewTextHandler(&logs, nil))})
+	svc.RecheckAgent("not-a-real-agent")
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) && !strings.Contains(logs.String(), "readiness recheck failed") {
+		time.Sleep(time.Millisecond)
+	}
+	if !strings.Contains(logs.String(), "readiness recheck failed") {
+		t.Fatalf("log = %q, want readiness failure", logs.String())
+	}
+}
+
+type lockedBuffer struct {
+	mu sync.Mutex
+	bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(data []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.Buffer.Write(data)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.Buffer.String()
+}
 
 type readinessTestAgent struct {
 	resolveCalls atomic.Int32
