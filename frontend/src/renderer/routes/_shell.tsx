@@ -3,7 +3,7 @@ import { useSessionBrowserLink } from "../hooks/useSessionBrowserLink";
 import { createFileRoute, Outlet, useMatchRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { isCancelledError, useQueryClient } from "@tanstack/react-query";
 import { memo, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FolderPlus } from "lucide-react";
+import { FolderPlus, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { CommandPalette } from "../components/CommandPalette";
 import { CenterPanelShell } from "../components/CenterPanelShell";
@@ -188,6 +188,8 @@ function ShellLayout() {
 	const requestCreateProjectFromPath = useUiStore((state) => state.requestCreateProjectFromPath);
 	const requestNewShellTerminal = useUiStore((state) => state.requestNewShellTerminal);
 	const newShellTerminalNonce = useUiStore((state) => state.newShellTerminalNonce);
+	const onboardingFinishRequest = useUiStore((state) => state.onboardingFinishRequest);
+	const clearOnboardingFinishRequest = useUiStore((state) => state.clearOnboardingFinishRequest);
 	const setActiveShellTerminal = useUiStore((state) => state.setActiveShellTerminal);
 	const openShellTerminal = useOpenShellTerminal();
 	// Single subscription for sidebar clearance + drag strip (macOS no-ops inside the hook).
@@ -218,6 +220,7 @@ function ShellLayout() {
 	}, [isFullScreen]);
 	// Seeded to the current value so a mount never opens a terminal unasked.
 	const handledShellNonceRef = useRef(newShellTerminalNonce);
+	const handledOnboardingFinishNonceRef = useRef(0);
 	const [isKeyboardShortcutsOpen, setIsKeyboardShortcutsOpen] = useState(false);
 	const [isKeyboardShortcutsSettingsOpen, setIsKeyboardShortcutsSettingsOpen] = useState(false);
 	const routeParams = useParams({ strict: false }) as { projectId?: string; sessionId?: string };
@@ -881,6 +884,44 @@ function ShellLayout() {
 		setActiveShellTerminal,
 	]);
 
+	useEffect(() => {
+		if (!onboardingFinishRequest) return;
+		if (handledOnboardingFinishNonceRef.current === onboardingFinishRequest.nonce) return;
+		handledOnboardingFinishNonceRef.current = onboardingFinishRequest.nonce;
+
+		const {
+			asWorkspace,
+			clonePreparationId,
+			orchestratorAgent,
+			path,
+			repositorySetup,
+			workerAgent,
+		} = onboardingFinishRequest;
+		void (async () => {
+			try {
+				if (repositorySetup) {
+					await initializeProjectRepository(path);
+				}
+				await createProject({
+					asWorkspace,
+					clonePreparationId,
+					orchestratorAgent,
+					path,
+					workerAgent,
+				});
+			} catch (error) {
+				console.error("Failed to finish onboarding:", error);
+				showGlobalToast(
+					"Could not finish setup",
+					error instanceof Error ? error.message : "Something went wrong",
+					"error",
+				);
+			} finally {
+				clearOnboardingFinishRequest(onboardingFinishRequest.nonce);
+			}
+		})();
+	}, [clearOnboardingFinishRequest, createProject, initializeProjectRepository, onboardingFinishRequest, showGlobalToast]);
+
 	useEffect(
 		() => aoBridge.app.onOpenSettingsShortcut(() => useUiStore.getState().openGlobalSettings()),
 		[],
@@ -930,6 +971,20 @@ function ShellLayout() {
 	// Rendering the sidebar with an empty query while the home outlet shows its
 	// loader creates a visible two-stage launch and can make the home page flash
 	// before the project list arrives.
+	if (onboardingFinishRequest) {
+		return (
+			<main className="grid h-[100dvh] w-screen place-items-center bg-background text-foreground">
+				<div className="flex flex-col items-center gap-4 text-center">
+					<Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden="true" />
+					<div>
+						<h1 className="text-xl font-medium tracking-[-0.02em]">Starting your orchestrator…</h1>
+						<p className="mt-2 text-sm text-muted-foreground">Preparing the project and waiting for the session to be ready.</p>
+					</div>
+				</div>
+			</main>
+		);
+	}
+
 	if (isStartupLoading) return <DaemonStartupLoader />;
 
 	return (

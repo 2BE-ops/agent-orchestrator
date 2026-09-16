@@ -3,6 +3,9 @@ import { useEffect } from "react";
 import { MigrationPopup } from "../components/MigrationPopup";
 import { SessionsBoard } from "../components/SessionsBoard";
 import { useWorkspaceQuery } from "../hooks/useWorkspaceQuery";
+import { useUiStore } from "../stores/ui-store";
+
+const ONBOARDING_COMPLETE_STORAGE_KEY = "ao.onboarding.completed";
 
 export const Route = createFileRoute("/_shell/")({
 	component: ShellIndex,
@@ -11,11 +14,13 @@ export const Route = createFileRoute("/_shell/")({
 function ShellIndex() {
 	const navigate = useNavigate();
 	const workspaceQuery = useWorkspaceQuery();
+	const settingsModal = useUiStore((state) => state.settingsModal);
 
-	// TODO: remove — temporary redirect to preview onboarding prototype
 	useEffect(() => {
-		void navigate({ to: "/onboarding", replace: true });
-	}, [navigate]);
+		if (!settingsModal && !window.localStorage.getItem(ONBOARDING_COMPLETE_STORAGE_KEY)) {
+			void navigate({ to: "/onboarding", replace: true });
+		}
+	}, [navigate, settingsModal]);
 
 	useEffect(() => {
 		if (!workspaceQuery.isSuccess) return;

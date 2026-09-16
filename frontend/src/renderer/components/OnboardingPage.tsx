@@ -1,24 +1,28 @@
 import { useNavigate } from "@tanstack/react-router";
 import { CircleDashed, Loader2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import aoLogo from "../../../assets/ao-logo.svg";
 import feedbackBackground from "../../landing/public/optimized/feature4.webp";
 import visibilityBackground from "../../landing/public/optimized/feature.webp";
 import { FeedbackLoopDemo } from "../../landing/src/app/components/FeaturesSection/components/FeedbackLoopDemo/FeedbackLoopDemo";
 import { FleetBoardDemo, type FleetBoardAssets } from "../../landing/src/app/components/FeaturesSection/components/FleetBoardDemo/FleetBoardDemo";
+import { OnboardingProjectSetup } from "./OnboardingProjectSetup";
 import { refreshAgentsIfStale, useAgentsQuery, type AgentCatalog } from "../hooks/useAgentsQuery";
 import { AGENT_OPTIONS, agentLabel } from "../lib/agent-options";
-import { buildRankedAgentOptions, DEFAULT_AGENT_PRIORITY_RANK } from "../lib/agent-select-options";
-import { aoBridge } from "../lib/bridge";
+import { buildRankedAgentOptions, DEFAULT_AGENT_PRIORITY_RANK, unknownAgentReadiness } from "../lib/agent-select-options";
 import { cn } from "../lib/utils";
+import { useUiStore } from "../stores/ui-store";
+import type { PreparedProjectInput } from "./CreateProjectFlow";
 import { applyDocumentTheme, applyDocumentThemeStyle, readStoredThemeStyle, resolveTheme } from "../lib/theme";
 import claudeCodeLogo from "../assets/agents/claude-code.svg";
 import codexLogo from "../assets/agents/codex.svg";
 import cursorLogo from "../assets/agents/cursor.svg";
 import opencodeLogo from "../assets/agents/opencode.svg";
 
-type Step = "welcome" | "feedback" | "orchestrator" | "workers" | "project";
+export const ONBOARDING_COMPLETE_STORAGE_KEY = "ao.onboarding.completed";
+
+type Step = "welcome" | "feedback" | "project" | "orchestrator" | "workers" | "guide";
 
 type StepDetails = {
 	title: string;
@@ -26,7 +30,7 @@ type StepDetails = {
 	nextLabel: string;
 };
 
-const STEPS: Step[] = ["welcome", "feedback", "orchestrator", "workers", "project"];
+const STEPS: Step[] = ["welcome", "feedback", "project", "orchestrator", "workers", "guide"];
 
 const STEP_DETAILS: Record<Step, StepDetails> = {
 	welcome: {
@@ -37,7 +41,12 @@ const STEP_DETAILS: Record<Step, StepDetails> = {
 	feedback: {
 		title: "Keep the loop moving.",
 		subtitle: "CI and review feedback return to the right agent.",
-		nextLabel: "Choose agents",
+		nextLabel: "Create your project",
+	},
+	project: {
+		title: "Create your first project.",
+		subtitle: "Choose a local folder or connect a Git repository to give your agents a place to work.",
+		nextLabel: "Choose orchestrator",
 	},
 	orchestrator: {
 		title: "Pick your orchestrator agent.",
@@ -47,17 +56,16 @@ const STEP_DETAILS: Record<Step, StepDetails> = {
 	workers: {
 		title: "Pick your worker agents.",
 		subtitle: "Workers carry out the tasks your orchestrator delegates to them.",
-		nextLabel: "Add a project",
+		nextLabel: "See how it works",
 	},
-	project: {
-		title: "Add your first project.",
-		subtitle: "AO keeps each worker in its own worktree.",
-		nextLabel: "Open AO",
+	guide: {
+		title: "Give your orchestrator a goal.",
+		subtitle: "It breaks the work down, sends tasks to your workers, and keeps you updated as they make progress.",
+		nextLabel: "Continue to orchestrator",
 	},
 };
 
 const ALL_IMAGES = [visibilityBackground, feedbackBackground];
-const INSTALL_GUIDE_URL = "https://aoagents.dev/docs/plugins/agents";
 // Availability is helpful context, never a gate for setup. A daemon that is
 // still booting (or a stalled local probe) must not leave every choice looking
 // perpetually busy.
@@ -73,7 +81,6 @@ const LANDING_PREVIEW_ASSETS: FleetBoardAssets = {
 	"/app-icons/cursor.svg": cursorLogo,
 	"/app-icons/opencode.svg": opencodeLogo,
 };
-
 function agentIcon(agentId: string) {
 	const suffixes = [`/${agentId}.svg`, `/${agentId}.png`];
 	return Object.entries(AGENT_ICON_URLS).find(([path]) => suffixes.some((suffix) => path.endsWith(suffix)))?.[1];
@@ -81,6 +88,8 @@ function agentIcon(agentId: string) {
 
 export function OnboardingPage() {
 	const navigate = useNavigate();
+	const openGlobalSettings = useUiStore((state) => state.openGlobalSettings);
+	const requestOnboardingFinish = useUiStore((state) => state.requestOnboardingFinish);
 	const agentsQuery = useAgentsQuery();
 	const [freshAgentCatalog, setFreshAgentCatalog] = useState<AgentCatalog | null>(null);
 	const [step, setStep] = useState<Step>("welcome");
@@ -88,21 +97,33 @@ export function OnboardingPage() {
 	const [workerAgent, setWorkerAgent] = useState<string | null>(null);
 	const [hoveredOrchestrator, setHoveredOrchestrator] = useState<string | null>(null);
 	const [hoveredWorker, setHoveredWorker] = useState<string | null>(null);
-	const [projectPath, setProjectPath] = useState("");
 	const [projectMode, setProjectMode] = useState<"folder" | "git">("folder");
+	const [preparedProject, setPreparedProject] = useState<PreparedProjectInput | null>(null);
 	const [agentCheckIndicatorTimedOut, setAgentCheckIndicatorTimedOut] = useState(false);
 	const stepIndex = STEPS.indexOf(step);
 	const details = STEP_DETAILS[step];
 	const agentCatalog = freshAgentCatalog ?? agentsQuery.data;
 	const agents = useMemo(() => {
-		const fallbackAgents = AGENT_OPTIONS.map((id) => ({ id, label: agentLabel(id) }));
+		const fallbackAgents = AGENT_OPTIONS.map((id) => unknownAgentReadiness(id, agentLabel(id)));
 		const isCatalogKnown = Boolean(agentCatalog);
 		const isCheckingCatalog = !isCatalogKnown && (agentsQuery.isLoading || agentsQuery.isFetching) && !agentCheckIndicatorTimedOut;
 		const installedIds = new Set(agentCatalog?.installed.map((agent) => agent.id));
+		const authorizedIds = new Set(agentCatalog?.authorized.map((agent) => agent.id));
+		const catalogAgents = (agentCatalog?.supported ?? []).map((agent) => ({
+			...unknownAgentReadiness(agent.id, agent.label),
+			installation: {
+				state: installedIds.has(agent.id) ? ("installed" as const) : ("not_installed" as const),
+				freshness: "fresh" as const,
+			},
+			authentication: {
+				state: authorizedIds.has(agent.id) ? ("authorized" as const) : ("unknown" as const),
+				freshness: "fresh" as const,
+			},
+			lastUsedAt: agent.lastUsedAt,
+			usageCount: agent.usageCount ?? 0,
+		}));
 		return buildRankedAgentOptions({
-			supported: agentCatalog?.supported,
-			installed: agentCatalog?.installed,
-			authorized: agentCatalog?.authorized,
+			agents: isCatalogKnown ? catalogAgents : undefined,
 			priorityRank: DEFAULT_AGENT_PRIORITY_RANK,
 			fallbackAgents,
 		}).map((agent) => {
@@ -152,24 +173,28 @@ export function OnboardingPage() {
 	}, []);
 
 	const next = useCallback(() => {
-		if (step === "project") {
+		if (step === "guide") {
+			if (!preparedProject || !orchestratorAgent || !workerAgent) return;
+			window.localStorage.setItem(ONBOARDING_COMPLETE_STORAGE_KEY, "1");
+			requestOnboardingFinish({
+				...preparedProject,
+				orchestratorAgent,
+				workerAgent,
+			});
 			void navigate({ to: "/" });
 			return;
 		}
 		goToStep(stepIndex + 1);
-	}, [goToStep, navigate, step, stepIndex]);
-
-	const handleSelectFolder = useCallback(async () => {
-		const result = await aoBridge.app.chooseDirectory("Choose a project repository");
-		if (result) setProjectPath(result);
-	}, []);
+	}, [goToStep, navigate, orchestratorAgent, preparedProject, requestOnboardingFinish, step, stepIndex, workerAgent]);
 
 	const handleInstallAgent = useCallback(async () => {
-		await aoBridge.app.openExternal(INSTALL_GUIDE_URL);
-	}, []);
+		openGlobalSettings("harness");
+		await navigate({ to: "/" });
+	}, [navigate, openGlobalSettings]);
 
 	const isProjectStep = step === "project";
 	const isAgentStep = step === "orchestrator" || step === "workers";
+	const isGuideStep = step === "guide";
 
 	useLayoutEffect(() => {
 		// Onboarding is a branded first-run surface: keep it dark and on the
@@ -207,7 +232,7 @@ export function OnboardingPage() {
 					"min-h-0",
 					isProjectStep
 						? "grid place-items-center"
-						: isAgentStep
+						: isAgentStep || isGuideStep
 							? "grid grid-cols-[minmax(360px,1.1fr)_minmax(300px,0.9fr)] items-center gap-10 max-[1040px]:grid-cols-[minmax(340px,1.15fr)_minmax(240px,0.85fr)] max-[1040px]:gap-6"
 						: "grid grid-cols-[minmax(280px,0.72fr)_minmax(520px,1.35fr)] items-center gap-14 max-[1040px]:grid-cols-[minmax(270px,0.75fr)_minmax(0,1.25fr)] max-[1040px]:gap-8",
 				)}>
@@ -215,16 +240,16 @@ export function OnboardingPage() {
 						key={step}
 						className={cn(
 							"grid h-[360px] grid-rows-[180px_180px]",
-							isAgentStep && "h-[480px] grid-rows-[210px_minmax(0,1fr)]",
-							isProjectStep && "w-full max-w-[520px] text-center",
+							(isAgentStep || isGuideStep) && "h-[480px] grid-rows-[210px_minmax(0,1fr)]",
+							isProjectStep && "w-full max-w-[680px] text-center",
 						)}
 						aria-labelledby={`onboarding-title-${step}`}
 					>
-						<div className={cn("flex flex-col justify-end pb-7", isAgentStep && "justify-center pb-5")}>
-							<h1 id={`onboarding-title-${step}`} className={cn(isAgentStep ? "max-w-[500px]" : "max-w-[410px]", "text-[clamp(2rem,3.2vw,3.15rem)] font-normal leading-[1.02] tracking-[-0.045em] text-balance", isProjectStep && "mx-auto")}>
+						<div className={cn("flex flex-col justify-end pb-7", (isAgentStep || isGuideStep) && "justify-center pb-5")}>
+							<h1 id={`onboarding-title-${step}`} className={cn(isAgentStep || isGuideStep ? "max-w-[500px]" : "max-w-[410px]", "text-[clamp(2rem,3.2vw,3.15rem)] font-normal leading-[1.02] tracking-[-0.045em] text-balance", isProjectStep && "mx-auto max-w-none whitespace-nowrap")}>
 								{details.title}
 							</h1>
-							<p className={cn("mt-5 max-w-[350px] text-[15px] leading-6 text-muted-foreground text-pretty", isAgentStep && "max-w-[430px]", isProjectStep && "mx-auto")}>{details.subtitle}</p>
+							<p className={cn("mt-5 max-w-[350px] text-[15px] leading-6 text-muted-foreground text-pretty", (isAgentStep || isGuideStep) && "max-w-[430px]", isProjectStep && "mx-auto")}>{details.subtitle}</p>
 						</div>
 						<div className={cn("min-h-0 pt-2", isProjectStep && "flex justify-center")}>
 							{isAgentStep && (
@@ -243,25 +268,28 @@ export function OnboardingPage() {
 								/>
 							)}
 							{step === "project" && (
-								<ProjectPicker
-									path={projectPath}
+								<OnboardingProjectSetup
 									mode={projectMode}
 									onModeChange={setProjectMode}
-									onPathChange={setProjectPath}
-									onSelectFolder={handleSelectFolder}
+									onPrepared={(project) => {
+										setPreparedProject(project);
+										if (project) setStep("orchestrator");
+									}}
+									preparedProject={preparedProject}
 								/>
 							)}
+							{isGuideStep && <OnboardingGuide />}
 						</div>
 					</section>
 
-					{isAgentStep ? (
+					{isAgentStep || isGuideStep ? (
 						<AgentTopologyPreview
 							orchestratorAgent={orchestratorAgent}
 							workerAgent={workerAgent}
 							hoveredOrchestrator={hoveredOrchestrator}
 							hoveredWorker={hoveredWorker}
 						/>
-					) : !isProjectStep ? <PreviewStage step={step} /> : null}
+					) : step === "welcome" || step === "feedback" ? <PreviewStage step={step} /> : null}
 				</div>
 
 				<footer className="flex items-start justify-between pt-4">
@@ -276,7 +304,7 @@ export function OnboardingPage() {
 					<button
 						type="button"
 						onClick={next}
-						disabled={(step === "orchestrator" && !orchestratorAgent) || (step === "workers" && !workerAgent)}
+						disabled={(step === "project" && !preparedProject) || (step === "orchestrator" && !orchestratorAgent) || (step === "workers" && !workerAgent)}
 						className="inline-flex h-10 w-auto items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-30"
 					>
 						{details.nextLabel}
@@ -293,6 +321,20 @@ type OnboardingAgent = {
 	name: string;
 	indicator: "auth" | "checking" | "none";
 };
+
+function OnboardingGuide() {
+	return (
+		<div className="w-full max-w-[500px] text-left">
+			<p className="mb-2 text-xs font-medium text-muted-foreground">Try a prompt like this</p>
+			<div className="rounded-lg bg-card px-3.5 py-3 font-mono text-[12px] leading-5 text-foreground/85">
+				Break this feature into 3 parallel tasks, assign each to a worker, and bring me the results when they are ready.
+			</div>
+			<p className="mt-4 text-xs leading-5 text-muted-foreground">
+				Your orchestrator plans the work at the top. Three workers branch out below it, each in its own worktree.
+			</p>
+		</div>
+	);
+}
 
 function AgentPicker({
 	role,
@@ -324,7 +366,6 @@ function AgentPicker({
 		<div className="w-full max-w-[440px] text-left">
 			<AgentRolePicker
 				label={isOrchestrator ? "Orchestrator agent" : "Worker agents"}
-				showLabel={!isOrchestrator}
 				agents={agents}
 				value={isOrchestrator ? orchestratorAgent : workerAgent}
 				hovered={isOrchestrator ? hoveredOrchestrator : hoveredWorker}
@@ -338,7 +379,6 @@ function AgentPicker({
 
 function AgentRolePicker({
 	label,
-	showLabel = true,
 	agents,
 	value,
 	hovered,
@@ -347,7 +387,6 @@ function AgentRolePicker({
 	onInstall,
 }: {
 	label: string;
-	showLabel?: boolean;
 	agents: OnboardingAgent[];
 	value: string | null;
 	hovered: string | null;
@@ -360,7 +399,6 @@ function AgentRolePicker({
 	const [showTopFade, setShowTopFade] = useState(false);
 	return (
 		<section aria-label={label}>
-			{showLabel ? <p className="mb-1.5 text-xs font-medium text-muted-foreground">{label}</p> : null}
 			<div className="relative">
 				<div className="max-h-[240px] space-y-0.5 overflow-y-auto rounded-lg pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" onScroll={(event) => setShowTopFade(event.currentTarget.scrollTop > 0)}>
 					{installed.map((agent) => (
@@ -566,66 +604,7 @@ function GenericWorkerIcon() {
 	);
 }
 
-function ProjectPicker({
-	path,
-	mode,
-	onModeChange,
-	onPathChange,
-	onSelectFolder,
-}: {
-	path: string;
-	mode: "folder" | "git";
-	onModeChange: (mode: "folder" | "git") => void;
-	onPathChange: (path: string) => void;
-	onSelectFolder: () => void;
-}) {
-	return (
-		<div className="w-full max-w-[520px]">
-			<div className="mb-3 inline-flex rounded-lg bg-card p-0.5">
-				<ModeButton active={mode === "folder"} onClick={() => onModeChange("folder")}>Local folder</ModeButton>
-				<ModeButton active={mode === "git"} onClick={() => onModeChange("git")}>Git repository</ModeButton>
-			</div>
-			{mode === "folder" ? (
-				<button
-					type="button"
-					onClick={onSelectFolder}
-					className="flex h-11 w-full items-center gap-2.5 rounded-lg bg-card px-3 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-				>
-					<FolderIcon />
-					<span className={cn("min-w-0 flex-1 truncate", path && "font-mono text-foreground")}>{path || "Choose a project folder"}</span>
-				</button>
-			) : (
-				<label className="block">
-					<span className="sr-only">Git repository URL</span>
-					<input
-						type="url"
-						placeholder="https://github.com/you/project"
-						value={path}
-						onChange={(event) => onPathChange(event.target.value)}
-						className="h-11 w-full rounded-lg bg-card px-3 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
-					/>
-				</label>
-			)}
-		</div>
-	);
-}
-
-function ModeButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-	return (
-		<button
-			type="button"
-			onClick={onClick}
-			className={cn(
-				"rounded-md px-3 py-1.5 text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-				active ? "bg-foreground/15 text-foreground" : "text-muted-foreground hover:text-foreground",
-			)}
-		>
-			{children}
-		</button>
-	);
-}
-
-function PreviewStage({ step }: { step: Step }) {
+function PreviewStage({ step }: { step: "welcome" | "feedback" }) {
 	return (
 		<div className="relative mx-auto aspect-[4/3] w-full max-w-[720px] overflow-hidden">
 			<img
@@ -645,10 +624,6 @@ function PreviewStage({ step }: { step: Step }) {
 			</div>
 		</div>
 	);
-}
-
-function FolderIcon() {
-	return <svg viewBox="0 0 16 16" className="size-4 shrink-0 text-white/45" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true"><path d="M2.5 4.5A1.5 1.5 0 0 1 4 3h2l1.2 1.5H12A1.5 1.5 0 0 1 13.5 6v5A1.5 1.5 0 0 1 12 12.5H4A1.5 1.5 0 0 1 2.5 11V4.5Z" strokeLinejoin="round" /></svg>;
 }
 
 function CheckIcon({ className }: { className?: string }) {

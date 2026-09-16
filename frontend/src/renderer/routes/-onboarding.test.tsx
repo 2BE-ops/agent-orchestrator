@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,6 +17,8 @@ type MockAgentsQuery = {
 const routeMocks = vi.hoisted(() => ({
 	navigate: vi.fn(),
 	agentsQuery: {} as MockAgentsQuery,
+	requestOnboardingFinish: vi.fn(),
+	openGlobalSettings: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
@@ -25,9 +27,25 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 	useNavigate: () => routeMocks.navigate,
 }));
 
+vi.mock("../stores/ui-store", () => ({
+	useUiStore: (selector: (state: unknown) => unknown) =>
+		selector({
+			openGlobalSettings: routeMocks.openGlobalSettings,
+			requestOnboardingFinish: routeMocks.requestOnboardingFinish,
+		}),
+}));
+
 vi.mock("../hooks/useAgentsQuery", () => ({
 	refreshAgentsIfStale: vi.fn().mockResolvedValue(undefined),
 	useAgentsQuery: () => routeMocks.agentsQuery,
+}));
+
+vi.mock("../components/OnboardingProjectSetup", () => ({
+	OnboardingProjectSetup: ({ onPrepared }: { onPrepared: (input: { path: string }) => void }) => (
+		<button type="button" onClick={() => onPrepared({ path: "/tmp/acme/project" })}>
+			Prepare project
+		</button>
+	),
 }));
 
 import { OnboardingPage } from "../components/OnboardingPage";
@@ -40,6 +58,8 @@ async function renderOnboarding() {
 
 beforeEach(() => {
 	routeMocks.navigate.mockReset();
+	routeMocks.requestOnboardingFinish.mockReset();
+	routeMocks.openGlobalSettings.mockReset();
 	routeMocks.agentsQuery = {
 		data: {
 			authorized: [
@@ -70,10 +90,13 @@ describe("onboarding route", () => {
 			routeMocks.agentsQuery = { data: undefined, isFetching: true, isLoading: true };
 			await renderOnboarding();
 			await act(async () => {
-				screen.getByRole("button", { name: "Continue" }).click();
+				fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 			});
 			await act(async () => {
-				screen.getByRole("button", { name: "Choose agents" }).click();
+				fireEvent.click(screen.getByRole("button", { name: "Create your project" }));
+			});
+			await act(async () => {
+				fireEvent.click(screen.getByRole("button", { name: "Prepare project" }));
 			});
 
 			expect(screen.getAllByLabelText("Checking availability")).not.toHaveLength(0);
@@ -92,15 +115,12 @@ describe("onboarding route", () => {
 		await renderOnboarding();
 
 		expect(screen.getByRole("heading", { name: "Stop babysitting agents." })).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
-		expect(screen.getByText("Board")).toBeInTheDocument();
-		expect(screen.getByText("Idle")).toBeInTheDocument();
-
 		await user.click(screen.getByRole("button", { name: "Continue" }));
 		expect(await screen.findByRole("heading", { name: "Keep the loop moving." })).toBeInTheDocument();
-		expect(screen.getAllByText("Reviews")).not.toHaveLength(0);
+		await user.click(screen.getByRole("button", { name: "Create your project" }));
+		expect(await screen.findByRole("heading", { name: "Create your first project." })).toBeInTheDocument();
+		await user.click(screen.getByRole("button", { name: "Prepare project" }));
 
-		await user.click(screen.getByRole("button", { name: "Choose agents" }));
 		expect(await screen.findByRole("heading", { name: "Pick your orchestrator agent." })).toBeInTheDocument();
 
 		const nextButton = screen.getByRole("button", { name: "Choose workers" });
@@ -116,34 +136,46 @@ describe("onboarding route", () => {
 
 		expect(await screen.findByRole("heading", { name: "Pick your worker agents." })).toBeInTheDocument();
 		const workerPicker = screen.getByRole("region", { name: "Worker agents" });
-		const projectButton = screen.getByRole("button", { name: "Add a project" });
+		const projectButton = screen.getByRole("button", { name: "See how it works" });
 		expect(projectButton).toBeDisabled();
 		expect(within(workerPicker).getByRole("button", { name: "Install Cursor" })).toBeEnabled();
 		await user.click(within(workerPicker).getByRole("button", { name: "Codex" }));
 		expect(projectButton).toBeEnabled();
 
 		await user.click(projectButton);
-		expect(await screen.findByRole("heading", { name: "Add your first project." })).toBeInTheDocument();
+		expect(await screen.findByRole("heading", { name: "Give your orchestrator a goal." })).toBeInTheDocument();
+		expect(screen.getByText(/Break this feature into 3 parallel tasks/)).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Continue to orchestrator" })).toBeInTheDocument();
 	});
 
-	it("supports back navigation and opens the dashboard from the final step", async () => {
+	it("supports back navigation and opens the orchestrator from the final step", async () => {
 		const user = userEvent.setup();
 		await renderOnboarding();
 
 		await user.click(screen.getByRole("button", { name: "Continue" }));
-		expect(await screen.findByRole("heading", { name: "Keep the loop moving." })).toBeInTheDocument();
+		await user.click(await screen.findByRole("button", { name: "Create your project" }));
+		expect(await screen.findByRole("heading", { name: "Create your first project." })).toBeInTheDocument();
+		await user.click(screen.getByRole("button", { name: "Prepare project" }));
+		expect(await screen.findByRole("heading", { name: "Pick your orchestrator agent." })).toBeInTheDocument();
 		await user.click(screen.getByRole("button", { name: "Back" }));
-		expect(await screen.findByRole("heading", { name: "Stop babysitting agents." })).toBeInTheDocument();
+		expect(await screen.findByRole("heading", { name: "Create your first project." })).toBeInTheDocument();
 
-		await user.click(screen.getByRole("button", { name: "Continue" }));
-		await user.click(await screen.findByRole("button", { name: "Choose agents" }));
+		await user.click(screen.getByRole("button", { name: "Choose orchestrator" }));
 		const agentPicker = await screen.findByRole("region", { name: "Pick your orchestrator agent." });
 		await user.click(within(within(agentPicker).getByRole("region", { name: "Orchestrator agent" })).getByRole("button", { name: "Codex" }));
 		await user.click(screen.getByRole("button", { name: "Choose workers" }));
 		const workerPicker = await screen.findByRole("region", { name: "Worker agents" });
 		await user.click(within(workerPicker).getByRole("button", { name: "Claude Code" }));
-		await user.click(screen.getByRole("button", { name: "Add a project" }));
-		await user.click(screen.getByRole("button", { name: "Open AO" }));
-		await waitFor(() => expect(routeMocks.navigate).toHaveBeenCalledWith({ to: "/" }));
+		await user.click(screen.getByRole("button", { name: "See how it works" }));
+		await user.click(screen.getByRole("button", { name: "Continue to orchestrator" }));
+		await waitFor(() => {
+			expect(routeMocks.requestOnboardingFinish).toHaveBeenCalledWith({
+				path: "/tmp/acme/project",
+				orchestratorAgent: "codex",
+				workerAgent: "claude-code",
+			});
+			expect(routeMocks.navigate).toHaveBeenCalledWith({ to: "/" });
+		});
+		expect(window.localStorage.getItem("ao.onboarding.completed")).toBe("1");
 	});
 });
