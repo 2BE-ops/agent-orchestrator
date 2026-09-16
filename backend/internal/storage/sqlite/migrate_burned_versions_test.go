@@ -150,9 +150,11 @@ var shippedMigrations = map[int64]string{
 	143: "0143_conversation_checkpoint_turn.sql",
 	144: "0144_session_revision.sql",
 	145: "0145_native_checkpoint_evidence.sql",
-	146: "0146_reports.sql",
-	147: "0147_report_delivery.sql",
-	148: "0148_project_summaries.sql",
+	146: "0146_codex_account_management_simplification.sql",
+	147: "0147_native_history_provenance.sql",
+	148: "0148_reports.sql",
+	149: "0149_report_delivery.sql",
+	150: "0150_project_summaries.sql",
 }
 
 // burnedVersion reports version numbers that must never be (re)used: they
