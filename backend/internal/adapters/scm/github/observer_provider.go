@@ -483,9 +483,10 @@ func pageInfoEndCursor(connection map[string]any) string {
 }
 
 func scmObservationFromGraphQL(ref ports.SCMPRRef, pr map[string]any) ports.SCMObservation {
-	checks := scmChecksFromGraphQL(pr)
+	ciProjection := githubCIProjectionFromGraphQL(pr)
+	checks := ciProjection.scmChecks()
 	failed := failedSCMChecks(checks)
-	ci := string(ciSummaryFromRollupState(pr))
+	ci := string(ciProjection.summaryWithRollupFallback())
 	prURL := firstNonEmpty(str(pr["url"]), ref.URL)
 	review := string(reviewDecisionFromGraphQL(pr))
 	providerMergeable := str(pr["mergeable"])
@@ -549,15 +550,7 @@ func scmObservationFromGraphQL(ref ports.SCMPRRef, pr map[string]any) ports.SCMO
 }
 
 func ciSummaryFromRollupState(pr map[string]any) domain.CIState {
-	roll := statusRollup(pr)
-	if roll == nil {
-		return domain.CIUnknown
-	}
-	contexts, _ := roll["contexts"].(map[string]any)
-	if len(nodes(contexts["nodes"])) > 0 && !pageInfoHasMore(contexts) {
-		return ciSummaryFromGraphQL(pr)
-	}
-	return mapRollupState(str(roll["state"]))
+	return githubCIProjectionFromGraphQL(pr).summaryWithRollupFallback()
 }
 
 func scmContextsPaginated(pr map[string]any) bool {
@@ -565,36 +558,7 @@ func scmContextsPaginated(pr map[string]any) bool {
 }
 
 func scmChecksFromGraphQL(pr map[string]any) []ports.SCMCheckObservation {
-	roll := statusRollup(pr)
-	contexts, _ := roll["contexts"].(map[string]any)
-	rawNodes := effectiveCheckNodes(contexts)
-	out := make([]ports.SCMCheckObservation, 0, len(rawNodes))
-	for _, n := range rawNodes {
-		typ := str(n["__typename"])
-		var ch ports.SCMCheckObservation
-		switch typ {
-		case "CheckRun":
-			ch.Name = str(n["name"])
-			ch.Status = string(checkStatusFromGraphQL(n))
-			ch.Conclusion = strings.ToLower(str(n["conclusion"]))
-			ch.URL = firstNonEmpty(str(n["detailsUrl"]), str(n["url"]))
-			if id := int64(num(n["databaseId"])); id > 0 {
-				ch.ProviderID = strconv.FormatInt(id, 10)
-			}
-		case "StatusContext":
-			ch.Name = str(n["context"])
-			ch.Status = string(checkStatusFromGraphQL(n))
-			ch.Conclusion = strings.ToLower(str(n["state"]))
-			ch.URL = str(n["targetUrl"])
-		default:
-			continue
-		}
-		if ch.Name == "" {
-			continue
-		}
-		out = append(out, ch)
-	}
-	return out
+	return githubCIProjectionFromGraphQL(pr).scmChecks()
 }
 
 func failedSCMChecks(checks []ports.SCMCheckObservation) []ports.SCMCheckObservation {
