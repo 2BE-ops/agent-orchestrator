@@ -339,11 +339,9 @@ func (m *Manager) resumeChatController(
 		m.augmentAgentRuntimeEnv(agent, env)
 	}
 	historyMode := ports.ChatHistoryImport
-	if requireNativeHistory {
-		historyMode = ports.ChatHistoryRequired
-	}
 	var providerHandoff *domain.ChatProviderHandoff
 	if requireNativeHistory {
+		historyMode = ports.ChatHistoryRequired
 		providerHandoff, err = m.prepareLiveChatProviderHandoff(ctx, rec)
 	} else {
 		providerHandoff, err = m.prepareRecoveredChatProviderHandoff(ctx, rec)

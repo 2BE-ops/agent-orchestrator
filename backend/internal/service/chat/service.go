@@ -1379,16 +1379,13 @@ func (s *Service) driverCapabilities(
 }
 
 // StartChat launches the controller for a freshly created session.
-func (s *Service) StartChat(ctx context.Context, cfg StartRequest) (StartResult, error) {
+func (s *Service) StartChat(ctx context.Context, cfg StartConfig) (StartResult, error) {
 	controller, err := s.Start(ctx, cfg)
 	if err != nil {
 		return StartResult{}, err
 	}
 	return controllerStartResult(controller, nil, nil), nil
 }
-
-// StartRequest is the shared coordinator-to-service launch contract.
-type StartRequest = ports.ChatControllerStart
 
 // StartResult is the durable outcome of a launch.
 type StartResult = ports.ChatControllerStarted
