@@ -235,6 +235,42 @@ describe("annotation adjustment preload", () => {
 		}));
 	});
 
+	it("uses a pill comment composer aligned on one row without cancel or send buttons", () => {
+		const button = setElementBounds(document.createElement("button"), { left: 20, top: 30, width: 140, height: 36 });
+		button.id = "comment-row";
+		button.textContent = "Continue";
+		document.body.appendChild(button);
+
+		clickPage(button);
+		const root = overlayRoot();
+		const form = root.querySelector<HTMLFormElement>(".composer--comment");
+		const row = root.querySelector<HTMLElement>(".composer-input-row");
+		const styles = root.querySelector("style")?.textContent ?? "";
+
+		expect(form).not.toBeNull();
+		expect(root.querySelector(".composer-actions")).toBeNull();
+		expect(root.querySelector(".cancel-button")).toBeNull();
+		expect(root.querySelector(".send-button")).toBeNull();
+		expect(styles).toContain("border-radius:9999px");
+		expect(styles).toContain(".composer-input-row{display:flex;min-width:0;align-items:center");
+		expect(row?.querySelector(".adjust-button")).not.toBeNull();
+		expect(row?.querySelector(".composer-note")).not.toBeNull();
+	});
+
+	it("discards an open comment when clicking outside the composer", () => {
+		const button = setElementBounds(document.createElement("button"), { left: 20, top: 30, width: 140, height: 36 });
+		button.id = "outside-dismiss";
+		button.textContent = "Continue";
+		document.body.appendChild(button);
+
+		clickPage(button);
+		expect(latestSession().draft).toBeDefined();
+
+		document.body.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+		expect(latestSession().draft).toBeUndefined();
+		expect(overlayRoot().querySelector(".composer")).toBeNull();
+	});
+
 	it("keeps the selection highlight visible with a 6px outset while annotating", async () => {
 		const button = setElementBounds(document.createElement("button"), { left: 20, top: 30, width: 140, height: 36 });
 		button.id = "selected-box";

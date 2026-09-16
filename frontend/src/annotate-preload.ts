@@ -35,18 +35,20 @@ const ADJUST_MODE_ENABLED = true;
 
 const PROMPT_GUTTER = 14;
 const PROMPT_GAP = 10;
-const COMMENT_WIDTH = 300;
+const COMMENT_WIDTH = 320;
 const ADJUSTMENT_WIDTH = 316;
 const ADJUSTMENT_MAX_HEIGHT = 400;
-const COMMENT_TEXTAREA_MIN_HEIGHT = 36;
+const COMMENT_TEXTAREA_MIN_HEIGHT = 20;
 const COMMENT_MAX_HEIGHT = 360;
 /** Keep in sync with overlayStyles --pad / --gap / --control / --radius. */
 const COMPOSER_PAD = 8;
 const COMPOSER_GAP = 8;
 const COMPOSER_CONTROL = 28;
 const COMPOSER_RADIUS = 8;
-const COMMENT_ACTION_ROW_HEIGHT = COMPOSER_GAP + COMPOSER_CONTROL;
-const COMMENT_CHROME_VERTICAL = COMPOSER_PAD * 2;
+const COMMENT_RADIUS = 16;
+const COMMENT_CHROME_VERTICAL = 16;
+/** Icon for the adjust/options control: sliders | sliders-horizontal | tune | sparkles | settings */
+const ADJUST_ICON = "sliders-horizontal" as const;
 /** Extra pixels outside the target on each side while a selection is active. */
 const SELECTED_OUTSET_PX = 6;
 const MARKDOWN_TARGETS =
@@ -204,6 +206,7 @@ function handleClick(event: MouseEvent): void {
 	if (session.draft) {
 		event.preventDefault();
 		event.stopImmediatePropagation();
+		closeComposer();
 		return;
 	}
 	const target = annotationTarget(event.target);
@@ -246,7 +249,7 @@ function openComposer(element: Element, annotation?: BrowserSavedAnnotation): vo
 		: { kind: "comment", body: "", target, adjustments: [] };
 	emitState();
 	renderAll();
-	setTimeout(() => shadow?.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus(), 0);
+	setTimeout(() => shadow?.querySelector<HTMLTextAreaElement>(".composer-note")?.focus(), 0);
 }
 
 function closeComposer(): void {
@@ -437,18 +440,13 @@ function renderComposer(): void {
 	const draft = session.draft;
 	if (!draft) { mount.innerHTML = ""; return; }
 	const target = selectedElement ?? resolveTarget(draft.target);
-	const expanded = Boolean(draft.body.trim() || draft.id);
 	mount.innerHTML = `
-		<form class="composer chrome composer--${draft.kind}${expanded ? " composer--expanded" : ""}" aria-label="Annotate selection">
+		<form class="composer chrome composer--${draft.kind}" aria-label="Annotate selection">
 			<div class="composer-input-row">
-				${ADJUST_MODE_ENABLED ? `<button type="button" data-action="adjust" class="adjust-button${draft.kind === "adjustment" ? " adjust-button--active" : ""}" aria-label="${draft.kind === "adjustment" ? "Return to comment" : "Adjust element"}" title="${draft.kind === "adjustment" ? "Return to comment" : "Adjust element"}">${icon("sliders")}</button>` : ""}
+				${ADJUST_MODE_ENABLED ? `<button type="button" data-action="adjust" class="adjust-button${draft.kind === "adjustment" ? " adjust-button--active" : ""}" aria-label="${draft.kind === "adjustment" ? "Return to comment" : "Adjust element"}" title="${draft.kind === "adjustment" ? "Return to comment" : "Adjust element"}">${adjustIcon()}</button>` : ""}
 				<textarea class="composer-note" rows="1" aria-label="${draft.kind === "adjustment" ? "Adjustment note" : "Comment"}" placeholder="${draft.kind === "adjustment" ? "Describe these changes…" : "Add a comment..."}"></textarea>
 			</div>
 			${ADJUST_MODE_ENABLED && draft.kind === "adjustment" && target ? adjustmentPanel(target) : ""}
-			<div class="composer-actions" ${draft.kind === "comment" && !expanded ? "hidden" : ""}>
-				<button type="button" data-action="cancel" class="cancel-button">Cancel</button>
-				<button type="submit" class="send-button" aria-label="Save ${draft.kind === "adjustment" ? "adjustment" : "comment"}" title="Save (Enter)">${icon(draft.kind === "adjustment" ? "check" : "arrow")}</button>
-			</div>
 		</form>`;
 	const form = mount.querySelector<HTMLFormElement>("form")!;
 	const textarea = form.querySelector<HTMLTextAreaElement>(".composer-note")!;
@@ -457,10 +455,9 @@ function renderComposer(): void {
 	const resize = () => composerAnchorRect && resizeAndPositionComposer(form, textarea, composerAnchorRect);
 	textarea.addEventListener("input", () => {
 		draft.body = textarea.value;
-		const showActions = Boolean(draft.body.trim() || draft.id);
-		form.classList.toggle("composer--expanded", showActions);
-		const actions = form.querySelector<HTMLElement>(".composer-actions");
-		if (actions && draft.kind === "comment") actions.hidden = !showActions;
+		if (draft.kind === "comment") {
+			form.classList.toggle("composer--multiline", textarea.value.includes("\n") || textarea.scrollHeight > COMMENT_TEXTAREA_MIN_HEIGHT + 4);
+		}
 		resize();
 		emitState();
 	});
@@ -479,7 +476,6 @@ function renderComposer(): void {
 			closeComposer();
 		}
 	});
-	form.querySelector<HTMLElement>('[data-action="cancel"]')?.addEventListener("click", closeComposer);
 	form.querySelector<HTMLElement>('[data-action="adjust"]')?.addEventListener("click", () => {
 		if (draft.kind === "adjustment") {
 			if (target) restoreAdjustments(target, draft.adjustments);
@@ -522,7 +518,7 @@ function renderComposer(): void {
 	resize();
 }
 
-function icon(name: "camera" | "eye" | "trash" | "close" | "arrow" | "check" | "sliders" | "grip" | "reset" | "link"): string {
+function icon(name: "camera" | "eye" | "trash" | "close" | "arrow" | "check" | "sliders" | "sliders-horizontal" | "tune" | "sparkles" | "settings" | "grip" | "reset" | "link"): string {
 	const paths = {
 		camera: '<path d="M14.5 5 13 3h-4L7.5 5H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><circle cx="11" cy="11" r="3.5"/>',
 		eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/>',
@@ -531,11 +527,19 @@ function icon(name: "camera" | "eye" | "trash" | "close" | "arrow" | "check" | "
 		arrow: '<path d="M12 19V5m-7 7 7-7 7 7"/>',
 		check: '<path d="m5 12 4 4 10-10"/>',
 		sliders: '<path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"/>',
+		"sliders-horizontal": '<path d="M21 4H14M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/>',
+		tune: '<path d="M12 22a1 1 0 0 1 0-20 10 10 0 0 1 10 10 1 1 0 0 1-2 0 7 7 0 0 0-7-7 1 1 0 0 1 0-2 7 7 0 0 0 7 7 1 1 0 0 1 0 2 10 10 0 0 1-10-10z"/>',
+		sparkles: '<path d="M15 4 16 8l4 1-3 3 1 4-4-2-4 2 1-4-3-3 4-1 1-4m-9 3 1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2m18 12 1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2"/>',
+		settings: '<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
 		grip: '<circle cx="9" cy="7" r="1"/><circle cx="15" cy="7" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="17" r="1"/><circle cx="15" cy="17" r="1"/>',
 		reset: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5"/>',
 		link: '<path d="M10 13a5 5 0 0 0 7.54.54l2-2a5 5 0 0 0-7.07-7.07l-1.15 1.15M14 11a5 5 0 0 0-7.54-.54l-2 2a5 5 0 0 0 7.07 7.07l1.14-1.14"/>',
 	};
 	return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name]}</svg>`;
+}
+
+function adjustIcon(): string {
+	return icon(ADJUST_ICON);
 }
 
 function adjustmentPanel(element: Element): string {
@@ -860,18 +864,16 @@ function resizeAndPositionComposer(form: HTMLFormElement, textarea: HTMLTextArea
 	} else {
 		form.style.maxHeight = "none";
 		textarea.style.height = "0px";
-		// Expanded actions: gap above a control-sized button row (see COMPOSER_*).
-		const actionHeight = form.classList.contains("composer--expanded") ? COMMENT_ACTION_ROW_HEIGHT : 0;
 		const spaceAbove = rect.top - PROMPT_GAP - PROMPT_GUTTER;
 		const spaceBelow = viewportHeight - PROMPT_GUTTER - rect.bottom - PROMPT_GAP;
 		const availableHeight = Math.max(spaceAbove, spaceBelow);
-		const maxComposerHeight = Math.max(86, Math.min(COMMENT_MAX_HEIGHT, availableHeight));
-		const maxTextareaHeight = Math.max(COMMENT_TEXTAREA_MIN_HEIGHT, maxComposerHeight - actionHeight - COMMENT_CHROME_VERTICAL);
+		const maxComposerHeight = Math.max(44, Math.min(COMMENT_MAX_HEIGHT, availableHeight));
+		const maxTextareaHeight = Math.max(COMMENT_TEXTAREA_MIN_HEIGHT, maxComposerHeight - COMMENT_CHROME_VERTICAL);
 		const naturalHeight = Math.max(COMMENT_TEXTAREA_MIN_HEIGHT, textarea.scrollHeight);
 		textarea.style.height = `${Math.min(maxTextareaHeight, naturalHeight)}px`;
 		textarea.style.overflowY = naturalHeight > maxTextareaHeight ? "auto" : "hidden";
 	}
-	const height = Math.min(viewportHeight - PROMPT_GUTTER * 2, Math.max(52, form.getBoundingClientRect().height));
+	const height = Math.min(viewportHeight - PROMPT_GUTTER * 2, Math.max(44, form.getBoundingClientRect().height));
 	const position = promptPositionForRect(rect, { width: viewportWidth, height: viewportHeight, promptWidth: width, promptHeight: height, gutter: PROMPT_GUTTER, gap: PROMPT_GAP });
 	form.style.left = `${position.left}px`;
 	form.style.top = `${position.top}px`;
@@ -960,42 +962,37 @@ function overlayStyles(): string {
 		.danger{color:var(--danger)}
 		button svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 		.composer{
-			position:fixed;box-sizing:border-box;border:1px solid var(--border);border-radius:var(--radius);
-			background:var(--bg);color:var(--fg);padding:var(--pad);
+			position:fixed;box-sizing:border-box;border:1px solid var(--border);
+			background:var(--bg);color:var(--fg);
 			box-shadow:0 8px 28px rgba(0,0,0,.32);pointer-events:auto;font-size:12px;overflow:hidden;
 		}
-		.composer--comment{transition:box-shadow 150ms ease}
-		.composer-input-row{display:flex;min-width:0;align-items:flex-start;gap:var(--gap)}
+		.composer--comment{
+			border-radius:9999px;padding:8px 14px 8px 10px;
+			transition:box-shadow 150ms ease,border-radius 150ms ease;
+		}
+		.composer--comment.composer--multiline{border-radius:${COMMENT_RADIUS}px;padding:10px 14px 10px 10px}
+		.composer-input-row{display:flex;min-width:0;align-items:center;gap:8px}
 		.adjust-button{
 			width:var(--control);height:var(--control);flex:0 0 var(--control);
-			border:0;border-radius:var(--radius);background:transparent;color:var(--muted-fg);padding:0;
+			border:0;border-radius:9999px;background:transparent;color:var(--muted-fg);padding:0;
 		}
 		.adjust-button:hover,.adjust-button--active{background:var(--muted);color:var(--fg)}
 		.adjust-button svg{width:16px;height:16px}
 		.composer-note{
-			display:block;box-sizing:border-box;min-width:0;flex:1;height:36px;min-height:36px;resize:none;
+			display:block;box-sizing:border-box;min-width:0;flex:1;resize:none;
 			border:0;background:transparent;color:var(--fg);caret-color:var(--fg);
-			padding:8px 0;font:400 13px/20px "Geist Variable",system-ui,sans-serif;outline:none;
+			padding:0;margin:0;font:400 13px/20px "Geist Variable",system-ui,sans-serif;outline:none;
 			overflow-y:hidden;scrollbar-width:none;
 		}
+		.composer--comment .composer-note{height:20px;min-height:20px}
 		.composer-note::-webkit-scrollbar,.property-textarea::-webkit-scrollbar,.adjustment-scroll::-webkit-scrollbar{display:none}
 		.composer-note::placeholder{color:var(--muted-fg)}
 		textarea:focus,input:focus,select:focus{outline:none}
-		.composer-actions{
-			display:flex;align-items:center;justify-content:space-between;gap:var(--gap);padding-top:var(--gap);
+		.composer--adjustment{
+			display:flex;flex-direction:column;padding:0;background:var(--bg);border-radius:var(--radius);
 		}
-		.composer-actions[hidden]{display:none}
-		.cancel-button{height:var(--control);border:0;border-radius:var(--radius);background:transparent;padding:0 10px;color:var(--muted-fg)}
-		.cancel-button:hover{background:var(--muted);color:var(--fg)}
-		.send-button{
-			width:var(--control);height:var(--control);flex:0 0 var(--control);padding:0;border:0;
-			border-radius:var(--radius);background:var(--accent);color:var(--accent-fg);
-		}
-		.send-button:hover{background:color-mix(in oklch,var(--accent) 88%,var(--fg))}
-		.send-button svg{width:14px;height:14px}
-		.composer--adjustment{display:flex;flex-direction:column;padding:0;background:var(--bg)}
 		.composer--adjustment .composer-input-row{flex:0 0 auto;padding:var(--pad);background:var(--muted)}
-		.composer--adjustment .composer-note{max-height:52px;padding:6px 0}
+		.composer--adjustment .composer-note{max-height:52px;padding:0}
 		.element-header{
 			display:flex;flex:0 0 auto;align-items:center;justify-content:space-between;
 			border-top:1px solid var(--border);border-bottom:1px solid var(--border);
@@ -1075,9 +1072,6 @@ function overlayStyles(): string {
 		.spacing-section[open] summary::after{transform:rotate(-90deg)}
 		.spacing-fields{display:flex;flex-direction:column;gap:var(--gap);padding:0 0 var(--pad)}
 		.spacing-fields .linked-group{display:flex;flex-direction:column;gap:var(--gap)}
-		.composer--adjustment .composer-actions{
-			flex:0 0 auto;border-top:1px solid var(--border);background:var(--bg);padding:var(--pad);
-		}
 		.screenshot-notice{
 			position:fixed;left:50%;top:55px;transform:translateX(-50%);
 			border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--fg);
