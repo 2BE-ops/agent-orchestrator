@@ -4652,15 +4652,12 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 	background: var(--color-status-needs-you);
 }
 
-.browser-panel__annotation-label {
-	color: var(--muted-foreground);
-}
-
-.browser-panel__annotation-host {
+.browser-panel__annotation-count {
 	min-width: 0;
 	overflow: hidden;
 	color: var(--foreground);
-	font-weight: 500;
+	font-weight: var(--font-weight-medium);
+	font-variant-numeric: tabular-nums;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -4717,22 +4714,23 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 	height: var(--size-control-md);
 	gap: var(--space-1_5);
 	padding-inline: var(--space-2_5);
+	color: var(--primary-foreground);
 	font-size: var(--font-size-sm);
 	font-weight: var(--font-weight-medium);
 }
 
+.browser-panel__toolbar--annotation .browser-panel__annotation-send:disabled {
+	opacity: 0.72;
+}
+
 .browser-panel__annotation-send-count {
+	color: inherit;
 	font-variant-numeric: tabular-nums;
-	opacity: 0.8;
 }
 
 @container browser-annotation (max-width: 30rem) {
 	.browser-panel__annotation-context {
 		max-width: 26%;
-	}
-
-	.browser-panel__annotation-label {
-		display: none;
 	}
 }
 

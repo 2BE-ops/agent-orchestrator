@@ -1002,15 +1002,8 @@ export function BrowserPanelView({
 			</div>
 			<div className="browser-panel__annotation-context">
 				<span aria-hidden="true" className="browser-panel__annotation-status-dot" />
-				<span className="browser-panel__annotation-label">{t("browser.annotationActive")}</span>
-				<span className="browser-panel__annotation-host">
-					{(() => {
-						try {
-							return new URL(navState.url).hostname;
-						} catch {
-							return navState.title || "page";
-						}
-					})()}
+				<span className="browser-panel__annotation-count">
+					{t("browser.annotationCount", { count: annotationState.count })}
 				</span>
 			</div>
 			<div className="browser-panel__annotation-actions browser-panel__annotation-actions--trailing">

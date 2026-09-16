@@ -64,6 +64,8 @@
 	"browser.agentUsing": "Agente usando el navegador",
 	"browser.annotate": "Anotar página",
 	"browser.annotationActive": "Anotando",
+	"browser.annotationCount_one": "{{count}} anotación",
+	"browser.annotationCount_other": "{{count}} anotaciones",
 	"browser.annotationDiscardAll": "Descartar todo",
 	"browser.annotationDiscardAllComments": "Descartar todos los comentarios",
 	"browser.annotationExit": "Salir",
