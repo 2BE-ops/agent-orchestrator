@@ -157,7 +157,7 @@ func TestLiveTextContinuesWhileProjectionIsBlocked(t *testing.T) {
 func TestLiveSubscriptionRejectsStaleControllerGeneration(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
-	if err := h.st.ClaimChatControllerGeneration(ctx, testSession, "replacement", h.now()); err != nil {
+	if err := h.st.ClaimChatControllerGeneration(ctx, testSession, "replacement"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := h.svc.SubscribeLive(ctx, testSession); !errors.Is(err, chatsvc.ErrNoController) {
