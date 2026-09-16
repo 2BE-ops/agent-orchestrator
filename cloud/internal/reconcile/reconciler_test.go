@@ -338,6 +338,97 @@ func (s *pausePathStore) UpdateSandboxObservation(
 	return nil
 }
 
+// restoreProvider fakes the provider calls the provision path and the
+// terminated-park path use, counting them so a test can assert which branch a
+// restored sandbox took.
+type restoreProvider struct {
+	sandbox.Provider
+	env       sandbox.Environment
+	found     bool
+	findCalls int
+	getCalls  int
+}
+
+func (p *restoreProvider) FindBySession(context.Context, string) (sandbox.Environment, bool, error) {
+	p.findCalls++
+	return p.env, p.found, nil
+}
+
+func (p *restoreProvider) Get(context.Context, sandbox.ID) (sandbox.Environment, error) {
+	p.getCalls++
+	return p.env, nil
+}
+
+// A deleted-then-restored sandbox (observed 'deleted', no provider environment,
+// desired 'running') must re-enter provisioning and build a fresh sandbox.
+func TestRestoredDeletedSandboxReprovisions(t *testing.T) {
+	t.Parallel()
+	store := &pausePathStore{}
+	provider := &restoreProvider{found: true, env: sandbox.Environment{ID: "env-new"}}
+	reconciler := New(store, fixedResolver{provider}, Options{})
+	if err := reconciler.reconcileSandbox(context.Background(), domain.Sandbox{
+		SessionID: "session-1", OrgID: "org-1", Provider: sandbox.ProviderNodeOps,
+		DesiredState:          domain.SandboxDesiredRunning,
+		ObservedState:         domain.SandboxObservedDeleted,
+		ProviderEnvironmentID: "",
+	}); err != nil {
+		t.Fatalf("reconcileSandbox: %v", err)
+	}
+	if provider.findCalls != 1 {
+		t.Fatalf("provision not reached: FindBySession called %d times, want 1", provider.findCalls)
+	}
+	if store.observed != domain.SandboxObservedProvisioning {
+		t.Fatalf("observed = %q, want %q", store.observed, domain.SandboxObservedProvisioning)
+	}
+}
+
+// A restore that re-asserts a running intent on a sandbox parked as 'terminated'
+// (repair-storm ceiling) must un-park it and re-enter provisioning.
+func TestRestoredTerminatedSandboxReprovisions(t *testing.T) {
+	t.Parallel()
+	store := &pausePathStore{}
+	provider := &restoreProvider{found: true, env: sandbox.Environment{ID: "env-new"}}
+	reconciler := New(store, fixedResolver{provider}, Options{})
+	if err := reconciler.reconcileSandbox(context.Background(), domain.Sandbox{
+		SessionID: "session-1", OrgID: "org-1", Provider: sandbox.ProviderNodeOps,
+		DesiredState:          domain.SandboxDesiredRunning,
+		ObservedState:         domain.SandboxObservedTerminated,
+		ProviderEnvironmentID: "",
+	}); err != nil {
+		t.Fatalf("reconcileSandbox: %v", err)
+	}
+	if provider.findCalls != 1 {
+		t.Fatalf("terminated+running not re-provisioned: FindBySession called %d times, want 1", provider.findCalls)
+	}
+	if store.observed != domain.SandboxObservedProvisioning {
+		t.Fatalf("observed = %q, want %q", store.observed, domain.SandboxObservedProvisioning)
+	}
+}
+
+// The terminated park is preserved for any non-running desired state: a
+// terminated sandbox is not probed or resumed while it stays parked.
+func TestTerminatedSandboxStaysParkedWhenNotRunning(t *testing.T) {
+	t.Parallel()
+	store := &pausePathStore{}
+	provider := &restoreProvider{env: sandbox.Environment{ID: "env-1"}}
+	reconciler := New(store, fixedResolver{provider}, Options{})
+	if err := reconciler.reconcileSandbox(context.Background(), domain.Sandbox{
+		SessionID: "session-1", OrgID: "org-1", Provider: sandbox.ProviderNodeOps,
+		DesiredState:          domain.SandboxDesiredPaused,
+		ObservedState:         domain.SandboxObservedTerminated,
+		ProviderEnvironmentID: "env-1",
+	}); err != nil {
+		t.Fatalf("reconcileSandbox: %v", err)
+	}
+	if provider.getCalls != 0 || provider.findCalls != 0 {
+		t.Fatalf("a parked terminated sandbox must not touch the provider (get=%d find=%d)",
+			provider.getCalls, provider.findCalls)
+	}
+	if store.observed != domain.SandboxObservedTerminated {
+		t.Fatalf("observed = %q, want %q (parked)", store.observed, domain.SandboxObservedTerminated)
+	}
+}
+
 // stopSpyProvider fakes just the two provider calls the pause path uses.
 type stopSpyProvider struct {
 	sandbox.Provider

@@ -213,6 +213,12 @@ func run(logger *slog.Logger) error {
 	}); err != nil {
 		logger.Warn("publish worker.ready failed", "error", err)
 	}
+	// rehydrateDone gates the coding agent on delete/restore rehydration: the
+	// preserved uncommitted work must be applied and the transcript written
+	// before the agent is built, so --resume finds the conversation and the
+	// workspace holds the restored files. It is closed once (checkout success or
+	// failure) so the agent never hangs.
+	rehydrateDone := make(chan struct{})
 	go func() {
 		if err := prepareWorkspace(
 			runCtx, logger, client, bootstrap, workspace, dataDir, publicURL,
@@ -220,14 +226,22 @@ func run(logger *slog.Logger) error {
 			if runCtx.Err() == nil {
 				logger.Error("background workspace startup failed", "error", err)
 			}
+			close(rehydrateDone)
 			return
 		}
+		// Restore a previously deleted session's state before the agent launches.
+		// A fresh session finds nothing captured and this returns quickly.
+		rehydrateSession(runCtx, logger, client, bootstrap, workspace, dataDir)
+		close(rehydrateDone)
 		transportSupervisor.MarkWorkspaceReady()
+		// Begin durable-restore checkpointing now that the checkout and the git
+		// credential helper are in place. Bound to runCtx: it stops on shutdown.
+		newCheckpointer(client, bootstrap, workspace, dataDir, logger).run(runCtx)
 	}()
 	go func() {
 		if err := startInteractiveAgent(
 			runCtx, logger, client, bootstrap, workspace, dataDir,
-			pullRequestSocketPath, reviewSocketPath, &transportSupervisor,
+			pullRequestSocketPath, reviewSocketPath, &transportSupervisor, rehydrateDone,
 		); err != nil && runCtx.Err() == nil {
 			logger.Error("background coding-agent startup failed", "error", err)
 		}
@@ -293,7 +307,16 @@ func startInteractiveAgent(
 	bootstrap worker.BootstrapResponse,
 	workspace, dataDir, pullRequestSocketPath, reviewSocketPath string,
 	transportSupervisor *workertransport.Supervisor,
+	rehydrateDone <-chan struct{},
 ) error {
+	// Wait until the checkout has completed and any delete/restore rehydration
+	// has run: the transcript must be on disk before the command is built, so
+	// BuildInteractive detects the restored conversation and launches --resume.
+	select {
+	case <-ctx.Done():
+		return nil
+	case <-rehydrateDone:
+	}
 	if err := verifyHarnessAvailable(bootstrap.Launch.Harness); err != nil {
 		logger.Warn("coding-agent harness unavailable", "error", err)
 		return nil
