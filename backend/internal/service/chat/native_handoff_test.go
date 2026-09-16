@@ -188,31 +188,25 @@ func TestNativeChatHandoffAtomicPublication(t *testing.T) {
 			if readErr != nil {
 				t.Fatal(readErr)
 			}
+			wantTurn, wantRequest := domain.TurnStateQueued, domain.ActivityStatusPending
 			if scenario == "success" {
-				for _, turn := range rows.Turns {
-					if turn.ID == "old-turn" && turn.State != domain.TurnStateFailed {
-						t.Fatalf("predecessor work can dispatch into the new context: %s", turn.State)
-					}
+				wantTurn, wantRequest = domain.TurnStateFailed, domain.ActivityStatusFailed
+			}
+			for _, turn := range rows.Turns {
+				if turn.ID == "old-turn" && turn.State != wantTurn {
+					t.Fatalf("predecessor turn state = %s, want %s", turn.State, wantTurn)
 				}
-				for _, activity := range rows.Activities {
-					if activity.RequestID != "" && activity.Status != domain.ActivityStatusFailed {
-						t.Fatalf("dead predecessor request remains actionable: %+v", activity)
-					}
+			}
+			for _, activity := range rows.Activities {
+				if activity.RequestID != "" && activity.Status != wantRequest {
+					t.Fatalf("predecessor request status = %s, want %s: %+v", activity.Status, wantRequest, activity)
 				}
+			}
+			if scenario == "success" {
 				if rows.Conversation.SessionID != f.target.ID || rows.Conversation.ActiveBranchID != handoff.BoundaryID || len(rows.Messages) != 3 {
 					t.Fatalf("incomplete publication: %+v", rows)
 				}
 			} else {
-				for _, turn := range rows.Turns {
-					if turn.ID == "old-turn" && turn.State != domain.TurnStateQueued {
-						t.Fatalf("failed handoff settled predecessor work: %s", turn.State)
-					}
-				}
-				for _, activity := range rows.Activities {
-					if activity.RequestID != "" && activity.Status != domain.ActivityStatusPending {
-						t.Fatalf("failed handoff settled predecessor request: %+v", activity)
-					}
-				}
 				if rows.Conversation.ActiveBranchID != f.root.ID || len(rows.Messages) != 1 {
 					t.Fatalf("failed handoff partially published history: head=%s messages=%d", rows.Conversation.ActiveBranchID, len(rows.Messages))
 				}

@@ -111,6 +111,10 @@ func TestCheckpointRetiresOnlySupersededHookFacts(t *testing.T) {
 		want bool
 	}{
 		{name: "known older prompt and answer", want: true},
+		{name: "current prompt with superseded assistant", want: true, edit: func(p *nativeHistoryCheckpoint, turns []domain.ConversationTurn, _ []domain.ConversationMessage) {
+			p.latestUserPrompt = "New prompt"
+			p.latestUserPromptAt = turns[1].RequestedAt
+		}},
 		{name: "unknown terminal answer", edit: func(p *nativeHistoryCheckpoint, _ []domain.ConversationTurn, _ []domain.ConversationMessage) {
 			p.latestAssistantUpdate = "New work AO has not imported"
 		}},
