@@ -48,11 +48,12 @@ describe("session usage summaries", () => {
 		expect(getMock).toHaveBeenCalledOnce();
 	});
 
-	it("does not block the board when usage preloading fails", async () => {
+	it("does not retry or block the board when usage preloading fails", async () => {
 		getMock.mockRejectedValue(new Error("usage unavailable"));
 		const queryClient = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
 
 		await expect(preloadSessionUsageSummaries(queryClient, "reverb")).resolves.toBeUndefined();
+		expect(getMock).toHaveBeenCalledOnce();
 	});
 
 	// The detail query lives in useSessionUsage.ts and must stay beneath this

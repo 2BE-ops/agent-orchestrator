@@ -34,7 +34,7 @@ export async function preloadSessionUsageSummaries(
 	projectId?: string,
 ): Promise<void> {
 	try {
-		await queryClient.ensureQueryData(sessionUsageQueryOptions(projectId));
+		await queryClient.ensureQueryData({ ...sessionUsageQueryOptions(projectId), retry: false });
 	} catch {
 		// The mounted query retains its existing retry/error behavior.
 	}
