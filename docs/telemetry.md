@@ -37,7 +37,7 @@ AO sends structured events in a few broad categories:
   else changes. When telemetry is disabled, the request is never made
 - The authenticated GitHub account login, when the active credentials belong to
   a user account. AO observes it at daemon startup and hourly while remote
-  telemetry is enabled. This links an installation to a GitHub account so we can
+  telemetry is enabled and you have explicitly granted identity consent. This links an installation to a GitHub account so we can
   attribute usage and agent spawns and reach out for feedback. It is not anonymous.
   Bot accounts and failed lookups are skipped; credentials and email addresses
   are never included
@@ -225,7 +225,10 @@ with this documentation in the
 GitHub's authenticated `/user` endpoint using the daemon's active credentials.
 It uses the same `distinct_id` as daemon and desktop usage events. The exporter
 also adds the usual AO version properties. No `identify()` call or person
-profile is created. The event is also recorded in local telemetry storage.
+profile is created. Keeping `$process_person_profile: false` is deliberate:
+attribution stays a time-stamped event association, not a persistent person
+profile or an automatic merge of installations. The event is also recorded in
+local telemetry storage.
 
 Join observations to `ao.session.spawned`, `ao.v2.app.active`, or
 `ao.v2.renderer.loaded` by `distinct_id`. Keep the observation timestamp: the
@@ -236,8 +239,20 @@ hourly refresh detects successful sign-ins and account switches without a
 daemon restart. A token supplied through the environment takes precedence over
 GitHub CLI credentials, following the daemon's existing authentication rules.
 
-Collection runs only when remote PostHog telemetry is configured and events are
-enabled. Denying `ao.github.account_observed` (or a matching prefix) also prevents
+Collection requires an affirmative identity opt-in in the desktop renewal dialog
+or the explicitly disclosed telemetry setting. Schema-v1/v2 policies and new
+packaged defaults do not grant identity consent. Schema v3 persists
+`consent_identity_enabled`; declining or disabling clears it. The separate
+identity module gate does not change the agent-switch production gate, and
+`consent_generation` remains a fresh UUID per policy write.
+
+Before both the authenticated lookup and event capture, the daemon reads the
+owner-only durable policy. Missing, invalid, revoked, or changed consent prevents
+capture; without a current identity grant it never performs the lookup. A grant
+is picked up on the next hourly check without restarting. On Windows, the
+existing durable-policy replacement limitation keeps identity consent disabled.
+Remote PostHog must
+also be configured and events enabled. Denying `ao.github.account_observed` (or a matching prefix) also prevents
 the lookup. Each lookup has a five-second timeout and does not block startup.
 Historical installations cannot be assigned a login until an observation is
 received; older activity must not automatically be attributed to a newly

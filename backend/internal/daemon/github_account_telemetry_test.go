@@ -34,7 +34,7 @@ func TestGitHubAccountTelemetryGatesLookup(t *testing.T) {
 			stop := startGitHubAccountTelemetry(t.Context(), cfg, nil, func(context.Context) (ports.SCMIdentity, error) {
 				t.Error("disabled telemetry must not resolve an account")
 				return ports.SCMIdentity{}, nil
-			})
+			}, accountAuthority{})
 			stop()
 		})
 	}
@@ -68,7 +68,7 @@ func TestGitHubAccountTelemetryRefreshesWithoutStaleIdentity(t *testing.T) {
 			observation := observations[i]
 			i++
 			return observation.identity, observation.err
-		}, ticks)
+		}, accountAuthority{}, ticks)
 	}()
 	for i := 1; i < len(observations); i++ {
 		select {
@@ -102,7 +102,7 @@ func TestGitHubAccountTelemetryStopsInFlightLookup(t *testing.T) {
 		close(started)
 		<-ctx.Done()
 		return ports.SCMIdentity{Login: "octocat", Human: true}, nil
-	})
+	}, accountAuthority{})
 	select {
 	case <-started:
 	case <-time.After(2 * time.Second):
@@ -111,5 +111,130 @@ func TestGitHubAccountTelemetryStopsInFlightLookup(t *testing.T) {
 	stop()
 	if len(sink.events) != 0 {
 		t.Fatal("cancelled lookup emitted an identity")
+	}
+}
+
+// The happy-path fixture stands for a validated durable v3 affirmative grant.
+type accountAuthority struct{}
+
+func (accountAuthority) ReadAgentSwitchFailureAuthority(context.Context) (ports.AgentSwitchFailureAuthoritySnapshot, error) {
+	return ports.AgentSwitchFailureAuthoritySnapshot{Present: true, EventsEnabled: true, ConsentIdentityEnabled: true, ConsentGeneration: "grant"}, nil
+}
+
+type identityAuthorityFunc func(context.Context) (ports.AgentSwitchFailureAuthoritySnapshot, error)
+
+func (f identityAuthorityFunc) ReadAgentSwitchFailureAuthority(ctx context.Context) (ports.AgentSwitchFailureAuthoritySnapshot, error) {
+	return f(ctx)
+}
+
+func TestIdentityRequiresCurrentConsentBeforeLookupAndCapture(t *testing.T) {
+	grant, _ := (accountAuthority{}).ReadAgentSwitchFailureAuthority(t.Context())
+	for _, scenario := range []string{"missing", "legacy", "revoked", "invalid", "revoked during lookup", "changed generation", "invalid after lookup", "granted"} {
+		t.Run(scenario, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			ticks := make(chan time.Time)
+			sink := accountTelemetrySink{events: make(chan ports.TelemetryEvent, 1)}
+			calls, reads := 0, 0
+			reader := identityAuthorityFunc(func(context.Context) (ports.AgentSwitchFailureAuthoritySnapshot, error) {
+				reads++
+				if reads > 2 {
+					cancel()
+					return grant, context.Canceled
+				}
+				value := grant
+				switch scenario {
+				case "missing":
+					value.Present = false
+				case "legacy":
+					value.ConsentIdentityEnabled = false
+				case "revoked":
+					value.EventsEnabled = false
+				case "invalid":
+					return value, errors.New("invalid authority")
+				case "revoked during lookup":
+					if reads > 1 {
+						value.ConsentIdentityEnabled = false
+					}
+				case "changed generation":
+					if reads > 1 {
+						value.ConsentGeneration = "different"
+					}
+				case "invalid after lookup":
+					if reads > 1 {
+						return value, errors.New("invalid authority")
+					}
+				}
+				return value, nil
+			})
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				runGitHubAccountTelemetry(ctx, sink, func(context.Context) (ports.SCMIdentity, error) {
+					calls++
+					return ports.SCMIdentity{Login: "octocat", Human: true}, nil
+				}, reader, ticks)
+			}()
+			// An unbuffered tick cannot be received until this observation completed.
+			// Cancel in the authority reader on the next iteration to avoid another lookup.
+			select {
+			case ticks <- time.Now():
+				cancel()
+			case <-time.After(2 * time.Second):
+				t.Fatal("observation did not complete")
+			}
+			<-done
+			if scenario == "missing" || scenario == "legacy" || scenario == "revoked" || scenario == "invalid" {
+				if calls != 0 {
+					t.Fatalf("lookup occurred without consent: %d", calls)
+				}
+			}
+			want := 0
+			if scenario == "granted" {
+				want = 1
+			}
+			if len(sink.events) != want {
+				t.Fatalf("captured %d events, want %d", len(sink.events), want)
+			}
+		})
+	}
+}
+
+func TestIdentityConsentRenewedWithoutRestart(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ticks := make(chan time.Time)
+	checked := make(chan struct{}, 4)
+	grant := make(chan struct{})
+	authority := identityAuthorityFunc(func(context.Context) (ports.AgentSwitchFailureAuthoritySnapshot, error) {
+		snapshot, err := (accountAuthority{}).ReadAgentSwitchFailureAuthority(ctx)
+		select {
+		case <-grant:
+		default:
+			snapshot.ConsentIdentityEnabled = false
+		}
+		checked <- struct{}{}
+		return snapshot, err
+	})
+	sink := &accountTelemetrySink{events: make(chan ports.TelemetryEvent, 2)}
+	calls := 0
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runGitHubAccountTelemetry(ctx, sink, func(context.Context) (ports.SCMIdentity, error) {
+			calls++
+			return ports.SCMIdentity{Login: "octocat", Human: true}, nil
+		}, authority, ticks)
+	}()
+	<-checked // Startup does not grant consent.
+	close(grant)
+	ticks <- time.Now()
+	<-checked     // Before lookup.
+	<-checked     // Before capture.
+	<-sink.events // Capture completed.
+	cancel()
+	<-done
+	if calls != 1 {
+		t.Fatal("renewed consent was not picked up without restart")
 	}
 }

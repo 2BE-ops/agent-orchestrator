@@ -313,7 +313,10 @@ export default function PrivacyPage() {
               </Bullet>
               <Bullet>
                 The authenticated GitHub user account login, observed at daemon
-                startup and hourly while remote telemetry is enabled. We associate
+                startup and hourly only after you explicitly opt in to identity
+                collection and while remote telemetry is enabled. Existing anonymous
+                telemetry consent does not authorize this collection; AO asks again.
+                You can decline or turn it off in Settings. We associate
                 it with the installation identifier to understand usage and agent
                 spawns and reach out for feedback. Bot accounts and failed lookups
                 are skipped. No credentials or email addresses are included.

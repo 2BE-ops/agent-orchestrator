@@ -7,8 +7,12 @@ import (
 	"time"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/config"
+	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 )
+
+// Independent of the agent-switch production gate; requires an explicit v3 grant.
+const githubIdentityTelemetryEnabled = domain.GitHubIdentityTelemetryEnabled
 
 const githubAccountEvent = "ao.github.account_observed"
 
@@ -23,6 +27,7 @@ func startGitHubAccountTelemetry(
 	cfg config.TelemetryConfig,
 	sink ports.EventSink,
 	resolve func(context.Context) (ports.SCMIdentity, error),
+	authority ports.AgentSwitchFailureAuthorityReader,
 ) func() {
 	if !cfg.Events || cfg.Remote != config.TelemetryRemotePostHog || strings.TrimSpace(cfg.PostHogKey) == "" || strings.TrimSpace(cfg.PostHogHost) == "" {
 		return func() {}
@@ -39,7 +44,7 @@ func startGitHubAccountTelemetry(
 		defer close(done)
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()
-		runGitHubAccountTelemetry(ctx, sink, resolve, ticker.C)
+		runGitHubAccountTelemetry(ctx, sink, resolve, authority, ticker.C)
 	}()
 	return func() {
 		cancel()
@@ -51,16 +56,27 @@ func runGitHubAccountTelemetry(
 	ctx context.Context,
 	sink ports.EventSink,
 	resolve func(context.Context) (ports.SCMIdentity, error),
+	authority ports.AgentSwitchFailureAuthorityReader,
 	ticks <-chan time.Time,
 ) {
 	for ctx.Err() == nil {
+		before, consentErr := authority.ReadAgentSwitchFailureAuthority(ctx)
+		if !githubIdentityTelemetryEnabled || consentErr != nil || !before.Present || !before.EventsEnabled || !before.ConsentIdentityEnabled || before.ConsentGeneration == "" {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticks:
+				continue
+			}
+		}
 		lookupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		identity, err := resolve(lookupCtx)
 		cancel()
+		after, consentErr := authority.ReadAgentSwitchFailureAuthority(ctx)
 		login := strings.TrimSpace(identity.Login)
 		// Never fall back to a repository owner, git user.name, or a stale
 		// successful lookup. Failures and bot credentials are not user identity.
-		if err == nil && ctx.Err() == nil && identity.Human && githubLoginPattern.MatchString(login) {
+		if err == nil && consentErr == nil && after == before && ctx.Err() == nil && identity.Human && githubLoginPattern.MatchString(login) {
 			sink.Emit(ctx, ports.TelemetryEvent{
 				Name:       githubAccountEvent,
 				Source:     "daemon",

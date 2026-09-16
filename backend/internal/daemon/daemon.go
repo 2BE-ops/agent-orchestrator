@@ -280,7 +280,11 @@ func Run() error {
 	// graceful shutdown inside Server.Run and stops the background goroutines.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	stopGitHubAccountTelemetry := startGitHubAccountTelemetry(ctx, telemetryCfg.Telemetry, telemetrySink, func(ctx context.Context) (ports.SCMIdentity, error) {
+	// Identity collection can become enabled after a durable renewal without a
+	// restart. Its dedicated sink is never used before both authority checks.
+	identityTelemetrySink := newTelemetrySink(cfg, store, log)
+	defer func() { _ = identityTelemetrySink.Close(context.Background()) }()
+	stopGitHubAccountTelemetry := startGitHubAccountTelemetry(ctx, cfg.Telemetry, identityTelemetrySink, func(ctx context.Context) (ports.SCMIdentity, error) {
 		// A fresh provider also refreshes its token and identity caches, so an
 		// account switch is reflected at the next observation.
 		provider, err := newGitHubSCMProvider(log)
@@ -288,7 +292,7 @@ func Run() error {
 			return ports.SCMIdentity{}, err
 		}
 		return provider.AuthenticatedIdentity(ctx)
-	})
+	}, policyauthority.New(filepath.Join(cfg.DataDir, agentswitchobs.PolicyFileName)))
 	defer stopGitHubAccountTelemetry()
 	policyCoordinator.StartWatcher(ctx)
 	defer func() { _ = policyCoordinator.CloseAndDrain(context.Background()) }()
