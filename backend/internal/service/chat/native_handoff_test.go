@@ -30,7 +30,7 @@ func TestNativeChatHandoffAtomicPublication(t *testing.T) {
 		"wrong_scope": "incomplete native Chat handoff reservation", "stale_head_before_io": "handoff conversation changed",
 		"stale_sequence_before_io":     "handoff conversation changed",
 		"stale_conversation_before_io": "handoff conversation changed",
-		"live_reconnect":               "independent native handoff requires a stable history replay",
+		"live_reconnect":               "native-history handoff cannot adopt an existing live provider",
 	} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx := context.Background()
@@ -159,7 +159,7 @@ func TestNativeChatHandoffAtomicPublication(t *testing.T) {
 			case "missing_callback":
 				cfg.ControllerReady = nil
 			case "skip_history":
-				cfg.SkipNativeHistoryImport = true
+				cfg.HistoryMode = ports.ChatHistoryDeferred
 			case "wrong_scope":
 				cfg.ProviderScopeID = "unreserved"
 			case "stale_head_before_io":

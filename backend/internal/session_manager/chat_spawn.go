@@ -57,70 +57,14 @@ type ChatLauncher interface {
 
 // ChatStart is what the launcher needs. It mirrors the terminal path's
 // LaunchConfig in spirit: everything resolved, nothing left to look up.
-type ChatStart struct {
-	SessionID     domain.SessionID
-	ProjectID     domain.ProjectID
-	Kind          domain.SessionKind
-	Harness       domain.AgentHarness
-	DataDir       string
-	WorkspacePath string
-	// Env carries the HookPATH-pinned PATH, which is how the agent's own shell
-	// commands find `ao`. An orchestrator delegates by running `ao spawn`, so
-	// without this a chat orchestrator could talk but not work.
-	Env                     map[string]string
-	Model                   string
-	Permissions             ports.PermissionMode
-	SystemPrompt            string
-	AdditionalDirectories   []string
-	ExpectedControllerOwner domain.SessionControllerOwner
-	// PrepareControllerEnv rotates launch-only credentials after Chat Service has
-	// selected this launch under its per-session controller gate.
-	PrepareControllerEnv func(context.Context, domain.SessionControllerOwner) (map[string]string, error)
-	// ProviderConversationID resumes a stored conversation instead of opening a
-	// new one. Empty means start fresh.
-	ProviderConversationID string
-	// ProviderScopeID reserves a provider boundary that is not active yet. Agent
-	// switching supplies its durable boundary before the target provider starts;
-	// ordinary starts leave it empty for Chat Service to derive or reserve.
-	ProviderScopeID string
-	// ProviderHandoff authorizes a separate history boundary, not an ordinary
-	// resume with its identity check disabled.
-	ProviderHandoff *domain.ChatProviderHandoff
-	// ControllerGeneration lets a durable coordinator reserve the generation
-	// before launch. Empty keeps the ordinary spawn/restore behavior where Chat
-	// Service allocates it.
-	ControllerGeneration string
-	// RequireNativeHistory is set only for a TUI -> Chat handoff. The target must
-	// replay the provider transcript before it can become the committed UI.
-	RequireNativeHistory bool
-	// SkipNativeHistoryImport is set by agent switching: the target's provider
-	// boundary is committed inside ControllerReady, so old provider events must
-	// not be projected into the source branch before that atomic write.
-	SkipNativeHistoryImport bool
-	// ControllerReady commits the durable controller facts before the provider
-	// event stream is consumed. This prevents an immediate exit from racing a
-	// later MarkSpawned write back to idle.
-	ControllerReady func(ChatStarted) (ChatControllerCommit, error)
-}
+type ChatStart = ports.ChatControllerStart
 
 // ChatStarted is the durable result of a launch.
-type ChatStarted struct {
-	ProviderConversationID string
-	ControllerGeneration   string
-	Conversation           domain.ConversationRecord
-	ProviderBoundary       *domain.ConversationBranch
-	// CommitProviderHistory projects a stable native replay inside the same
-	// lifecycle transaction that publishes ProviderBoundary. It is nil for
-	// ordinary resumes and paths that do not import native history.
-	CommitProviderHistory func(context.Context) error
-}
+type ChatStarted = ports.ChatControllerStarted
 
 // ChatControllerCommit carries the post-commit conversation state back to Chat
 // Service without making it read again after durable ownership has changed.
-type ChatControllerCommit struct {
-	Conversation    domain.ConversationRecord
-	ControllerOwner domain.SessionControllerOwner
-}
+type ChatControllerCommit = ports.ChatControllerCommit
 
 // chatProviderOwnershipStore supplies the durable handoff and history
 // facts. Embedders without these reads retain strict ordinary-resume behavior.
@@ -161,10 +105,10 @@ func (m *Manager) launchChatController(ctx context.Context, in chatSpawn) (domai
 		return domain.SessionRecord{}, wrapSpawnStage(id, ErrChatController, err)
 	}
 	defer releaseCodexAdmission()
-	agentConfig := applySpawnAgentConfig(
-		effectiveAgentConfig(in.cfg.Kind, in.project.Config),
-		in.cfg.AgentConfig,
-	)
+	agentConfig := in.cfg.AgentConfig
+	if !in.cfg.AgentConfigResolved {
+		agentConfig = applySpawnAgentConfig(effectiveAgentConfig(in.cfg.Kind, in.project.Config), in.cfg.AgentConfig)
+	}
 
 	var diffBaseSHA, diffBaseRef string
 	if in.projectKind == domain.ProjectKindSingleRepo {
@@ -191,6 +135,7 @@ func (m *Manager) launchChatController(ctx context.Context, in chatSpawn) (domai
 		WorkspacePath:           in.workspace.Path,
 		Env:                     env,
 		Model:                   agentConfig.Model,
+		Effort:                  agentConfig.Effort,
 		Permissions:             agentConfig.Permissions,
 		SystemPrompt:            in.systemPrompt,
 		AdditionalDirectories:   workspaceProjectDirectories(in.workspace.Path, in.workspaceProject),
@@ -227,7 +172,7 @@ func (m *Manager) launchChatController(ctx context.Context, in chatSpawn) (domai
 			}
 			committedConversation, commitErr := m.markChatControllerSpawned(
 				ctx, id, metadata, started.Conversation, started.ProviderBoundary,
-				started.CommitProviderHistory, nil,
+				started.CommitProviderHistory, nil, started.LiveReconnect,
 			)
 			completionErr = commitErr
 			controllerCommitted = completionErr == nil
@@ -358,6 +303,7 @@ func (m *Manager) resumeChatController(
 	ws ports.WorkspaceInfo,
 	requireNativeHistory bool,
 	controllerGeneration string,
+	historyPolicy domain.SessionInterfaceTransitionHistoryPolicy,
 ) (RestoreResult, error) {
 	if m.chat == nil {
 		return RestoreResult{}, fmt.Errorf("%s %s: %w: chat mode is not available in this build",
@@ -380,7 +326,7 @@ func (m *Manager) resumeChatController(
 		return RestoreResult{}, fmt.Errorf("%s %s: switched continuation: %w", operation, rec.ID, err)
 	}
 
-	agentConfig := effectiveAgentConfig(rec.Kind, project.Config)
+	agentConfig := restoredAgentConfig(rec, project.Config)
 	if rec.Metadata.Permissions != "" {
 		agentConfig.Permissions = rec.Metadata.Permissions
 	}
@@ -392,7 +338,16 @@ func (m *Manager) resumeChatController(
 	if agent, ok := m.agents.Agent(rec.Harness); ok {
 		m.augmentAgentRuntimeEnv(agent, env)
 	}
-	providerHandoff, err := m.prepareChatProviderHandoff(ctx, rec, requireNativeHistory)
+	historyMode := ports.ChatHistoryImport
+	if requireNativeHistory {
+		historyMode = ports.ChatHistoryRequired
+	}
+	var providerHandoff *domain.ChatProviderHandoff
+	if requireNativeHistory {
+		providerHandoff, err = m.prepareLiveChatProviderHandoff(ctx, rec)
+	} else {
+		providerHandoff, err = m.prepareRecoveredChatProviderHandoff(ctx, rec)
+	}
 	if err != nil {
 		return RestoreResult{}, fmt.Errorf("%s %s: recover provider ownership: %w", operation, rec.ID, err)
 	}
@@ -406,6 +361,7 @@ func (m *Manager) resumeChatController(
 		WorkspacePath:           ws.Path,
 		Env:                     env,
 		Model:                   agentConfig.Model,
+		Effort:                  agentConfig.Effort,
 		Permissions:             agentConfig.Permissions,
 		SystemPrompt:            systemPrompt,
 		AdditionalDirectories:   additionalDirectories,
@@ -430,7 +386,8 @@ func (m *Manager) resumeChatController(
 		// the saga's reserved generation until delivery is durably settled so a
 		// second restart can still prove exact target ownership.
 		ControllerGeneration: controllerGeneration,
-		RequireNativeHistory: requireNativeHistory,
+		HistoryMode:          historyMode,
+		HistoryPolicy:        historyPolicy,
 		ControllerReady: func(started ChatStarted) (ChatControllerCommit, error) {
 			metadata := rec.Metadata
 			metadata.WorkspacePath = ws.Path
@@ -445,7 +402,7 @@ func (m *Manager) resumeChatController(
 
 			committedConversation, commitErr := m.markChatControllerSpawned(
 				ctx, rec.ID, metadata, started.Conversation, started.ProviderBoundary,
-				started.CommitProviderHistory, providerHandoff,
+				started.CommitProviderHistory, providerHandoff, started.LiveReconnect,
 			)
 			if commitErr == nil {
 				// Chat retains this callback for controller rebuilds. Consume the
@@ -486,7 +443,14 @@ func (m *Manager) markChatControllerSpawned(
 	providerBoundary *domain.ConversationBranch,
 	commitProviderHistory func(context.Context) error,
 	handoff *domain.ChatProviderHandoff,
+	liveReconnect bool,
 ) (domain.ConversationRecord, error) {
+	if liveReconnect {
+		if providerBoundary != nil {
+			return domain.ConversationRecord{}, errors.New("live Chat reconnect cannot replace the provider boundary")
+		}
+		return conversation, m.lcm.MarkChatReconnected(ctx, id, metadata)
+	}
 	if handoff != nil && (providerBoundary == nil || commitProviderHistory == nil) {
 		return domain.ConversationRecord{}, errors.New("native Chat handoff requires atomic history publication")
 	}

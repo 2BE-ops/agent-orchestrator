@@ -55,7 +55,7 @@ func TestNativeReplayDoesNotSupersedeNewHooksWithRepeatedText(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := st.ClaimChatControllerGeneration(ctx, testSession, "old-generation", now); err != nil {
+			if err := st.ClaimChatControllerGeneration(ctx, testSession, "old-generation"); err != nil {
 				t.Fatal(err)
 			}
 			var events []ports.ChatEvent
@@ -97,13 +97,21 @@ func TestNativeReplayDoesNotSupersedeNewHooksWithRepeatedText(t *testing.T) {
 					ports.ChatEvent{Kind: ports.ChatEventTurnCompleted, ProviderEventID: id + "-completed", ProviderTurnID: id, TurnState: state})
 			}
 			lcm := lifecycle.New(st, nil)
-			signal := ports.ActivitySignal{Event: "user-prompt-submit", ControllerGeneration: "old-generation", Timestamp: now.Add(time.Second), LatestUserPrompt: "continue", LatestAssistantUpdate: "yes"}
-			if err := lcm.ApplyActivitySignal(ctx, testSession, signal); err != nil {
+			rec, _, err := st.GetSession(ctx, testSession)
+			if err != nil {
 				t.Fatal(err)
 			}
+			rec.Metadata.LatestUserPrompt, rec.Metadata.LatestAssistantUpdate = "continue", "yes"
+			rec.Metadata.LatestUserPromptAt, rec.Metadata.LatestAssistantUpdateAt = now.Add(time.Second), now.Add(time.Second)
+			if err := st.UpdateSession(ctx, rec); err != nil {
+				t.Fatal(err)
+			}
+			var signal ports.ActivitySignal
 			if tc.newHook.Event != "" {
 				signal = tc.newHook
 				signal.ControllerGeneration = "old-generation"
+				signal.AgentSessionID = "thread-1"
+				signal.ProviderTurnID = "terminal"
 				signal.Timestamp = now.Add(3 * time.Minute)
 				if err := lcm.ApplyActivitySignal(ctx, testSession, signal); err != nil {
 					t.Fatal(err)
@@ -126,6 +134,7 @@ func TestNativeReplayDoesNotSupersedeNewHooksWithRepeatedText(t *testing.T) {
 			}
 			if tc.reassignReplayIDs {
 				for i := range events {
+					events[i].NativeTurnID = events[i].ProviderTurnID
 					events[i].ProviderTurnID = "reloaded-" + events[i].ProviderTurnID
 					events[i].ProviderItemID = "reloaded-" + events[i].ProviderItemID
 				}
@@ -133,7 +142,7 @@ func TestNativeReplayDoesNotSupersedeNewHooksWithRepeatedText(t *testing.T) {
 			provider := &nativeHistoryConversation{fakeConversation: newFakeConversation(), events: events}
 			svc := chatsvc.New(chatsvc.Options{Store: st, Sessions: st, Reader: snapshotReader(st), Drivers: fakeRegistry{driver: fakeDriver{conv: provider}}, NewID: uuid.NewString})
 			t.Cleanup(func() { svc.StopAll(ctx) })
-			_, err = svc.Start(ctx, chatsvc.StartConfig{SessionID: testSession, ProjectID: testProject, Harness: domain.HarnessCodex, ProviderConversationID: "thread-1", RequireNativeHistory: true})
+			_, err = svc.Start(ctx, chatsvc.StartConfig{SessionID: testSession, ProjectID: testProject, Harness: domain.HarnessCodex, ProviderConversationID: "thread-1", HistoryMode: ports.ChatHistoryRequired})
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("Start error = %v, want %v", err, tc.wantErr)
 			}

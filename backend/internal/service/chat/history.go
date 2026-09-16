@@ -321,9 +321,10 @@ func (s *Service) EditMessage(
 					provider, err = driver.Resume(operationCtx, ports.ChatResumeConfig{
 						SessionID: cfg.SessionID, ProviderConversationID: providerConversationID,
 						DataDir: cfg.DataDir, WorkspacePath: cfg.WorkspacePath, Env: launchEnv,
-						Model: cfg.Model, Permissions: cfg.Permissions, SystemPrompt: cfg.SystemPrompt,
+						Model: cfg.Model, Effort: cfg.Effort,
+						Permissions: cfg.Permissions, SystemPrompt: cfg.SystemPrompt,
 						ProviderScopeID:       sourceBranch.ProviderScopeID,
-						LegacyProviderIDs:     !sourceBranch.ProviderIDsScoped,
+						ProviderIDsScoped:     sourceBranch.ProviderIDsScoped,
 						AdditionalDirectories: cfg.AdditionalDirectories, MCPServers: cfg.MCPServers,
 					})
 				}
@@ -359,7 +360,8 @@ func (s *Service) EditMessage(
 			} else {
 				provider, err = driver.Start(operationCtx, ports.ChatStartConfig{
 					SessionID: cfg.SessionID, DataDir: cfg.DataDir, WorkspacePath: cfg.WorkspacePath,
-					Env: launchEnv, Model: cfg.Model, Permissions: cfg.Permissions,
+					Env: launchEnv, Model: cfg.Model, Effort: cfg.Effort,
+					Permissions:  cfg.Permissions,
 					SystemPrompt: cfg.SystemPrompt, AdditionalDirectories: cfg.AdditionalDirectories,
 					MCPServers: cfg.MCPServers, ProviderScopeID: providerScopeID,
 				})
@@ -900,9 +902,10 @@ func (s *Service) activateBranchLocked(ctx context.Context, id domain.SessionID,
 	provider, err := driver.Resume(operationCtx, ports.ChatResumeConfig{
 		SessionID: cfg.SessionID, ProviderConversationID: branch.ProviderConversationID,
 		DataDir: cfg.DataDir, WorkspacePath: cfg.WorkspacePath, Env: launchEnv,
-		Model: cfg.Model, Permissions: cfg.Permissions, SystemPrompt: cfg.SystemPrompt,
+		Model: cfg.Model, Effort: cfg.Effort,
+		Permissions: cfg.Permissions, SystemPrompt: cfg.SystemPrompt,
 		ProviderScopeID:       branch.ProviderScopeID,
-		LegacyProviderIDs:     !branch.ProviderIDsScoped,
+		ProviderIDsScoped:     branch.ProviderIDsScoped,
 		AdditionalDirectories: cfg.AdditionalDirectories, MCPServers: cfg.MCPServers,
 	})
 	if err != nil {
@@ -921,7 +924,7 @@ func (s *Service) activateBranchLocked(ctx context.Context, id domain.SessionID,
 	replacement := newController(id, conversation, generation, source.harness, provider, s.store, s.activity, s.log, s.newID, s.now, s.onAccountChanged, s.onCodexCapacityChanged)
 	if err := s.store.ActivateConversationBranch(operationCtx, id, conversation.ID, branch.ID,
 		branch.ProviderConversationID, generation, s.now()); err != nil {
-		cleanupUnpublishedConversation(provider, true)
+		_ = cleanupUnpublishedConversation(provider, true)
 		activateErr := err
 		if restoreErr := s.restoreClosedSourceController(
 			operationCtx, id, source, activeBranch, cfg, driver); restoreErr != nil {
@@ -999,9 +1002,10 @@ func (s *Service) restoreClosedSourceController(
 	provider, err := driver.Resume(recoveryCtx, ports.ChatResumeConfig{
 		SessionID: cfg.SessionID, ProviderConversationID: providerConversationID,
 		DataDir: cfg.DataDir, WorkspacePath: cfg.WorkspacePath, Env: launchEnv,
-		Model: cfg.Model, Permissions: cfg.Permissions, SystemPrompt: cfg.SystemPrompt,
+		Model: cfg.Model, Effort: cfg.Effort,
+		Permissions: cfg.Permissions, SystemPrompt: cfg.SystemPrompt,
 		ProviderScopeID:       branch.ProviderScopeID,
-		LegacyProviderIDs:     !branch.ProviderIDsScoped,
+		ProviderIDsScoped:     branch.ProviderIDsScoped,
 		AdditionalDirectories: cfg.AdditionalDirectories, MCPServers: cfg.MCPServers,
 	})
 	if err != nil {

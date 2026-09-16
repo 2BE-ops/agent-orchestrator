@@ -1765,7 +1765,7 @@ func TestEditMessageForksBeforeMiddlePromptAndReusesStoredContent(t *testing.T) 
 		t.Fatalf("resume config = %#v", resumes)
 	}
 	branch, err := h.st.ConversationBranch(ctx, h.ctrl.ConversationID(), result.ActiveBranchID)
-	if err != nil || branch.ProviderScopeID == "" || branch.ProviderScopeID != resumes[0].ProviderScopeID || !branch.ProviderIDsScoped || resumes[0].LegacyProviderIDs {
+	if err != nil || branch.ProviderScopeID == "" || branch.ProviderScopeID != resumes[0].ProviderScopeID || !branch.ProviderIDsScoped || !resumes[0].ProviderIDsScoped {
 		t.Fatalf("native fork lost its durable replay namespace: branch=%+v err=%v", branch, err)
 	}
 }

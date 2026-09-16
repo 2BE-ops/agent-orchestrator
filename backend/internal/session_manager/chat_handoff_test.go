@@ -43,7 +43,11 @@ func TestChatProviderHandoffRequiresExactCoordinatorProof(t *testing.T) {
 			}
 			st.transitions[transition.ID] = transition
 			m := New(Deps{Store: st})
-			plan, err := m.prepareChatProviderHandoff(context.Background(), rec, live)
+			prepare := m.prepareLiveChatProviderHandoff
+			if !live {
+				prepare = m.prepareRecoveredChatProviderHandoff
+			}
+			plan, err := prepare(context.Background(), rec)
 			if scenario == "unowned_history" {
 				if err == nil {
 					t.Fatal("unknown history ownership must refuse adoption")

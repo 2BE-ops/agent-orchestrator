@@ -63,8 +63,7 @@ func (l integrationChatLauncher) StartChat(ctx context.Context, cfg ChatStart) (
 		ProviderScopeID:         cfg.ProviderScopeID,
 		ProviderHandoff:         cfg.ProviderHandoff,
 		ControllerGeneration:    cfg.ControllerGeneration,
-		RequireNativeHistory:    cfg.RequireNativeHistory,
-		SkipNativeHistoryImport: cfg.SkipNativeHistoryImport,
+		HistoryMode:             cfg.HistoryMode,
 		ControllerReady: func(result chatsvc.StartResult) (chatsvc.ControllerCommit, error) {
 			if cfg.ControllerReady == nil {
 				return chatsvc.ControllerCommit{}, nil
@@ -409,9 +408,9 @@ func newChatSwitchIntegrationFixture(t *testing.T, stale bool) *chatSwitchIntegr
 	if _, err := service.Start(ctx, chatsvc.StartConfig{
 		SessionID: session.ID, ProjectID: session.ProjectID, Kind: session.Kind,
 		Harness: domain.HarnessClaudeCode, DataDir: dataDir, WorkspacePath: workspacePath,
-		ProviderConversationID:  chatSwitchIntegrationSourceProvider,
-		ControllerGeneration:    chatSwitchIntegrationSourceGeneration,
-		SkipNativeHistoryImport: true,
+		ProviderConversationID: chatSwitchIntegrationSourceProvider,
+		ControllerGeneration:   chatSwitchIntegrationSourceGeneration,
+		HistoryMode:            ports.ChatHistoryDeferred,
 	}); err != nil {
 		t.Fatalf("start real source Chat controller: %v", err)
 	}

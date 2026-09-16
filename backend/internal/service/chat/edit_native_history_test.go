@@ -82,11 +82,11 @@ func TestEditedFirstMessageResumesNativeHistoryAfterTerminalHooks(t *testing.T) 
 					t.Fatal(err)
 				}
 				if tc.terminalHook {
-					if err := lifecycle.New(h.st, nil).ApplyActivitySignal(ctx, testSession, ports.ActivitySignal{
-						Event: "stop", ControllerGeneration: rec.Metadata.ControllerGeneration,
-						AgentSessionID: "thread-fresh", LatestUserPrompt: "continue", LatestAssistantUpdate: "reply to continue",
-						Timestamp: h.clock.Add(time.Minute),
-					}); err != nil {
+					// A legacy build supplied these later Terminal facts without native
+					// turn provenance. Their age must still gate the replay.
+					rec.Metadata.LatestUserPromptAt = h.clock.Add(time.Minute)
+					rec.Metadata.LatestAssistantUpdateAt = h.clock.Add(time.Minute)
+					if err := h.st.UpdateSession(ctx, rec); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -112,7 +112,7 @@ func TestEditedFirstMessageResumesNativeHistoryAfterTerminalHooks(t *testing.T) 
 			t.Cleanup(func() { resumed.StopAll(context.Background()) })
 			_, err = resumed.Start(ctx, chatsvc.StartConfig{
 				SessionID: testSession, ProjectID: testProject, Harness: domain.HarnessClaudeCode,
-				ProviderConversationID: "thread-fresh", RequireNativeHistory: true,
+				ProviderConversationID: "thread-fresh", HistoryMode: ports.ChatHistoryRequired,
 			})
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("resume edited native conversation: got %v, want %v", err, tc.wantErr)

@@ -60,6 +60,14 @@ UPDATE sessions SET
     runtime_handle_id = '',
     runtime_launch_id = '',
     agent_session_id_launch_id = '',
+    conversation_checkpoint_state = 'empty',
+    conversation_checkpoint_generation = '',
+    conversation_checkpoint_native_id = '',
+    conversation_checkpoint_turn_id = '',
+    native_checkpoint_evidence = '',
+    conversation_checkpoint_unsettled = 0,
+    latest_user_prompt = '',
+    latest_assistant_update = '',
     native_transcript_path = '',
     updated_at = ?5
 WHERE id = ?6
@@ -109,6 +117,14 @@ UPDATE sessions SET
     runtime_launch_id = ?4,
     agent_session_id = ?5,
     agent_session_id_launch_id = ?4,
+    conversation_checkpoint_state = 'empty',
+    conversation_checkpoint_generation = '',
+    conversation_checkpoint_native_id = '',
+    conversation_checkpoint_turn_id = '',
+    native_checkpoint_evidence = '',
+    conversation_checkpoint_unsettled = 0,
+    latest_user_prompt = '',
+    latest_assistant_update = '',
     native_transcript_path = ?6,
     updated_at = ?2
 WHERE id = ?7
@@ -1123,21 +1139,28 @@ UPDATE sessions SET
     latest_user_prompt_at = ?8,
     latest_assistant_update = ?9,
     latest_assistant_update_at = ?10,
-    native_transcript_path = ?11,
-    updated_at = ?12
-WHERE sessions.id = ?13
+    conversation_checkpoint_state = ?11,
+    conversation_checkpoint_generation = ?12,
+    conversation_checkpoint_native_id = ?13,
+    conversation_checkpoint_unsettled = ?14,
+    conversation_checkpoint_turn_id = ?15,
+    native_checkpoint_evidence = ?16,
+    native_transcript_path = ?17,
+    updated_at = ?18
+WHERE sessions.id = ?19
+  AND sessions.revision = ?20
   AND sessions.is_terminated = 0
-  AND sessions.harness = ?14
-  AND sessions.session_mode = ?15
+  AND sessions.harness = ?21
+  AND sessions.session_mode = ?22
   AND (
       (
-          ?15 <> 'chat'
-          AND sessions.runtime_launch_id = ?16
+          ?22 <> 'chat'
+          AND sessions.runtime_launch_id = ?23
       )
       OR
       (
-          ?15 = 'chat'
-          AND sessions.controller_generation = ?17
+          ?22 = 'chat'
+          AND sessions.controller_generation = ?24
       )
   )
   AND NOT EXISTS (
@@ -1152,23 +1175,30 @@ WHERE sessions.id = ?13
 `
 
 type UpdateSessionFromActivitySignalParams struct {
-	ActivityState                domain.ActivityState
-	ActivityLastAt               time.Time
-	FirstSignalAt                sql.NullTime
-	AgentSessionID               string
-	AgentSessionIDLaunchID       string
-	NativeIdentityObservedAt     sql.NullTime
-	LatestUserPrompt             string
-	LatestUserPromptAt           sql.NullTime
-	LatestAssistantUpdate        string
-	LatestAssistantUpdateAt      sql.NullTime
-	NativeTranscriptPath         string
-	UpdatedAt                    time.Time
-	ID                           domain.SessionID
-	ExpectedHarness              domain.AgentHarness
-	ExpectedSessionMode          domain.SessionMode
-	ExpectedRuntimeLaunchID      string
-	ExpectedControllerGeneration string
+	ActivityState                    domain.ActivityState
+	ActivityLastAt                   time.Time
+	FirstSignalAt                    sql.NullTime
+	AgentSessionID                   string
+	AgentSessionIDLaunchID           string
+	NativeIdentityObservedAt         sql.NullTime
+	LatestUserPrompt                 string
+	LatestUserPromptAt               sql.NullTime
+	LatestAssistantUpdate            string
+	LatestAssistantUpdateAt          sql.NullTime
+	ConversationCheckpointState      domain.ConversationCheckpointState
+	ConversationCheckpointGeneration string
+	ConversationCheckpointNativeID   string
+	ConversationCheckpointUnsettled  bool
+	ConversationCheckpointTurnID     string
+	NativeCheckpointEvidence         string
+	NativeTranscriptPath             string
+	UpdatedAt                        time.Time
+	ID                               domain.SessionID
+	ExpectedRevision                 int64
+	ExpectedHarness                  domain.AgentHarness
+	ExpectedSessionMode              domain.SessionMode
+	ExpectedRuntimeLaunchID          string
+	ExpectedControllerGeneration     string
 }
 
 // Lifecycle reads the session before reducing a hook. Fence the resulting
@@ -1188,9 +1218,16 @@ func (q *Queries) UpdateSessionFromActivitySignal(ctx context.Context, arg Updat
 		arg.LatestUserPromptAt,
 		arg.LatestAssistantUpdate,
 		arg.LatestAssistantUpdateAt,
+		arg.ConversationCheckpointState,
+		arg.ConversationCheckpointGeneration,
+		arg.ConversationCheckpointNativeID,
+		arg.ConversationCheckpointUnsettled,
+		arg.ConversationCheckpointTurnID,
+		arg.NativeCheckpointEvidence,
 		arg.NativeTranscriptPath,
 		arg.UpdatedAt,
 		arg.ID,
+		arg.ExpectedRevision,
 		arg.ExpectedHarness,
 		arg.ExpectedSessionMode,
 		arg.ExpectedRuntimeLaunchID,

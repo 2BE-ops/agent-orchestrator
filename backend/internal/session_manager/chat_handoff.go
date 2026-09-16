@@ -8,11 +8,9 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 )
 
-// prepareChatProviderHandoff is read-only. A mismatch alone is never proof: only
-// the coordinator's exact native identity may introduce an independent context.
-// Historical repairs additionally require that this session still owns the
-// project narrative; a retired session cannot take it back from its replacement.
-func (m *Manager) prepareChatProviderHandoff(ctx context.Context, rec domain.SessionRecord, liveHandoff bool) (*domain.ChatProviderHandoff, error) {
+// A mismatch alone is never proof: only the coordinator's exact native identity
+// may introduce an independent context. These lookups do not transfer ownership.
+func (m *Manager) chatProviderTransition(ctx context.Context, rec domain.SessionRecord) (*domain.SessionInterfaceTransition, error) {
 	store, ok := m.store.(chatProviderOwnershipStore)
 	if !ok || rec.Metadata.ProviderConversationID == "" || domain.NormalizeSessionMode(rec.Mode) != domain.SessionModeChat {
 		return nil, nil
@@ -25,15 +23,20 @@ func (m *Manager) prepareChatProviderHandoff(ctx context.Context, rec domain.Ses
 		transition.TargetMode != domain.SessionModeChat || transition.NativeConversationID != rec.Metadata.ProviderConversationID {
 		return nil, nil
 	}
-	if liveHandoff {
-		if transition.Phase != domain.SessionInterfaceTransitionTargetStarting && transition.Phase != domain.SessionInterfaceTransitionActivating {
-			return nil, nil
-		}
-	} else if !rec.IsTerminated || transition.Phase != domain.SessionInterfaceTransitionCompleted {
+	return &transition, nil
+}
+
+func (m *Manager) prepareLiveChatProviderHandoff(ctx context.Context, rec domain.SessionRecord) (*domain.ChatProviderHandoff, error) {
+	transition, err := m.chatProviderTransition(ctx, rec)
+	if err != nil || transition == nil {
+		return nil, err
+	}
+	if transition.Phase != domain.SessionInterfaceTransitionTargetStarting && transition.Phase != domain.SessionInterfaceTransitionActivating {
 		return nil, nil
 	}
+	store := m.store.(chatProviderOwnershipStore)
 	conversation, err := store.ConversationForSession(ctx, rec.ID)
-	if errors.Is(err, domain.ErrNoConversation) && liveHandoff && rec.Kind == domain.KindOrchestrator {
+	if errors.Is(err, domain.ErrNoConversation) && rec.Kind == domain.KindOrchestrator {
 		if projects, ok := m.store.(interface {
 			ProjectConversation(context.Context, domain.ProjectID) (domain.ConversationRecord, error)
 		}); ok {
@@ -43,7 +46,7 @@ func (m *Manager) prepareChatProviderHandoff(ctx context.Context, rec domain.Ses
 			}
 		}
 	}
-	if errors.Is(err, domain.ErrNoConversation) && liveHandoff && rec.Kind != domain.KindOrchestrator {
+	if errors.Is(err, domain.ErrNoConversation) && rec.Kind != domain.KindOrchestrator {
 		return nil, nil // first Chat use for a worker
 	}
 	if err != nil {
@@ -54,7 +57,7 @@ func (m *Manager) prepareChatProviderHandoff(ctx context.Context, rec domain.Ses
 		if err != nil {
 			return nil, err
 		}
-		if !liveHandoff || !found || !previous.IsTerminated || rec.IsTerminated ||
+		if !found || !previous.IsTerminated || rec.IsTerminated ||
 			previous.ProjectID != rec.ProjectID || !rec.CreatedAt.After(previous.CreatedAt) {
 			return nil, fmt.Errorf("project conversation %s is owned by another session", conversation.ID)
 		}
@@ -66,6 +69,33 @@ func (m *Manager) prepareChatProviderHandoff(ctx context.Context, rec domain.Ses
 			return nil, errors.New("only the current orchestrator may adopt project history")
 		}
 	}
+	return reserveChatProviderHandoff(ctx, store, rec, *transition, conversation)
+}
+
+// Recovery may repair only this session's history, never adopt a successor's.
+func (m *Manager) prepareRecoveredChatProviderHandoff(ctx context.Context, rec domain.SessionRecord) (*domain.ChatProviderHandoff, error) {
+	if !rec.IsTerminated {
+		return nil, nil
+	}
+	transition, err := m.chatProviderTransition(ctx, rec)
+	if err != nil || transition == nil {
+		return nil, err
+	}
+	if transition.Phase != domain.SessionInterfaceTransitionCompleted {
+		return nil, nil
+	}
+	store := m.store.(chatProviderOwnershipStore)
+	conversation, err := store.ConversationForSession(ctx, rec.ID)
+	if err != nil {
+		return nil, err
+	}
+	if conversation.SessionID != rec.ID {
+		return nil, fmt.Errorf("project conversation %s is owned by another session", conversation.ID)
+	}
+	return reserveChatProviderHandoff(ctx, store, rec, *transition, conversation)
+}
+
+func reserveChatProviderHandoff(ctx context.Context, store chatProviderOwnershipStore, rec domain.SessionRecord, transition domain.SessionInterfaceTransition, conversation domain.ConversationRecord) (*domain.ChatProviderHandoff, error) {
 	branch, err := store.ConversationBranch(ctx, conversation.ID, conversation.ActiveBranchID)
 	if err != nil {
 		return nil, err

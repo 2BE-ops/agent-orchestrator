@@ -111,7 +111,7 @@ func (s *Store) createConversation(
 
 	scope := options.scope
 	if scope == domain.ConversationScopeProject {
-		if existing, err := s.qw.SelectProjectConversation(ctx, options.project); err == nil {
+		if existing, err := s.qw.SelectProjectConversation(ctx, optionalProjectID(options.project)); err == nil {
 			if options.preserveOwner {
 				if existing.CurrentSessionID == nil || *existing.CurrentSessionID != options.session {
 					return domain.ConversationRecord{}, fmt.Errorf("project conversation %s is no longer owned by session %s", existing.ID, options.session)
@@ -209,7 +209,7 @@ func (s *Store) createConversation(
 		if insertErr := q.InsertConversation(ctx, gen.InsertConversationParams{
 			ID:               options.id,
 			Scope:            scope,
-			ProjectID:        options.project,
+			ProjectID:        optionalProjectID(options.project),
 			SessionID:        ownerSession,
 			CurrentSessionID: &options.session,
 			ActiveBranchID:   rootBranchID,
@@ -455,11 +455,11 @@ func (s *Store) commitChatSpawn(
 			if err != nil {
 				return err
 			}
-			if conversation.Scope != domain.ConversationScopeProject || previous.ProjectID != rec.ProjectID ||
+			if conversation.Scope != domain.ConversationScopeProject || previous.ProjectID == nil || *previous.ProjectID != rec.ProjectID ||
 				!previous.IsTerminated || !rec.CreatedAt.After(previous.CreatedAt) {
 				return errors.New("native Chat handoff project owner is not a retired predecessor")
 			}
-			sessions, err := q.ListSessionsByProject(ctx, rec.ProjectID)
+			sessions, err := q.ListSessionsByProject(ctx, optionalProjectID(rec.ProjectID))
 			if err != nil {
 				return err
 			}
@@ -495,7 +495,6 @@ func (s *Store) commitChatSpawn(
 			// terminated target remains unavailable to every concurrent reader.
 			rows, err := q.ClaimChatControllerGeneration(ctx, gen.ClaimChatControllerGenerationParams{
 				ControllerGeneration: rec.Metadata.ControllerGeneration,
-				UpdatedAt:            rec.UpdatedAt,
 				ID:                   rec.ID,
 			})
 			if err != nil {
@@ -787,7 +786,7 @@ func (s *Store) ActivateConversationBranch(
 // ProjectConversation is a read-only lookup; unlike CreateConversation it does
 // not transfer ownership before a replacement provider has connected.
 func (s *Store) ProjectConversation(ctx context.Context, project domain.ProjectID) (domain.ConversationRecord, error) {
-	row, err := s.qr.SelectProjectConversation(ctx, project)
+	row, err := s.qr.SelectProjectConversation(ctx, optionalProjectID(project))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.ConversationRecord{}, ErrConversationNotFound
 	}
@@ -3016,7 +3015,7 @@ func conversationToDomain(row gen.Conversation) domain.ConversationRecord {
 	rec := domain.ConversationRecord{
 		ID:             row.ID,
 		Scope:          row.Scope,
-		ProjectID:      row.ProjectID,
+		ProjectID:      projectIDValue(row.ProjectID),
 		ActiveBranchID: row.ActiveBranchID,
 		LatestSequence: row.LatestSequence,
 		Settings: domain.ConversationSettings{

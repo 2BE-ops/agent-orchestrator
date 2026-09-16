@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LoaderCircle, PanelRight, Plus } from "lucide-react";
+import { Globe2, PanelRight, Plus } from "lucide-react";
 import { useBlocker } from "@tanstack/react-router";
 import { motion, useReducedMotion } from "motion/react";
 import {
@@ -38,6 +38,7 @@ import {
 	SessionInterfaceSwitchDialog,
 	SessionInterfaceSwitchMenuItem,
 	SessionInterfaceTransitionNotice,
+	interfaceTransitionOffersHistoryRecovery,
 } from "./SessionInterfaceSwitch";
 import { ShellTopbar } from "./ShellTopbar";
 import { SwitchAgentDialog } from "./SwitchAgentDialog";
@@ -45,11 +46,7 @@ import { SessionTopbarHost } from "./SessionTopbarPortal";
 import { TerminalSwitchAgentButton } from "./TerminalSwitchAgentButton";
 import { TopbarButton } from "./TopbarButton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
-import { Button } from "./ui/button";
 import { useBrowserView } from "../hooks/useBrowserView";
-import { useCodexAccountActions } from "../hooks/useCodexAccountActions";
-import { useCodexAccountsQuery } from "../hooks/useCodexAccountsQuery";
-import { codexSwitchDisplay } from "../hooks/codex-accounts-state";
 import { useFileAnnotation } from "../hooks/useFileAnnotation";
 import { useResizable } from "../hooks/useResizable";
 import {
@@ -61,10 +58,13 @@ import {
 import {
 	interfaceTransitionHasUnacknowledgedNotice,
 	interfaceTransitionIsActive,
+	interfaceTransitionNeedsRestart,
 	useSessionInterfaceTransition,
 } from "../hooks/useSessionInterfaceTransition";
 import { useAgentSwitchRouteVisibility } from "../hooks/useAgentSwitchVisibility";
 import { useWorkspaceSession, workspaceQueryKey } from "../hooks/useWorkspaceQuery";
+import { cloudLifecycleStage, type CloudLifecycleStage } from "../lib/cloud-lifecycle";
+import { useCloudCp } from "../hooks/useCloudCp";
 import { useSessionHandoffMenu } from "../hooks/useSessionHandoffMenu";
 import { clearSwitchAgentState } from "../hooks/useSwitchAgent";
 import { useWindowFullScreen } from "../hooks/useWindowFullScreen";
@@ -134,11 +134,18 @@ const inspectorWidthVar = "--ao-inspector-w";
 const INSPECTOR_SPRING_MS = 300;
 const INSPECTOR_SPRING_EASING =
 	"linear(0, 0.333 12.5%, 0.642 25%, 0.813 37.5%, 0.902 50%, 0.949 62.5%, 0.974 75%, 0.986 87.5%, 1)";
-const BROWSER_POPOUT_MOTION_MS = 320;
 const shellTopbarHiddenByPlatform = hidesShellTopbar();
 const isMac = isMacPlatform();
 const noDragStyle = isMac ? ({ WebkitAppRegion: "no-drag" } as CSSProperties) : undefined;
 const newTerminalShortcutLabel = shortcutBindingLabel(defaultShortcutBindings("new-shell-terminal", isMac)[0], isMac);
+const sessionHeaderActions = (
+	<div
+		className="session-topbar-session-chrome flex shrink-0 items-center"
+		data-compact-session-chrome="false"
+	>
+		<ShellTopbar embedded />
+	</div>
+);
 
 type ReviewsResponse = components["schemas"]["ListReviewsResponse"];
 type SessionInterfaceTransition = components["schemas"]["SessionInterfaceTransition"];
@@ -146,6 +153,7 @@ type ReviewerTerminalTarget = { handleId: string; harness: string };
 type InterfaceSwitchDialogScope = {
 	sessionId: string;
 	targetMode: "chat" | "tui";
+	historyPolicy?: "strict" | "provider_history";
 };
 
 type WorkspaceLayoutMode = "utility" | "browser" | "files";
@@ -251,18 +259,11 @@ function sizingGeometryEqual(a: InspectorSizing, b: InspectorSizing): boolean {
 	);
 }
 
-type BrowserPopOutPhase = "docked" | "opening" | "open" | "closing";
-type BrowserPopOutRect = { top: number; left: number; width: number; height: number };
+type BrowserPopOutPhase = "docked" | "mounting" | "open";
 type BrowserPopOutState = {
 	sessionId: string;
 	phase: BrowserPopOutPhase;
-	dockRect?: BrowserPopOutRect;
 };
-
-function browserPopOutRect(rect?: DOMRectReadOnly | null): BrowserPopOutRect | undefined {
-	if (!rect || rect.width <= 0 || rect.height <= 0) return undefined;
-	return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
-}
 
 function topbarSecondaryLabelMode(width: number): "compact" | "expanded" {
 	return width <= TOPBAR_SECONDARY_COMPACT_MAX_PX ? "compact" : "expanded";
@@ -296,6 +297,7 @@ type SessionViewProps = {
 // panel slides on `x` with SHELL_PANEL_SPRING. Dragging uses useResizable
 // (clamped at min, never auto-collapse). Collapse is the explicit toggle only.
 function SessionInspectorRail({
+	showCollapsedHandle = true,
 	children,
 	isOpen,
 	onExpand,
@@ -305,6 +307,7 @@ function SessionInspectorRail({
 	settledClosed,
 	splitRef,
 }: {
+	showCollapsedHandle?: boolean;
 	children: ReactNode;
 	isOpen: boolean;
 	onExpand: () => void;
@@ -326,8 +329,12 @@ function SessionInspectorRail({
 	}
 	const minWidth = useCallback(() => rangeRef.current.min, []);
 	const maxWidth = useCallback(() => rangeRef.current.max, []);
+	const gapRef = useRef<HTMLDivElement>(null);
+	const panelRef = useRef<HTMLDivElement>(null);
+	const getResizeTargets = useCallback(() => [gapRef.current, panelRef.current], []);
 	const { onPointerDown, onCollapsedPointerDown, onDoubleClick } = useResizable({
 		cssVar: inspectorWidthVar,
+		getCssTargets: getResizeTargets,
 		storageKey: sizing.storageKey,
 		defaultWidth: sizing.defaultWidth,
 		min: minWidth,
@@ -369,6 +376,7 @@ function SessionInspectorRail({
 				className="relative max-w-(--session-inspector-max-width) shrink-0"
 				data-slot="inspector-gap"
 				initial={false}
+				ref={gapRef}
 				animate={{ width: isOpen ? `var(${inspectorWidthVar}, ${sizing.defaultWidth}px)` : 0 }}
 				transition={transition}
 			/>
@@ -387,6 +395,7 @@ function SessionInspectorRail({
 				initial={false}
 				animate={{ x: isOpen ? "0%" : "100%" }}
 				onAnimationComplete={handleAnimationComplete}
+				ref={panelRef}
 				style={{ width: `var(${inspectorWidthVar}, ${sizing.defaultWidth}px)` }}
 				transition={transition}
 			>
@@ -400,7 +409,7 @@ function SessionInspectorRail({
 				/>
 				<div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">{children}</div>
 			</motion.div>
-			{isOpen ? null : (
+			{isOpen || !showCollapsedHandle ? null : (
 				<div
 					className="absolute inset-y-0 right-0 z-chrome w-2 cursor-e-resize touch-none"
 					data-slot="inspector-collapsed-rail"
@@ -425,6 +434,43 @@ function SessionInspectorRail({
 // x-transform). Summary/Reviews/Files share a utility width, while Browser
 // automatically grows into a co-work canvas. Chat readability clamps either
 // profile before the conversation can become unusably narrow.
+function CloudLifecycleStatus({ stage }: { stage: CloudLifecycleStage }) {
+	const { t } = useTranslation();
+	const label = {
+		paused_by_coder: t("cloud.lifecycle.pausedByCoder"),
+		resuming_workspace: t("cloud.lifecycle.resumingWorkspace"),
+		waiting_for_coder_agent: t("cloud.lifecycle.waitingForCoderAgent"),
+		starting_ao_worker: t("cloud.lifecycle.startingAoWorker"),
+		restoring_agent: t("cloud.lifecycle.restoringAgent"),
+		connected: t("cloud.lifecycle.connected"),
+	}[stage];
+	const settled = stage === "connected";
+	const paused = stage === "paused_by_coder";
+	return (
+		<motion.div
+			animate={{ opacity: 1, y: 0 }}
+			aria-live="polite"
+			className={cn(
+				"absolute right-3 top-3 z-20 flex h-7 items-center gap-2 rounded-sm border px-2.5",
+				"bg-background/92 font-mono text-[11px] tracking-tight shadow-sm backdrop-blur-sm",
+				settled ? "border-success/30 text-passive" : "border-border/80 text-foreground",
+			)}
+			data-cloud-lifecycle-stage={stage}
+			initial={{ opacity: 0, y: -4 }}
+			role="status"
+		>
+			<span
+				aria-hidden="true"
+				className={cn(
+					"size-1.5 rounded-full",
+					settled ? "bg-success" : paused ? "bg-warning" : "animate-pulse bg-primary",
+				)}
+			/>
+			{label}
+		</motion.div>
+	);
+}
+
 export function SessionView({ sessionId }: SessionViewProps) {
 	const { t } = useTranslation();
 	const [confirmedDraftDiscard, setConfirmedDraftDiscard] = useState<{
@@ -515,10 +561,12 @@ export function SessionView({ sessionId }: SessionViewProps) {
 		[queryClient],
 	);
 	const workspaceQuery = useWorkspaceSession(sessionId);
+	const { client: cloudCpClient } = useCloudCp();
 	const theme = useResolvedTheme();
-	const prefersReducedMotion = useReducedMotion();
-	const isInspectorOpen = useUiStore((state) => state.inspectorSessions[sessionId]?.isOpen ?? true);
-	const inspectorView = useUiStore((state) => state.inspectorSessions[sessionId]?.view ?? "summary");
+	const browserOnly = Boolean(workspaceQuery.data && isOrchestratorSession(workspaceQuery.data));
+	const isInspectorOpen = useUiStore((state) => state.inspectorSessions[sessionId]?.isOpen ?? !browserOnly);
+	const inspectorView = useUiStore((state) => browserOnly ? "browser" : state.inspectorSessions[sessionId]?.view ?? "summary");
+	const browserUnseen = useUiStore((state) => Boolean(state.inspectorSessions[sessionId]?.browserUnseen));
 	const setInspectorOpenForSession = useUiStore((state) => state.setInspectorOpen);
 	const toggleInspector = useUiStore((state) => state.toggleInspector);
 	const setInspectorViewForSession = useUiStore((state) => state.setInspectorView);
@@ -531,7 +579,6 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	const sessionSplitRef = useRef<HTMLDivElement | null>(null);
 	const terminalLiveResizeTimerRef = useRef<number | null>(null);
 	const workspaceResizeTimerRef = useRef<number | null>(null);
-	const browserPopOutHandoffFrameRef = useRef<number | null>(null);
 	const [inspectorSettledClosed, setInspectorSettledClosed] = useState(!isInspectorOpen);
 	const inspectorPanelVisible = isInspectorOpen || !inspectorSettledClosed;
 	const [terminalTarget, setTerminalTarget] = useState<TerminalTarget>({ kind: "worker" });
@@ -596,7 +643,16 @@ export function SessionView({ sessionId }: SessionViewProps) {
 		[sessionId],
 	);
 	const browserPopOutPhase = browserPopOutState.sessionId === sessionId ? browserPopOutState.phase : "docked";
-	const browserPoppedOut = browserPopOutPhase !== "docked";
+	const browserPopOutMounted = browserPopOutPhase !== "docked";
+	const browserPoppedOut = browserPopOutPhase === "open";
+	const [browserPopoutTopbarHost, setBrowserPopoutTopbarHost] = useState<HTMLDivElement | null>(null);
+	useLayoutEffect(() => {
+		if (browserPopOutPhase !== "mounting" || !browserPopoutTopbarHost) return;
+		// Establish the portal destination before moving the browser. This layout
+		// effect completes before paint, so the user sees one atomic geometry change
+		// and the address/tabs never spend a frame underneath the native view.
+		setBrowserPopOutState({ sessionId, phase: "open" });
+	}, [browserPopOutPhase, browserPopoutTopbarHost, sessionId]);
 	const [handoffDialogOpen, setHandoffDialogOpen] = useState(false);
 	const handoffDialogContainerRef = useRef<HTMLDivElement | null>(null);
 	const [handoffDialogContainer, setHandoffDialogContainer] = useState<HTMLDivElement | null>(null);
@@ -662,6 +718,21 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	useEffect(() => stopTerminalLiveResize, [stopTerminalLiveResize]);
 
 	const session = workspaceQuery.data;
+	const cloudStage = cloudLifecycleStage(session);
+	const cloudResumeRef = useRef("");
+	const requestCloudResume = useCallback(async () => {
+		if (!session?.cloud) return;
+		await cloudCpClient.resumeSession(session.cloud.orgId, session.id);
+		await refreshWorkspaces();
+	}, [cloudCpClient, refreshWorkspaces, session]);
+	useEffect(() => {
+		if (!session?.cloud || cloudResumeRef.current === session.id) return;
+		cloudResumeRef.current = session.id;
+		void requestCloudResume().catch(() => {
+			// Keep the paused lifecycle projection visible. A later message, shell
+			// open, or route visit can issue a fresh explicit resume intent.
+		});
+	}, [requestCloudResume, session]);
 	const routeVisibilityOperation =
 		session?.activeAgentSwitch &&
 		session.activeAgentSwitch.state !== "completed" &&
@@ -669,17 +740,6 @@ export function SessionView({ sessionId }: SessionViewProps) {
 			? "active"
 			: "history";
 	useAgentSwitchRouteVisibility(`session/${sessionId}`, routeVisibilityOperation);
-	const codexAccounts = useCodexAccountsQuery(session?.provider === "codex");
-	const codexAccountActions = useCodexAccountActions(queryClient);
-	const codexAccountSwitch = codexAccounts.data?.currentSwitch;
-	const codexAccountSwitchPresentation = codexAccountSwitch ? codexSwitchDisplay(codexAccountSwitch) : null;
-	const codexAccountSwitchBlocksSession = Boolean(
-		session?.provider === "codex" &&
-			codexAccountSwitch &&
-			!["completed", "failed"].includes(codexAccountSwitch.phase) &&
-			(codexAccountSwitch.sessions.length === 0 ||
-				codexAccountSwitch.sessions.some((entry) => entry.sessionId === session.id)),
-	);
 	const interfaceSwitch = useSessionInterfaceTransition(session?.id);
 	useEffect(() => {
 		setConfirmedDraftDiscard(undefined);
@@ -855,7 +915,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	// workspace can no longer be resolved).
 	const addShellTerminal = useCallback(() => {
 		const shell = openShellTerminal.open(
-			{ projectId: session?.workspaceId, sessionId },
+			{ projectId: session?.workspaceId, sessionId, cloud: session?.cloud },
 			{
 				onSuccess: (openedShell) => {
 					setActiveShellTerminal(openedShell.handleId);
@@ -886,7 +946,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 			sessionId,
 			title: shell.title,
 		});
-	}, [openShellTerminal, sessionId, session?.workspaceId, setActiveShellTerminal]);
+	}, [openShellTerminal, sessionId, session?.cloud, session?.workspaceId, setActiveShellTerminal]);
 
 	const activateAuxiliaryTab = useCallback(
 		(key?: string) => {
@@ -1111,8 +1171,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 		);
 	}, [availableReviewerTerminal, reviewerQuery.isFetched]);
 	const isOrchestrator = session ? isOrchestratorSession(session) : false;
-	// Orchestrators get the full workspace width; only workers need the inspector rail.
-	const hasInspector = Boolean(session && !isOrchestrator);
+	const hasInspector = Boolean(session);
 	const sizing = useMemo(() => inspectorSizing(inspectorView), [inspectorView]);
 	const browserEntryWidthFloorRef = useRef<number | null>(null);
 
@@ -1157,9 +1216,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 		(next: InspectorView) => {
 			if (next === inspectorView) return;
 			if (next === "browser") {
-				const currentWidth = Number.parseFloat(
-					document.documentElement.style.getPropertyValue(inspectorWidthVar),
-				);
+				const currentWidth = Number(window.localStorage.getItem(sizing.storageKey));
 				browserEntryWidthFloorRef.current = Number.isFinite(currentWidth) ? currentWidth : null;
 			} else {
 				browserEntryWidthFloorRef.current = null;
@@ -1178,6 +1235,9 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	);
 
 	const activeInterfaceTransition = interfaceTransitionIsActive(interfaceSwitch.transition);
+	const hasInterfaceNotice = interfaceTransitionHasUnacknowledgedNotice(interfaceSwitch.transition);
+	const historyRecoveryNotice = hasInterfaceNotice && interfaceTransitionOffersHistoryRecovery(interfaceSwitch.transition);
+	const restartRequiredNotice = interfaceTransitionNeedsRestart(interfaceSwitch.transition);
 	const chatLeaveLocked = Boolean(
 		chatLeaveLock?.sessionId === sessionId && session?.mode === "chat",
 	);
@@ -1235,7 +1295,12 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	);
 	const chatToTerminal = session?.mode === "chat" && interfaceTarget === "tui";
 	const beginInterfaceSwitch = useCallback(
-		async (policy: "drain" | "interrupt", targetMode: "chat" | "tui", dialogScope?: InterfaceSwitchDialogScope) => {
+		async (
+			policy: "drain" | "interrupt",
+			targetMode: "chat" | "tui",
+			dialogScope?: InterfaceSwitchDialogScope,
+			historyPolicy: "strict" | "provider_history" = "strict",
+		) => {
 			const draftLeaveDecision = chatToTerminal && getChatDraftBoundaries(sessionId).length > 0
 				? await confirmUnsafeDraftLeave()
 				: ({ kind: "safe" } satisfies UnsafeDraftLeaveDecision);
@@ -1257,7 +1322,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 				});
 			}
 			try {
-				const response = await interfaceSwitch.start({ targetMode, policy });
+				const response = await interfaceSwitch.start({ targetMode, policy, historyPolicy });
 				if (chatLeaveRequestId !== undefined) {
 					setChatLeaveLock((current) =>
 						current?.requestId === chatLeaveRequestId && response?.transition?.id
@@ -1319,9 +1384,26 @@ export function SessionView({ sessionId }: SessionViewProps) {
 				policy,
 				interfaceSwitchDialogScope.targetMode,
 				interfaceSwitchDialogScope,
+				interfaceSwitchDialogScope.historyPolicy,
 			);
 		},
 		[beginInterfaceSwitch, interfaceSwitchDialogScope, interfaceTarget, session],
+	);
+	const requestFailedInterfaceSwitch = useCallback(
+		(historyPolicy: "strict" | "provider_history") => {
+			const failed = interfaceSwitch.transition;
+			if (!session || !failed || failed.sessionId !== session.id || failed.targetMode !== interfaceTarget) return;
+			interfaceSwitch.resetStartError();
+			// A failed attempt's interrupt policy is stale consent. Re-evaluate the
+			// current Terminal state and either choose the safe drain default or ask
+			// again before cancelling newly started work.
+			if (!interfaceBusy) {
+				void beginInterfaceSwitch("drain", failed.targetMode, undefined, historyPolicy);
+				return;
+			}
+			setInterfaceSwitchDialogScope({ sessionId: session.id, targetMode: failed.targetMode, historyPolicy });
+		},
+		[beginInterfaceSwitch, interfaceBusy, interfaceSwitch, interfaceTarget, session],
 	);
 	// Adapters without a Chat driver cannot offer a switch into Chat UI; hide
 	// the button entirely rather than showing a permanently disabled control.
@@ -1330,7 +1412,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 		!interfaceSwitchUnsupported && (interfaceSwitch.status || interfaceSwitch.isLoading || interfaceSwitch.statusError),
 	);
 	const newTerminalError = openShellTerminal.error ? apiErrorMessage(openShellTerminal.error) : undefined;
-	const newShellTerminalAction =
+	const newShellTerminalAction = useMemo(() =>
 		session && !isOrchestrator ? (
 			<Tooltip>
 				<TooltipTrigger asChild>
@@ -1347,7 +1429,9 @@ export function SessionView({ sessionId }: SessionViewProps) {
 					{newTerminalError ?? t("terminal.newWithShortcut", { shortcut: newTerminalShortcutLabel })}
 				</TooltipContent>
 			</Tooltip>
-		) : null;
+		) : null,
+		[addShellTerminal, isOrchestrator, newTerminalError, session, t],
+	);
 	const fileAnnotation = useFileAnnotation(sessionId);
 	const centerFileTabs = useMemo(
 		() =>
@@ -1372,7 +1456,9 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	const previewUrl = session?.previewUrl?.trim() || undefined;
 	const previewRevision = session?.previewRevision;
 	const browserSlotVisible = Boolean(
-		session && hasInspector && (browserPoppedOut || (isInspectorOpen && inspectorView === "browser")),
+		session &&
+			hasInspector &&
+			(browserPoppedOut || (inspectorPanelVisible && inspectorView === "browser")),
 	);
 	const terminated = session ? !sessionIsActive(session) : false;
 	const browserView = useBrowserView({
@@ -1405,8 +1491,14 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	// only preview work arriving afterward may reveal Browser automatically.
 	useLayoutEffect(() => {
 		if (!session) return;
+		if (browserOnly) {
+			const current = useUiStore.getState().inspectorSessions[sessionId];
+			if (!current) setInspectorOpenForSession(sessionId, false);
+			if (current?.view !== "browser") setInspectorViewForSession(sessionId, "browser");
+			return;
+		}
 		initializeInspectorSession(sessionId, hasBrowserContent, hasInspector);
-	}, [hasBrowserContent, hasInspector, session, sessionId, initializeInspectorSession]);
+	}, [browserOnly, hasBrowserContent, hasInspector, session, sessionId, initializeInspectorSession, setInspectorOpenForSession, setInspectorViewForSession]);
 
 	useLayoutEffect(() => {
 		setTerminalTarget({ kind: "worker" });
@@ -1449,7 +1541,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	useEffect(() => {
 		if (handoffSwitchError) setHandoffDialogOpen(true);
 	}, [handoffSwitchError]);
-	const interfaceSwitchInlineStatus =
+	const interfaceSwitchInlineStatus = useMemo(() =>
 		session && showInterfaceSwitchAction && activeInterfaceTransition ? (
 			<SessionInterfaceSwitchButton
 				target={interfaceTarget}
@@ -1468,8 +1560,23 @@ export function SessionView({ sessionId }: SessionViewProps) {
 					void interfaceSwitch.cancel().catch(() => {});
 				}}
 			/>
-		) : null;
-	const interfaceSwitchMenuItem =
+		) : null,
+		[
+			activeInterfaceTransition,
+			interfaceSwitch.cancelError,
+			interfaceSwitch.cancelling,
+			interfaceSwitch.isLoading,
+			interfaceSwitch.starting,
+			interfaceSwitch.status,
+			interfaceSwitch.statusError,
+			interfaceSwitch.transition,
+			interfaceTarget,
+			requestInterfaceSwitch,
+			session,
+			showInterfaceSwitchAction,
+		],
+	);
+	const interfaceSwitchMenuItem = useMemo(() =>
 		session && showInterfaceSwitchAction && !activeInterfaceTransition ? (
 			<SessionInterfaceSwitchMenuItem
 				target={interfaceTarget}
@@ -1482,8 +1589,20 @@ export function SessionView({ sessionId }: SessionViewProps) {
 				pending={interfaceSwitch.starting || chatLeaveLocked}
 				onClick={requestInterfaceSwitch}
 			/>
-		) : null;
-	const handoffMenuItem = session ? (
+		) : null,
+		[
+			activeInterfaceTransition,
+			interfaceSwitch.isLoading,
+			interfaceSwitch.starting,
+			interfaceSwitch.status,
+			interfaceSwitch.statusError,
+			interfaceTarget,
+			requestInterfaceSwitch,
+			session,
+			showInterfaceSwitchAction,
+		],
+	);
+	const handoffMenuItem = useMemo(() => session ? (
 		<TerminalSwitchAgentButton
 			key={session.id}
 			variant="menu-item"
@@ -1494,24 +1613,16 @@ export function SessionView({ sessionId }: SessionViewProps) {
 			session={session}
 			switchError={handoffSwitchError}
 		/>
-	) : null;
-	const sessionTabActions = (
+	) : null, [handoffAgentSwitch, handoffControlPresentation, handoffDialogOpen, handoffSwitchError, handleHandoffDialogOpenChange, session]);
+	const sessionTabActions = useMemo(() => (
 		<SessionActionsMenu inlineStatus={interfaceSwitchInlineStatus}>
 			{interfaceSwitchMenuItem}
 			{handoffMenuItem}
 		</SessionActionsMenu>
-	);
+	), [handoffMenuItem, interfaceSwitchInlineStatus, interfaceSwitchMenuItem]);
 	// Spinner replaces the ⋮ at the same size, so the tab title does not need a
 	// wider action slot while switching.
 	const sessionTabActionWide = false;
-	const sessionHeaderActions = (
-		<div
-			className="session-topbar-session-chrome flex shrink-0 items-center"
-			data-compact-session-chrome="false"
-		>
-			<ShellTopbar embedded />
-		</div>
-	);
 
 	useEffect(() => {
 		setHandoffDialogOpen(false);
@@ -1527,12 +1638,13 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	}, [clearVisibleTerminalKind, routedTerminalTarget.kind, sessionId, setVisibleTerminalKind]);
 
 	const prepareFilesInspector = useCallback(() => {
+		if (browserOnly) return;
 		setBrowserPopOutState({ sessionId, phase: "docked" });
 		setFilesPoppedOut(false);
 		setFilesChangedOnly(sessionId, true);
 		transitionInspectorView("files");
 		setInspectorOpenForSession(sessionId, true);
-	}, [sessionId, setFilesChangedOnly, setInspectorOpenForSession, transitionInspectorView]);
+	}, [browserOnly, sessionId, setFilesChangedOnly, setInspectorOpenForSession, transitionInspectorView]);
 
 	const fetchWorkspaceFiles = useCallback(async () => {
 		return queryClient.fetchQuery(
@@ -1544,12 +1656,16 @@ export function SessionView({ sessionId }: SessionViewProps) {
 		async (rawPath: string) => {
 			const data = await fetchWorkspaceFiles();
 			const path = matchWorkspaceFilePath(rawPath, data.files ?? []);
+			if (browserOnly) {
+				openCenterFile(path);
+				return;
+			}
 			setFilePreviewRequestsBySession((current) => ({
 				...current,
 				[sessionId]: { path, key: (current[sessionId]?.key ?? 0) + 1 },
 			}));
 		},
-		[fetchWorkspaceFiles, sessionId],
+		[browserOnly, openCenterFile, fetchWorkspaceFiles, sessionId],
 	);
 
 	const handleOpenFiles = useCallback(() => {
@@ -1583,92 +1699,28 @@ export function SessionView({ sessionId }: SessionViewProps) {
 		[sessionId, setInspectorOpenForSession, transitionInspectorView],
 	);
 
-	const measureBrowserDockRect = useCallback(() => {
-		const target = sessionSplitRef.current?.querySelector<HTMLElement>("[data-browser-dock-target]");
-		return browserPopOutRect(target?.getBoundingClientRect());
-	}, []);
-
 	const handleToggleBrowserPopOut = useCallback(
-		(next: boolean, sourceRect?: DOMRectReadOnly) => {
+		(next: boolean) => {
 			if (next) setFilesPoppedOut(false);
 			setBrowserPopOutState((current) => {
 				if (next) {
 					if (current.sessionId === sessionId && current.phase !== "docked") return current;
-					return {
-						sessionId,
-						phase: prefersReducedMotion ? "open" : "opening",
-						dockRect: browserPopOutRect(sourceRect) ?? measureBrowserDockRect(),
-					};
+					return { sessionId, phase: "mounting" };
 				}
 				if (current.sessionId !== sessionId || current.phase === "docked") return current;
-				if (prefersReducedMotion) return { sessionId, phase: "docked" };
-				return {
-					sessionId,
-					phase: "closing",
-					dockRect: measureBrowserDockRect() ?? current.dockRect,
-				};
+				return { sessionId, phase: "docked" };
 			});
 		},
-		[measureBrowserDockRect, prefersReducedMotion, sessionId],
+		[sessionId],
 	);
-
-	// Mount the portal at the exact docked geometry for one painted frame, then
-	// let CSS interpolate its real box. The native WebContentsView follows that
-	// moving slot through its ResizeObserver instead of snapping full-screen.
-	useEffect(() => {
-		if (browserPopOutPhase !== "opening") return;
-		const frame = window.requestAnimationFrame(() => {
-			setBrowserPopOutState((current) =>
-				current.sessionId === sessionId && current.phase === "opening"
-					? { ...current, phase: "open" }
-					: current,
-			);
-		});
-		return () => window.cancelAnimationFrame(frame);
-	}, [browserPopOutPhase, sessionId]);
-
-	const commitBrowserPopOutClose = useCallback(() => {
-		setBrowserPopOutState((current) =>
-			current.sessionId === sessionId && current.phase === "closing"
-				? { sessionId, phase: "docked" }
-				: current,
-		);
-	}, [sessionId]);
-
-	const finishBrowserPopOutClose = useCallback(() => {
-		if (browserPopOutHandoffFrameRef.current !== null) return;
-		// Hold the portal at the exact destination for two painted frames. Electron's
-		// native WebContentsView bounds update trails the DOM transition slightly;
-		// handing back to the dock immediately exposes that final compositor step.
-		browserPopOutHandoffFrameRef.current = window.requestAnimationFrame(() => {
-			browserPopOutHandoffFrameRef.current = window.requestAnimationFrame(() => {
-				browserPopOutHandoffFrameRef.current = null;
-				commitBrowserPopOutClose();
-			});
-		});
-	}, [commitBrowserPopOutClose]);
-
-	useEffect(
-		() => () => {
-			if (browserPopOutHandoffFrameRef.current !== null) {
-				window.cancelAnimationFrame(browserPopOutHandoffFrameRef.current);
-				browserPopOutHandoffFrameRef.current = null;
-			}
-		},
-		[],
-	);
-
-	// transitionend is the normal path; the timer protects restore when a window
-	// resize or compositor interruption suppresses that DOM event.
-	useEffect(() => {
-		if (browserPopOutPhase !== "closing") return;
-		const timer = window.setTimeout(finishBrowserPopOutClose, BROWSER_POPOUT_MOTION_MS + 80);
-		return () => window.clearTimeout(timer);
-	}, [browserPopOutPhase, finishBrowserPopOutClose]);
 
 	useEffect(() => {
 		if (!hasInspector) return;
 		const current = useUiStore.getState().inspectorSessions[sessionId];
+		if (browserOnly) {
+			if (terminated && current?.browserUnseen) setBrowserUnseen(sessionId, false);
+			return;
+		}
 		if (!hasBrowserContent) {
 			if (current?.browserContentRevealed) setBrowserContentRevealed(sessionId, false);
 			else if (current?.browserUnseen) setBrowserUnseen(sessionId, false);
@@ -1678,6 +1730,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 		setBrowserContentRevealed(sessionId, true);
 	}, [
 		hasBrowserContent,
+		browserOnly,
 		hasInspector,
 		previewRevision,
 		sessionId,
@@ -1697,11 +1750,15 @@ export function SessionView({ sessionId }: SessionViewProps) {
 		if (baseline.key === previewKey) return;
 		previewBaselineRef.current = { sessionId, key: previewKey };
 		if (!previewKey) return;
+		if (browserOnly && !terminated && !useUiStore.getState().inspectorSessions[sessionId]?.browserContentRevealed) {
+			setInspectorOpenForSession(sessionId, true);
+		}
 		setBrowserContentRevealed(sessionId, true);
 		if (browserIsVisible(sessionId, browserPoppedOut)) {
 			setBrowserUnseen(sessionId, false);
 			return;
 		}
+		// Workers and already-revealed orchestrators badge new browser work.
 		// A new preview target used to force-switch the inspector to the Browser
 		// tab and pop it open, even if the user was looking at something else
 		// entirely (Reviews, a different session's Files tab, mid-typing in
@@ -1717,6 +1774,9 @@ export function SessionView({ sessionId }: SessionViewProps) {
 		sessionId,
 		setBrowserContentRevealed,
 		setBrowserUnseen,
+		browserOnly,
+		terminated,
+		setInspectorOpenForSession,
 	]);
 
 	// Agent browser commands are genuine browser activity even when they do not
@@ -1726,6 +1786,11 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	// on hasBrowserContent/browserContentRevealed missed exactly that case.
 	useEffect(() => {
 		if (!hasInspector || terminated || !browserView.agentBrowserActive) return;
+		if (browserOnly && !useUiStore.getState().inspectorSessions[sessionId]?.browserContentRevealed) {
+			setBrowserContentRevealed(sessionId, true);
+			setInspectorOpenForSession(sessionId, true);
+			return;
+		}
 		if (!browserIsVisible(sessionId, browserPoppedOut)) setBrowserUnseen(sessionId, true);
 	}, [
 		browserPoppedOut,
@@ -1736,6 +1801,9 @@ export function SessionView({ sessionId }: SessionViewProps) {
 		sessionId,
 		setBrowserUnseen,
 		terminated,
+		browserOnly,
+		setBrowserContentRevealed,
+		setInspectorOpenForSession,
 	]);
 
 	// Opening Browser consumes the pending activity indicator, including the
@@ -1747,8 +1815,9 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	}, [browserPoppedOut, hasInspector, inspectorView, isInspectorOpen, sessionId, setBrowserUnseen]);
 
 	const handleToggleInspector = useCallback(() => {
+		if (browserOnly) setBrowserContentRevealed(sessionId, true);
 		toggleInspector(sessionId);
-	}, [sessionId, toggleInspector]);
+	}, [browserOnly, sessionId, toggleInspector, setBrowserContentRevealed]);
 
 	useEffect(() => {
 		if (!hasInspector) return;
@@ -1811,37 +1880,6 @@ export function SessionView({ sessionId }: SessionViewProps) {
 
 	return (
 		<div className="relative flex h-full min-h-0 flex-col bg-background text-foreground" data-testid="session-detail">
-			{codexAccountSwitchBlocksSession ? (
-				<div
-					className="absolute inset-0 z-50 grid place-items-center bg-background/80 p-6 backdrop-blur-sm"
-					data-testid="codex-account-switch-blocker"
-				>
-					<div className="flex max-w-sm flex-col items-center gap-3 rounded-xl border border-border bg-card px-6 py-5 text-center shadow-lg">
-						<div aria-live="assertive" className="flex flex-col items-center gap-3" role="status">
-							{codexAccountSwitchPresentation?.busy ? <LoaderCircle className="size-5 animate-spin text-passive" aria-label={t(codexAccountSwitchPresentation.key)} /> : null}
-							<p className="text-sm font-medium">
-								{codexAccountSwitchPresentation?.canRecover
-									? t(codexAccountSwitchPresentation.key)
-									: t("settings.codexAccounts.switchingSessions")}
-							</p>
-							{codexAccountSwitchPresentation && !codexAccountSwitchPresentation.canRecover ? <p className="text-xs text-passive">{t(codexAccountSwitchPresentation.key)}</p> : null}
-						</div>
-						{codexAccountSwitchPresentation?.canRecover && codexAccountSwitch ? (
-							<Button
-								type="button"
-								size="sm"
-								variant="outline"
-								disabled={codexAccountActions.recoverPending}
-								onClick={() => void codexAccountActions.recoverSwitch(codexAccountSwitch.id)}
-							>
-								{codexAccountActions.recoverPending ? <LoaderCircle className="animate-spin" aria-label={t("settings.codexAccounts.recovering")} /> : null}
-								{t("settings.codexAccounts.retryRecovery")}
-							</Button>
-						) : null}
-						{codexAccountActions.error ? <p className="text-xs text-error" role="alert">{codexAccountActions.error}</p> : null}
-					</div>
-				</div>
-			) : null}
 			<div
 				className="session-split relative flex min-h-0 flex-1 overflow-hidden"
 				data-testid="panel-group"
@@ -1870,6 +1908,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 							data-testid="session-topbar-host"
 						/>
 						<div className="relative min-h-0 flex-1" ref={bindHandoffDialogContainer}>
+							{cloudStage ? <CloudLifecycleStatus stage={cloudStage} /> : null}
 							{session && handoffDialogContainer ? (
 								<SwitchAgentDialog
 									agentSwitch={handoffAgentSwitch}
@@ -1923,8 +1962,9 @@ export function SessionView({ sessionId }: SessionViewProps) {
 									shellError={
 										openShellTerminal.error ? apiErrorMessage(openShellTerminal.error) : undefined
 									}
-									onOpenFiles={handleOpenFiles}
+									onOpenFiles={browserOnly ? undefined : handleOpenFiles}
 									onOpenFile={handleOpenFile}
+									onOpenLinkInBrowser={browserView.openLink}
 								/>
 							) : (
 								<CenterPane
@@ -1972,7 +2012,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 									/>
 								</div>
 							) : null}
-							{interfaceSwitch.startError && !interfaceSwitchDialogOpen ? (
+							{interfaceSwitch.startError && !interfaceSwitchDialogOpen && !historyRecoveryNotice && !restartRequiredNotice ? (
 								<div role="alert" className="absolute left-1/2 top-3 z-20 flex w-[min(34rem,calc(100%-1.5rem))] -translate-x-1/2 items-start gap-3 rounded-lg border border-destructive/40 bg-popover px-3 py-2.5 text-xs shadow-md">
 									<div className="min-w-0 flex-1">
 										<p className="font-medium">{t("session.interfaceSwitchFailed")}</p>
@@ -1981,7 +2021,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 									<button type="button" aria-label={t("session.dismissInterfaceSwitchError")} className="shrink-0 rounded px-1 text-muted-foreground hover:text-foreground" onClick={interfaceSwitch.resetStartError}>{t("session.dismissInterfaceSwitchNotice")}</button>
 								</div>
 							) : null}
-							{!interfaceSwitch.startError && interfaceTransitionHasUnacknowledgedNotice(interfaceSwitch.transition) ? (
+							{(!interfaceSwitch.startError || historyRecoveryNotice || restartRequiredNotice) && hasInterfaceNotice ? (
 								<SessionInterfaceTransitionNotice
 									transition={interfaceSwitch.transition}
 									dismissing={interfaceSwitch.acknowledgingNotice}
@@ -1996,6 +2036,14 @@ export function SessionView({ sessionId }: SessionViewProps) {
 										if (targetMode) void beginInterfaceSwitch("interrupt", targetMode);
 									}}
 									interrupting={interfaceSwitch.starting}
+									onRetry={() => {
+										requestFailedInterfaceSwitch("strict");
+									}}
+									onUseProviderHistory={() => {
+										requestFailedInterfaceSwitch("provider_history");
+									}}
+									recoveryError={interfaceSwitch.startError}
+									retrying={interfaceSwitch.starting}
 								/>
 							) : null}
 						</div>
@@ -2003,6 +2051,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 				</div>
 				{hasInspector ? (
 					<SessionInspectorRail
+						showCollapsedHandle={!browserOnly}
 						isOpen={isInspectorOpen}
 						onCloseAnimationComplete={handleInspectorCloseAnimationComplete}
 						onExpand={() => setInspectorOpenForSession(sessionId, true)}
@@ -2014,10 +2063,11 @@ export function SessionView({ sessionId }: SessionViewProps) {
 						splitRef={sessionSplitRef}
 					>
 						<SessionInspector
-							browserAnnotationQueue={browserAnnotationQueue}
+							browserOnly={browserOnly}
+							browserAnnotationQueue={inspectorView === "browser" ? browserAnnotationQueue : undefined}
 							browserPoppedOut={browserPoppedOut}
 							filesView={
-								session ? (
+								inspectorView === "files" && session ? (
 									<SessionFileExplorer
 										onOpenFile={openCenterFile}
 										onSplitChange={setFilesSplit}
@@ -2029,13 +2079,13 @@ export function SessionView({ sessionId }: SessionViewProps) {
 								) : null
 							}
 							isInspectorVisible={inspectorPanelVisible}
-							onOpenFiles={handleOpenFiles}
+							onOpenFiles={browserOnly ? undefined : handleOpenFiles}
 							onOpenReviewFile={handleOpenReviewFile}
 							onOpenReviewerTerminal={selectReviewerTerminal}
 							onToggleBrowserPopOut={handleToggleBrowserPopOut}
 							onViewChange={transitionInspectorView}
 							view={inspectorView}
-							browserView={browserView}
+							browserView={inspectorView === "browser" ? browserView : undefined}
 							session={session}
 						/>
 					</SessionInspectorRail>
@@ -2046,17 +2096,36 @@ export function SessionView({ sessionId }: SessionViewProps) {
 					<Tooltip>
 						<TooltipTrigger asChild>
 							<TopbarButton
-								aria-label={isInspectorOpen ? t("shell.closeInspector") : t("shell.openInspector")}
+								aria-label={
+									browserOnly
+										? `${isInspectorOpen ? t("common.close") : t("inspector.open")} ${t("inspector.browser")}`
+										: isInspectorOpen ? t("shell.closeInspector") : t("shell.openInspector")
+								}
 								aria-pressed={isInspectorOpen}
 								onClick={handleToggleInspector}
 								style={noDragStyle}
 								variant="icon"
 							>
-								<PanelRight className="size-icon-md" aria-hidden="true" />
+								{browserOnly ? (
+									<span className="relative inline-flex">
+										<Globe2 aria-hidden="true" className="size-icon-md" />
+										{!isInspectorOpen && browserUnseen ? (
+											<span
+												aria-hidden="true"
+												className="pointer-events-none absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-primary ring-2 ring-background"
+												data-testid="orchestrator-browser-unseen-indicator"
+											/>
+										) : null}
+									</span>
+								) : (
+									<PanelRight className="size-icon-md" aria-hidden="true" />
+								)}
 							</TopbarButton>
 						</TooltipTrigger>
 						<TooltipContent side="bottom">
-							{isInspectorOpen ? t("shell.closeInspectorTitle") : t("shell.openInspectorTitle")}
+							{browserOnly
+								? `${isInspectorOpen ? t("common.close") : t("inspector.open")} ${t("inspector.browser")}`
+								: isInspectorOpen ? t("shell.closeInspectorTitle") : t("shell.openInspectorTitle")}
 						</TooltipContent>
 					</Tooltip>
 					{/* Keep the global notification action trailing at the window edge. */}
@@ -2113,43 +2182,36 @@ export function SessionView({ sessionId }: SessionViewProps) {
           sidebar + topbar, not just the session area) and sits outside any
           `[data-panel]` column, so the native WebContentsView is not clamped
           and fills the window below any native titlebar overlay. */}
-			{browserPoppedOut && session
+			{browserPopOutMounted && session
 				? createPortal(
 						<div
-							aria-busy={browserPopOutPhase === "opening" || browserPopOutPhase === "closing"}
 							className={cn(
 								"browser-popout-overlay",
 								shellTopbarHiddenByPlatform && !isNativeFullScreen && "browser-popout-overlay--mac-windowed",
 							)}
 							data-phase={browserPopOutPhase}
-							style={
-								browserPopOutState.sessionId === sessionId && browserPopOutState.dockRect
-									? ({
-											"--browser-popout-dock-top": `${browserPopOutState.dockRect.top}px`,
-											"--browser-popout-dock-left": `${browserPopOutState.dockRect.left}px`,
-											"--browser-popout-dock-width": `${browserPopOutState.dockRect.width}px`,
-											"--browser-popout-dock-height": `${browserPopOutState.dockRect.height}px`,
-										} as CSSProperties)
-									: undefined
-							}
 						>
 							<div aria-hidden="true" className="browser-popout-backdrop" />
 							<div
-								className="browser-popout-frame"
-								onTransitionEnd={(event) => {
-									if (event.target === event.currentTarget && event.propertyName === "width") {
-										finishBrowserPopOutClose();
-									}
-								}}
-							>
-								<BrowserPanelView
+								className={cn(
+									"browser-popout-titlebar browser-panel__topbar-host",
+									shellTopbarHiddenByPlatform &&
+										!isNativeFullScreen &&
+										"browser-popout-titlebar--mac-windowed",
+								)}
+								data-testid="browser-popout-topbar"
+								ref={setBrowserPopoutTopbarHost}
+							/>
+							<div className="browser-popout-frame">
+								{browserPoppedOut && browserPopoutTopbarHost ? <BrowserPanelView
 									active
 									annotationQueue={browserAnnotationQueue}
 									browserView={browserView}
 									onTogglePopOut={handleToggleBrowserPopOut}
 									poppedOut
 									session={session}
-								/>
+									topbarHost={browserPopoutTopbarHost}
+								/> : null}
 							</div>
 						</div>,
 						document.body,
