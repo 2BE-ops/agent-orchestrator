@@ -262,6 +262,18 @@ export interface CloudCpResumeSessionResponse {
 	};
 }
 
+/**
+ * POST /orgs/{orgId}/sessions/{sessionId}/restore responds 202: a deleted
+ * session is re-provisioned with its conversation and work intact, and the
+ * reconciler owns bringing it back — the response only echoes the new intent.
+ */
+export interface CloudCpRestoreSessionResponse {
+	session: {
+		id: string;
+		desiredState: string;
+	};
+}
+
 // ---------------------------------------------------------------------------
 // Chat events (`event_handlers.go`)
 // ---------------------------------------------------------------------------
