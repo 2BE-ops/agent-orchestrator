@@ -45,46 +45,7 @@ func (l integrationChatLauncher) PreflightChat(
 }
 
 func (l integrationChatLauncher) StartChat(ctx context.Context, cfg ChatStart) (ChatStarted, error) {
-	result, err := l.service.StartChat(ctx, chatsvc.StartRequest{
-		SessionID:               cfg.SessionID,
-		ProjectID:               cfg.ProjectID,
-		Kind:                    cfg.Kind,
-		Harness:                 cfg.Harness,
-		DataDir:                 cfg.DataDir,
-		WorkspacePath:           cfg.WorkspacePath,
-		Env:                     cfg.Env,
-		Model:                   cfg.Model,
-		Permissions:             cfg.Permissions,
-		SystemPrompt:            cfg.SystemPrompt,
-		AdditionalDirectories:   cfg.AdditionalDirectories,
-		ExpectedControllerOwner: cfg.ExpectedControllerOwner,
-		PrepareControllerEnv:    cfg.PrepareControllerEnv,
-		ProviderConversationID:  cfg.ProviderConversationID,
-		ProviderScopeID:         cfg.ProviderScopeID,
-		ProviderHandoff:         cfg.ProviderHandoff,
-		ControllerGeneration:    cfg.ControllerGeneration,
-		HistoryMode:             cfg.HistoryMode,
-		ControllerReady: func(result chatsvc.StartResult) (chatsvc.ControllerCommit, error) {
-			if cfg.ControllerReady == nil {
-				return chatsvc.ControllerCommit{}, nil
-			}
-			commit, readyErr := cfg.ControllerReady(ChatStarted{
-				ProviderConversationID: result.ProviderConversationID,
-				ControllerGeneration:   result.ControllerGeneration,
-				Conversation:           result.Conversation,
-				ProviderBoundary:       result.ProviderBoundary,
-				CommitProviderHistory:  result.CommitProviderHistory,
-			})
-			return chatsvc.ControllerCommit{Conversation: commit.Conversation, ControllerOwner: commit.ControllerOwner}, readyErr
-		},
-	})
-	if err != nil {
-		return ChatStarted{}, err
-	}
-	return ChatStarted{
-		ProviderConversationID: result.ProviderConversationID,
-		ControllerGeneration:   result.ControllerGeneration,
-	}, nil
+	return l.service.StartChat(ctx, cfg)
 }
 
 func (l integrationChatLauncher) StartChatTurn(ctx context.Context, id domain.SessionID, text string) (string, error) {

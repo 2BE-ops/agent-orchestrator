@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/lifecycle"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	chatsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/chat"
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite/sqlitetest"
-	"github.com/google/uuid"
 )
 
 type handoffDriverRegistry struct{ driver ports.ChatDriver }
@@ -31,6 +32,7 @@ func TestNativeForkHandoffRetainsEachExchangeOnce(t *testing.T) {
 		wantCopies                int
 	}{
 		{"copied ancestry", "thread-A", "alpha remembered", 1},
+		{"persisted history omits item IDs", "thread-A", "alpha remembered", 1},
 		{"indirect ancestry", "thread-middle", "alpha remembered", 1},
 		{"unrelated identical history", "unrelated", "alpha remembered", 2},
 		{"changed ancestor content", "thread-A", "different answer", 2},
@@ -94,7 +96,26 @@ func TestNativeForkHandoffRetainsEachExchangeOnce(t *testing.T) {
 			reservation := &domain.ChatProviderHandoff{BoundaryID: "fork-boundary", ConversationID: before.Conversation.ID, PreviousSessionID: rec.ID, PreviousBranchID: before.Conversation.ActiveBranchID, PreviousSequence: before.Conversation.LatestSequence, ExpectedControllerOwner: rec.ControllerOwner()}
 			resumedDriver, resumedServer := newTestDriver(t)
 			resumedServer.reply("thread/resume", `{"thread":{"id":"thread-B"}}`)
-			resumedServer.reply("thread/read", forkHandoffHistory("thread-B", tc.parent, tc.firstAnswer, true))
+			replay := forkHandoffHistory("thread-B", tc.parent, tc.firstAnswer, true)
+			if tc.name == "persisted history omits item IDs" {
+				var decoded struct {
+					Thread map[string]any `json:"thread"`
+				}
+				if err := json.Unmarshal([]byte(replay), &decoded); err != nil {
+					t.Fatal(err)
+				}
+				for _, turn := range decoded.Thread["turns"].([]any) {
+					for _, item := range turn.(map[string]any)["items"].([]any) {
+						delete(item.(map[string]any), "id")
+					}
+				}
+				encoded, err := json.Marshal(decoded)
+				if err != nil {
+					t.Fatal(err)
+				}
+				replay = string(encoded)
+			}
+			resumedServer.reply("thread/read", replay)
 			if tc.parent == "thread-middle" {
 				resumedServer.respondSequence("thread/read", forkHandoffHistory("thread-B", tc.parent, tc.firstAnswer, true), `{"thread":{"id":"thread-middle","forkedFromId":"thread-A"}}`)
 			}
@@ -154,7 +175,7 @@ func TestNativeForkHandoffRetainsEachExchangeOnce(t *testing.T) {
 			// A new driver and service exercise a daemon restart, not cached replay.
 			restartedDriver, restartedServer := newTestDriver(t)
 			restartedServer.reply("thread/resume", `{"thread":{"id":"thread-B"}}`)
-			restartedServer.reply("thread/read", forkHandoffHistory("thread-B", tc.parent, tc.firstAnswer, true))
+			restartedServer.reply("thread/read", replay)
 			if tc.parent == "thread-middle" {
 				// Restart resolves the chain again; no in-memory ancestry cache.
 				restartedServer.respondSequence("thread/read", forkHandoffHistory("thread-B", tc.parent, tc.firstAnswer, true), `{"thread":{"id":"thread-middle","forkedFromId":"thread-A"}}`)

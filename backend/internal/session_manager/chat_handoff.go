@@ -34,7 +34,10 @@ func (m *Manager) prepareLiveChatProviderHandoff(ctx context.Context, rec domain
 	if transition.Phase != domain.SessionInterfaceTransitionTargetStarting && transition.Phase != domain.SessionInterfaceTransitionActivating {
 		return nil, nil
 	}
-	store := m.store.(chatProviderOwnershipStore)
+	store, ok := m.store.(chatProviderOwnershipStore)
+	if !ok {
+		return nil, errors.New("native handoff requires conversation ownership storage")
+	}
 	conversation, err := store.ConversationForSession(ctx, rec.ID)
 	if errors.Is(err, domain.ErrNoConversation) && rec.Kind == domain.KindOrchestrator {
 		if projects, ok := m.store.(interface {
@@ -84,7 +87,10 @@ func (m *Manager) prepareRecoveredChatProviderHandoff(ctx context.Context, rec d
 	if transition.Phase != domain.SessionInterfaceTransitionCompleted {
 		return nil, nil
 	}
-	store := m.store.(chatProviderOwnershipStore)
+	store, ok := m.store.(chatProviderOwnershipStore)
+	if !ok {
+		return nil, errors.New("native handoff recovery requires conversation ownership storage")
+	}
 	conversation, err := store.ConversationForSession(ctx, rec.ID)
 	if err != nil {
 		return nil, err

@@ -695,17 +695,20 @@ func (s *Service) Start(ctx context.Context, cfg StartConfig) (*Controller, erro
 		} else {
 			existing, err = s.nativeReplayRows(ctx, activeBranch, existing)
 			if err != nil {
-				cleanupUnpublishedConversation(conv, false)
+				_ = cleanupUnpublishedConversation(conv, false)
 				return nil, err
 			}
-			// Older builds carried the predecessor's hook checkpoint across edits.
+			// Older builds carried legacy hook text across edits. Trusted native
+			// checkpoints always retain their identity and content requirements.
 			// The edit's timestamp proves those facts predate this continuation;
 			// newer or undated hooks still gate replay, as does its AO high-water mark.
 			if activeBranch.ReplacedTurnID != "" {
-				if !replayCheckpoint.latestUserPromptAt.IsZero() && replayCheckpoint.latestUserPromptAt.Before(activeBranch.CreatedAt) {
+				if replayCheckpoint.userMismatch == ports.ChatHistoryMismatchUntrustedUserText &&
+					!replayCheckpoint.latestUserPromptAt.IsZero() && replayCheckpoint.latestUserPromptAt.Before(activeBranch.CreatedAt) {
 					replayCheckpoint.latestUserPrompt = ""
 				}
-				if !replayCheckpoint.latestAssistantUpdateAt.IsZero() && replayCheckpoint.latestAssistantUpdateAt.Before(activeBranch.CreatedAt) {
+				if replayCheckpoint.assistantMismatch == ports.ChatHistoryMismatchUntrustedAssistantText &&
+					!replayCheckpoint.latestAssistantUpdateAt.IsZero() && replayCheckpoint.latestAssistantUpdateAt.Before(activeBranch.CreatedAt) {
 					replayCheckpoint.latestAssistantUpdate = ""
 				}
 			}
@@ -1384,8 +1387,7 @@ func (s *Service) StartChat(ctx context.Context, cfg StartRequest) (StartResult,
 	return controllerStartResult(controller, nil, nil), nil
 }
 
-// StartRequest mirrors session_manager.ChatStart. Duplicated rather than
-// imported so the manager and this service do not depend on each other's types.
+// StartRequest is the shared coordinator-to-service launch contract.
 type StartRequest = ports.ChatControllerStart
 
 // StartResult is the durable outcome of a launch.

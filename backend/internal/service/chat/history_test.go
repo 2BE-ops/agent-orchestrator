@@ -822,7 +822,7 @@ func TestEditMessageReplaysDurableContextWhenNativeForkIsUnavailable(t *testing.
 		t.Fatalf("initial start has no provider scope: %#v", starts[0])
 	}
 	if starts[1].SystemPrompt != "preserved prompt" || starts[1].ProviderScopeID == "" ||
-		starts[1].ProviderScopeID == starts[0].ProviderScopeID {
+		starts[1].ProviderScopeID == starts[0].ProviderScopeID || !starts[1].ProviderIDsScoped {
 		t.Fatalf("approximate start config = %#v", starts[1])
 	}
 	sent := driver.fresh.sentMessages()

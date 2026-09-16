@@ -363,7 +363,7 @@ func (s *Service) EditMessage(
 					Env: launchEnv, Model: cfg.Model, Effort: cfg.Effort,
 					Permissions:  cfg.Permissions,
 					SystemPrompt: cfg.SystemPrompt, AdditionalDirectories: cfg.AdditionalDirectories,
-					MCPServers: cfg.MCPServers, ProviderScopeID: providerScopeID,
+					MCPServers: cfg.MCPServers, ProviderScopeID: providerScopeID, ProviderIDsScoped: true,
 				})
 				if err == nil {
 					providerConversationID = provider.ProviderConversationID()

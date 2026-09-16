@@ -48,18 +48,25 @@ func (s *Service) withoutInheritedHistory(ctx context.Context, provider ports.Ch
 		if err != nil {
 			return nil, err
 		}
+		// Presentation hides inactive providers' handles to disable edit controls.
+		// Recover the durable IDs here, without exposing them to the current UI.
+		rows.Turns = append([]domain.ConversationTurn(nil), rows.Turns...)
+		for j := range rows.Turns {
+			if rows.Turns[j].ProviderTurnID != "" {
+				continue
+			}
+			stored, err := s.store.TurnByID(ctx, rows.Turns[j].ID)
+			if err != nil {
+				return nil, err
+			}
+			rows.Turns[j].ProviderTurnID = stored.ProviderTurnID
+		}
 		events = omitCopiedPrefix(events, mapped, rows)
 	}
 	return events, nil
 }
 
 func omitCopiedPrefix(events, mapped []ports.ChatEvent, rows ConversationRows) []ports.ChatEvent {
-	// Snapshot presentation hides inactive providers' turn handles. The item
-	// identities remain durable, so index by them with AO turn IDs as local keys.
-	rows.Turns = append([]domain.ConversationTurn(nil), rows.Turns...)
-	for i := range rows.Turns {
-		rows.Turns[i].ProviderTurnID = rows.Turns[i].ID
-	}
 	index := indexNativeHistoryTurns(rows.Turns, rows.Messages, rows.Activities)
 	if index == nil {
 		return events
@@ -69,6 +76,14 @@ func omitCopiedPrefix(events, mapped []ports.ChatEvent, rows ConversationRows) [
 	messages, activities := map[string]int{}, map[string]int{}
 	ambiguous := false
 	for i, event := range mapped {
+		// Codex may omit item IDs in persisted history. Its native turn identity
+		// still proves the candidate; complete content must match below as well.
+		if matched := index.byProviderTurnID[event.ProviderTurnID]; matched != nil {
+			if candidate != nil && matched != candidate {
+				ambiguous = true
+			}
+			candidate = matched
+		}
 		if matched := index.providerItems[event.ProviderItemID]; matched != nil {
 			if candidate != nil && matched != candidate {
 				ambiguous = true

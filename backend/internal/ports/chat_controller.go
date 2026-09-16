@@ -2,12 +2,14 @@ package ports
 
 import (
 	"context"
+
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 )
 
 // ChatHistoryMode makes required replay and deferred import mutually exclusive.
 type ChatHistoryMode uint8
 
+// Controller replay modes.
 const (
 	ChatHistoryImport ChatHistoryMode = iota
 	ChatHistoryRequired
@@ -15,6 +17,7 @@ const (
 	ChatHistoryDeferred
 )
 
+// ChatControllerStart is the resolved launch contract shared by the coordinator and Chat service.
 type ChatControllerStart struct {
 	SessionID             domain.SessionID
 	ProjectID             domain.ProjectID
@@ -58,11 +61,13 @@ type ChatControllerStart struct {
 	ControllerReady func(ChatControllerStarted) (ChatControllerCommit, error)
 }
 
+// ChatControllerCommit returns the ownership published by the launch callback.
 type ChatControllerCommit struct {
 	Conversation    domain.ConversationRecord
 	ControllerOwner domain.SessionControllerOwner
 }
 
+// ChatControllerStarted supplies the provider identity and pending atomic history commit.
 type ChatControllerStarted struct {
 	// LiveReconnect is true only when the driver attached to the same running
 	// provider process. A native-history resume in a new process is a spawn.

@@ -17,18 +17,20 @@ import (
 
 func TestEditedFirstMessageResumesNativeHistoryAfterTerminalHooks(t *testing.T) {
 	for _, tc := range []struct {
-		name             string
-		legacyCheckpoint bool
-		terminalHook     bool
-		terminalReplay   bool
-		unknownTime      bool
-		wantErr          error
+		name              string
+		legacyCheckpoint  bool
+		terminalHook      bool
+		terminalReplay    bool
+		unknownTime       bool
+		trustedCheckpoint bool
+		wantErr           error
 	}{
 		{name: "edit_clears_previous_checkpoint"},
 		{name: "already_stuck_edit", legacyCheckpoint: true},
 		{name: "new_terminal_work_missing", legacyCheckpoint: true, terminalHook: true, wantErr: ports.ErrChatHistoryUnsettled},
 		{name: "new_terminal_work_replayed", legacyCheckpoint: true, terminalHook: true, terminalReplay: true},
 		{name: "unknown_checkpoint_age", legacyCheckpoint: true, unknownTime: true, wantErr: ports.ErrChatHistoryUnsettled},
+		{name: "trusted_checkpoint_keeps_text_requirements", legacyCheckpoint: true, trustedCheckpoint: true, wantErr: ports.ErrChatHistoryUnsettled},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, _, driver := newEditHarness(t, false)
@@ -77,6 +79,13 @@ func TestEditedFirstMessageResumesNativeHistoryAfterTerminalHooks(t *testing.T) 
 				if tc.unknownTime {
 					rec.Metadata.LatestUserPromptAt = time.Time{}
 					rec.Metadata.LatestAssistantUpdateAt = time.Time{}
+				}
+				if tc.trustedCheckpoint {
+					rec.Harness = domain.HarnessCodex
+					rec.Metadata.ConversationCheckpointState = domain.ConversationCheckpointComplete
+					rec.Metadata.ConversationCheckpointGeneration = "native-launch"
+					rec.Metadata.ConversationCheckpointNativeID = "thread-fresh"
+					rec.Metadata.ConversationCheckpointTurnID = "provider-turn-101"
 				}
 				if err := h.st.UpdateSession(ctx, rec); err != nil {
 					t.Fatal(err)
