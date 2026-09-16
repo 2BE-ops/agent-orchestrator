@@ -3,8 +3,9 @@ import { CancellationToken } from "builder-util-runtime";
 import { app, dialog, autoUpdater as nativeAutoUpdater } from "electron";
 import { startMacUpdateProgress } from "./mac-update-progress";
 import { markUpdateRelaunch } from "./update-relaunch-flag";
-import { accessSync, constants as fsConstants, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { accessSync, constants as fsConstants, existsSync, lstatSync, readFileSync, readdirSync, statfsSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import semver from "semver";
 import type { RequestOptions } from "node:http";
@@ -107,16 +108,112 @@ let restartFailureHandler: (() => void) | undefined;
 let macRestartProgress: Awaited<ReturnType<typeof startMacUpdateProgress>> | undefined;
 let nativeReadyVersion: string | undefined;
 let nativePreparationError: Error | undefined;
-const NATIVE_PREPARATION_TIMEOUT_MS = 180_000;
+// Squirrel.Mac staging has no progress event and no cancel API, so a fixed
+// deadline punished slow disks (#5170). Watch the staging dir for growth and
+// give up only after a stretch of no progress; fall back to a fixed cap when the
+// growth signal can't be read.
+const STAGE_POLL_INTERVAL_MS = 10_000;
+const STAGE_INACTIVITY_TIMEOUT_MS = 90_000;
+const STAGE_NO_SIGNAL_CAP_MS = 6 * 60_000;
+const STAGE_ABSOLUTE_CAP_MS = 15 * 60_000;
+// A ShipIt extract keeps an uncompressed copy during the swap, so require a floor
+// of free space beyond the already-downloaded zip.
+const MIN_FREE_BYTES_TO_STAGE = 2 * 1024 * 1024 * 1024;
+// Short user-facing lines; the raw ditto/pkzip/codesign detail is logged, not shown.
+const STAGE_STALL_MESSAGE = "Couldn't finish preparing the update. AO stayed open, so nothing changed. Retry to try again.";
+const STAGE_DISK_MESSAGE = "Not enough disk space to install the update. Free up space, then retry.";
 let nativePreparationBlocked: Error | undefined;
 let rejectNativeOperation: ((error: Error) => void) | undefined;
 let nativePreparation: { version: string; promise: Promise<void>; finish(error?: Error): void } | undefined;
 
+// Squirrel.Mac stages into ~/Library/Caches/<bundleId>.ShipIt. This is the OS
+// updater's own working area: AO only READS it (never writes, keeps no AO state
+// there; AO state stays under ~/.ao) and every read fails open to undefined.
+function macShipItDir(): string | undefined {
+  if (process.platform !== "darwin") return undefined;
+  try {
+    const cachesRoot = path.join(os.homedir(), "Library", "Caches");
+    const entry = readdirSync(cachesRoot).find((name) => name.endsWith(".ShipIt"));
+    return entry ? path.join(cachesRoot, entry) : undefined;
+  } catch { return undefined; }
+}
+
+// Bytes under the staging area, bounded so a poll can't walk a huge tree.
+// undefined means no readable signal.
+function shipItStagingBytes(dir: string | undefined): number | undefined {
+  if (dir === undefined) return undefined;
+  let total = 0;
+  let seen = 0;
+  const budget = 20_000;
+  const walk = (d: string): void => {
+    let names: string[];
+    try { names = readdirSync(d); } catch { return; }
+    for (const name of names) {
+      if (seen >= budget) return;
+      seen += 1;
+      const full = path.join(d, name);
+      let st;
+      try { st = lstatSync(full); } catch { continue; }
+      if (st.isSymbolicLink()) continue;
+      if (st.isDirectory()) walk(full);
+      else total += st.size;
+    }
+  };
+  walk(dir);
+  return seen === 0 ? undefined : total;
+}
+
+// True when the volume clearly lacks room to extract and swap. Fails open.
+function insufficientDiskForStaging(): boolean {
+  if (process.platform !== "darwin") return false;
+  try {
+    const target = macShipItDir() ?? path.join(os.homedir(), "Library", "Caches");
+    const { bavail, bsize } = statfsSync(target);
+    return Number(bavail) * Number(bsize) < MIN_FREE_BYTES_TO_STAGE;
+  } catch { return false; }
+}
+
+// Rewrites only known extraction/verification failures to a short line; any
+// other error passes through so its own recovery and messaging stay intact.
+function shortStagingMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  if (/no space left on device/i.test(raw)) return STAGE_DISK_MESSAGE;
+  if (/ditto:|pkzip|code ?signature|codesign|failed to (?:extract|unzip)/i.test(raw)) return STAGE_STALL_MESSAGE;
+  return raw;
+}
+
+function blockNativePreparation(message: string): void {
+  nativePreparationBlocked = new Error(message);
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+  activeDownloadCancellation?.cancel();
+}
+
+// Test seam: override the filesystem probes to drive the watchdog
+// deterministically. A fresh module import restores the defaults.
+let readStagingBytes: (dir: string | undefined) => number | undefined = shipItStagingBytes;
+let stagingDiskIsFull: () => boolean = insufficientDiskForStaging;
+export function __setStagingProbesForTesting(probes: {
+  readStagingBytes?: (dir: string | undefined) => number | undefined;
+  stagingDiskIsFull?: () => boolean;
+}): void {
+  if (probes.readStagingBytes) readStagingBytes = probes.readStagingBytes;
+  if (probes.stagingDiskIsFull) stagingDiskIsFull = probes.stagingDiskIsFull;
+}
+
 function beginNativePreparation(version: string): void {
   if (nativePreparationBlocked) return;
   if (nativePreparation) {
-    nativePreparationBlocked = new Error("macOS received overlapping update requests. Close and reopen AO before retrying.");
+    nativePreparationBlocked = new Error(STAGE_STALL_MESSAGE);
     nativePreparation.finish(nativePreparationBlocked);
+    return;
+  }
+  // Catch a full disk before ditto fails partway with a cryptic pkzip error (#5170).
+  if (stagingDiskIsFull()) {
+    blockNativePreparation(STAGE_DISK_MESSAGE);
+    nativeReadyVersion = undefined;
+    nativePreparationError = nativePreparationBlocked;
+    broadcast(stagedDownloadedStatus());
     return;
   }
   nativeReadyVersion = undefined;
@@ -130,7 +227,7 @@ function beginNativePreparation(version: string): void {
     version, promise,
     finish(error?: Error) {
       if (nativePreparation !== preparation) return;
-      clearTimeout(timer);
+      clearInterval(watchdog);
       nativePreparation = undefined;
       nativePreparationError = error;
       if (error) {
@@ -140,17 +237,35 @@ function beginNativePreparation(version: string): void {
       } else { nativeReadyVersion = version; resolve(); }
     },
   };
-  const timer = setTimeout(() => {
-    // Squirrel offers no cancellation API. Do not start another generation on
-    // top of a timed-out native request, even if its JS transfer settles later.
-    nativePreparationBlocked = new Error("macOS stopped responding while preparing the update. AO has stayed open. Close and reopen AO before retrying.");
-    autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = false;
-    activeDownloadCancellation?.cancel();
+  const stagingDir = macShipItDir();
+  const startedAt = Date.now();
+  let lastBytes = readStagingBytes(stagingDir);
+  let lastProgressAt = startedAt;
+  const trip = (): void => {
+    // No cancel API, so never stage again on top of a stalled request even if
+    // its JS transfer settles later; recovery is a clean relaunch.
+    console.error(`native update preparation stalled after ${Math.round((Date.now() - startedAt) / 1000)}s with no staging progress`);
+    blockNativePreparation(STAGE_STALL_MESSAGE);
     preparation.finish(nativePreparationBlocked);
     broadcast(stagedDownloadedStatus());
-  }, NATIVE_PREPARATION_TIMEOUT_MS);
-  timer.unref?.();
+  };
+  const watchdog = setInterval(() => {
+    const now = Date.now();
+    const bytes = readStagingBytes(stagingDir);
+    if (bytes !== undefined && (lastBytes === undefined || bytes > lastBytes)) {
+      lastBytes = bytes;
+      lastProgressAt = now;
+    }
+    const haveSignal = bytes !== undefined;
+    if (
+      now - startedAt >= STAGE_ABSOLUTE_CAP_MS ||
+      (haveSignal && now - lastProgressAt >= STAGE_INACTIVITY_TIMEOUT_MS) ||
+      (!haveSignal && now - startedAt >= STAGE_NO_SIGNAL_CAP_MS)
+    ) {
+      trip();
+    }
+  }, STAGE_POLL_INTERVAL_MS);
+  watchdog.unref?.();
   nativePreparation = preparation;
 }
 
@@ -1384,15 +1499,18 @@ function wireUpdaterEvents(): void {
       broadcast(lastStatus.state === "downloading" ? lastStatus : stagedDownloadedStatus());
     });
     nativeAutoUpdater.on("error", (error) => {
-      nativePreparation?.finish(error);
+      // Log the full detail; surface only a short line.
+      console.error("native macOS updater error during staging:", error);
+      const short = new Error(shortStagingMessage(error));
+      nativePreparation?.finish(short);
       nativeReadyVersion = undefined;
-      nativePreparationError = error;
+      nativePreparationError = short;
       if (macRestartRequested) {
         macRestartRequested = false;
         macRestartPreparation = undefined;
         stagedInCurrentProcess = false;
-        void macRestartProgress?.fail(errorMessage(error)).catch(() => undefined);
-        broadcast({ state: "error", message: errorMessage(error) });
+        void macRestartProgress?.fail(short.message).catch(() => undefined);
+        broadcast({ state: "error", message: short.message });
         // Squirrel can close the windows, then fail to persist its relaunch
         // request. Restore AO in that still-running process instead of leaving
         // the user with no app window and no possible automatic restart.

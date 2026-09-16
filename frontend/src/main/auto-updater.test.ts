@@ -3075,6 +3075,10 @@ describe("quitAndInstallUpdate", () => {
     vi.useFakeTimers();
     try {
       const { module, autoUpdater, updaterEvents, nativeAutoUpdater, startMacUpdateProgress } = await importAutoUpdater(undefined, { nativeReadyManually: true });
+      // A static, non-growing staging signal makes the inactivity watchdog trip
+      // deterministically at STAGE_INACTIVITY_TIMEOUT_MS (90s) instead of reading
+      // this machine's real ShipIt cache.
+      module.__setStagingProbesForTesting({ readStagingBytes: () => 1 });
       await module.startAutoUpdates(stateDir);
       updaterEvents.get("update-downloaded")?.({ version: "2.1.0" });
       const install = module.quitAndInstallUpdate();
@@ -3096,6 +3100,7 @@ describe("quitAndInstallUpdate", () => {
     try {
       writeFileSync(nodePath.join(stateDir, "staged-update.json"), JSON.stringify({ version: "2.1.0", stagedAt: Date.now(), channel: "latest" }));
       const { module, autoUpdater, updaterEvents, nativeAutoUpdater } = await importAutoUpdater(undefined, { nativeReadyManually: true });
+      module.__setStagingProbesForTesting({ readStagingBytes: () => 1 });
       await module.startAutoUpdates(stateDir);
       const transfer = deferred();
       autoUpdater.checkForUpdates.mockResolvedValue({ isUpdateAvailable: true, updateInfo: { version: "2.1.0" } });
@@ -3103,14 +3108,14 @@ describe("quitAndInstallUpdate", () => {
         updaterEvents.get("update-downloaded")?.({ version: "2.1.0" });
         return transfer.promise;
       });
-      const assertion = expect(module.quitAndInstallUpdate()).rejects.toThrow(/Close and reopen AO/);
+      const assertion = expect(module.quitAndInstallUpdate()).rejects.toThrow(/nothing changed/);
       await flushMicrotasks();
       await vi.advanceTimersByTimeAsync(180_000);
       await assertion;
       nativeAutoUpdater.emit("update-downloaded");
       transfer.resolve();
       await flushMicrotasks();
-      await expect(module.quitAndInstallUpdate()).rejects.toThrow(/Close and reopen AO/);
+      await expect(module.quitAndInstallUpdate()).rejects.toThrow(/nothing changed/);
       expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
       expect(autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1);
     } finally { vi.useRealTimers(); restore(); }
@@ -4032,12 +4037,13 @@ it("keeps timed-out native preparation non-installable even after a late event",
   const restore = stubProcess("darwin", process.execPath);
   try {
     const { module, updaterEvents, nativeUpdaterEvents, autoUpdater } = await importAutoUpdater(undefined, { nativeReadyManually: true });
+    module.__setStagingProbesForTesting({ readStagingBytes: () => 1 });
     await module.checkForUpdatesNow(stateDir);
     updaterEvents.get("update-downloaded")?.({ version: "2.0.0" });
     await vi.advanceTimersByTimeAsync(3 * 60_000);
     expect(module.getUpdateStatus()).toMatchObject({ state: "error", staged: { ready: false } });
-    expect(module.getUpdateStatus().message).toContain("stopped responding while preparing");
-    await expect(module.quitAndInstallUpdate()).rejects.toThrow(/Close and reopen AO/);
+    expect(module.getUpdateStatus().message).toContain("nothing changed");
+    await expect(module.quitAndInstallUpdate()).rejects.toThrow(/nothing changed/);
     expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
     nativeUpdaterEvents.get("update-downloaded")?.({}, "notes", "2.0.0");
     expect(module.getUpdateStatus().state).toBe("error");
