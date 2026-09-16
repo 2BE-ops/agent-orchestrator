@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -199,55 +200,42 @@ func TestSend_SteerStateChangeRaceUsesOneAtomicRequest(t *testing.T) {
 	}
 }
 
-func TestSend_SteerUnsupportedDoesNotSilentlyQueue(t *testing.T) {
-	cfg := setConfigEnv(t)
-	var calls int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/internal/") {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		calls++
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		_, _ = io.WriteString(w, `{"error":"conflict","code":"CHAT_STEER_UNSUPPORTED","message":"cannot steer"}`)
-	}))
-	t.Cleanup(srv.Close)
-	writeRunFileFor(t, cfg, srv)
-
-	_, _, err := executeCLI(t, Deps{ProcessAlive: func(int) bool { return true }},
-		"send", "--session", "demo-1", "--steer", "--message", "correction")
-	if err == nil || !strings.Contains(err.Error(), "CHAT_STEER_UNSUPPORTED") {
-		t.Fatalf("err = %v, want explicit unsupported error", err)
+func TestSend_SteerFailureDoesNotSilentlyQueue(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		code   string
+	}{
+		{name: "unsupported", status: http.StatusConflict, code: "CHAT_STEER_UNSUPPORTED"},
+		{name: "provider failure", status: http.StatusBadGateway, code: "CHAT_PROVIDER_FAILED"},
 	}
-	if calls != 1 {
-		t.Fatalf("calls = %d, unsupported steer must not queue", calls)
-	}
-}
 
-func TestSend_SteerProviderFailureDoesNotQueue(t *testing.T) {
-	cfg := setConfigEnv(t)
-	var calls int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/internal/") {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		calls++
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadGateway)
-		_, _ = io.WriteString(w, `{"error":"provider","code":"CHAT_PROVIDER_FAILED","message":"provider failed"}`)
-	}))
-	t.Cleanup(srv.Close)
-	writeRunFileFor(t, cfg, srv)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := setConfigEnv(t)
+			var calls int
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasPrefix(r.URL.Path, "/internal/") {
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
+				calls++
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.status)
+				_, _ = fmt.Fprintf(w, `{"error":"failure","code":%q,"message":"steer failed"}`, tt.code)
+			}))
+			t.Cleanup(srv.Close)
+			writeRunFileFor(t, cfg, srv)
 
-	_, _, err := executeCLI(t, Deps{ProcessAlive: func(int) bool { return true }},
-		"send", "--session", "demo-1", "--steer", "--message", "correction")
-	if err == nil || !strings.Contains(err.Error(), "CHAT_PROVIDER_FAILED") {
-		t.Fatalf("err = %v, want provider failure", err)
-	}
-	if calls != 1 {
-		t.Fatalf("calls = %d, failed steer must not queue", calls)
+			_, _, err := executeCLI(t, Deps{ProcessAlive: func(int) bool { return true }},
+				"send", "--session", "demo-1", "--steer", "--message", "correction")
+			if err == nil || !strings.Contains(err.Error(), tt.code) {
+				t.Fatalf("err = %v, want %s", err, tt.code)
+			}
+			if calls != 1 {
+				t.Fatalf("calls = %d, failed steer must not queue", calls)
+			}
+		})
 	}
 }
 
