@@ -355,12 +355,28 @@ func (s *Store) IssueTerminalTicket(
 		var exited bool
 		err := s.withSessionAccess(ctx, principal, orgID, sessionID, func(tx pgx.Tx, _ sessionAccess) error {
 			return tx.QueryRow(ctx,
-				`SELECT session.is_terminated OR session.activity_state = 'exited' OR EXISTS (
-					SELECT 1 FROM ao_terminal_sessions terminal
-					WHERE terminal.org_id = session.org_id
-					  AND terminal.session_id = session.id
-					  AND terminal.kind = 'agent'
-					  AND terminal.state IN ('closed', 'failed')
+				// The agent terminal is "exited" only when the session is terminated
+				// or the agent reported exit, OR a prior agent terminal closed AND no
+				// live one exists. A resume closes the old terminal and opens a fresh
+				// one, so a resumed session always carries closed terminals; keying
+				// exit on "any closed terminal" falsely reports every resumed session
+				// as exited even while a live open terminal is serving. Requiring no
+				// opening/open agent terminal fixes that false positive.
+				`SELECT session.is_terminated OR session.activity_state = 'exited' OR (
+					EXISTS (
+						SELECT 1 FROM ao_terminal_sessions terminal
+						WHERE terminal.org_id = session.org_id
+						  AND terminal.session_id = session.id
+						  AND terminal.kind = 'agent'
+						  AND terminal.state IN ('closed', 'failed')
+					)
+					AND NOT EXISTS (
+						SELECT 1 FROM ao_terminal_sessions terminal
+						WHERE terminal.org_id = session.org_id
+						  AND terminal.session_id = session.id
+						  AND terminal.kind = 'agent'
+						  AND terminal.state IN ('opening', 'open')
+					)
 				)
 				FROM ao_sessions session
 				WHERE session.org_id = $1 AND session.id = $2`,

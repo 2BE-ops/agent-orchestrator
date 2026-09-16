@@ -86,6 +86,17 @@ export function createCloudTerminalMux(options: CloudTerminalMuxOptions): Termin
 		connectionListeners.forEach((listener) => listener(next));
 	};
 
+	const terminalExited = (error: unknown): boolean =>
+		typeof error === "object" && error !== null && (error as { code?: unknown }).code === "TERMINAL_SESSION_EXITED";
+
+	const reportTerminalExited = () => {
+		if (disposed || exited) return;
+		exited = true;
+		errorListeners.forEach((listener) =>
+			listener("The coding-agent terminal has exited. Start a new session to continue."),
+		);
+	};
+
 	const sendJSON = (message: unknown): boolean => {
 		if (socket && socket.readyState === WS.OPEN) {
 			socket.send(JSON.stringify(message));
@@ -170,8 +181,16 @@ export function createCloudTerminalMux(options: CloudTerminalMuxOptions): Termin
 		let ticket: string;
 		try {
 			ticket = await options.mintTicket(kind);
-		} catch {
+		} catch (error) {
 			if (disposed) return;
+			// A control plane that reports the agent terminal has exited (410
+			// TERMINAL_SESSION_EXITED) is terminal: surface it and stop, rather than
+			// looping the ticket mint forever as if the worker were merely not up yet
+			// (the "Connected, but stuck Connecting…" symptom).
+			if (terminalExited(error)) {
+				reportTerminalExited();
+				return;
+			}
 			// A freshly created session's worker may not be connected yet while its
 			// sandbox provisions; the control plane reports that as 409
 			// WORKER_UNAVAILABLE on the ticket request. Report this as "waiting",
