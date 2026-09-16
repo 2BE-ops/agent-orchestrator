@@ -62,6 +62,7 @@ type APIDeps struct {
 	Installer         controllers.Installer
 	AgentAuth         controllers.AgentAuthService
 	AgentSwitchPolicy AgentSwitchPolicyControl
+	ProjectSummaries  controllers.ProjectSummaryService
 
 	// Presence tracks which mobile devices are currently running the app.
 	// Nil disables presence tracking (the roster then reports every device offline).
@@ -102,31 +103,32 @@ func normalizeAPIDeps(deps APIDeps, log *slog.Logger) APIDeps {
 // API owns one controller per resource and is the single Register call the
 // router invokes to mount the /api/v1 surface.
 type API struct {
-	cfg           config.Config
-	deps          APIDeps
-	agents        *controllers.AgentsController
-	codexAccounts *controllers.CodexAccountsController
-	projects      *controllers.ProjectsController
-	sessions      *controllers.SessionsController
-	desktop       *controllers.DesktopWorkspaceController
-	usage         *controllers.UsageController
-	prs           *controllers.PRsController
-	reviews       *controllers.ReviewsController
-	notifications *controllers.NotificationsController
-	reports       *controllers.ReportsController
-	push          *controllers.PushController
-	imports       *controllers.ImportController
-	shellTerms    *controllers.ShellTerminalsController
-	conversations *controllers.ConversationsController
-	settings      *controllers.SettingsController
-	dev           *controllers.DevController
-	browser       *controllers.BrowserController
-	system        *controllers.SystemController
-	identity      *controllers.IdentityController
-	endpoints     *controllers.EndpointsController
-	systemInstall *controllers.SystemInstallController
-	agentAuth     *controllers.AgentAuthController
-	events        *EventsController
+	cfg              config.Config
+	deps             APIDeps
+	agents           *controllers.AgentsController
+	codexAccounts    *controllers.CodexAccountsController
+	projects         *controllers.ProjectsController
+	projectSummaries *controllers.ProjectSummariesController
+	sessions         *controllers.SessionsController
+	desktop          *controllers.DesktopWorkspaceController
+	usage            *controllers.UsageController
+	prs              *controllers.PRsController
+	reviews          *controllers.ReviewsController
+	notifications    *controllers.NotificationsController
+	reports          *controllers.ReportsController
+	push             *controllers.PushController
+	imports          *controllers.ImportController
+	shellTerms       *controllers.ShellTerminalsController
+	conversations    *controllers.ConversationsController
+	settings         *controllers.SettingsController
+	dev              *controllers.DevController
+	browser          *controllers.BrowserController
+	system           *controllers.SystemController
+	identity         *controllers.IdentityController
+	endpoints        *controllers.EndpointsController
+	systemInstall    *controllers.SystemInstallController
+	agentAuth        *controllers.AgentAuthController
+	events           *EventsController
 }
 
 // NewAPI constructs the API surface from its dependencies. cfg carries the
@@ -143,6 +145,7 @@ func NewAPI(cfg config.Config, deps APIDeps) *API {
 		projects: &controllers.ProjectsController{
 			Mgr: deps.Projects,
 		},
+		projectSummaries: &controllers.ProjectSummariesController{Svc: deps.ProjectSummaries},
 		sessions: &controllers.SessionsController{
 			Svc:           deps.Sessions,
 			Activity:      deps.Activity,
@@ -190,6 +193,7 @@ func (a *API) Register(root chi.Router) {
 			a.agents.Register(r)
 			a.codexAccounts.Register(r)
 			a.projects.Register(r)
+			a.projectSummaries.Register(r)
 			a.sessions.Register(r)
 			a.desktop.Register(r)
 			a.usage.Register(r)

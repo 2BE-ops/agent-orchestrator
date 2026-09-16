@@ -152,6 +152,7 @@ var shippedMigrations = map[int64]string{
 	145: "0145_native_checkpoint_evidence.sql",
 	146: "0146_reports.sql",
 	147: "0147_report_delivery.sql",
+	148: "0148_project_summaries.sql",
 }
 
 // burnedVersion reports version numbers that must never be (re)used: they
