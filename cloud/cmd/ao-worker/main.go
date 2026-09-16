@@ -225,6 +225,7 @@ func run(logger *slog.Logger) error {
 		); err != nil {
 			if runCtx.Err() == nil {
 				logger.Error("background workspace startup failed", "error", err)
+				cancel()
 			}
 			close(rehydrateDone)
 			return
@@ -350,6 +351,17 @@ func startInteractiveAgent(
 	if err != nil {
 		agentCommand.Cleanup()
 		return fmt.Errorf("initialize agent terminal: %w", err)
+	}
+	// The agent process begins acting on its baked-in first task the moment it
+	// exists, so hold the spawn until the repository checkout is ready. All the
+	// preparation above runs concurrently with the clone; only this final spawn
+	// waits, so a snappy start does not boot the agent into an empty workspace.
+	// The workspace shell is a separate terminal and is unaffected.
+	select {
+	case <-ctx.Done():
+		agentCommand.Cleanup()
+		return ctx.Err()
+	case <-rehydrateDone:
 	}
 	if err := transportSupervisor.StartAgent(ctx, agentCommand, agentTerminal.TerminalID); err != nil {
 		return fmt.Errorf("start interactive coding-agent terminal: %w", err)
