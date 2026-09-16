@@ -2531,6 +2531,44 @@ paths:
       tags:
       - push
   /api/v1/reports:
+    get:
+      operationId: listReports
+      parameters:
+      - description: Stable project identifier.
+        in: query
+        name: projectId
+        required: true
+        schema:
+          description: Stable project identifier.
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListReportsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: List persisted project reports without changing delivery state
+      tags:
+      - reports
     post:
       operationId: createReport
       requestBody:
@@ -7205,6 +7243,8 @@ components:
       type: object
     AgentConfig:
       properties:
+        effort:
+          type: string
         mode:
           type: string
         model:
@@ -7355,6 +7395,12 @@ components:
       type: object
     AgentModelInfo:
       properties:
+        defaultEffort:
+          type: string
+        efforts:
+          items:
+            type: string
+          type: array
         id:
           type: string
         isDefault:
@@ -8477,6 +8523,12 @@ components:
           - terminated
           - no_signal
           type: string
+        statusReadiness:
+          enum:
+          - checking
+          - ready
+          - unavailable
+          type: string
         terminalGeneration:
           type: string
         terminalHandleId:
@@ -8488,7 +8540,6 @@ components:
           type: string
       required:
       - id
-      - projectId
       - kind
       - autoReviewEnabled
       - mode
@@ -8500,6 +8551,7 @@ components:
       - createdAt
       - updatedAt
       - isPinned
+      - statusReadiness
       - chatProviderPreserved
       - status
       - kanbanColumn
@@ -9266,6 +9318,11 @@ components:
         brief:
           maxLength: 16384
           type: string
+        effort:
+          maxLength: 64
+          type:
+          - "null"
+          - string
         mode:
           enum:
           - tui
@@ -9930,6 +9987,15 @@ components:
           type: array
       required:
       - projects
+      type: object
+    ListReportsResponse:
+      properties:
+        reports:
+          items:
+            $ref: '#/components/schemas/ReportResponse'
+          type: array
+      required:
+      - reports
       type: object
     ListReviewsResponse:
       properties:
@@ -10731,6 +10797,49 @@ components:
       - kind
       - reference
       type: object
+    ReportOutputResponse:
+      properties:
+        kind:
+          type: string
+        label:
+          type: string
+        reference:
+          type: string
+      required:
+      - kind
+      - reference
+      type: object
+    ReportResponse:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        message:
+          type: string
+        note:
+          type: string
+        outputs:
+          items:
+            $ref: '#/components/schemas/ReportOutputResponse'
+          type: array
+        projectId:
+          type: string
+        repeatCount:
+          format: int64
+          type: integer
+        sessionId:
+          type: string
+        state:
+          type: string
+      required:
+      - id
+      - sessionId
+      - projectId
+      - createdAt
+      - repeatCount
+      type: object
     ResolveCommentsResponse:
       properties:
         ok:
@@ -11010,6 +11119,11 @@ components:
           type: string
         errorDetail:
           type: string
+        historyPolicy:
+          enum:
+          - strict
+          - provider_history
+          type: string
         id:
           type: string
         noticeAcknowledgedAt:
@@ -11057,6 +11171,7 @@ components:
       - sourceMode
       - targetMode
       - policy
+      - historyPolicy
       - phase
       - createdAt
       - updatedAt
@@ -11426,6 +11541,16 @@ components:
         agentSessionId:
           description: Native agent session identifier used to resume its transcript.
           type: string
+        conversationCheckpointOrigin:
+          description: Whether the main-turn boundary came from a human or AO coordination.
+          enum:
+          - human
+          - coordination
+          type: string
+        coordinationId:
+          description: Opaque identity of an AO-authored semantic prompt accepted
+            by the native agent.
+          type: string
         event:
           description: AO hook sub-command that produced this state (e.g. post-tool-use).
           type: string
@@ -11440,6 +11565,9 @@ components:
         launchId:
           description: AO process generation that produced the signal.
           type: string
+        providerTurnId:
+          description: Native main-turn identity reported by the hook, when supported.
+          type: string
         state:
           description: Agent activity state reported by an agent hook. Optional for
             metadata-only hooks.
@@ -11449,6 +11577,10 @@ components:
           - waiting_input
           - blocked
           - exited
+          type: string
+        submissionId:
+          description: AO prompt-hook context correlation UUID, when supported.
+          maxLength: 36
           type: string
         toolName:
           description: Native tool name, for tool-use hook events.
@@ -11803,8 +11935,6 @@ components:
           - github
           - gitlab
           type: string
-      required:
-      - projectId
       type: object
     SpawnSessionResponse:
       properties:
@@ -11896,6 +12026,11 @@ components:
       type: object
     StartSessionInterfaceTransitionRequest:
       properties:
+        historyPolicy:
+          enum:
+          - strict
+          - provider_history
+          type: string
         policy:
           enum:
           - drain

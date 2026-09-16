@@ -3,6 +3,7 @@ package report
 import (
 	"context"
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,16 +29,18 @@ type CreateInput struct {
 
 // Service validates and creates durable worker reports.
 type Service struct {
-	store Store
-	now   func() time.Time
-	newID func() string
+	store     Store
+	now       func() time.Time
+	newID     func() string
+	onCreated func(domain.ReportRecord)
 }
 
 // Deps configures a Service.
 type Deps struct {
-	Store Store
-	Now   func() time.Time
-	NewID func() string
+	Store     Store
+	Now       func() time.Time
+	NewID     func() string
+	OnCreated func(domain.ReportRecord)
 }
 
 // New constructs a report Service.
@@ -48,7 +51,36 @@ func New(d Deps) *Service {
 	if d.NewID == nil {
 		d.NewID = func() string { return "rpt_" + uuid.NewString() }
 	}
-	return &Service{store: d.Store, now: d.Now, newID: d.NewID}
+	return &Service{store: d.Store, now: d.Now, newID: d.NewID, onCreated: d.OnCreated}
+}
+
+// ListProject returns persisted report facts ordered by created_at then id,
+// with each report's outputs in persisted position order. It never claims,
+// acknowledges, schedules, or otherwise mutates report delivery state.
+func (s *Service) ListProject(ctx context.Context, projectID domain.ProjectID) ([]domain.ReportRecord, error) {
+	if s == nil || s.store == nil {
+		return nil, errors.New("report: store is required")
+	}
+	if projectID == "" {
+		return nil, apierr.Invalid("REPORT_PROJECT_REQUIRED", "Project id is required", nil)
+	}
+	reader, ok := s.store.(interface {
+		ListReportsByProject(context.Context, domain.ProjectID) ([]domain.ReportRecord, error)
+	})
+	if !ok {
+		return nil, errors.New("report: project reader is required")
+	}
+	reports, err := reader.ListReportsByProject(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	sort.SliceStable(reports, func(i, j int) bool {
+		if reports[i].CreatedAt.Equal(reports[j].CreatedAt) {
+			return reports[i].ID < reports[j].ID
+		}
+		return reports[i].CreatedAt.Before(reports[j].CreatedAt)
+	})
+	return reports, nil
 }
 
 // Create validates ownership and persists one pending report. Reports are
@@ -92,5 +124,9 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.ReportR
 		CreatedAt: now, DeliveryState: domain.ReportPending, AvailableAt: availableAt,
 		SettlementDeadline: settlementDeadline, RepeatCount: 1,
 	}
-	return s.store.CreateReport(ctx, rec)
+	created, err := s.store.CreateReport(ctx, rec)
+	if err == nil && s.onCreated != nil {
+		s.onCreated(created)
+	}
+	return created, err
 }

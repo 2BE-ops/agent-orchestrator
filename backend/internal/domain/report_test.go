@@ -6,6 +6,22 @@ import (
 	"time"
 )
 
+func TestReportDeliveryEnvelopeRoundTrip(t *testing.T) {
+	message := WrapReportDelivery("report-batch:abc_123", "Reports since your previous turn:\ncomplete")
+	if got, ok := ReportDeliveryID(message); !ok || got != "report-batch:abc_123" {
+		t.Fatalf("ReportDeliveryID() = %q, %v", got, ok)
+	}
+	for _, invalid := range []string{
+		`<ao-report-delivery id="bad value">x`,
+		`<ao-report-delivery id="bad\"value">x`,
+		"ordinary prompt",
+	} {
+		if got, ok := ReportDeliveryID(invalid); ok {
+			t.Fatalf("ReportDeliveryID(%q) = %q, true", invalid, got)
+		}
+	}
+}
+
 func TestValidateReportContent(t *testing.T) {
 	pr := "https://github.com/owner/repo/pull/42"
 	tests := []struct {

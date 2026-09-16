@@ -19,16 +19,20 @@ beforeEach(() => {
 // The point of these is that the SYNTAX stops being visible. Every case here is a
 // shape agents actually emit, and the assertion is that structure replaced markup.
 
-function renderWithLinkHandler(text: string, onLinkOpen: (url: string) => void) {
+function renderWithLinkHandler(text: string, onLinkOpen: (url: string) => void, workspacePaths: string[] = []) {
 	return render(
-		<ChatLinkProvider onLinkOpen={onLinkOpen}>
+		<ChatLinkProvider onLinkOpen={onLinkOpen} workspacePaths={workspacePaths}>
 			<ChatMarkdown text={text} />
 		</ChatLinkProvider>,
 	);
 }
 
 function renderWithSessionLinkHandler(text: string, onSessionLinkOpen: (url: string) => void) {
-	return render(<ChatLinkProvider onSessionLinkOpen={onSessionLinkOpen}><ChatMarkdown text={text} /></ChatLinkProvider>);
+	return render(
+		<ChatLinkProvider onSessionLinkOpen={onSessionLinkOpen}>
+			<ChatMarkdown text={text} />
+		</ChatLinkProvider>,
+	);
 }
 
 describe("ChatMarkdown", () => {
@@ -145,6 +149,19 @@ describe("ChatMarkdown", () => {
 		openExternal.mockRestore();
 	});
 
+	it("routes workspace file clicks to the AO Browser handler", async () => {
+		const user = userEvent.setup();
+		const onLinkOpen = vi.fn();
+		const openExternal = vi.spyOn(aoBridge.app, "openExternal").mockResolvedValue(undefined);
+		renderWithLinkHandler("see [test-ui-2.html](test-ui-2.html)", onLinkOpen, ["test-ui-2.html"]);
+
+		await user.click(screen.getByRole("link", { name: "test-ui-2.html" }));
+
+		expect(onLinkOpen).toHaveBeenCalledWith("test-ui-2.html");
+		expect(openExternal).not.toHaveBeenCalled();
+		openExternal.mockRestore();
+	});
+
 	it.each([
 		"ao://sessions/project/session",
 		"[Open session](ao://sessions/project/session)",
@@ -159,7 +176,11 @@ describe("ChatMarkdown", () => {
 
 	it("does not auto-activate a session link while streaming", () => {
 		const onSessionLinkOpen = vi.fn();
-		render(<ChatLinkProvider onSessionLinkOpen={onSessionLinkOpen}><ChatMarkdown streaming text="ao://sessions/project/session" /></ChatLinkProvider>);
+		render(
+			<ChatLinkProvider onSessionLinkOpen={onSessionLinkOpen}>
+				<ChatMarkdown streaming text="ao://sessions/project/session" />
+			</ChatLinkProvider>,
+		);
 		expect(screen.getByRole("link")).toBeInTheDocument();
 		expect(onSessionLinkOpen).not.toHaveBeenCalled();
 	});

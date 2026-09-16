@@ -147,3 +147,75 @@ func TestReportStoreRequeuesInterruptedClaimOnRestartAndFencesOldToken(t *testin
 		t.Fatalf("new acknowledge ok=%v err=%v", ok, err)
 	}
 }
+
+func TestReportStoreDurableBatchIdentityExcludesLaterReportsOnRetry(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	seedProject(t, s, "ao")
+	sess, err := s.CreateSession(ctx, sampleRecord("ao"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	create := func(id string) {
+		t.Helper()
+		_, err := s.CreateReport(ctx, domain.ReportRecord{ID: id, SessionID: sess.ID, ProjectID: "ao", Message: id, CreatedAt: now, DeliveryState: domain.ReportPending, AvailableAt: now, RepeatCount: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	create("first")
+	create("second")
+	claimed, err := s.ClaimPendingReportBatch(ctx, "ao", "token-1", now)
+	if err != nil || len(claimed) != 2 || claimed[0].DeliveryBatchID == "" || claimed[0].DeliveryBatchID != claimed[1].DeliveryBatchID {
+		t.Fatalf("claimed = %+v, err = %v", claimed, err)
+	}
+	batchID := claimed[0].DeliveryBatchID
+	if _, err := s.ReleaseReportBatch(ctx, "ao", "token-1", now, "accepted response lost"); err != nil {
+		t.Fatal(err)
+	}
+	create("later")
+	retried, err := s.ClaimPendingReportBatch(ctx, "ao", "token-2", now)
+	if err != nil || len(retried) != 2 || retried[0].DeliveryBatchID != batchID {
+		t.Fatalf("retried = %+v, err = %v", retried, err)
+	}
+	if _, err := s.AcknowledgeReportBatch(ctx, "ao", "token-2", now); err != nil {
+		t.Fatal(err)
+	}
+	next, err := s.ClaimPendingReportBatch(ctx, "ao", "token-3", now)
+	if err != nil || len(next) != 1 || next[0].ID != "later" || next[0].DeliveryBatchID == batchID {
+		t.Fatalf("next = %+v, err = %v", next, err)
+	}
+}
+
+func TestReportStoreInterruptLimitSurvivesRestart(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	s, err := sqlite.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedProject(t, s, "ao")
+	sess, err := s.CreateSession(ctx, sampleRecord("ao"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	if acquired, _, err := s.AcquireReportInterrupt(ctx, sess.ID, now, 3*time.Minute); err != nil || !acquired {
+		t.Fatalf("first acquired = %v, err = %v", acquired, err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = sqlite.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if acquired, next, err := s.AcquireReportInterrupt(ctx, sess.ID, now.Add(2*time.Minute), 3*time.Minute); err != nil || acquired || !next.Equal(now.Add(3*time.Minute)) {
+		t.Fatalf("restart acquired = %v, err = %v", acquired, err)
+	}
+	if acquired, _, err := s.AcquireReportInterrupt(ctx, sess.ID, now.Add(3*time.Minute), 3*time.Minute); err != nil || !acquired {
+		t.Fatalf("boundary acquired = %v, err = %v", acquired, err)
+	}
+}

@@ -18,8 +18,16 @@ import (
 )
 
 type fakeReportService struct {
-	input reportsvc.CreateInput
-	err   error
+	input   reportsvc.CreateInput
+	err     error
+	reports []domain.ReportRecord
+}
+
+func (f *fakeReportService) ListProject(_ context.Context, projectID domain.ProjectID) ([]domain.ReportRecord, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return append([]domain.ReportRecord(nil), f.reports...), nil
 }
 
 func (f *fakeReportService) Create(_ context.Context, input reportsvc.CreateInput) (domain.ReportRecord, error) {
@@ -56,6 +64,26 @@ func TestReportsAPI_InvalidJSON(t *testing.T) {
 	_, status, _ := doRequest(t, srv, "POST", "/api/v1/reports", `{"unknown":true}`)
 	if status != http.StatusBadRequest {
 		t.Fatalf("status=%d", status)
+	}
+}
+
+func TestReportsAPI_ListIsReadOnlyProjection(t *testing.T) {
+	created := time.Date(2026, 9, 14, 10, 0, 0, 0, time.UTC)
+	svc := &fakeReportService{reports: []domain.ReportRecord{{
+		ID: "rpt_1", SessionID: "worker", ProjectID: "ao", State: domain.ReportDone,
+		Note: "finished", CreatedAt: created, RepeatCount: 2,
+		Outputs: []domain.ReportOutput{{Kind: domain.ReportOutputArtifact, Reference: "opaque"}},
+	}}}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	srv := httptest.NewServer(httpd.NewRouterWithControl(config.Config{}, log, nil, httpd.APIDeps{Reports: svc}, httpd.ControlDeps{}))
+	defer srv.Close()
+	body, status, _ := doRequest(t, srv, "GET", "/api/v1/reports?projectId=ao", "")
+	if status != http.StatusOK || !reportContainsAll(string(body), `"id":"rpt_1"`, `"sessionId":"worker"`, `"reference":"opaque"`, `"repeatCount":2`) {
+		t.Fatalf("status=%d body=%s", status, body)
+	}
+	_, status, _ = doRequest(t, srv, "GET", "/api/v1/reports", "")
+	if status != http.StatusBadRequest {
+		t.Fatalf("missing project status=%d", status)
 	}
 }
 

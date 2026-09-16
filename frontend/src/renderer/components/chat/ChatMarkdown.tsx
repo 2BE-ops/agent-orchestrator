@@ -34,13 +34,13 @@ import {
 	useState,
 	type ReactNode,
 } from "react";
-import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
+import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { WrapText } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { canonicalLanguage } from "../../lib/code-highlight";
 import { fenceOf } from "../../lib/markdown-fence";
-import { isWebLink, openLinkInSystemBrowser } from "../../lib/external-link-policy";
+import { isWebLink, isWorkspaceFileLink, openLinkInSystemBrowser } from "../../lib/external-link-policy";
 import { isSessionLink, remarkSessionLinks } from "../../lib/session-links";
 import { AppLink } from "../AppLink";
 import { HighlightedCode } from "./HighlightedCode";
@@ -74,20 +74,22 @@ const PLUGINS = [remarkGfm, remarkSessionLinks];
  * and re-parse every message on every poll.
  */
 const StreamingProse = createContext(false);
-const OpenChatLink = createContext<((url: string) => void) | undefined>(undefined);
+const OpenChatLink = createContext<{ open?: (url: string) => void; workspacePaths: string[] }>({ workspacePaths: [] });
 const OpenSessionLink = createContext<((url: string) => void) | undefined>(undefined);
 
 export function ChatLinkProvider({
 	onLinkOpen,
 	onSessionLinkOpen,
+	workspacePaths = [],
 	children,
 }: {
 	onLinkOpen?: (url: string) => void;
 	onSessionLinkOpen?: (url: string) => void;
+	workspacePaths?: string[];
 	children: ReactNode;
 }) {
 	return (
-		<OpenChatLink.Provider value={onLinkOpen}>
+		<OpenChatLink.Provider value={{ open: onLinkOpen, workspacePaths }}>
 			<OpenSessionLink.Provider value={onSessionLinkOpen}>{children}</OpenSessionLink.Provider>
 		</OpenChatLink.Provider>
 	);
@@ -115,7 +117,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({
 					muted ? "text-[13px] text-muted-foreground" : "text-sm text-foreground",
 				)}
 			>
-				<Markdown remarkPlugins={PLUGINS} components={COMPONENTS} urlTransform={chatUrlTransform}>
+				<Markdown remarkPlugins={PLUGINS} components={COMPONENTS}>
 					{text}
 				</Markdown>
 			</div>
@@ -216,33 +218,30 @@ function compactEmoji(children: ReactNode): ReactNode {
 }
 
 function MarkdownLink({ href, children }: { href?: string; children?: ReactNode }) {
-	const onLinkOpen = useContext(OpenChatLink);
+	const { open: onLinkOpen, workspacePaths } = useContext(OpenChatLink);
 	const onSessionLinkOpen = useContext(OpenSessionLink);
 	const sessionLink = Boolean(href && isSessionLink(href));
 	return (
 		<AppLink
 			href={href}
 			onBrowserOpen={onLinkOpen}
+			inAppLink={href ? (url) => isWebLink(url) || isWorkspaceFileLink(url, workspacePaths) || isSessionLink(url) : undefined}
 			onClick={(event) => {
 				if (href && sessionLink) {
 					event.preventDefault();
 					onSessionLinkOpen?.(href);
-				} else if (href && !isWebLink(href)) {
+				} else if (href && !isWebLink(href) && !isWorkspaceFileLink(href, workspacePaths)) {
 					event.preventDefault();
 					void openLinkInSystemBrowser(href);
 				}
 			}}
-			target={sessionLink ? undefined : "_blank"}
+			target="_blank"
 			rel="noreferrer noopener"
 			className="text-markdown-link underline decoration-markdown-link/45 underline-offset-2 transition-colors hover:text-markdown-link-hover hover:decoration-markdown-link-hover/75"
 		>
 			{children}
 		</AppLink>
 	);
-}
-
-function chatUrlTransform(url: string): string {
-	return isSessionLink(url) ? url : defaultUrlTransform(url);
 }
 
 /**
@@ -254,7 +253,7 @@ function chatUrlTransform(url: string): string {
  */
 function MermaidFence({ code }: { code: string }) {
 	const streaming = useContext(StreamingProse);
-	const onLinkOpen = useContext(OpenChatLink);
+	const { open: onLinkOpen } = useContext(OpenChatLink);
 	return <MermaidBlock code={code} streaming={streaming} onLinkOpen={onLinkOpen} />;
 }
 

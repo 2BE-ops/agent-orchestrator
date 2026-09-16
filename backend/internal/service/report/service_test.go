@@ -12,6 +12,7 @@ type fakeStore struct {
 	session domain.SessionRecord
 	ok      bool
 	created domain.ReportRecord
+	reports []domain.ReportRecord
 }
 
 func (f *fakeStore) GetSession(context.Context, domain.SessionID) (domain.SessionRecord, bool, error) {
@@ -20,6 +21,32 @@ func (f *fakeStore) GetSession(context.Context, domain.SessionID) (domain.Sessio
 func (f *fakeStore) CreateReport(_ context.Context, r domain.ReportRecord) (domain.ReportRecord, error) {
 	f.created = r
 	return r, nil
+}
+func (f *fakeStore) ListReportsByProject(context.Context, domain.ProjectID) ([]domain.ReportRecord, error) {
+	return append([]domain.ReportRecord(nil), f.reports...), nil
+}
+
+func TestListProjectIsReadOnlyAndOrdered(t *testing.T) {
+	at := time.Date(2026, 9, 15, 1, 2, 3, 0, time.UTC)
+	outputs := []domain.ReportOutput{
+		{Kind: domain.ReportOutputArtifact, Reference: "first"},
+		{Kind: domain.ReportOutputArtifact, Reference: "second"},
+	}
+	st := &fakeStore{reports: []domain.ReportRecord{
+		{ID: "c", CreatedAt: at.Add(time.Second)},
+		{ID: "b", CreatedAt: at, Outputs: outputs},
+		{ID: "a", CreatedAt: at},
+	}}
+	got, err := New(Deps{Store: st}).ListProject(context.Background(), "ao")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 || got[0].ID != "a" || got[1].ID != "b" || got[2].ID != "c" {
+		t.Fatalf("report order = %+v", got)
+	}
+	if len(got[1].Outputs) != 2 || got[1].Outputs[0].Reference != "first" || got[1].Outputs[1].Reference != "second" {
+		t.Fatalf("output position order = %+v", got[1].Outputs)
+	}
 }
 
 func TestCreateDerivesOwnershipAndFixedDeliveryDeadlines(t *testing.T) {
