@@ -336,7 +336,9 @@ func startInteractiveAgent(
 		"to submit an AO-triggered review verdict."
 	agentTerminal, err := client.ensureAgentTerminal(ctx)
 	if err != nil {
-		agentCommand.Cleanup()
+		if agentCommand.Cleanup != nil {
+			agentCommand.Cleanup()
+		}
 		return fmt.Errorf("initialize agent terminal: %w", err)
 	}
 	// The agent process begins acting on its baked-in first task the moment it
@@ -346,7 +348,9 @@ func startInteractiveAgent(
 	// The workspace shell is a separate terminal and is unaffected.
 	select {
 	case <-ctx.Done():
-		agentCommand.Cleanup()
+		if agentCommand.Cleanup != nil {
+			agentCommand.Cleanup()
+		}
 		return ctx.Err()
 	case <-workspaceReady:
 	}
