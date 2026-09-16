@@ -2087,23 +2087,25 @@ func TestAuthenticationRequestCancellationDoesNotCancelSharedRead(t *testing.T) 
 		done <- err
 	}()
 	<-started
+	manager.mu.Lock()
+	call := manager.auth[record.Snapshot.ID].call
+	manager.mu.Unlock()
+	if call == nil {
+		t.Fatal("shared authentication read was not started")
+	}
 	cancel()
 	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Fatalf("wait error = %v", err)
 	}
 	close(release)
-	deadline := time.After(time.Second)
-	for {
-		latest, _ := manager.catalog.record(record.Snapshot.ID)
-		if latest.Snapshot.Authentication.State == domain.AgentAuthenticationAuthorized {
-			break
-		}
-		select {
-		case <-deadline:
-			t.Fatal("shared authentication read did not finish")
-		default:
-			time.Sleep(time.Millisecond)
-		}
+	select {
+	case <-call.done:
+	case <-time.After(time.Second):
+		t.Fatal("shared authentication read did not finish")
+	}
+	latest, _ := manager.catalog.record(record.Snapshot.ID)
+	if latest.Snapshot.Authentication.State != domain.AgentAuthenticationAuthorized {
+		t.Fatalf("authentication = %#v", latest.Snapshot.Authentication)
 	}
 }
 

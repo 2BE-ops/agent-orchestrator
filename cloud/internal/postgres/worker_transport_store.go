@@ -365,10 +365,16 @@ func (s *Store) IssueTerminalTicket(
 					)
 					AND NOT EXISTS (
 					SELECT 1 FROM ao_terminal_sessions terminal
+					JOIN ao_worker_connections worker
+					  ON worker.org_id = terminal.org_id
+					 AND worker.session_id = terminal.session_id
+					 AND worker.epoch = terminal.worker_epoch
+					 AND worker.disconnected_at IS NULL
 					WHERE terminal.org_id = session.org_id
 					  AND terminal.session_id = session.id
 					  AND terminal.kind = 'agent'
 					  AND terminal.state IN ('opening', 'open')
+					  AND terminal.expires_at > now()
 					)
 				)
 				FROM ao_sessions session
@@ -491,10 +497,16 @@ func (s *Store) IssueTerminalTicket(
 						)
 						AND NOT EXISTS (
 						SELECT 1 FROM ao_terminal_sessions terminal
+						JOIN ao_worker_connections worker
+						  ON worker.org_id = terminal.org_id
+						 AND worker.session_id = terminal.session_id
+						 AND worker.epoch = terminal.worker_epoch
+						 AND worker.disconnected_at IS NULL
 						WHERE terminal.org_id = session.org_id
 						  AND terminal.session_id = session.id
 						  AND terminal.kind = 'agent'
 						  AND terminal.state IN ('opening', 'open')
+						  AND terminal.expires_at > now()
 						)
 					)
 					FROM ao_sessions session
