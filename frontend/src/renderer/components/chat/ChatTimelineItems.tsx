@@ -1137,7 +1137,7 @@ function TerminalInput({ text, truncated }: { text: string; truncated?: boolean 
 				<Keyboard aria-hidden="true" className="size-3" />
 				Agent typed
 			</span>
-			<pre className="scrollbar-none overflow-x-auto border border-dashed border-border-strong bg-background px-2.5 py-1.5 font-mono text-[10.5px] leading-relaxed text-accent">
+			<pre className="scrollbar-none overflow-x-auto border border-dashed border-border-strong bg-background px-2.5 py-1.5 font-mono text-[10.5px] leading-relaxed text-foreground">
 				{shown}
 			</pre>
 			{truncated ? (
