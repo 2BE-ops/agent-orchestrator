@@ -11,16 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/aoagents/agent-orchestrator/cloud/internal/worker"
 )
-
-// checkpointMinInterval throttles durable-restore checkpoints. A turn can
-// complete many times a minute; capturing at most this often keeps control-plane
-// and origin-push load bounded while still bounding how much uncommitted work a
-// sandbox destroy can lose.
-const checkpointMinInterval = 15 * time.Second
 
 // preservedRefPrefix namespaces the git ref that carries a session's uncommitted
 // work across a sandbox destroy. It matches desktop AO's
@@ -41,11 +34,7 @@ type checkpointer struct {
 	scratch   bool
 	logger    *slog.Logger
 
-	interval time.Duration
-	now      func() time.Time
-
-	mu      sync.Mutex
-	lastRun time.Time
+	mu sync.Mutex
 	// change detection: an identical checkpoint is neither re-pushed nor re-sent.
 	lastTranscriptHash string
 	lastPreservedRef   string
@@ -73,49 +62,13 @@ func newCheckpointer(
 		harness:   bootstrap.Launch.Harness,
 		scratch:   worker.IsScratchRepositoryURL(bootstrap.Launch.RepositoryURL),
 		logger:    logger,
-		interval:  checkpointMinInterval,
-		now:       time.Now,
 	}
 }
 
-// run drives checkpoints on a throttled timer until the context is cancelled.
-// The timer is the checkpoint trigger: an interactive agent's turn completion is
-// observed by the control plane (via the ao hook binary), not by the worker
-// process, so a bounded periodic capture is the reliable in-worker signal.
-func (cp *checkpointer) run(ctx context.Context) {
-	ticker := time.NewTicker(cp.interval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			cp.checkpoint(ctx)
-		}
-	}
-}
-
-// due reports whether enough time has elapsed since the last checkpoint and, if
-// so, records now as the last run. It keeps checkpoints safe to trigger from
-// both the timer and any future event source without hammering the control
-// plane.
-func (cp *checkpointer) due() bool {
-	cp.mu.Lock()
-	defer cp.mu.Unlock()
-	now := cp.now()
-	if !cp.lastRun.IsZero() && now.Sub(cp.lastRun) < cp.interval {
-		return false
-	}
-	cp.lastRun = now
-	return true
-}
-
-// checkpoint captures the transcript and uncommitted work once, if throttling
-// allows and anything has changed.
+// checkpoint captures the transcript and uncommitted work once. It is invoked by
+// the checkpoint bridge on each turn-completion (Stop hook) event; the capture is
+// change-detected, so a poke with nothing new to save is a no-op.
 func (cp *checkpointer) checkpoint(ctx context.Context) {
-	if !cp.due() {
-		return
-	}
 	agentSessionID, path, ok := cp.resolver.locate()
 	if !ok {
 		// No transcript yet (agent still booting or first turn incomplete).
