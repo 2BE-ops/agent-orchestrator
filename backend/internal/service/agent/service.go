@@ -289,7 +289,8 @@ func (s *Service) loadModels(ctx context.Context, agentID, projectID string, mod
 	discovered = applyCustomModelEntryPolicy(discovered, policy)
 	discovered.BinaryVersion = version
 	if discoverErr != nil {
-		if hasCached && len(cached.Catalog.Models) > 0 {
+		cacheMatchesContext := agentID != "claude-code" || cached.BinaryVersion == version
+		if hasCached && cacheMatchesContext && len(cached.Catalog.Models) > 0 {
 			cached.Catalog.Stale = true
 			cached.Catalog.Warning = discoverErr.Error()
 			cached.Catalog.RefreshRecommended = true
@@ -307,7 +308,7 @@ func (s *Service) loadModels(ctx context.Context, agentID, projectID string, mod
 			}
 			return discovered, nil
 		}
-		if hasCached {
+		if hasCached && cacheMatchesContext {
 			cached.Catalog.Stale = true
 			cached.Catalog.Warning = discoverErr.Error()
 			cached.Catalog.RefreshRecommended = true
@@ -316,7 +317,7 @@ func (s *Service) loadModels(ctx context.Context, agentID, projectID string, mod
 			}
 			return cached.Catalog, nil
 		}
-		if shared, ok := s.latestAgentCatalog(ctx, agentID, projectID); ok {
+		if shared, ok := s.latestAgentCatalog(ctx, agentID, projectID, version); ok {
 			shared = applyCustomModelEntryPolicy(shared, policy)
 			shared.Stale = true
 			shared.Warning = discoverErr.Error()
@@ -341,7 +342,7 @@ func (s *Service) loadModels(ctx context.Context, agentID, projectID string, mod
 // latestAgentCatalog returns a last-known-good catalog from another project as
 // a display-only fallback. Discovery remains project-scoped and this result is
 // deliberately not persisted under the requested project key.
-func (s *Service) latestAgentCatalog(ctx context.Context, agentID, projectID string) (ports.AgentModelCatalog, bool) {
+func (s *Service) latestAgentCatalog(ctx context.Context, agentID, projectID, fingerprint string) (ports.AgentModelCatalog, bool) {
 	if s.cache == nil {
 		return ports.AgentModelCatalog{}, false
 	}
@@ -353,6 +354,9 @@ func (s *Service) latestAgentCatalog(ctx context.Context, agentID, projectID str
 	var bestAt time.Time
 	for _, record := range records {
 		if record.ProjectID == projectID {
+			continue
+		}
+		if agentID == "claude-code" && record.BinaryVersion != fingerprint {
 			continue
 		}
 		var candidate ports.AgentModelCatalog
