@@ -4586,9 +4586,19 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 	order: -1;
 }
 
-/* Annotation mode replaces navigation chrome with a quiet, fixed control
-   strip. Keep its actions spatially stable: feedback comes from tone and
-   contrast, never from lifting, scaling, or reshaping controls on hover. */
+/* Annotation mode adds a second chrome row below tabs. Keep its actions
+   spatially stable: feedback comes from tone and contrast, never from
+   lifting, scaling, or reshaping controls on hover. */
+.browser-panel__annotation-row {
+	container-name: browser-annotation;
+	container-type: inline-size;
+	display: flex;
+	flex-shrink: 0;
+	min-width: 0;
+	padding: 0 var(--space-1) var(--space-1);
+	background: var(--bg);
+}
+
 .browser-panel__toolbar--annotation {
 	position: relative;
 	display: flex;
@@ -4597,7 +4607,6 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 	/* Fit icon-sm (28px) controls with equal 4px padding on every side. */
 	height: calc(var(--size-control-md) + 2 * var(--space-1));
 	min-width: 0;
-	flex: 1 1 auto;
 	align-items: center;
 	gap: var(--space-2);
 	padding: var(--space-1);
@@ -4720,7 +4729,7 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 	font-variant-numeric: tabular-nums;
 }
 
-@container browser-toolbar (max-width: 30rem) {
+@container browser-annotation (max-width: 30rem) {
 	.browser-panel__annotation-context {
 		max-width: 26%;
 	}
@@ -4730,7 +4739,7 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 	}
 }
 
-@container browser-toolbar (max-width: 23rem) {
+@container browser-annotation (max-width: 23rem) {
 	.browser-panel__annotation-context {
 		display: none;
 	}

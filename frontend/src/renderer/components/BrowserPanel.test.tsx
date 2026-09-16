@@ -1207,15 +1207,17 @@ describe("BrowserPanel", () => {
 		expect(screen.getByRole("button", { name: /annotate/i })).toBeDisabled();
 	});
 
-	it("replaces the current browser chrome row with annotation batch controls", async () => {
+	it("adds an annotation control row below the tab row while keeping tabs visible", async () => {
 		hookState.navState = { ...hookState.navState, url: "https://example.test/docs" };
 		hookState.annotationMode = true;
 		hookState.annotationState = { count: 2, screenshotCount: 1, hasDraft: false };
 
 		render(<BrowserPanel active onTogglePopOut={() => undefined} poppedOut={false} session={session} />);
 
-		expect(screen.getByTestId("browser-toolbar")).toHaveClass("browser-panel__toolbar--annotation");
-		expect(screen.queryByTestId("browser-tab-bar")).not.toBeInTheDocument();
+		expect(screen.getByTestId("browser-tab-bar")).toBeInTheDocument();
+		expect(screen.getByTestId("browser-toolbar")).toBeInTheDocument();
+		const annotationToolbar = screen.getByTestId("browser-annotation-toolbar");
+		expect(annotationToolbar.querySelector(".browser-panel__toolbar--annotation")).not.toBeNull();
 		expect(screen.getByText("example.test")).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "Send annotations" })).toHaveTextContent("2");
 		expect(screen.getByRole("button", { name: "Send annotations" })).toHaveClass(

@@ -979,9 +979,10 @@ export function BrowserPanelView({
 	);
 	const annotationToolbar = (
 		<div
-			className="browser-panel__toolbar browser-panel__toolbar--annotation"
-			data-testid="browser-toolbar"
+			className="browser-panel__annotation-row"
+			data-testid="browser-annotation-toolbar"
 		>
+			<div className="browser-panel__toolbar browser-panel__toolbar--annotation">
 			<div className="browser-panel__annotation-actions browser-panel__annotation-actions--leading">
 				<Tooltip>
 					<TooltipTrigger asChild>
@@ -1090,6 +1091,7 @@ export function BrowserPanelView({
 					) : null}
 				</Button>
 			</div>
+			</div>
 		</div>
 	);
 	return (
@@ -1132,13 +1134,11 @@ export function BrowserPanelView({
 		>
 			{topbarHost ? createPortal(browserAddressBar, topbarHost) : browserAddressBar}
 			<div
-				className={cn("browser-panel__tab-row", annotationMode && "browser-panel__tab-row--annotation")}
+				className="browser-panel__tab-row"
 				data-testid="browser-tab-row"
 			>
-				{annotationMode ? annotationToolbar : (
-					<>
-						{browserTabBar}
-						<div className="browser-panel__toolbar" data-testid="browser-toolbar">
+				{browserTabBar}
+				<div className="browser-panel__toolbar" data-testid="browser-toolbar">
 							<BrowserControlTooltip label={t("browser.back")}>
 								<span className="browser-panel__navigation-control inline-flex">
 							<Button
@@ -1471,10 +1471,9 @@ export function BrowserPanelView({
 						)}
 					</DropdownMenuContent>
 				</DropdownMenu>
-						</div>
-					</>
-				)}
+				</div>
 			</div>
+			{annotationMode ? annotationToolbar : null}
 			<div className="browser-panel__body flex min-h-0 flex-1 overflow-hidden">
 				<div
 					className="browser-panel__viewport relative min-h-0 flex-1 overflow-hidden"
