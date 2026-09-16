@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	telemetryadapter "github.com/aoagents/agent-orchestrator/backend/internal/adapters/telemetry"
 	"github.com/aoagents/agent-orchestrator/backend/internal/config"
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
@@ -13,6 +14,11 @@ import (
 
 // Independent of the agent-switch production gate; requires an explicit v3 grant.
 const githubIdentityTelemetryEnabled = domain.GitHubIdentityTelemetryEnabled
+
+const githubAccountRefreshInterval = 24 * time.Hour
+
+// Poll only local policy so a new grant need not wait for the daily refresh.
+const githubAccountPolicyPollInterval = time.Second
 
 const githubAccountEvent = "ao.github.account_observed"
 
@@ -26,25 +32,23 @@ func startGitHubAccountTelemetry(
 	ctx context.Context,
 	cfg config.TelemetryConfig,
 	sink ports.EventSink,
+	enabled func() bool,
 	resolve func(context.Context) (ports.SCMIdentity, error),
 	authority ports.AgentSwitchFailureAuthorityReader,
 ) func() {
-	if !cfg.Events || cfg.Remote != config.TelemetryRemotePostHog || strings.TrimSpace(cfg.PostHogKey) == "" || strings.TrimSpace(cfg.PostHogHost) == "" {
+	if cfg.Remote != config.TelemetryRemotePostHog || strings.TrimSpace(cfg.PostHogKey) == "" || strings.TrimSpace(cfg.PostHogHost) == "" {
 		return func() {}
 	}
-	for _, raw := range cfg.DisabledEvents {
-		name := strings.ToLower(strings.TrimSpace(raw))
-		if name == githubAccountEvent || (strings.HasSuffix(name, "*") && len(name) > 1 && strings.HasPrefix(githubAccountEvent, strings.TrimSuffix(name, "*"))) {
-			return func() {}
-		}
+	if telemetryadapter.NewEventDenylist(cfg.DisabledEvents).Blocks(githubAccountEvent) {
+		return func() {}
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		ticker := time.NewTicker(time.Hour)
+		ticker := time.NewTicker(githubAccountPolicyPollInterval)
 		defer ticker.Stop()
-		runGitHubAccountTelemetry(ctx, sink, resolve, authority, ticker.C)
+		runGitHubAccountTelemetry(ctx, sink, enabled, resolve, authority, ticker.C)
 	}()
 	return func() {
 		cancel()
@@ -55,40 +59,59 @@ func startGitHubAccountTelemetry(
 func runGitHubAccountTelemetry(
 	ctx context.Context,
 	sink ports.EventSink,
+	enabled func() bool,
 	resolve func(context.Context) (ports.SCMIdentity, error),
 	authority ports.AgentSwitchFailureAuthorityReader,
 	ticks <-chan time.Time,
 ) {
+	now := time.Now()
+	var nextRefresh time.Time
+	var lastGrant ports.AgentSwitchFailureAuthoritySnapshot
 	for ctx.Err() == nil {
-		before, consentErr := authority.ReadAgentSwitchFailureAuthority(ctx)
-		if !githubIdentityTelemetryEnabled || consentErr != nil || !before.Present || !before.EventsEnabled || !before.ConsentIdentityEnabled || before.ConsentGeneration == "" {
-			select {
-			case <-ctx.Done():
+		observe := func() {
+			if !enabled() {
+				nextRefresh = time.Time{}
+				lastGrant = ports.AgentSwitchFailureAuthoritySnapshot{}
 				return
-			case <-ticks:
-				continue
+			}
+			before, consentErr := authority.ReadAgentSwitchFailureAuthority(ctx)
+			if !githubIdentityTelemetryEnabled || consentErr != nil || !before.Present || !before.EventsEnabled || !before.ConsentIdentityEnabled || before.ConsentGeneration == "" {
+				nextRefresh = time.Time{}
+				lastGrant = ports.AgentSwitchFailureAuthoritySnapshot{}
+				return
+			}
+			if before == lastGrant && now.Before(nextRefresh) {
+				return
+			}
+			lastGrant = before
+			// Failed lookups also wait a day; a new grant may trigger sooner.
+			nextRefresh = now.Add(githubAccountRefreshInterval)
+			lookupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			identity, err := resolve(lookupCtx)
+			cancel()
+			after, consentErr := authority.ReadAgentSwitchFailureAuthority(ctx)
+			login := strings.TrimSpace(identity.Login)
+			// Never fall back to a repository owner, git user.name, or a stale
+			// successful lookup. Failures and bot credentials are not user identity.
+			if err == nil && consentErr == nil && after == before && enabled() && ctx.Err() == nil && identity.Human && githubLoginPattern.MatchString(login) {
+				sink.Emit(ctx, ports.TelemetryEvent{
+					Name:       githubAccountEvent,
+					Source:     "daemon",
+					OccurredAt: time.Now().UTC(),
+					Level:      ports.TelemetryLevelInfo,
+					Payload:    map[string]any{"github_login": login},
+				})
 			}
 		}
-		lookupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		identity, err := resolve(lookupCtx)
-		cancel()
-		after, consentErr := authority.ReadAgentSwitchFailureAuthority(ctx)
-		login := strings.TrimSpace(identity.Login)
-		// Never fall back to a repository owner, git user.name, or a stale
-		// successful lookup. Failures and bot credentials are not user identity.
-		if err == nil && consentErr == nil && after == before && ctx.Err() == nil && identity.Human && githubLoginPattern.MatchString(login) {
-			sink.Emit(ctx, ports.TelemetryEvent{
-				Name:       githubAccountEvent,
-				Source:     "daemon",
-				OccurredAt: time.Now().UTC(),
-				Level:      ports.TelemetryLevelInfo,
-				Payload:    map[string]any{"github_login": login},
-			})
-		}
+		observe()
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticks:
+		case tick, ok := <-ticks:
+			if !ok {
+				return
+			}
+			now = tick
 		}
 	}
 }

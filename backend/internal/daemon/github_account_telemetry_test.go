@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -31,7 +32,7 @@ func TestGitHubAccountTelemetryGatesLookup(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := config.TelemetryConfig{Events: true, Remote: config.TelemetryRemotePostHog, PostHogKey: "phc_test", PostHogHost: "https://example.test"}
 			tc.modify(&cfg)
-			stop := startGitHubAccountTelemetry(t.Context(), cfg, nil, func(context.Context) (ports.SCMIdentity, error) {
+			stop := startGitHubAccountTelemetry(t.Context(), cfg, nil, func() bool { return cfg.Events }, func(context.Context) (ports.SCMIdentity, error) {
 				t.Error("disabled telemetry must not resolve an account")
 				return ports.SCMIdentity{}, nil
 			}, accountAuthority{})
@@ -61,7 +62,7 @@ func TestGitHubAccountTelemetryRefreshesWithoutStaleIdentity(t *testing.T) {
 	go func() {
 		defer close(done)
 		i := 0
-		runGitHubAccountTelemetry(ctx, sink, func(ctx context.Context) (ports.SCMIdentity, error) {
+		runGitHubAccountTelemetry(ctx, sink, func() bool { return true }, func(ctx context.Context) (ports.SCMIdentity, error) {
 			if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 5*time.Second {
 				t.Error("lookup must have a bounded deadline")
 			}
@@ -72,7 +73,7 @@ func TestGitHubAccountTelemetryRefreshesWithoutStaleIdentity(t *testing.T) {
 	}()
 	for i := 1; i < len(observations); i++ {
 		select {
-		case ticks <- time.Now():
+		case ticks <- time.Now().Add(time.Minute + time.Duration(i)*24*time.Hour):
 		case <-time.After(2 * time.Second):
 			t.Fatal("observation did not finish")
 		}
@@ -98,7 +99,7 @@ func TestGitHubAccountTelemetryStopsInFlightLookup(t *testing.T) {
 	started := make(chan struct{})
 	sink := accountTelemetrySink{events: make(chan ports.TelemetryEvent, 1)}
 	cfg := config.TelemetryConfig{Events: true, Remote: config.TelemetryRemotePostHog, PostHogKey: "phc_test", PostHogHost: "https://example.test"}
-	stop := startGitHubAccountTelemetry(t.Context(), cfg, sink, func(ctx context.Context) (ports.SCMIdentity, error) {
+	stop := startGitHubAccountTelemetry(t.Context(), cfg, sink, func() bool { return cfg.Events }, func(ctx context.Context) (ports.SCMIdentity, error) {
 		close(started)
 		<-ctx.Done()
 		return ports.SCMIdentity{Login: "octocat", Human: true}, nil
@@ -170,7 +171,7 @@ func TestIdentityRequiresCurrentConsentBeforeLookupAndCapture(t *testing.T) {
 			done := make(chan struct{})
 			go func() {
 				defer close(done)
-				runGitHubAccountTelemetry(ctx, sink, func(context.Context) (ports.SCMIdentity, error) {
+				runGitHubAccountTelemetry(ctx, sink, func() bool { return true }, func(context.Context) (ports.SCMIdentity, error) {
 					calls++
 					return ports.SCMIdentity{Login: "octocat", Human: true}, nil
 				}, reader, ticks)
@@ -221,7 +222,7 @@ func TestIdentityConsentRenewedWithoutRestart(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		runGitHubAccountTelemetry(ctx, sink, func(context.Context) (ports.SCMIdentity, error) {
+		runGitHubAccountTelemetry(ctx, sink, func() bool { return true }, func(context.Context) (ports.SCMIdentity, error) {
 			calls++
 			return ports.SCMIdentity{Login: "octocat", Human: true}, nil
 		}, authority, ticks)
@@ -236,5 +237,86 @@ func TestIdentityConsentRenewedWithoutRestart(t *testing.T) {
 	<-done
 	if calls != 1 {
 		t.Fatal("renewed consent was not picked up without restart")
+	}
+}
+
+func TestGitHubAccountTelemetryRefreshInterval(t *testing.T) {
+	if githubAccountRefreshInterval != 24*time.Hour {
+		t.Fatalf("refresh interval = %s, want daily", githubAccountRefreshInterval)
+	}
+}
+
+func TestGitHubAccountTelemetryDailyAttemptsAndPromptRenewal(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	ticks := make(chan time.Time)
+	done := make(chan struct{})
+	var calls atomic.Int32
+	var enabled atomic.Bool
+	enabled.Store(true)
+	go func() {
+		defer close(done)
+		runGitHubAccountTelemetry(ctx, accountTelemetrySink{events: make(chan ports.TelemetryEvent, 4)}, enabled.Load, func(context.Context) (ports.SCMIdentity, error) {
+			calls.Add(1)
+			return ports.SCMIdentity{}, errors.New("offline") // Failed attempts are daily too.
+		}, accountAuthority{}, ticks)
+	}()
+	base := time.Now().Add(time.Minute)
+	ticks <- base // Startup attempt has completed.
+	if calls.Load() != 1 {
+		t.Fatalf("startup calls=%d", calls.Load())
+	}
+	ticks <- base.Add(time.Second) // Previous local poll completed, no retry.
+	if calls.Load() != 1 {
+		t.Fatal("retried on policy poll")
+	}
+	ticks <- base.Add(24 * time.Hour)
+	ticks <- base.Add(24*time.Hour + time.Second)
+	if calls.Load() != 2 {
+		t.Fatalf("daily calls=%d", calls.Load())
+	}
+	enabled.Store(false)
+	ticks <- base.Add(24*time.Hour + 2*time.Second)
+	ticks <- base.Add(24*time.Hour + 3*time.Second)
+	if calls.Load() != 2 {
+		t.Fatal("lookup while revoked")
+	}
+	enabled.Store(true)
+	ticks <- base.Add(24*time.Hour + 4*time.Second)
+	ticks <- base.Add(24*time.Hour + 5*time.Second)
+	if calls.Load() != 3 {
+		t.Fatalf("grant not observed promptly: %d", calls.Load())
+	}
+	cancel()
+	<-done
+}
+
+func TestGitHubAccountTelemetryDisabledPolicyPollStops(t *testing.T) {
+	polls := make(chan struct{}, 4)
+	cfg := config.TelemetryConfig{Events: true, Remote: config.TelemetryRemotePostHog, PostHogKey: "test-key", PostHogHost: "https://example.test"}
+	stop := startGitHubAccountTelemetry(t.Context(), cfg, nil, func() bool {
+		polls <- struct{}{}
+		return false
+	}, func(context.Context) (ports.SCMIdentity, error) {
+		t.Error("disabled poll must not look up GitHub")
+		return ports.SCMIdentity{}, nil
+	}, identityAuthorityFunc(func(context.Context) (ports.AgentSwitchFailureAuthoritySnapshot, error) {
+		t.Error("effective disabled policy needs no authority lookup")
+		return ports.AgentSwitchFailureAuthoritySnapshot{}, nil
+	}))
+	defer stop()
+	for range 2 { // Startup and a real one-second local-policy tick.
+		select {
+		case <-polls:
+		case <-time.After(5 * time.Second):
+			t.Fatal("policy poll did not run")
+		}
+	}
+	done := make(chan struct{})
+	go func() { stop(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("disabled poll did not cancel promptly")
 	}
 }

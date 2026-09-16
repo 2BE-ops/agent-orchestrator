@@ -36,7 +36,7 @@ AO sends structured events in a few broad categories:
   fails for any reason the classification is simply left off the event; nothing
   else changes. When telemetry is disabled, the request is never made
 - The authenticated GitHub account login, when the active credentials belong to
-  a user account. AO observes it at daemon startup and hourly while remote
+  a user account. AO observes it at daemon startup and daily while remote
   telemetry is enabled and you have explicitly granted identity consent. This links an installation to a GitHub account so we can
   attribute usage and agent spawns and reach out for feedback. It is not anonymous.
   Bot accounts and failed lookups are skipped; credentials and email addresses
@@ -235,7 +235,7 @@ Join observations to `ao.session.spawned`, `ao.v2.app.active`, or
 login identifies an account observed on that installation at that time, not a
 verified person or permanent owner. Accounts may be shared or switched; a
 failed lookup must not be treated as confirmation of a previous account. The
-hourly refresh detects successful sign-ins and account switches without a
+daily refresh detects successful sign-ins and account switches without a
 daemon restart. A token supplied through the environment takes precedence over
 GitHub CLI credentials, following the daemon's existing authentication rules.
 
@@ -249,7 +249,10 @@ identity module gate does not change the agent-switch production gate, and
 Before both the authenticated lookup and event capture, the daemon reads the
 owner-only durable policy. Missing, invalid, revoked, or changed consent prevents
 capture; without a current identity grant it never performs the lookup. A grant
-is picked up on the next hourly check without restarting. On Windows, the
+is picked up by a local one-second policy poll without restarting; disabled
+policy polls never call GitHub. Subsequent lookup attempts are daily. Normal
+and identity events share one lazily initialized export pipeline and tenure
+tracker. Events observed before consent are dropped, not replayed on opt-in. On Windows, the
 existing durable-policy replacement limitation keeps identity consent disabled.
 Remote PostHog must
 also be configured and events enabled. Denying `ao.github.account_observed` (or a matching prefix) also prevents
