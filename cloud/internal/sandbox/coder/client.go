@@ -791,21 +791,7 @@ func bootstrapCommandForArchive(
 	preinstalledCheck := ""
 	if preinstalled {
 		binaryPreparation = ""
-		workerHash := sha256.Sum256(bootstrap.Binary)
-		guards := []string{
-			"[ -x " + shellQuote(workerDestination) + " ]",
-			"[ \"$(sha256sum " + shellQuote(workerDestination) + " | cut -d' ' -f1)\" = " +
-				shellQuote(hex.EncodeToString(workerHash[:])) + " ]",
-		}
-		if len(bootstrap.HelperBinary) > 0 {
-			helperHash := sha256.Sum256(bootstrap.HelperBinary)
-			guards = append(guards,
-				"[ -x "+shellQuote(bootstrap.HelperDestination)+" ]",
-				"[ \"$(sha256sum "+shellQuote(bootstrap.HelperDestination)+" | cut -d' ' -f1)\" = "+
-					shellQuote(hex.EncodeToString(helperHash[:]))+" ]",
-			)
-		}
-		preinstalledCheck = "if ! { " + strings.Join(guards, " && ") + "; }; then echo " + preinstalledMiss + "; exit 0; fi\n"
+		preinstalledCheck = preinstalledHealScript(bootstrap, workerDestination)
 	}
 	workerEnvironment := path.Join(layout.WorkerData, "worker.env")
 	workerLauncher := path.Join(layout.WorkerData, "launch.sh")
@@ -854,6 +840,56 @@ func bootstrapCommandForArchive(
 		"sleep 1\nsudo -n -u " + shellQuote(workerUser) + " kill -0 \"$worker_pid\" 2>/dev/null || { echo 'AO worker exited during startup' >&2; exit 1; }\n" +
 		"rm -rf \"$stage\"\ntrap - EXIT\necho " + bootstrapOK + "\n"
 	return "sh -lc " + shellQuote(script)
+}
+
+// preinstalledHealScript emits the shell that runs before a launch-only bootstrap
+// upload. For each baked binary it checks whether the copy at its destination
+// already matches the exact hash the control plane runs. A stale or missing copy
+// first tries a fast HTTP pull of the correct build from the control plane
+// (content-addressed and unauthenticated, like /worker/bootstrap), verifies the
+// sha256, and installs it in place. Only if that self-heal fails does the
+// workspace emit preinstalledMiss and exit 0, so the caller falls back to the
+// slow PTY binary upload. AO_CLOUD_PUBLIC_URL is not yet sourced from worker.env
+// at this point, so the origin is embedded here as a shell literal.
+func preinstalledHealScript(bootstrap sandbox.WorkerBootstrap, workerDestination string) string {
+	publicURL := strings.TrimRight(strings.TrimSpace(bootstrap.Environment["AO_CLOUD_PUBLIC_URL"]), "/")
+	workerHash := sha256.Sum256(bootstrap.Binary)
+	var script strings.Builder
+	script.WriteString("ao_public_url=" + shellQuote(publicURL) + "\n")
+	// ao_http_heal <dest> <sha256>: pull the content-addressed binary from the
+	// control plane, verify its hash, and install it. Any failure returns non-zero
+	// so the caller signals a miss and the PTY upload takes over.
+	script.WriteString("ao_http_heal() {\n")
+	script.WriteString("  ao_dest=$1; ao_want=$2\n")
+	script.WriteString("  [ -n \"$ao_public_url\" ] || return 1\n")
+	script.WriteString("  ao_tmp=$(mktemp) || return 1\n")
+	script.WriteString("  ao_url=\"$ao_public_url/api/cloud/v1/worker/binary/$ao_want\"\n")
+	script.WriteString("  if command -v curl >/dev/null 2>&1; then\n")
+	script.WriteString("    curl -fsSL \"$ao_url\" -o \"$ao_tmp\" || { rm -f \"$ao_tmp\"; return 1; }\n")
+	script.WriteString("  elif command -v wget >/dev/null 2>&1; then\n")
+	script.WriteString("    wget -qO \"$ao_tmp\" \"$ao_url\" || { rm -f \"$ao_tmp\"; return 1; }\n")
+	script.WriteString("  else\n    rm -f \"$ao_tmp\"; return 1\n  fi\n")
+	script.WriteString("  [ \"$(sha256sum \"$ao_tmp\" | cut -d' ' -f1)\" = \"$ao_want\" ] || { rm -f \"$ao_tmp\"; return 1; }\n")
+	script.WriteString("  sudo -n install -m 0755 \"$ao_tmp\" \"$ao_dest\" || { rm -f \"$ao_tmp\"; return 1; }\n")
+	script.WriteString("  rm -f \"$ao_tmp\"\n")
+	script.WriteString("}\n")
+	script.WriteString(preinstalledHealBlock(workerDestination, hex.EncodeToString(workerHash[:])))
+	if len(bootstrap.HelperBinary) > 0 {
+		helperHash := sha256.Sum256(bootstrap.HelperBinary)
+		script.WriteString(preinstalledHealBlock(bootstrap.HelperDestination, hex.EncodeToString(helperHash[:])))
+	}
+	return script.String()
+}
+
+// preinstalledHealBlock guards one baked binary: if the copy at dest is missing
+// or does not match the expected sha256, attempt the HTTP self-heal, and only on
+// its failure emit the miss marker so the caller falls back to the PTY upload.
+func preinstalledHealBlock(dest, expectedHex string) string {
+	quotedDest := shellQuote(dest)
+	return "if ! { [ -x " + quotedDest + " ] && [ \"$(sha256sum " + quotedDest + " | cut -d' ' -f1)\" = " +
+		shellQuote(expectedHex) + " ]; }; then\n" +
+		"  ao_http_heal " + quotedDest + " " + shellQuote(expectedHex) +
+		" || { echo " + preinstalledMiss + "; exit 0; }\nfi\n"
 }
 
 func shellQuote(value string) string {
