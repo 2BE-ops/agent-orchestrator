@@ -47,7 +47,7 @@ const (
 // native payload when present. All four are optional: an old daemon decodes
 // the body leniently and simply ignores them.
 type setActivityAPIRequest struct {
-	ObservedAt time.Time `json:"observedAt,omitempty"`
+	ObservedAt                   time.Time                           `json:"observedAt,omitempty"`
 	State                        string                              `json:"state,omitempty"`
 	Event                        string                              `json:"event,omitempty"`
 	ToolName                     string                              `json:"toolName,omitempty"`
@@ -450,7 +450,7 @@ func (c *commandContext) runHook(ctx context.Context, agent, event string) error
 	}
 	path := "sessions/" + url.PathEscape(sessionID) + "/activity"
 	req := setActivityAPIRequest{
-		ObservedAt: observedAt,
+		ObservedAt:                   observedAt,
 		Event:                        event,
 		ToolName:                     toolName,
 		ToolUseID:                    toolUseID,

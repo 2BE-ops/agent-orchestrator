@@ -98,7 +98,7 @@ type SessionMetadata struct {
 	LatestUserPromptAt time.Time `json:"-"`
 	// LatestAssistantUpdate is the latest user-facing assistant update observed
 	// before any internal agent-switch coordination turn.
-	LatestAssistantUpdate string `json:"latestAssistantUpdate,omitempty"`
+	LatestAssistantUpdate   string    `json:"latestAssistantUpdate,omitempty"`
 	LatestAssistantUpdateAt time.Time `json:"-"`
 	// ConversationCheckpointState and its owner provenance are internal replay
 	// safety facts. They survive daemon restart but are not part of the session
