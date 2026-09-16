@@ -341,6 +341,12 @@ func startInteractiveAgent(
 		}
 		return fmt.Errorf("initialize agent terminal: %w", err)
 	}
+	if err := transportSupervisor.ConfigureAgent(agentCommand, agentTerminal.TerminalID); err != nil {
+		if agentCommand.Cleanup != nil {
+			agentCommand.Cleanup()
+		}
+		return fmt.Errorf("configure interactive coding-agent terminal: %w", err)
+	}
 	// The agent process begins acting on its baked-in first task the moment it
 	// exists, so hold the spawn until the repository checkout is ready. All the
 	// preparation above runs concurrently with the clone; only this final spawn
@@ -348,9 +354,7 @@ func startInteractiveAgent(
 	// The workspace shell is a separate terminal and is unaffected.
 	select {
 	case <-ctx.Done():
-		if agentCommand.Cleanup != nil {
-			agentCommand.Cleanup()
-		}
+		transportSupervisor.DiscardConfiguredAgent(agentTerminal.TerminalID)
 		return ctx.Err()
 	case <-workspaceReady:
 	}
