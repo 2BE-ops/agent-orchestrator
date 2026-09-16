@@ -8,6 +8,7 @@ import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import semver from "semver";
+import { AO_BUNDLE_ID } from "./stale-app-copies";
 import type { RequestOptions } from "node:http";
 import {
   readUpdateSettings,
@@ -114,11 +115,30 @@ let nativePreparationError: Error | undefined;
 // growth signal can't be read.
 const STAGE_POLL_INTERVAL_MS = 10_000;
 const STAGE_INACTIVITY_TIMEOUT_MS = 90_000;
+// After ditto finishes extracting, ShipIt verifies the code signature: a
+// read-only phase where the staging bytes plateau while real work continues.
+// That plateau can outlast the inactivity window, so never call a stall on
+// bytes alone until this much total time has passed; a genuinely wedged stage
+// still trips on the no-signal and absolute caps below.
+const STAGE_VERIFY_GRACE_MS = 3 * 60_000;
 const STAGE_NO_SIGNAL_CAP_MS = 6 * 60_000;
 const STAGE_ABSOLUTE_CAP_MS = 15 * 60_000;
-// A ShipIt extract keeps an uncompressed copy during the swap, so require a floor
-// of free space beyond the already-downloaded zip.
-const MIN_FREE_BYTES_TO_STAGE = 2 * 1024 * 1024 * 1024;
+// A ShipIt extract unpacks the downloaded zip and keeps both the old and new
+// bundles around during the swap, so it needs several times the archive size in
+// free space. Derive the requirement from the artifact we actually downloaded
+// rather than a flat number: a small nightly should not be refused on a disk
+// that comfortably fits it. A floor keeps a safety margin, and a cap keeps a
+// large build from demanding more than the extraction realistically uses. When
+// the artifact size is unknown, fall back to the cap.
+const STAGE_ARCHIVE_EXPANSION_FACTOR = 3;
+const STAGE_FREE_BYTES_FLOOR = 512 * 1024 * 1024;
+const STAGE_FREE_BYTES_CAP = 2 * 1024 * 1024 * 1024;
+
+function requiredFreeBytesToStage(archiveBytes: number | undefined): number {
+  if (!archiveBytes || archiveBytes <= 0) return STAGE_FREE_BYTES_CAP;
+  const derived = archiveBytes * STAGE_ARCHIVE_EXPANSION_FACTOR;
+  return Math.min(STAGE_FREE_BYTES_CAP, Math.max(STAGE_FREE_BYTES_FLOOR, derived));
+}
 // Short user-facing lines; the raw ditto/pkzip/codesign detail is logged, not shown.
 const STAGE_STALL_MESSAGE = "Couldn't finish preparing the update. AO stayed open, so nothing changed. Retry to try again.";
 const STAGE_DISK_MESSAGE = "Not enough disk space to install the update. Free up space, then retry.";
@@ -129,12 +149,14 @@ let nativePreparation: { version: string; promise: Promise<void>; finish(error?:
 // Squirrel.Mac stages into ~/Library/Caches/<bundleId>.ShipIt. This is the OS
 // updater's own working area: AO only READS it (never writes, keeps no AO state
 // there; AO state stays under ~/.ao) and every read fails open to undefined.
+// The path is our own bundle id, not the first ".ShipIt" that happens to be in
+// the cache: another Electron app's staging dir would give a bogus byte signal
+// that keeps the watchdog alive (or falsely full) while our own stage stalls.
 function macShipItDir(): string | undefined {
   if (process.platform !== "darwin") return undefined;
   try {
-    const cachesRoot = path.join(os.homedir(), "Library", "Caches");
-    const entry = readdirSync(cachesRoot).find((name) => name.endsWith(".ShipIt"));
-    return entry ? path.join(cachesRoot, entry) : undefined;
+    const dir = path.join(os.homedir(), "Library", "Caches", `${AO_BUNDLE_ID}.ShipIt`);
+    return existsSync(dir) ? dir : undefined;
   } catch { return undefined; }
 }
 
@@ -163,13 +185,14 @@ function shipItStagingBytes(dir: string | undefined): number | undefined {
   return seen === 0 ? undefined : total;
 }
 
-// True when the volume clearly lacks room to extract and swap. Fails open.
-function insufficientDiskForStaging(): boolean {
+// True when the volume clearly lacks room to extract and swap the given
+// requirement. Fails open.
+function insufficientDiskForStaging(requiredBytes: number): boolean {
   if (process.platform !== "darwin") return false;
   try {
     const target = macShipItDir() ?? path.join(os.homedir(), "Library", "Caches");
     const { bavail, bsize } = statfsSync(target);
-    return Number(bavail) * Number(bsize) < MIN_FREE_BYTES_TO_STAGE;
+    return Number(bavail) * Number(bsize) < requiredBytes;
   } catch { return false; }
 }
 
@@ -192,16 +215,16 @@ function blockNativePreparation(message: string): void {
 // Test seam: override the filesystem probes to drive the watchdog
 // deterministically. A fresh module import restores the defaults.
 let readStagingBytes: (dir: string | undefined) => number | undefined = shipItStagingBytes;
-let stagingDiskIsFull: () => boolean = insufficientDiskForStaging;
+let stagingDiskIsFull: (requiredBytes: number) => boolean = insufficientDiskForStaging;
 export function __setStagingProbesForTesting(probes: {
   readStagingBytes?: (dir: string | undefined) => number | undefined;
-  stagingDiskIsFull?: () => boolean;
+  stagingDiskIsFull?: (requiredBytes: number) => boolean;
 }): void {
   if (probes.readStagingBytes) readStagingBytes = probes.readStagingBytes;
   if (probes.stagingDiskIsFull) stagingDiskIsFull = probes.stagingDiskIsFull;
 }
 
-function beginNativePreparation(version: string): void {
+function beginNativePreparation(version: string, archiveBytes?: number): void {
   if (nativePreparationBlocked) return;
   if (nativePreparation) {
     nativePreparationBlocked = new Error(STAGE_STALL_MESSAGE);
@@ -209,7 +232,7 @@ function beginNativePreparation(version: string): void {
     return;
   }
   // Catch a full disk before ditto fails partway with a cryptic pkzip error (#5170).
-  if (stagingDiskIsFull()) {
+  if (stagingDiskIsFull(requiredFreeBytesToStage(archiveBytes))) {
     blockNativePreparation(STAGE_DISK_MESSAGE);
     nativeReadyVersion = undefined;
     nativePreparationError = nativePreparationBlocked;
@@ -237,7 +260,12 @@ function beginNativePreparation(version: string): void {
       } else { nativeReadyVersion = version; resolve(); }
     },
   };
-  const stagingDir = macShipItDir();
+  // Squirrel creates the .ShipIt dir only after electron-updater has already
+  // emitted update-downloaded (it stages on the checkForUpdates() call that
+  // fires right after this handler runs), so the dir usually does not exist yet
+  // at this point. Keep re-resolving it until it appears, otherwise the growth
+  // signal never engages and every stage falls back to the flat no-signal cap.
+  let stagingDir = macShipItDir();
   const startedAt = Date.now();
   let lastBytes = readStagingBytes(stagingDir);
   let lastProgressAt = startedAt;
@@ -251,15 +279,23 @@ function beginNativePreparation(version: string): void {
   };
   const watchdog = setInterval(() => {
     const now = Date.now();
+    if (stagingDir === undefined) stagingDir = macShipItDir();
     const bytes = readStagingBytes(stagingDir);
     if (bytes !== undefined && (lastBytes === undefined || bytes > lastBytes)) {
       lastBytes = bytes;
       lastProgressAt = now;
     }
     const haveSignal = bytes !== undefined;
+    // A byte plateau only counts as a stall once it has outlasted the
+    // signature-verification grace, so a legitimate verify phase is not mistaken
+    // for a wedge.
+    const plateauStalled =
+      haveSignal &&
+      now - lastProgressAt >= STAGE_INACTIVITY_TIMEOUT_MS &&
+      now - startedAt >= STAGE_VERIFY_GRACE_MS;
     if (
       now - startedAt >= STAGE_ABSOLUTE_CAP_MS ||
-      (haveSignal && now - lastProgressAt >= STAGE_INACTIVITY_TIMEOUT_MS) ||
+      plateauStalled ||
       (!haveSignal && now - startedAt >= STAGE_NO_SIGNAL_CAP_MS)
     ) {
       trip();
@@ -1616,7 +1652,15 @@ function wireUpdaterEvents(): void {
     const restaged = stagedAtMs !== undefined && info?.version === stagedVersion;
     stagedVersion = info?.version;
     stagedInCurrentProcess = true;
-    if (process.platform === "darwin" && stagedVersion) beginNativePreparation(stagedVersion);
+    if (process.platform === "darwin" && stagedVersion) {
+      // electron-updater carries the artifact sizes in the manifest; the mac
+      // build is a single zip, so the largest entry is the archive we staged.
+      const archiveBytes = info?.files?.reduce(
+        (max, file) => Math.max(max, file?.size ?? 0),
+        0,
+      );
+      beginNativePreparation(stagedVersion, archiveBytes || undefined);
+    }
     stagedChannel = autoUpdater.channel ?? undefined;
     offeredReleaseNotes =
       normalizeReleaseNotes(info?.releaseNotes) ?? offeredReleaseNotes ?? directFeedReleaseNotes;
