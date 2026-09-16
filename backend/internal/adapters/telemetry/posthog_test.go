@@ -338,7 +338,7 @@ func TestSanitizeRemotePayloadDropsUnlistedReviewKeys(t *testing.T) {
 // owner, and a property missing from this allowlist is dropped silently. Both
 // events carry the same payload, so both entries have to stay in step.
 func TestProjectPayloadAllowlistCoversRepoOwnerAttribution(t *testing.T) {
-	want := []string{"has_git_remote", "kind", "repo_owner", "repo_owner_type", "github_org"}
+	want := []string{"has_git_remote", "kind", "repo_owner", "repo_owner_type", "repo_owner_count", "github_org"}
 	for _, name := range []string{"ao.projects.created", "ao.onboarding.first_project_added"} {
 		allowed, ok := remotePayloadAllowlist[name]
 		if !ok {
@@ -390,5 +390,33 @@ func TestSanitizeRemotePayloadKeepsRepoOwnerAndDropsTheRemote(t *testing.T) {
 	}
 	if _, ok := got["repo_url"]; ok {
 		t.Fatalf("repo_url survived sanitization: %#v", got)
+	}
+}
+
+// The workspace owner-count property has to survive the allowlist on both
+// project events, while anything resembling a repository identity still does
+// not.
+func TestSanitizeRemotePayloadKeepsWorkspaceOwnerCount(t *testing.T) {
+	for _, name := range []string{"ao.projects.created", "ao.onboarding.first_project_added"} {
+		got := sanitizeRemotePayload(name, map[string]any{
+			"kind":             "workspace",
+			"has_git_remote":   false,
+			"repo_owner":       "aoagents",
+			"repo_owner_count": 1,
+			"github_org":       "aoagents",
+			"repo_name":        "secret-repo",
+			"repo_origin_url":  "git@github.com:acme/secret-repo.git",
+		})
+		if got["repo_owner_count"] != int64(1) {
+			t.Errorf("%s: repo_owner_count = %#v, want 1", name, got["repo_owner_count"])
+		}
+		if got["repo_owner"] != "aoagents" || got["github_org"] != "aoagents" {
+			t.Errorf("%s: repo_owner/github_org = %#v/%#v, want aoagents", name, got["repo_owner"], got["github_org"])
+		}
+		for _, key := range []string{"repo_name", "repo_origin_url"} {
+			if _, ok := got[key]; ok {
+				t.Errorf("%s: %s survived sanitization: %#v", name, key, got)
+			}
+		}
 	}
 }
