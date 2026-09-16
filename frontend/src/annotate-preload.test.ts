@@ -235,7 +235,7 @@ describe("annotation adjustment preload", () => {
 		}));
 	});
 
-	it("keeps the selection highlight visible with a 2px outset while annotating", async () => {
+	it("keeps the selection highlight visible with a 6px outset while annotating", async () => {
 		const button = setElementBounds(document.createElement("button"), { left: 20, top: 30, width: 140, height: 36 });
 		button.id = "selected-box";
 		button.textContent = "Continue";
@@ -250,10 +250,10 @@ describe("annotation adjustment preload", () => {
 		expect(highlight?.hidden).toBe(false);
 		await vi.waitFor(() => {
 			expect(highlight?.classList.contains("hover--selected")).toBe(true);
-			expect(highlight?.style.left).toBe("18px");
-			expect(highlight?.style.top).toBe("28px");
-			expect(highlight?.style.width).toBe("144px");
-			expect(highlight?.style.height).toBe("40px");
+			expect(highlight?.style.left).toBe("14px");
+			expect(highlight?.style.top).toBe("24px");
+			expect(highlight?.style.width).toBe("152px");
+			expect(highlight?.style.height).toBe("48px");
 		});
 	});
 

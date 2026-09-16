@@ -48,7 +48,7 @@ const COMPOSER_RADIUS = 8;
 const COMMENT_ACTION_ROW_HEIGHT = COMPOSER_GAP + COMPOSER_CONTROL;
 const COMMENT_CHROME_VERTICAL = COMPOSER_PAD * 2;
 /** Extra pixels outside the target on each side while a selection is active. */
-const SELECTED_OUTSET_PX = 2;
+const SELECTED_OUTSET_PX = 6;
 const MARKDOWN_TARGETS =
 	"h1, h2, h3, h4, h5, h6, p, ul, ol, li, blockquote, pre, table, th, td, figure, figcaption, img, hr, details, summary";
 
@@ -387,7 +387,7 @@ function renderHover(): void {
 	const alreadySelected = highlight.classList.contains("hover--selected");
 	highlight.hidden = false;
 	if (selecting) {
-		// Ease from flush bounds to a constant 2px outset once per selection.
+		// Ease from flush bounds to a constant outset once per selection.
 		if (wasHidden || !alreadySelected) {
 			highlight.classList.remove("hover--selected");
 			positionBox(highlight, rect, 0);
