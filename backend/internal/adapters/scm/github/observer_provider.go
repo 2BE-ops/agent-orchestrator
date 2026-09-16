@@ -396,7 +396,10 @@ author{ login avatarUrl }
 mergeCommit{ oid }
 commits(last:1){ nodes{ commit{ oid statusCheckRollup{ state contexts(first:CONTEXT_LIMIT){ nodes{
   __typename
-  ... on CheckRun { name status conclusion detailsUrl url databaseId }
+  ... on CheckRun {
+    name status conclusion detailsUrl url databaseId
+    checkSuite{ workflowRun{ runNumber runAttempt workflow{ databaseId } } }
+  }
   ... on StatusContext { context state targetUrl }
 } pageInfo{ hasNextPage endCursor } } } } } }
 `, "CONTEXT_LIMIT", strconv.Itoa(scmBatchCheckContextLimit))
@@ -443,7 +446,10 @@ func buildCheckContextsQuery(ref ports.SCMPRRef, cursor string) string {
 repo: repository(owner:%s,name:%s){ pullRequest(number:%d){
   commits(last:1){ nodes{ commit{ statusCheckRollup{ contexts(first:%d, after:%s){ nodes{
     __typename
-    ... on CheckRun { name status conclusion detailsUrl url databaseId }
+    ... on CheckRun {
+      name status conclusion detailsUrl url databaseId
+      checkSuite{ workflowRun{ runNumber runAttempt workflow{ databaseId } } }
+    }
     ... on StatusContext { context state targetUrl }
   } pageInfo{ hasNextPage endCursor } } } } } }
 } }
@@ -547,6 +553,10 @@ func ciSummaryFromRollupState(pr map[string]any) domain.CIState {
 	if roll == nil {
 		return domain.CIUnknown
 	}
+	contexts, _ := roll["contexts"].(map[string]any)
+	if len(nodes(contexts["nodes"])) > 0 && !pageInfoHasMore(contexts) {
+		return ciSummaryFromGraphQL(pr)
+	}
 	return mapRollupState(str(roll["state"]))
 }
 
@@ -557,7 +567,7 @@ func scmContextsPaginated(pr map[string]any) bool {
 func scmChecksFromGraphQL(pr map[string]any) []ports.SCMCheckObservation {
 	roll := statusRollup(pr)
 	contexts, _ := roll["contexts"].(map[string]any)
-	rawNodes := nodes(contexts["nodes"])
+	rawNodes := effectiveCheckNodes(contexts)
 	out := make([]ports.SCMCheckObservation, 0, len(rawNodes))
 	for _, n := range rawNodes {
 		typ := str(n["__typename"])
