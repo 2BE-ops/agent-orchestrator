@@ -59,6 +59,7 @@ type Store interface {
 	SendMessage(context.Context, domain.Principal, string, string, string, string) (domain.ClientEvent, error)
 	ListClientEvents(context.Context, domain.Principal, string, string, int64, int) ([]domain.ClientEvent, bool, error)
 	SetSandboxDesiredState(ctx context.Context, principal domain.Principal, orgID, sessionID, desiredState string) error
+	RestoreSession(ctx context.Context, principal domain.Principal, orgID, sessionID string) error
 	ResumeSession(context.Context, domain.Principal, string, string) (domain.SandboxLifecycle, error)
 	WakePausedSessions(context.Context, domain.Principal, string) (int64, error)
 	RedeemWorkerBootstrapTicket(context.Context, string) (domain.AccessTicket, error)
@@ -131,6 +132,7 @@ type CheckoutBroker interface {
 
 type Server struct {
 	store            Store
+	transcripts      TranscriptStore
 	workos           auth.WorkOSVerifier
 	localAuthEnabled bool
 	localSessionTTL  time.Duration
@@ -173,6 +175,7 @@ type Server struct {
 
 type Options struct {
 	Store                     Store
+	Transcripts               TranscriptStore
 	WorkOS                    auth.WorkOSVerifier
 	LocalAuthEnabled          bool
 	LocalSessionTTL           time.Duration
@@ -243,6 +246,7 @@ func New(options Options) *Server {
 	}
 	server := &Server{
 		store:                     options.Store,
+		transcripts:               options.Transcripts,
 		workos:                    options.WorkOS,
 		localAuthEnabled:          options.LocalAuthEnabled,
 		localSessionTTL:           options.LocalSessionTTL,
@@ -361,6 +365,8 @@ func New(options Options) *Server {
 			router.Post("/worker/children/{sessionId}/messages", server.sendWorkerChildMessage)
 			router.Delete("/worker/children/{sessionId}", server.deleteWorkerChild)
 			router.Post("/worker/parent/messages", server.reportToParent)
+			router.Put("/worker/transcript", server.workerPutTranscript)
+			router.Get("/worker/transcript", server.workerGetTranscript)
 			router.Post("/worker/transport/claim", server.workerClaimTransport)
 			// The worker blocks here (long-poll) instead of busy-polling the
 			// claim routes; the control plane wakes it the instant a turn or
@@ -406,6 +412,7 @@ func New(options Options) *Server {
 			router.Get("/sessions/{sessionId}", server.getSession)
 			router.Post("/sessions/wake", server.wakePausedSessions)
 			router.Post("/sessions/{sessionId}/resume", server.resumeSession)
+			router.Post("/sessions/{sessionId}/restore", server.restoreSession)
 			router.Get("/sessions/{sessionId}/children", server.listSessionChildren)
 			router.Delete("/sessions/{sessionId}", server.deleteSession)
 			router.Post("/sessions/{sessionId}/messages", server.sendMessage)
