@@ -4593,12 +4593,14 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 	position: relative;
 	display: flex;
 	width: 100%;
-	height: 32px;
+	height: 100%;
+	min-height: 0;
 	min-width: 0;
 	flex: 1 1 auto;
 	align-items: center;
-	gap: 6px;
-	padding: 2px 4px;
+	align-self: stretch;
+	gap: var(--space-2);
+	padding: var(--space-1);
 	border-radius: var(--radius-md);
 	background: color-mix(in srgb, var(--surface) 94%, var(--bg));
 	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 70%, transparent);
@@ -4609,7 +4611,7 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 	display: flex;
 	min-width: 0;
 	align-items: center;
-	gap: 2px;
+	gap: var(--space-1);
 }
 
 .browser-panel__annotation-actions--leading {
@@ -4629,9 +4631,9 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 	min-width: 0;
 	translate: -50% -50%;
 	align-items: center;
-	gap: 5px;
+	gap: var(--space-1_5);
 	pointer-events: none;
-	font-size: 12px;
+	font-size: var(--font-size-sm);
 	line-height: 1;
 }
 
@@ -4659,12 +4661,12 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 .browser-panel__annotation-separator {
 	width: 1px;
 	height: 16px;
-	margin: 0 3px;
+	margin: 0 var(--space-1);
 	background: color-mix(in srgb, var(--color-border) 78%, transparent);
 }
 
 .browser-panel__toolbar.browser-panel__toolbar--annotation button {
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	box-shadow: none;
 	transform: none;
 	translate: none;
@@ -4698,24 +4700,24 @@ body:has(#root .platform-linux) > .browser-popout-overlay {
 	top: 1px;
 	right: 2px;
 	color: var(--color-status-needs-you);
-	font-family: var(--font-mono);
-	font-size: 9px;
-	font-weight: 600;
+	font-size: var(--font-size-nano);
+	font-weight: var(--font-weight-semibold);
+	font-variant-numeric: tabular-nums;
 	line-height: 1;
 }
 
 .browser-panel__toolbar--annotation .browser-panel__annotation-send {
 	min-width: 52px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	box-shadow: none;
 }
 
 .browser-panel__annotation-send-count {
 	margin-left: 1px;
-	padding-left: 6px;
+	padding-left: var(--space-1_5);
 	border-left: 1px solid color-mix(in srgb, currentColor 28%, transparent);
-	font-family: var(--font-mono);
-	font-size: 10px;
+	font-size: var(--font-size-xs);
+	font-variant-numeric: tabular-nums;
 }
 
 @container browser-toolbar (max-width: 30rem) {

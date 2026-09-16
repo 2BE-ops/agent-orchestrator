@@ -100,11 +100,19 @@ describe("annotation adjustment preload", () => {
 		const root = openAdjust(button);
 		const form = root.querySelector<HTMLFormElement>(".composer--adjustment");
 		const color = root.querySelector<HTMLInputElement>('[data-property="color"]');
+		const styles = root.querySelector("style")?.textContent ?? "";
 
 		expect(form?.style.width).toBe("316px");
 		expect(form?.style.maxHeight).toBe("400px");
 		expect(color).toHaveAttribute("type", "color");
-		expect(root.querySelector("style")?.textContent).toContain(".color-picker::-webkit-color-swatch");
+		expect(styles).toContain(".color-picker::-webkit-color-swatch");
+		// Unified chrome: modest radius, equal padding, sans by default; mono only for CSS values.
+		expect(styles).toContain("--radius:8px");
+		expect(styles).toContain("--pad:8px");
+		expect(styles).not.toContain("border-radius:999px");
+		expect(styles).not.toContain('font:700 10px "Geist Mono Variable"');
+		expect(styles).toContain('font:600 10px/1 "Geist Variable"');
+		expect(styles).toContain('font:400 12px/17px "Geist Mono Variable"');
 	});
 
 	it("applies a picked text color live to the element that paints nested text", () => {

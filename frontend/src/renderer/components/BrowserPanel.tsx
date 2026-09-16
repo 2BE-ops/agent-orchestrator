@@ -1077,11 +1077,12 @@ export function BrowserPanelView({
 				<span aria-hidden="true" className="browser-panel__annotation-separator" />
 				<Button
 					aria-label={t("browser.annotationSendAll")}
-					className="browser-panel__annotation-send h-7 gap-1.5 px-2.5 text-xs font-medium"
+					className="browser-panel__annotation-send"
 					disabled={annotationState.count === 0 && !annotationState.hasDraft}
 					onClick={() => void annotationAction("submit")}
 					size="sm"
 					type="button"
+					variant="primary"
 				>
 					{t("browser.annotationSend")}
 					{annotationState.count > 0 ? (

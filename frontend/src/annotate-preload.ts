@@ -804,12 +804,14 @@ function resizeAndPositionComposer(form: HTMLFormElement, textarea: HTMLTextArea
 	} else {
 		form.style.maxHeight = "none";
 		textarea.style.height = "0px";
-		const actionHeight = form.classList.contains("composer--expanded") ? 50 : 0;
+		// Expanded actions: 8px gap above a 28px control row.
+		const actionHeight = form.classList.contains("composer--expanded") ? 36 : 0;
 		const spaceAbove = rect.top - PROMPT_GAP - PROMPT_GUTTER;
 		const spaceBelow = viewportHeight - PROMPT_GUTTER - rect.bottom - PROMPT_GAP;
 		const availableHeight = Math.max(spaceAbove, spaceBelow);
 		const maxComposerHeight = Math.max(86, Math.min(COMMENT_MAX_HEIGHT, availableHeight));
-		const maxTextareaHeight = Math.max(COMMENT_TEXTAREA_MIN_HEIGHT, maxComposerHeight - actionHeight - 14);
+		// Composer chrome uses equal 8px padding on every side.
+		const maxTextareaHeight = Math.max(COMMENT_TEXTAREA_MIN_HEIGHT, maxComposerHeight - actionHeight - 16);
 		const naturalHeight = Math.max(COMMENT_TEXTAREA_MIN_HEIGHT, textarea.scrollHeight);
 		textarea.style.height = `${Math.min(maxTextareaHeight, naturalHeight)}px`;
 		textarea.style.overflowY = naturalHeight > maxTextareaHeight ? "auto" : "hidden";
@@ -849,21 +851,183 @@ function ensureOverlay(): ShadowRoot {
 
 function overlayStyles(): string {
 	const vars = {
-		background: theme.background ?? "oklch(0.185 0.006 285.885)", foreground: theme.foreground ?? "oklch(0.985 0 0)",
-		muted: theme.muted ?? "oklch(0.274 0.006 286.033)", mutedForeground: theme.mutedForeground ?? "oklch(0.705 0.015 286.067)",
-		border: theme.border ?? "oklch(1 0 0 / 10%)", accent: theme.accent ?? "oklch(0.92 0.004 286.32)",
-		accentForeground: theme.accentForeground ?? "oklch(0.21 0.006 285.885)", destructive: theme.destructive ?? "oklch(0.704 0.191 22.216)",
+		background: theme.background ?? "oklch(0.185 0.006 285.885)",
+		foreground: theme.foreground ?? "oklch(0.985 0 0)",
+		muted: theme.muted ?? "oklch(0.274 0.006 286.033)",
+		mutedForeground: theme.mutedForeground ?? "oklch(0.705 0.015 286.067)",
+		border: theme.border ?? "oklch(1 0 0 / 10%)",
+		accent: theme.accent ?? "oklch(0.92 0.004 286.32)",
+		accentForeground: theme.accentForeground ?? "oklch(0.21 0.006 285.885)",
+		destructive: theme.destructive ?? "oklch(0.704 0.191 22.216)",
 	};
+	// Mirror renderer Button/Input chrome: 8px radius, 28px controls, equal 8px padding,
+	// Geist sans everywhere except code-like CSS values (px / hex).
 	return `
-		:host{all:initial;--bg:${vars.background};--fg:${vars.foreground};--muted:${vars.muted};--muted-fg:${vars.mutedForeground};--border:${vars.border};--accent:${vars.accent};--accent-fg:${vars.accentForeground};--danger:${vars.destructive};font-family:"Geist Variable",system-ui,sans-serif;color:var(--fg)}
-		.hover{position:fixed;box-sizing:border-box;border:2px solid #4d8dff;border-radius:7px;background:rgba(77,141,255,.10);pointer-events:none}
-		.marker{position:fixed;width:20px;height:20px;border:2px solid var(--bg);border-radius:50%;background:#74b98a;color:#101512;padding:0;font:700 10px "Geist Mono Variable",monospace;pointer-events:auto;box-shadow:0 2px 9px rgba(0,0,0,.38);cursor:pointer}
-		.tray{position:fixed;left:50%;top:12px;transform:translateX(-50%);display:flex;align-items:center;gap:5px;padding:5px;border:1px solid var(--border);border-radius:10px;background:color-mix(in oklch,var(--bg) 96%,transparent);backdrop-filter:blur(14px);box-shadow:0 10px 28px rgba(0,0,0,.28);pointer-events:auto;font-size:12px;white-space:nowrap}.count{font-weight:650;padding:0 7px}.divider{align-self:stretch;width:1px;background:var(--border);margin:2px}
-		button{display:inline-flex;height:28px;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:7px;background:var(--muted);color:var(--fg);padding:0 9px;font:500 12px "Geist Variable",system-ui;cursor:pointer}button:hover{filter:brightness(1.12)}button:disabled{opacity:.35;cursor:default}.primary{background:var(--accent);color:var(--accent-fg);font-weight:650}.danger{color:var(--danger)}kbd{margin-left:6px;opacity:.62;font:10px "Geist Mono Variable",monospace}button svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.icon-button{width:28px;padding:0}.original-button{gap:6px}
-		.composer{position:fixed;box-sizing:border-box;border:1px solid var(--border);background:var(--bg);color:var(--fg);box-shadow:0 14px 38px rgba(0,0,0,.38);pointer-events:auto;font-size:12px;overflow:hidden}.composer--comment{border-radius:18px;padding:6px 7px;transition:border-radius 160ms ease,padding 160ms ease}.composer--comment.composer--expanded{border-radius:18px;padding:7px}.composer-input-row{display:flex;min-width:0;align-items:flex-start;gap:5px}.adjust-button{width:38px;height:38px;flex:0 0 38px;border:0;border-radius:999px;background:transparent;color:var(--muted-fg);padding:0}.adjust-button:hover,.adjust-button--active{background:var(--muted);color:var(--fg)}.adjust-button svg{width:17px;height:17px}.composer-note{display:block;box-sizing:border-box;min-width:0;flex:1;height:36px;min-height:36px;resize:none;border:0;background:transparent;color:var(--fg);caret-color:var(--fg);padding:8px 4px;font:13px/20px "Geist Variable",system-ui;outline:none;overflow-y:hidden;scrollbar-width:none}.composer-note::-webkit-scrollbar,.property-textarea::-webkit-scrollbar,.adjustment-scroll::-webkit-scrollbar{display:none}.composer-note::placeholder{color:var(--muted-fg)}textarea:focus,input:focus,select:focus{outline:none}.composer-actions{display:flex;align-items:center;justify-content:space-between;padding:6px 1px 0}.composer-actions[hidden]{display:none}.cancel-button{height:30px;border-radius:999px;background:transparent;padding:0 12px}.send-button{width:34px;height:34px;flex:0 0 34px;padding:0;border:0;border-radius:999px;background:var(--accent);color:var(--accent-fg)}.send-button svg{width:15px;height:15px}
-		.composer--adjustment{display:flex;flex-direction:column;border-radius:16px;background:color-mix(in oklch,var(--bg) 96%,var(--muted))}.composer--adjustment .composer-input-row{flex:0 0 auto;padding:5px 7px;background:var(--muted)}.composer--adjustment .composer-note{max-height:52px}.element-header{display:flex;flex:0 0 auto;align-items:center;justify-content:space-between;border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:7px 11px;font-size:12px}.element-header strong{font-weight:600}.element-header span{color:var(--muted-fg)}.element-header svg{width:15px;height:15px}.adjustment-scroll{min-height:0;flex:1;overflow-y:auto;scrollbar-width:none}.adjustment-group{position:relative;display:flex;flex-direction:column;gap:5px;border-bottom:1px solid var(--border);padding:8px 10px}.adjustment-group--content{padding-bottom:9px}.adjustment-row{display:grid;grid-template-columns:88px minmax(0,1fr);align-items:center;gap:8px;min-height:28px;color:var(--muted-fg);font-size:11px}.adjustment-row--content{align-items:start}.adjustment-row--content>span:first-child{padding-top:7px}.field{position:relative;display:flex;min-width:0;align-items:center}.field input,.field select,.property-textarea{box-sizing:border-box;min-width:0;width:100%;height:28px;border:1px solid var(--border);border-radius:7px;background:var(--muted);color:var(--fg);padding:0 30px 0 8px;font:11px/17px "Geist Mono Variable",monospace}.property-textarea{height:46px;resize:none;padding:6px 28px 6px 8px;scrollbar-width:none}.field select{font-family:"Geist Variable",system-ui;padding-right:42px}.field input[data-unit]{padding-right:46px}.unit{position:absolute;right:30px;color:var(--muted-fg);font:10px "Geist Mono Variable",monospace;pointer-events:none}.field--color{gap:7px;padding-right:28px}.field input.color-picker{width:30px;height:24px;flex:0 0 30px;border:0;border-radius:6px;background:transparent;padding:0;overflow:hidden;cursor:pointer}.color-picker::-webkit-color-swatch-wrapper{padding:0}.color-picker::-webkit-color-swatch{border:1px solid var(--border);border-radius:6px}.color-value{min-width:0;overflow:hidden;color:var(--fg);font:11px "Geist Mono Variable",monospace;text-overflow:ellipsis;white-space:nowrap}.reset-button{position:absolute;right:1px;width:25px;height:25px;border:0;background:transparent;color:var(--muted-fg);padding:0}.field:has(select) .reset-button{right:20px}.reset-button--changed{color:var(--fg)}.reset-button svg{width:12px;height:12px}.linked-group{position:relative}.link-button{position:absolute;z-index:2;left:87px;top:50%;width:20px;height:20px;transform:translate(-50%,-50%);border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--muted-fg);padding:0;box-shadow:0 1px 4px rgba(0,0,0,.24)}.link-button svg{width:11px;height:11px}.link-button--active{border-color:#4d8dff;background:color-mix(in oklch,#4d8dff 22%,var(--bg));color:#78a8ff}.spacing-section{border-bottom:1px solid var(--border);padding:0 10px}.spacing-section summary{cursor:pointer;color:var(--muted-fg);font-size:11px;font-weight:500;padding:8px 0;list-style:none}.spacing-section summary::-webkit-details-marker{display:none}.spacing-section summary::after{content:"›";float:right;font-size:16px;line-height:13px;transform:rotate(90deg);transition:transform 120ms ease}.spacing-section[open] summary::after{transform:rotate(-90deg)}.spacing-fields{display:flex;flex-direction:column;gap:7px;padding:0 0 8px}.spacing-fields .linked-group{display:flex;flex-direction:column;gap:5px}.composer--adjustment .composer-actions{flex:0 0 auto;border-top:1px solid var(--border);background:var(--bg);padding:6px 8px}
-		.screenshot-notice{position:fixed;left:50%;top:55px;transform:translateX(-50%);border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--fg);padding:7px 10px;box-shadow:0 8px 22px rgba(0,0,0,.28);font:500 11px "Geist Variable",system-ui;pointer-events:none}
-		:host-context([data-original]){} :host([data-original]) .hover,:host([data-original]) .marker,:host([data-original]) .composer{visibility:hidden}
+		:host{
+			all:initial;
+			--bg:${vars.background};
+			--fg:${vars.foreground};
+			--muted:${vars.muted};
+			--muted-fg:${vars.mutedForeground};
+			--border:${vars.border};
+			--accent:${vars.accent};
+			--accent-fg:${vars.accentForeground};
+			--danger:${vars.destructive};
+			--radius:8px;
+			--control:28px;
+			--pad:8px;
+			--gap:8px;
+			font-family:"Geist Variable",system-ui,sans-serif;
+			color:var(--fg);
+		}
+		.hover{position:fixed;box-sizing:border-box;border:2px solid #4d8dff;border-radius:var(--radius);background:rgba(77,141,255,.10);pointer-events:none}
+		.marker{
+			position:fixed;width:20px;height:20px;border:2px solid var(--bg);border-radius:50%;
+			background:#74b98a;color:#101512;padding:0;
+			font:600 10px/1 "Geist Variable",system-ui,sans-serif;font-variant-numeric:tabular-nums;
+			pointer-events:auto;box-shadow:0 2px 8px rgba(0,0,0,.28);cursor:pointer;
+		}
+		button{
+			display:inline-flex;height:var(--control);align-items:center;justify-content:center;
+			border:1px solid transparent;border-radius:var(--radius);background:var(--muted);color:var(--fg);
+			padding:0 10px;font:400 12px/1 "Geist Variable",system-ui,sans-serif;cursor:pointer;
+			transition:background-color 120ms ease,border-color 120ms ease,color 120ms ease,opacity 120ms ease;
+		}
+		button:hover{background:color-mix(in oklch,var(--muted) 88%,var(--fg))}
+		button:disabled{opacity:.5;cursor:default}
+		button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+		.primary{background:var(--accent);color:var(--accent-fg)}
+		.primary:hover{background:color-mix(in oklch,var(--accent) 88%,var(--fg))}
+		.danger{color:var(--danger)}
+		button svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+		.composer{
+			position:fixed;box-sizing:border-box;border:1px solid var(--border);border-radius:var(--radius);
+			background:var(--bg);color:var(--fg);padding:var(--pad);
+			box-shadow:0 8px 28px rgba(0,0,0,.32);pointer-events:auto;font-size:12px;overflow:hidden;
+		}
+		.composer--comment{transition:box-shadow 150ms ease}
+		.composer-input-row{display:flex;min-width:0;align-items:flex-start;gap:var(--gap)}
+		.adjust-button{
+			width:var(--control);height:var(--control);flex:0 0 var(--control);
+			border:0;border-radius:var(--radius);background:transparent;color:var(--muted-fg);padding:0;
+		}
+		.adjust-button:hover,.adjust-button--active{background:var(--muted);color:var(--fg)}
+		.adjust-button svg{width:16px;height:16px}
+		.composer-note{
+			display:block;box-sizing:border-box;min-width:0;flex:1;height:36px;min-height:36px;resize:none;
+			border:0;background:transparent;color:var(--fg);caret-color:var(--fg);
+			padding:8px 0;font:400 13px/20px "Geist Variable",system-ui,sans-serif;outline:none;
+			overflow-y:hidden;scrollbar-width:none;
+		}
+		.composer-note::-webkit-scrollbar,.property-textarea::-webkit-scrollbar,.adjustment-scroll::-webkit-scrollbar{display:none}
+		.composer-note::placeholder{color:var(--muted-fg)}
+		textarea:focus,input:focus,select:focus{outline:none}
+		.composer-actions{
+			display:flex;align-items:center;justify-content:space-between;gap:var(--gap);padding-top:var(--gap);
+		}
+		.composer-actions[hidden]{display:none}
+		.cancel-button{height:var(--control);border:0;border-radius:var(--radius);background:transparent;padding:0 10px;color:var(--muted-fg)}
+		.cancel-button:hover{background:var(--muted);color:var(--fg)}
+		.send-button{
+			width:var(--control);height:var(--control);flex:0 0 var(--control);padding:0;border:0;
+			border-radius:var(--radius);background:var(--accent);color:var(--accent-fg);
+		}
+		.send-button:hover{background:color-mix(in oklch,var(--accent) 88%,var(--fg))}
+		.send-button svg{width:14px;height:14px}
+		.composer--adjustment{display:flex;flex-direction:column;padding:0;background:var(--bg)}
+		.composer--adjustment .composer-input-row{flex:0 0 auto;padding:var(--pad);background:var(--muted)}
+		.composer--adjustment .composer-note{max-height:52px;padding:6px 0}
+		.element-header{
+			display:flex;flex:0 0 auto;align-items:center;justify-content:space-between;
+			border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+			padding:var(--pad) 12px;font-size:12px;
+		}
+		.element-header strong{font-weight:600}
+		.element-header span{color:var(--muted-fg)}
+		.element-header svg{width:14px;height:14px}
+		.adjustment-scroll{min-height:0;flex:1;overflow-y:auto;scrollbar-width:none}
+		.adjustment-group{
+			position:relative;display:flex;flex-direction:column;gap:var(--gap);
+			border-bottom:1px solid var(--border);padding:var(--pad) 12px;
+		}
+		.adjustment-row{
+			display:grid;grid-template-columns:88px minmax(0,1fr);align-items:center;gap:var(--gap);
+			min-height:var(--control);color:var(--muted-fg);font-size:12px;
+		}
+		.adjustment-row--content{align-items:start}
+		.adjustment-row--content>span:first-child{padding-top:8px}
+		.field{position:relative;display:flex;min-width:0;align-items:center}
+		.field input,.field select,.property-textarea{
+			box-sizing:border-box;min-width:0;width:100%;height:var(--control);
+			border:1px solid transparent;border-radius:var(--radius);
+			background:color-mix(in oklch,var(--muted) 70%,transparent);color:var(--fg);
+			padding:0 30px 0 8px;font:400 12px/17px "Geist Variable",system-ui,sans-serif;
+		}
+		.field input[data-unit],.field input.color-picker+.color-value,.color-value,.unit{
+			font-family:"Geist Mono Variable",ui-monospace,monospace;font-variant-numeric:tabular-nums;
+		}
+		.field input[data-unit]{font:400 12px/17px "Geist Mono Variable",ui-monospace,monospace}
+		.property-textarea{
+			height:46px;resize:none;padding:6px 28px 6px 8px;scrollbar-width:none;
+			font:400 12px/17px "Geist Variable",system-ui,sans-serif;
+		}
+		.field select{padding-right:42px}
+		.field input[data-unit]{padding-right:46px}
+		.unit{
+			position:absolute;right:30px;color:var(--muted-fg);
+			font:400 10px/1 "Geist Mono Variable",ui-monospace,monospace;pointer-events:none;
+		}
+		.field--color{gap:8px;padding-right:28px}
+		.field input.color-picker{
+			width:28px;height:24px;flex:0 0 28px;border:0;border-radius:6px;
+			background:transparent;padding:0;overflow:hidden;cursor:pointer;
+		}
+		.color-picker::-webkit-color-swatch-wrapper{padding:0}
+		.color-picker::-webkit-color-swatch{border:1px solid var(--border);border-radius:6px}
+		.color-value{
+			min-width:0;overflow:hidden;color:var(--fg);
+			font:400 12px/1 "Geist Mono Variable",ui-monospace,monospace;
+			text-overflow:ellipsis;white-space:nowrap;
+		}
+		.reset-button{
+			position:absolute;right:1px;width:var(--control);height:var(--control);
+			border:0;border-radius:var(--radius);background:transparent;color:var(--muted-fg);padding:0;
+		}
+		.reset-button:hover{background:transparent;color:var(--fg)}
+		.field:has(select) .reset-button{right:20px}
+		.reset-button--changed{color:var(--fg)}
+		.reset-button svg{width:12px;height:12px}
+		.linked-group{position:relative}
+		.link-button{
+			position:absolute;z-index:2;left:87px;top:50%;width:20px;height:20px;
+			transform:translate(-50%,-50%);border:1px solid var(--border);border-radius:6px;
+			background:var(--bg);color:var(--muted-fg);padding:0;box-shadow:0 1px 3px rgba(0,0,0,.2);
+		}
+		.link-button svg{width:11px;height:11px}
+		.link-button--active{border-color:#4d8dff;background:color-mix(in oklch,#4d8dff 22%,var(--bg));color:#78a8ff}
+		.spacing-section{border-bottom:1px solid var(--border);padding:0 12px}
+		.spacing-section summary{
+			cursor:pointer;color:var(--muted-fg);font-size:12px;font-weight:500;
+			padding:var(--pad) 0;list-style:none;
+		}
+		.spacing-section summary::-webkit-details-marker{display:none}
+		.spacing-section summary::after{
+			content:"›";float:right;font-size:16px;line-height:13px;
+			transform:rotate(90deg);transition:transform 120ms ease;
+		}
+		.spacing-section[open] summary::after{transform:rotate(-90deg)}
+		.spacing-fields{display:flex;flex-direction:column;gap:var(--gap);padding:0 0 var(--pad)}
+		.spacing-fields .linked-group{display:flex;flex-direction:column;gap:var(--gap)}
+		.composer--adjustment .composer-actions{
+			flex:0 0 auto;border-top:1px solid var(--border);background:var(--bg);padding:var(--pad);
+		}
+		.screenshot-notice{
+			position:fixed;left:50%;top:55px;transform:translateX(-50%);
+			border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--fg);
+			padding:var(--pad) 12px;box-shadow:0 8px 22px rgba(0,0,0,.28);
+			font:400 12px/1 "Geist Variable",system-ui,sans-serif;pointer-events:none;
+		}
+		:host([data-original]) .hover,:host([data-original]) .marker,:host([data-original]) .composer{visibility:hidden}
 		@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 	`;
 }
