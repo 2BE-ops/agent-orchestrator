@@ -23,7 +23,9 @@ export function OnboardingCloudStep({ cloudEnabled }: { cloudEnabled: boolean })
 
 	return (
 		<div className="flex w-full max-w-[440px] flex-col gap-4 text-left">
-			<div className="flex w-full flex-col gap-3">
+			{/* Equal rows whatever the copy does: fr auto-rows keep both options the
+			    same height, so a wrapped description cannot make one taller. */}
+			<div className="grid w-full auto-rows-fr grid-cols-1 gap-3">
 				<SetupRow
 					variant="card"
 					icon={<Cloud aria-hidden="true" />}
