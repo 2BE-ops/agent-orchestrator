@@ -472,13 +472,14 @@ export function OnboardingPage() {
 						// agents cannot open pull requests or read issues without it.
 						(step === "github" && !githubSetup.authSatisfied)
 					}
-						className="group relative inline-flex h-10 w-auto items-center justify-center overflow-hidden whitespace-nowrap rounded-md bg-foreground px-4 text-sm font-medium text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-30"
+						className="group relative inline-flex h-10 w-auto items-center justify-center overflow-hidden whitespace-nowrap rounded-md px-4 text-sm font-medium text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-30"
 					>
 						{/* Emphasis fill: a white gradient with a highlight along the top
-						    edge, which flattens on hover. */}
+						    edge, which brightens on hover. The fill lives entirely in this
+						    overlay so the gradient is not covered by an opaque base. */}
 						<span
 							aria-hidden="true"
-							className="absolute inset-0 rounded-[inherit] bg-gradient-to-b from-foreground/90 to-foreground/70 shadow-[inset_0_1px_0_0_var(--color-foreground)] transition-colors group-hover:from-foreground group-hover:to-foreground/90"
+							className="absolute inset-0 rounded-[inherit] bg-gradient-to-b from-foreground/95 to-foreground/80 shadow-[inset_0_1px_0_0_var(--color-foreground)] transition-colors group-hover:from-foreground group-hover:to-foreground/90"
 						/>
 						<span className="relative">{t(details.nextLabel)}</span>
 					</button>
