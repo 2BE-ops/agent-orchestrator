@@ -996,6 +996,18 @@ function AttachedTerminal({
 	useEffect(() => {
 		onTerminalStateChange?.(state);
 	}, [onTerminalStateChange, state]);
+	// The immediate reconnecting signal a restore/resume sets (terminal-reset
+	// store). Reactive so the "Connecting…" surface shows the instant restore is
+	// clicked, before the polled runtimeConnected catches up; cleared the moment
+	// the new box's terminal attaches.
+	const isReconnecting = useTerminalResetStore((store) =>
+		session?.id ? Boolean(store.reconnecting[session.id]) : false,
+	);
+	useEffect(() => {
+		if (state === "attached" && session?.id) {
+			useTerminalResetStore.getState().markAttached(session.id);
+		}
+	}, [state, session?.id]);
 	useEffect(() => {
 		if (!terminal || state !== "attached" || !inputRequest) return;
 		if (lastInputRequestIdRef.current === inputRequest.id) return;
@@ -1136,9 +1148,11 @@ function AttachedTerminal({
 	// terminal attaches. Cloud only, so local terminals are unchanged.
 	const isBoxComingUp =
 		Boolean(session?.cloud) &&
-		isSessionActive &&
-		session?.runtimeConnected !== true &&
-		state !== "attached";
+		state !== "attached" &&
+		// isReconnecting fires synchronously on the restore/resume click; the
+		// runtimeConnected clause keeps the surface up through the rest of the
+		// fresh box's boot once the poll catches up.
+		(isReconnecting || (isSessionActive && session?.runtimeConnected !== true));
 	const showEndedState = (state === "exited" || canRestoreSession) && !isBoxComingUp;
 	const emptyStateTitle = session ? t("terminal.startingSession") : "Agent Orchestrator";
 	const emptyStateMessage = session

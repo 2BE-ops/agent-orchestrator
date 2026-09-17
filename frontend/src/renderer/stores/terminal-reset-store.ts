@@ -16,15 +16,31 @@ import { create } from "zustand";
 // within a live session where a terminal is currently mounted.
 type TerminalResetState = {
 	nonces: Record<string, number>;
+	// Sessions that are reconnecting to a fresh box (restore/resume) and have not
+	// re-attached yet. This is the IMMEDIATE, synchronous signal a restore sets:
+	// the polled runtimeConnected lags up to the 5s cloud poll, so on its own it
+	// leaves a window where the previous box's dead terminal still shows after a
+	// restore click. `bump` marks the session reconnecting; the terminal clears
+	// it via `markAttached` the instant it attaches to the new box.
+	reconnecting: Record<string, boolean>;
 	bump: (sessionId: string) => void;
+	markAttached: (sessionId: string) => void;
 };
 
 export const useTerminalResetStore = create<TerminalResetState>((set) => ({
 	nonces: {},
+	reconnecting: {},
 	bump: (sessionId) =>
 		set((state) => ({
 			nonces: { ...state.nonces, [sessionId]: (state.nonces[sessionId] ?? 0) + 1 },
+			reconnecting: { ...state.reconnecting, [sessionId]: true },
 		})),
+	markAttached: (sessionId) =>
+		set((state) =>
+			state.reconnecting[sessionId]
+				? { reconnecting: { ...state.reconnecting, [sessionId]: false } }
+				: state,
+		),
 }));
 
 /**
