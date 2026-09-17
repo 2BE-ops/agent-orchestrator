@@ -34,7 +34,6 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/agentbase"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/binaryutil"
-	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/terminalui"
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	aoprocess "github.com/aoagents/agent-orchestrator/backend/internal/process"
@@ -78,14 +77,14 @@ var _ ports.AgentAuthChecker = (*Plugin)(nil)
 var _ ports.EmptyComposerDetector = (*Plugin)(nil)
 var _ ports.AgentInterfaceHandoff = (*Plugin)(nil)
 var _ ports.AgentInterfaceHandoffHistoryProbe = (*Plugin)(nil)
+var _ ports.TerminalSurfaceInspector = (*Plugin)(nil)
 
 // ComposerIsEmpty recognizes Claude Code's blank composer or its dim
 // placeholder. Claude renders normal, non-dim status chrome below a bordered
 // composer, so inspect that bounded region before using the footer-free fallback.
 // A permission-menu selection and normal typed text are rejected.
 func (p *Plugin) ComposerIsEmpty(output string) bool {
-	return terminalui.LastBorderedPromptIsEmptyOrDimPlaceholder(output, "❯") ||
-		terminalui.LastPromptIsEmptyOrDimPlaceholder(output, "❯")
+	return p.InspectTerminalSurface(output).Composer == ports.TerminalComposerEmpty
 }
 
 // Manifest returns the adapter's static self-description.
@@ -214,13 +213,14 @@ func (p *Plugin) PreLaunch(ctx context.Context, cfg ports.LaunchConfig) error {
 }
 
 // GetRestoreCommand rebuilds the argv that continues an existing Claude Code
-// session: `claude [--permission-mode <mode>] --resume <agentSessionId>`. It
-// prefers the hook-captured native session id from
-// cfg.Session.Metadata["agentSessionId"]; for sessions created before hooks
-// captured it, it falls back to the deterministic UUID AO pins via
+// session: `claude [--model <model>] [--permission-mode <mode>]
+// --resume <agentSessionId>`. It prefers the hook-captured native session id
+// from cfg.Session.Metadata["agentSessionId"]; for sessions created before
+// hooks captured it, it falls back to the deterministic UUID AO pins via
 // --session-id at launch. ok is false only when neither is available, so the
-// caller fresh-spawns. The command re-applies the permission mode and current
-// standing system instructions. When Prompt is present it is passed as the
+// caller fresh-spawns. The command applies the caller's model selection,
+// permission mode, and current standing system instructions. A blank model
+// leaves model selection to Claude. When Prompt is present it is passed as the
 // resume-time user turn, avoiding a fragile terminal paste into Claude's TUI.
 func (p *Plugin) GetRestoreCommand(ctx context.Context, cfg ports.RestoreConfig) (cmd []string, ok bool, err error) {
 	if err := ctx.Err(); err != nil {
@@ -243,6 +243,7 @@ func (p *Plugin) GetRestoreCommand(ctx context.Context, cfg ports.RestoreConfig)
 		Binary:           binary,
 		SessionID:        cfg.Session.ID,
 		Metadata:         cfg.Session.Metadata,
+		Model:            cfg.Config.Model,
 		Prompt:           cfg.Prompt,
 		SystemPrompt:     cfg.SystemPrompt,
 		SystemPromptFile: cfg.SystemPromptFile,
@@ -407,8 +408,10 @@ func claudeLocalAuthStatus(ctx context.Context) (ports.AgentAuthStatus, bool, er
 	if err := ctx.Err(); err != nil {
 		return ports.AgentAuthStatusUnknown, false, err
 	}
-	if strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY")) != "" {
-		return ports.AgentAuthStatusAuthorized, true, nil
+	for _, name := range []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"} {
+		if strings.TrimSpace(os.Getenv(name)) != "" {
+			return ports.AgentAuthStatusAuthorized, true, nil
+		}
 	}
 	cfgPath, err := claudeConfigPath()
 	if err != nil {
@@ -557,24 +560,38 @@ func claudeConfigPath() (string, error) {
 // only projects[workspacePath].hasTrustDialogAccepted = true (preserving the
 // rest of the entry and every other project), and writes back via a
 // temp-file + atomic rename. If the path is already trusted, it makes no
-// write at all. A missing config file is treated as an empty one.
+// write at all. A missing config file is treated as an empty one; a
+// zero-byte or corrupt config file is refused rather than overwritten.
 // claudeTrustMu serializes ensureWorkspaceTrusted within the process. Concurrent
 // spawns to different workspaces otherwise read the same ~/.claude.json snapshot
 // and the last rename drops the other's trust entry.
 var claudeTrustMu sync.Mutex
 
 func ensureWorkspaceTrusted(configPath, workspacePath string) error {
+	return ensureWorkspaceTrustedForOS(configPath, workspacePath, runtime.GOOS)
+}
+
+func ensureWorkspaceTrustedForOS(configPath, workspacePath, goos string) error {
 	claudeTrustMu.Lock()
 	defer claudeTrustMu.Unlock()
+	if goos == "windows" {
+		workspacePath = strings.ReplaceAll(workspacePath, `\`, "/")
+	}
 
 	root := map[string]any{}
 	data, err := os.ReadFile(configPath)
 	switch {
 	case err == nil:
-		if len(data) > 0 {
-			if err := json.Unmarshal(data, &root); err != nil {
-				return fmt.Errorf("claude-code: parse %s: %w", configPath, err)
-			}
+		if len(bytes.TrimSpace(data)) == 0 {
+			// A zero-byte read means we may have caught some other writer
+			// mid-truncate. Treat it like a corrupt file, not a missing
+			// one: refuse to write rather than silently replacing the
+			// user's real config (oauthAccount, projects history, etc.)
+			// with one containing only the trust entry.
+			return fmt.Errorf("claude-code: %s is empty; refusing to overwrite", configPath)
+		}
+		if err := json.Unmarshal(data, &root); err != nil {
+			return fmt.Errorf("claude-code: parse %s: %w", configPath, err)
 		}
 	case os.IsNotExist(err):
 		// Treat as empty config; we'll create it.

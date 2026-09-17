@@ -21,6 +21,7 @@ import (
 	acpdriver "github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/acp"
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
+	aoprocess "github.com/aoagents/agent-orchestrator/backend/internal/process"
 )
 
 const minimumNodeMajor = 22
@@ -34,17 +35,19 @@ type claudePlugin interface {
 // plugin. The plugin remains the canonical discovery/auth implementation for
 // both Chat and TUI modes.
 func New(plugin claudePlugin, log *slog.Logger) ports.ChatDriver {
-	return acpdriver.New(acpdriver.Config{
+	return &checkpointDriver{plugin: plugin, ChatDriver: acpdriver.New(acpdriver.Config{
 		Harness: domain.HarnessClaudeCode,
 		Capabilities: ports.ChatCapabilities{
-			ports.ChatCapabilityStreaming: true,
-			ports.ChatCapabilityTools:     true,
-			ports.ChatCapabilityApprovals: true,
-			ports.ChatCapabilityInterrupt: true,
-			ports.ChatCapabilityResume:    true,
-			ports.ChatCapabilityUsage:     true,
-			ports.ChatCapabilityDiffs:     true,
-			ports.ChatCapabilityPlans:     true,
+			ports.ChatCapabilityStreaming:    true,
+			ports.ChatCapabilityTools:        true,
+			ports.ChatCapabilityApprovals:    true,
+			ports.ChatCapabilityInterrupt:    true,
+			ports.ChatCapabilityResume:       true,
+			ports.ChatCapabilityPromptReplay: true,
+			ports.ChatCapabilityUsage:        true,
+			ports.ChatCapabilityDiffs:        true,
+			ports.ChatCapabilityPlans:        true,
+			ports.ChatCapabilityCompaction:   true,
 		},
 		Probe: func(ctx context.Context) error {
 			if _, err := resolveRuntime(ctx); err != nil {
@@ -96,7 +99,7 @@ func New(plugin claudePlugin, log *slog.Logger) ports.ChatDriver {
 		SessionMeta:    claudeSessionMeta,
 		SessionMode:    claudeSessionMode,
 		SessionOptions: claudeSessionOptions,
-	}, log)
+	}, log)}
 }
 
 func validateClaudeACPExecutable(binary, goos string) error {
@@ -112,14 +115,15 @@ func validateClaudeACPExecutable(binary, goos string) error {
 }
 
 func claudeSessionMeta(cfg acpdriver.LaunchConfig) map[string]any {
-	if strings.TrimSpace(cfg.SystemPrompt) == "" {
+	standing := strings.TrimSpace(cfg.SystemPrompt)
+	if standing == "" {
 		return nil
 	}
 	// Append AO's standing instructions to Claude Code's own prompt. Replacing
 	// the preset would discard Claude's native coding/tool instructions.
 	return map[string]any{
 		"systemPrompt": map[string]any{
-			"type": "preset", "preset": "claude_code", "append": cfg.SystemPrompt,
+			"type": "preset", "preset": "claude_code", "append": standing,
 		},
 	}
 }
@@ -223,7 +227,7 @@ func requireFile(path, label string) error {
 func requireNodeVersion(ctx context.Context, node string) error {
 	// node is the explicit AO override or the validated executable inside AO's
 	// packaged resources, never prompt/provider input.
-	out, err := exec.CommandContext(ctx, node, "--version").Output() //nolint:gosec // Resolved local executable, not provider input.
+	out, err := aoprocess.CommandContext(ctx, node, "--version").Output() //nolint:gosec // Resolved local executable, not provider input.
 	if err != nil {
 		return fmt.Errorf("run packaged Node: %w", err)
 	}

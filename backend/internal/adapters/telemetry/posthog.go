@@ -151,6 +151,8 @@ var remotePayloadAllowlist = map[string]map[string]struct{}{
 	"ao.onboarding.first_project_added": {
 		"has_git_remote": {},
 		"kind":           {},
+		"github_org":     {},
+		"scm_provider":   {},
 	},
 	"ao.onboarding.first_session_spawned": {
 		"harness":                {},
@@ -161,14 +163,19 @@ var remotePayloadAllowlist = map[string]map[string]struct{}{
 		"created_runs": {},
 		"harness":      {},
 		"reused":       {},
+		"trigger":      {},
 	},
 	"ao.review.trigger_failed": {
 		"error_kind": {},
+		"trigger":    {},
 	},
 	"ao.review.submitted": {
+		"auto_inject":        {},
+		"body_bytes":         {},
 		"duration_ms":        {},
 		"harness":            {},
 		"posted_to_provider": {},
+		"trigger":            {},
 		"verdict":            {},
 	},
 	"ao.review.cancelled": {
@@ -177,6 +184,8 @@ var remotePayloadAllowlist = map[string]map[string]struct{}{
 	"ao.projects.created": {
 		"has_git_remote": {},
 		"kind":           {},
+		"github_org":     {},
+		"scm_provider":   {},
 	},
 	"ao.session.spawn_failed": {
 		"component":   {},

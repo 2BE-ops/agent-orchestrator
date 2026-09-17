@@ -10,7 +10,10 @@
  *
  *   - Raw HTML is escaped, not rendered. Agent output is only as trustworthy as the
  *     files it just read, so `rehype-raw` is deliberately absent; markdown-only is
- *     the whole sanitization story and there is no schema to get wrong. Syntax
+ *     the whole sanitization story and there is no schema to get wrong, with one
+ *     exception: ```mermaid fences render as diagrams through `MermaidBlock`,
+ *     whose SVG passes through mermaid's strict mode plus DOMPurify with
+ *     active-content tags forbidden. Syntax
  *     highlighting keeps that property — it renders a token tree as elements
  *     rather than injecting the highlighter's HTML string.
  *   - Nothing here re-parses or re-orders content. It renders exactly the text the
@@ -26,7 +29,6 @@
 import {
 	createContext,
 	Fragment,
-	isValidElement,
 	memo,
 	useContext,
 	useState,
@@ -37,10 +39,28 @@ import remarkGfm from "remark-gfm";
 import { WrapText } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { canonicalLanguage } from "../../lib/code-highlight";
-import { isWebLink, openLinkInSystemBrowser } from "../../lib/external-link-policy";
+import { fenceOf } from "../../lib/markdown-fence";
+import { isWebLink, isWorkspaceFileLink, openLinkInSystemBrowser } from "../../lib/external-link-policy";
+import { AppLink } from "../AppLink";
 import { HighlightedCode } from "./HighlightedCode";
+import { MermaidBlock } from "./MermaidBlock";
 import { CopyButton } from "./CopyButton";
 import "./code-theme.css";
+
+// Activity titles live inside disclosure buttons: keep inline formatting, but
+// unwrap block elements and links so provider text cannot nest interactive UI.
+const TITLE_ELEMENTS = ["code", "em", "strong", "del"];
+const TITLE_COMPONENTS: Components = {
+	code: ({ children }) => <code className="font-mono text-[0.95em]">{children}</code>,
+};
+
+export const ActivityTitle = memo(function ActivityTitle({ text }: { text: string }) {
+	return (
+		<Markdown allowedElements={TITLE_ELEMENTS} unwrapDisallowed components={TITLE_COMPONENTS}>
+			{text}
+		</Markdown>
+	);
+});
 
 /** GitHub-flavoured markdown: tables, strikethrough, task lists, autolinks. */
 const PLUGINS = [remarkGfm];
@@ -53,16 +73,18 @@ const PLUGINS = [remarkGfm];
  * and re-parse every message on every poll.
  */
 const StreamingProse = createContext(false);
-const OpenChatLink = createContext<((url: string) => void) | undefined>(undefined);
+const OpenChatLink = createContext<{ open?: (url: string) => void; workspacePaths: string[] }>({ workspacePaths: [] });
 
 export function ChatLinkProvider({
 	onLinkOpen,
+	workspacePaths = [],
 	children,
 }: {
 	onLinkOpen?: (url: string) => void;
+	workspacePaths?: string[];
 	children: ReactNode;
 }) {
-	return <OpenChatLink.Provider value={onLinkOpen}>{children}</OpenChatLink.Provider>;
+	return <OpenChatLink.Provider value={{ open: onLinkOpen, workspacePaths }}>{children}</OpenChatLink.Provider>;
 }
 
 export const ChatMarkdown = memo(function ChatMarkdown({
@@ -142,7 +164,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
 						aria-label="Wrap long lines"
 						title="Wrap long lines"
 						className={cn(
-							"flex items-center rounded px-1.5 py-0.5 transition-colors hover:bg-interactive-hover hover:text-foreground",
+							"flex size-7 items-center justify-center rounded-md transition-[background-color,color,transform] hover:bg-interactive-hover hover:text-foreground",
 							wrap ? "text-accent" : "text-muted-foreground",
 						)}
 					>
@@ -151,7 +173,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
 					<CopyButton text={code} label="Copy code" />
 				</div>
 			</div>
-			<pre className="overflow-x-auto px-3 py-2.5">
+			<pre className="scrollbar-none overflow-x-auto px-3 py-2.5">
 				<code className="font-mono text-[12px] leading-[1.6] text-foreground">
 					<HighlightedCode code={code} language={grammar} streaming={streaming} />
 				</code>
@@ -160,29 +182,8 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
 	);
 }
 
-/** The text inside a node, for the copy button and language sniffing. */
-function textOf(children: ReactNode): string {
-	if (typeof children === "string") return children;
-	if (typeof children === "number") return String(children);
-	if (Array.isArray(children)) return children.map(textOf).join("");
-	if (children && typeof children === "object" && "props" in children) {
-		return textOf((children as { props?: { children?: ReactNode } }).props?.children);
-	}
-	return "";
-}
-
-const LANGUAGE_CLASS = /language-([\w+#-]+)/;
 const EMOJI_GRAPHEME = /\p{Extended_Pictographic}|\p{Regional_Indicator}|[#*0-9]\uFE0F?\u20E3/u;
 const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-
-/** The fence inside a `pre`, or undefined if this is not a fenced block. */
-function fenceOf(children: ReactNode): { code: string; language?: string } | undefined {
-	if (!isValidElement<{ className?: string; children?: ReactNode }>(children)) return undefined;
-	return {
-		code: textOf(children.props.children).replace(/\n$/, ""),
-		language: LANGUAGE_CLASS.exec(children.props.className ?? "")?.[1],
-	};
-}
 
 function compactEmoji(children: ReactNode): ReactNode {
 	if (typeof children === "string") {
@@ -209,26 +210,38 @@ function compactEmoji(children: ReactNode): ReactNode {
 }
 
 function MarkdownLink({ href, children }: { href?: string; children?: ReactNode }) {
-	const onLinkOpen = useContext(OpenChatLink);
+	const { open: onLinkOpen, workspacePaths } = useContext(OpenChatLink);
 	return (
-		<a
+		<AppLink
 			href={href}
+			onBrowserOpen={onLinkOpen}
+			inAppLink={href ? (url) => isWebLink(url) || isWorkspaceFileLink(url, workspacePaths) : undefined}
+			onClick={(event) => {
+				if (href && !isWebLink(href) && !isWorkspaceFileLink(href, workspacePaths)) {
+					event.preventDefault();
+					void openLinkInSystemBrowser(href);
+				}
+			}}
 			target="_blank"
 			rel="noreferrer noopener"
-			onClick={(event) => {
-				if (!href) return;
-				event.preventDefault();
-				if (!event.altKey && onLinkOpen && isWebLink(href)) {
-					onLinkOpen(href);
-					return;
-				}
-				void openLinkInSystemBrowser(href);
-			}}
 			className="text-markdown-link underline decoration-markdown-link/45 underline-offset-2 transition-colors hover:text-markdown-link-hover hover:decoration-markdown-link-hover/75"
 		>
 			{children}
-		</a>
+		</AppLink>
 	);
+}
+
+/**
+ * A mermaid fence with the streaming state it was rendered under.
+ *
+ * A separate component rather than a hook call in the `pre` override because
+ * overrides are not components: hooks are illegal there, and `COMPONENTS`
+ * must stay module-level so react-markdown's memoization survives polling.
+ */
+function MermaidFence({ code }: { code: string }) {
+	const streaming = useContext(StreamingProse);
+	const { open: onLinkOpen } = useContext(OpenChatLink);
+	return <MermaidBlock code={code} streaming={streaming} onLinkOpen={onLinkOpen} />;
 }
 
 const COMPONENTS: Components = {
@@ -286,7 +299,11 @@ const COMPONENTS: Components = {
 	// on the class alone rendered those as inline code.
 	pre: ({ children }) => {
 		const fence = fenceOf(children);
-		return fence ? <CodeBlock code={fence.code} language={fence.language} /> : <>{children}</>;
+		if (!fence) return <>{children}</>;
+		// Mermaid is a diagram, not source: it renders through the sandboxed SVG
+		// path rather than the highlighter. See `MermaidBlock.tsx`.
+		if (fence.language?.toLowerCase() === "mermaid") return <MermaidFence code={fence.code} />;
+		return <CodeBlock code={fence.code} language={fence.language} />;
 	},
 	// Only inline code reaches here; `pre` above takes every fence.
 	code: ({ children }) => (
@@ -322,7 +339,8 @@ const COMPONENTS: Components = {
 	del: ({ children }) => <del className="text-muted-foreground">{children}</del>,
 
 	// Match terminal links: a plain HTTP(S) click uses the session's AO Browser;
-	// Option/Alt-click and non-web schemes use the system browser.
+	// Cmd/Ctrl- or Option/Alt-click and non-web schemes use the system browser,
+	// and right-click offers the system browser and copying the address.
 	a: MarkdownLink,
 
 	img: ({ src, alt }) => (
