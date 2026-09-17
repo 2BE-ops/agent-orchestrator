@@ -343,17 +343,16 @@ export default function PrivacyPage() {
               telemetry off stops it with everything else.
             </p>
             <p>
-              One exception: while the{" "}
-              <Strong>Share your GitHub handle</Strong> setting under Settings
-              &gt; Privacy is on, AO sends the GitHub username signed in to its
-              GitHub integration on session-start events, both as an event
-              property and as a PostHog person property, so we can see which
-              developers are most active. This setting is{" "}
-              <Strong>on by default</Strong> and can be turned off at any time in
-              Settings &gt; Privacy. AO only
-              sends a personal (human) account, never an organization or a bot
-              token. Turning it off stops future sends immediately; a person
-              property already stored in PostHog is not deleted.
+              One exception: AO sends the GitHub username signed in to its GitHub
+              integration on session-start events, both as an event property and
+              as a PostHog person property, so we can see which developers are
+              most active. AO only sends a personal (human) account, never an
+              organization or a bot token, and sends nothing if no GitHub token is
+              available. The handle is part of product telemetry and has no
+              separate switch: turning telemetry off stops it, because the
+              session-start event that carries it is then never sent. Anything
+              already stored in PostHog from earlier events is not deleted
+              retroactively.
             </p>
             <p>
               The desktop app does <Strong>not</Strong> currently send PostHog{" "}

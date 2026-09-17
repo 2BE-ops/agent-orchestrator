@@ -4,7 +4,6 @@ import { lstat, mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import {
 	AGENT_SWITCH_FAILURE_PRODUCTION_ENABLED,
-	GITHUB_IDENTITY_DEFAULT_ENABLED,
 	parseTelemetryPolicyDiskRecord,
 	telemetryPolicySnapshot,
 	type TelemetryPolicyDiskRecord,
@@ -118,26 +117,6 @@ export class TelemetryPolicyAuthority {
 		return this.snapshot();
 	}
 
-	async setGithubIdentityEnabled(githubIdentityEnabled: boolean): Promise<TelemetryPolicySnapshot> {
-		if (!this.loaded) await this.load();
-		if (!this.durabilitySupported) {
-			throw new Error("telemetry policy durable replacement is unsupported on Windows");
-		}
-		if (!this.writable) throw new Error("telemetry policy authority is unsafe and cannot be replaced");
-		// Preserve the failure-reporting consent fields: this toggle is orthogonal
-		// to events_enabled and must not mint a new consent_generation.
-		const record: TelemetryPolicyDiskRecord = {
-			...this.record,
-			schema_version: 3,
-			github_identity_enabled: githubIdentityEnabled,
-			updated_at: (this.options.now?.() ?? new Date()).toISOString(),
-		};
-		this.record = record;
-		this.current = this.snapshotOf(record, false);
-		await this.replace(record);
-		return this.snapshot();
-	}
-
 	async retryPendingReplacement(): Promise<TelemetryPolicySnapshot> {
 		if (!this.loaded) await this.load();
 		if (this.current.acknowledged) return this.snapshot();
@@ -151,11 +130,10 @@ export class TelemetryPolicyAuthority {
 
 	private newRecord(eventsEnabled: boolean): TelemetryPolicyDiskRecord {
 		return {
-			schema_version: 3,
+			schema_version: 2,
 			events_enabled: eventsEnabled,
 			consent_generation: (this.options.newGeneration ?? randomUUID)(),
 			consent_production_enabled: this.productionEnabled(),
-			github_identity_enabled: GITHUB_IDENTITY_DEFAULT_ENABLED,
 			updated_at: (this.options.now?.() ?? new Date()).toISOString(),
 		};
 	}

@@ -25,14 +25,15 @@ AO sends structured events in a few broad categories:
   user's own GitHub username, so this particular value is not anonymous. We use
   it to understand which organizations and developers get the most value from
   AO, so we can prioritize improvements and reach out for feedback
-- The GitHub username of the account signed in to AO's GitHub integration, when
-  the "Share your GitHub handle" setting is on. This setting is on by default and
-  can be turned off at any time in Settings > Privacy. When on, AO resolves your
-  authenticated GitHub login and sends it on session-start events, both as an
-  event property (`github_actor`) and as a PostHog person property, so we can see
-  which developers are most active and reach out for feedback. AO only sends it
-  when the signed-in account is a personal (human) account, never an organization
-  or bot token. See "Sharing your GitHub handle" below
+- The GitHub username of the account signed in to AO's GitHub integration. AO
+  resolves your authenticated GitHub login and sends it on session-start events,
+  both as an event property (`github_actor`) and as a PostHog person property, so
+  we can see which developers are most active and reach out for feedback. AO only
+  sends it when the signed-in account is a personal (human) account, never an
+  organization or bot token, and if no GitHub token is available it sends nothing.
+  This is part of product telemetry: it has no separate control, and turning
+  telemetry off (see below) stops it along with everything else. See "Sharing your
+  GitHub handle" below
 - Reliability data, such as an error type and context, a crash message and
   stack trace after path redaction, an HTTP status, or an agent waiting for
   input
@@ -175,20 +176,18 @@ contract.
 
 ## Sharing your GitHub handle
 
-When the **Share your GitHub handle** setting under Settings > Privacy is on, AO
-resolves the GitHub account signed in to its GitHub integration and includes that
-username on session-start events. It is sent both as the event property
+AO resolves the GitHub account signed in to its GitHub integration and includes
+that username on session-start events. It is sent both as the event property
 `github_actor` and as a PostHog person property on AO's shared installation
 person, which lets us group product activity by GitHub username and reach out to
 active users for feedback.
 
-This setting is on by default. You can turn it off at any time in Settings >
-Privacy. AO only sends the handle when
-the signed-in account is a personal (human) account; it never sends an
-organization or a bot token, and if no GitHub token is available it sends
-nothing. Turning the setting off stops AO from sending your handle on future
-events immediately. It is forward-only: a person property already stored in
-PostHog from earlier events is not deleted by turning the setting off.
+AO only sends the handle when the signed-in account is a personal (human)
+account; it never sends an organization or a bot token, and if no GitHub token is
+available it sends nothing. The handle is part of product telemetry and has no
+separate switch: turning telemetry off (see below) stops it, because the
+session-start event that carries it is then never sent. Anything already stored
+in PostHog from earlier events is not deleted retroactively.
 
 ## Turn desktop and daemon telemetry off
 

@@ -2,25 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseTelemetryPolicyDiskRecord, telemetryPolicyRetryable, telemetryPolicySnapshot, type TelemetryPolicyDiskRecord, type TelemetryPolicyView } from "./telemetry-policy";
 
 describe("telemetry policy wire record", () => {
-	it("accepts a version 3 record and preserves the GitHub-handle opt-out", () => {
-		expect(parseTelemetryPolicyDiskRecord(JSON.stringify({
-			schema_version: 3,
-			events_enabled: false,
-			consent_generation: "7f80c8a9-ec67-4a16-a067-a444ffcc5cca",
-			consent_production_enabled: true,
-			github_identity_enabled: false,
-			updated_at: "2026-08-28T10:15:30.000Z",
-		}))).toEqual({ ok: true, record: {
-			schema_version: 3,
-			events_enabled: false,
-			consent_generation: "7f80c8a9-ec67-4a16-a067-a444ffcc5cca",
-			consent_production_enabled: true,
-			github_identity_enabled: false,
-			updated_at: "2026-08-28T10:15:30.000Z",
-		} });
-	});
-
-	it("upgrades a version 2 record to v3 and defaults the GitHub-handle opt-in on", () => {
+	it("accepts only the exact snake_case versioned record", () => {
 		expect(parseTelemetryPolicyDiskRecord(JSON.stringify({
 			schema_version: 2,
 			events_enabled: false,
@@ -28,11 +10,10 @@ describe("telemetry policy wire record", () => {
 			consent_production_enabled: true,
 			updated_at: "2026-08-28T10:15:30.000Z",
 		}))).toEqual({ ok: true, record: {
-			schema_version: 3,
+			schema_version: 2,
 			events_enabled: false,
 			consent_generation: "7f80c8a9-ec67-4a16-a067-a444ffcc5cca",
 			consent_production_enabled: true,
-			github_identity_enabled: true,
 			updated_at: "2026-08-28T10:15:30.000Z",
 		} });
 	});
@@ -44,11 +25,10 @@ describe("telemetry policy wire record", () => {
 			consent_generation: "7f80c8a9-ec67-4a16-a067-a444ffcc5cca",
 			updated_at: "2026-08-28T10:15:30.000Z",
 		}))).toEqual({ ok: true, record: {
-			schema_version: 3,
+			schema_version: 2,
 			events_enabled: true,
 			consent_generation: "7f80c8a9-ec67-4a16-a067-a444ffcc5cca",
 			consent_production_enabled: false,
-			github_identity_enabled: true,
 			updated_at: "2026-08-28T10:15:30.000Z",
 		} });
 	});
@@ -69,12 +49,11 @@ describe("telemetry policy wire record", () => {
 });
 
 describe("telemetryPolicySnapshot", () => {
-	const record = (eventsEnabled: boolean, consentProductionEnabled: boolean, githubIdentityEnabled = true): TelemetryPolicyDiskRecord => ({
-		schema_version: 3,
+	const record = (eventsEnabled: boolean, consentProductionEnabled: boolean): TelemetryPolicyDiskRecord => ({
+		schema_version: 2,
 		events_enabled: eventsEnabled,
 		consent_generation: "7f80c8a9-ec67-4a16-a067-a444ffcc5cca",
 		consent_production_enabled: consentProductionEnabled,
-		github_identity_enabled: githubIdentityEnabled,
 		updated_at: "2026-08-28T10:15:30.000Z",
 	});
 
@@ -101,17 +80,11 @@ describe("telemetryPolicySnapshot", () => {
 		expect(telemetryPolicySnapshot(record(false, true), true, true).eventsEnabled).toBe(false);
 		expect(telemetryPolicySnapshot(record(false, false), true, false).eventsEnabled).toBe(false);
 	});
-
-	it("surfaces the GitHub-handle opt-in independently of failure reporting", () => {
-		expect(telemetryPolicySnapshot(record(false, false, true), true, true).githubIdentityEnabled).toBe(true);
-		expect(telemetryPolicySnapshot(record(true, true, false), true, true).githubIdentityEnabled).toBe(false);
-	});
 });
 
 describe("telemetryPolicyRetryable", () => {
 	const base: TelemetryPolicyView = {
 		eventsEnabled: false,
-		githubIdentityEnabled: false,
 		consentGeneration: "7f80c8a9-ec67-4a16-a067-a444ffcc5cca",
 		updatedAt: "2026-08-28T10:15:30.000Z",
 		acknowledged: false,

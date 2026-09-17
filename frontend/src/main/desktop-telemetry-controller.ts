@@ -21,7 +21,6 @@ type Authority = {
 	load(): Promise<TelemetryPolicySnapshot>;
 	snapshot(): TelemetryPolicySnapshot;
 	setEventsEnabled(enabled: boolean): Promise<TelemetryPolicySnapshot>;
-	setGithubIdentityEnabled(enabled: boolean): Promise<TelemetryPolicySnapshot>;
 	retryPendingReplacement(): Promise<TelemetryPolicySnapshot>;
 };
 
@@ -77,18 +76,6 @@ export class DesktopTelemetryController {
 			if (expectedGeneration !== this.view.consentGeneration) throw new Error("stale telemetry consent generation");
 			this.resetRetryBackoff();
 			return enabled ? this.enable() : this.disable();
-		});
-	}
-
-	setGithubIdentityEnabled(enabled: boolean): Promise<TelemetryPolicyView> {
-		return this.serialize(async () => {
-			// Orthogonal to failure-reporting capture: it only records the operator's
-			// GitHub-handle opt-in for the daemon to read. No transport, daemon gate,
-			// or renderer-queue transition is involved.
-			const snapshot = await this.options.authority.setGithubIdentityEnabled(enabled);
-			this.view = { ...this.view, githubIdentityEnabled: snapshot.githubIdentityEnabled };
-			this.publish();
-			return this.snapshot();
 		});
 	}
 

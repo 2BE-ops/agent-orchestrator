@@ -7,18 +7,15 @@ type TelemetryPolicyState = {
 	loaded: boolean;
 	saving: boolean;
 	saveError: boolean;
-	githubIdentitySaving: boolean;
-	githubIdentitySaveError: boolean;
 	load(): Promise<void>;
 	setEnabled(enabled: boolean): Promise<void>;
-	setGithubIdentityEnabled(enabled: boolean): Promise<void>;
 };
 
 let pendingLoad: Promise<void> | null = null;
 let subscribed = false;
 
 export const useTelemetryPolicyStore = create<TelemetryPolicyState>((set, get) => ({
-	view: null, loaded: false, saving: false, saveError: false, githubIdentitySaving: false, githubIdentitySaveError: false,
+	view: null, loaded: false, saving: false, saveError: false,
 	load: async () => {
 		if (get().loaded) return;
 		if (pendingLoad) return pendingLoad;
@@ -43,11 +40,5 @@ export const useTelemetryPolicyStore = create<TelemetryPolicyState>((set, get) =
 		set({ saving: true, saveError: false });
 		try { set({ view: await aoBridge.telemetry.setEventsEnabled(enabled), loaded: true, saving: false }); }
 		catch { set({ saving: false, saveError: true }); }
-	},
-	setGithubIdentityEnabled: async (enabled) => {
-		if (get().githubIdentitySaving) return;
-		set({ githubIdentitySaving: true, githubIdentitySaveError: false });
-		try { set({ view: await aoBridge.telemetry.setGithubIdentityEnabled(enabled), loaded: true, githubIdentitySaving: false }); }
-		catch { set({ githubIdentitySaving: false, githubIdentitySaveError: true }); }
 	},
 }));

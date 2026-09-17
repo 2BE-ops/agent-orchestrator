@@ -21,70 +21,40 @@ func (f *fakeIdentityResolver) AuthenticatedIdentity(context.Context) (ports.SCM
 	return f.identity, f.err
 }
 
-type fakeConsentReader struct {
-	enabled bool
-	err     error
-}
-
-func (f *fakeConsentReader) ReadGithubIdentityConsent(context.Context) (bool, error) {
-	return f.enabled, f.err
-}
-
-func TestGithubActorGatesOnConsentAndIdentity(t *testing.T) {
+func TestGithubActorGatesOnIdentity(t *testing.T) {
 	human := ports.SCMIdentity{Login: "octocat", Human: true}
 	cases := []struct {
 		name      string
 		identity  ports.SCMIdentityResolver
-		consent   ports.GithubIdentityConsentReader
 		wantLogin string
 		wantOK    bool
 	}{
 		{
-			name:      "consent on and human resolves",
+			name:      "human account resolves",
 			identity:  &fakeIdentityResolver{identity: human},
-			consent:   &fakeConsentReader{enabled: true},
 			wantLogin: "octocat",
 			wantOK:    true,
 		},
 		{
-			name:     "consent off stays anonymous",
-			identity: &fakeIdentityResolver{identity: human},
-			consent:  &fakeConsentReader{enabled: false},
-		},
-		{
-			name:     "consent read error stays anonymous",
-			identity: &fakeIdentityResolver{identity: human},
-			consent:  &fakeConsentReader{err: errors.New("unsafe policy file")},
-		},
-		{
-			name:     "identity resolver nil stays anonymous",
+			name:     "resolver nil stays anonymous",
 			identity: nil,
-			consent:  &fakeConsentReader{enabled: true},
-		},
-		{
-			name:     "consent reader nil stays anonymous",
-			identity: &fakeIdentityResolver{identity: human},
-			consent:  nil,
 		},
 		{
 			name:     "identity error stays anonymous",
 			identity: &fakeIdentityResolver{err: errors.New("GET /user failed")},
-			consent:  &fakeConsentReader{enabled: true},
 		},
 		{
 			name:     "non-human account stays anonymous",
 			identity: &fakeIdentityResolver{identity: ports.SCMIdentity{Login: "acme-org", Human: false}},
-			consent:  &fakeConsentReader{enabled: true},
 		},
 		{
 			name:     "empty login stays anonymous",
 			identity: &fakeIdentityResolver{identity: ports.SCMIdentity{Login: "", Human: true}},
-			consent:  &fakeConsentReader{enabled: true},
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			svc := &Service{githubIdentity: tc.identity, telemetryConsent: tc.consent}
+			svc := &Service{githubIdentity: tc.identity}
 			login, ok := svc.githubActor(context.Background())
 			if ok != tc.wantOK || login != tc.wantLogin {
 				t.Fatalf("githubActor = (%q, %v), want (%q, %v)", login, ok, tc.wantLogin, tc.wantOK)
@@ -93,13 +63,12 @@ func TestGithubActorGatesOnConsentAndIdentity(t *testing.T) {
 	}
 }
 
-func TestEmitSpawnedCarriesGithubActorWhenConsented(t *testing.T) {
+func TestEmitSpawnedCarriesGithubActor(t *testing.T) {
 	sink := &fakeTelemetrySink{}
 	svc := NewWithDeps(Deps{
-		Telemetry:        sink,
-		GithubIdentity:   &fakeIdentityResolver{identity: ports.SCMIdentity{Login: "octocat", Human: true}},
-		TelemetryConsent: &fakeConsentReader{enabled: true},
-		Clock:            func() time.Time { return time.Unix(1700000000, 0).UTC() },
+		Telemetry:      sink,
+		GithubIdentity: &fakeIdentityResolver{identity: ports.SCMIdentity{Login: "octocat", Human: true}},
+		Clock:          func() time.Time { return time.Unix(1700000000, 0).UTC() },
 	})
 
 	svc.emitSpawned(context.Background(), domain.SessionRecord{ID: "sess-1", ProjectID: "proj-1", Kind: domain.KindWorker, Harness: "claude-code"}, 12)
@@ -116,13 +85,11 @@ func TestEmitSpawnedCarriesGithubActorWhenConsented(t *testing.T) {
 	}
 }
 
-func TestEmitSpawnedStaysAnonymousWithoutConsent(t *testing.T) {
+func TestEmitSpawnedStaysAnonymousWithoutResolver(t *testing.T) {
 	sink := &fakeTelemetrySink{}
 	svc := NewWithDeps(Deps{
-		Telemetry:        sink,
-		GithubIdentity:   &fakeIdentityResolver{identity: ports.SCMIdentity{Login: "octocat", Human: true}},
-		TelemetryConsent: &fakeConsentReader{enabled: false},
-		Clock:            func() time.Time { return time.Unix(1700000000, 0).UTC() },
+		Telemetry: sink,
+		Clock:     func() time.Time { return time.Unix(1700000000, 0).UTC() },
 	})
 
 	svc.emitSpawned(context.Background(), domain.SessionRecord{ID: "sess-1", ProjectID: "proj-1", Kind: domain.KindWorker, Harness: "claude-code"}, 12)
@@ -135,6 +102,6 @@ func TestEmitSpawnedStaysAnonymousWithoutConsent(t *testing.T) {
 		t.Fatalf("payload should omit github_actor: %#v", ev.Payload)
 	}
 	if ev.PersonSet != nil {
-		t.Fatalf("personSet should be nil without consent: %#v", ev.PersonSet)
+		t.Fatalf("personSet should be nil without a resolver: %#v", ev.PersonSet)
 	}
 }

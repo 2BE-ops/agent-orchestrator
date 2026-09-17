@@ -232,7 +232,6 @@ export function GeneralSettingsSection({
 
 			<SettingsSection title={t("settings.privacy")} grouped>
 				<TelemetryEventsRow />
-				<GithubIdentityRow />
 			</SettingsSection>
 
 			{/* Advanced */}
@@ -272,27 +271,6 @@ function TelemetryEventsRow() {
 		</SettingsRow>
 		<p className={cn("pb-2 text-xs leading-relaxed", status === "failed" ? "text-destructive" : "text-muted-foreground")} role={status === "failed" ? "alert" : undefined}>
 			{t(status ? `settings.telemetryEvents.${status}` : "settings.telemetryEvents.description")}
-		</p>
-	</div>;
-}
-
-function GithubIdentityRow() {
-	const { t } = useTranslation();
-	const view = useTelemetryPolicyStore((state) => state.view);
-	const saving = useTelemetryPolicyStore((state) => state.githubIdentitySaving);
-	const saveError = useTelemetryPolicyStore((state) => state.githubIdentitySaveError);
-	const setGithubIdentityEnabled = useTelemetryPolicyStore((state) => state.setGithubIdentityEnabled);
-	const checked = view?.githubIdentityEnabled ?? false;
-	const status = saveError ? "failed"
-		: !view ? null
-		: !view.durabilitySupported ? "unsupported"
-		: null;
-	return <div className="flex w-full flex-col">
-		<SettingsRow label={t("settings.githubIdentity.label")}>
-			<Switch aria-label={t("settings.githubIdentity.label")} checked={checked} disabled={saving || !view || !view.durabilitySupported} onCheckedChange={(enabled) => { void setGithubIdentityEnabled(enabled); }} />
-		</SettingsRow>
-		<p className={cn("pb-2 text-xs leading-relaxed", status === "failed" ? "text-destructive" : "text-muted-foreground")} role={status === "failed" ? "alert" : undefined}>
-			{t(status ? `settings.githubIdentity.${status}` : "settings.githubIdentity.description")}
 		</p>
 	</div>;
 }
