@@ -25,6 +25,14 @@ AO sends structured events in a few broad categories:
   user's own GitHub username, so this particular value is not anonymous. We use
   it to understand which organizations and developers get the most value from
   AO, so we can prioritize improvements and reach out for feedback
+- The GitHub username of the account signed in to AO's GitHub integration, when
+  the "Share your GitHub handle" setting is on. This setting is on by default and
+  can be turned off at any time in Settings > Privacy. When on, AO resolves your
+  authenticated GitHub login and sends it on session-start events, both as an
+  event property (`github_actor`) and as a PostHog person property, so we can see
+  which developers are most active and reach out for feedback. AO only sends it
+  when the signed-in account is a personal (human) account, never an organization
+  or bot token. See "Sharing your GitHub handle" below
 - Reliability data, such as an error type and context, a crash message and
   stack trace after path redaction, an HTTP status, or an agent waiting for
   input
@@ -54,11 +62,13 @@ Product telemetry is designed not to include:
 - Shell command arguments, command history, or environment variables
 - Repository names, project names, branch names, or plain-text file paths
 - API keys, access tokens, passwords, or other credentials
-- Names, email addresses, or account identities
+- Names or email addresses
 
-The GitHub owner segment described under "What AO sends" is the one
-GitHub-derived value AO does send. It is limited to the owning
-organization or account and never includes the repository, path, or URL.
+The two exceptions are the GitHub owner segment and, when the "Share your GitHub
+handle" setting is on, your authenticated GitHub username. Both are described
+under "What AO sends". The owner segment is limited to the owning organization or
+account and never includes the repository, path, or URL. Aside from these,
+product telemetry is designed not to carry account identities.
 
 The optional website waitlist is separate from product telemetry. If you submit
 an email address, company role, and social profile there, they are used to manage
@@ -77,8 +87,12 @@ that waitlist as described in the [privacy policy](https://orchestrator.inc/priv
   properties; unexpected fields are discarded.
 - Event rates are limited to reduce repeated background activity and error
   loops.
-- Person profiles and session recording are disabled in the desktop and mobile
-  apps. AO does not automatically record screens, clicks, or touches.
+- Session recording is disabled in the desktop and mobile apps. AO does not
+  automatically record screens, clicks, or touches.
+- Person profiles are off for every event except the session-start event that
+  carries your GitHub handle while the "Share your GitHub handle" setting is on.
+  That one event sets a person property so activity can be grouped by GitHub
+  username; with the setting off, no event creates or updates a person profile.
 
 Separately from remote telemetry, the daemon can keep a local copy of
 operational events in AO's SQLite database. While local telemetry is active, AO
@@ -150,6 +164,23 @@ this agent-switch Sentry sender in production. Windows fails closed: event
 consent is treated as disabled and an enable acknowledgement is rejected until
 a tested native write-through replacement satisfies the policy-file durability
 contract.
+
+## Sharing your GitHub handle
+
+When the **Share your GitHub handle** setting under Settings > Privacy is on, AO
+resolves the GitHub account signed in to its GitHub integration and includes that
+username on session-start events. It is sent both as the event property
+`github_actor` and as a PostHog person property on AO's shared installation
+person, which lets us group product activity by GitHub username and reach out to
+active users for feedback.
+
+This setting is on by default. You can turn it off at any time in Settings >
+Privacy. AO only sends the handle when
+the signed-in account is a personal (human) account; it never sends an
+organization or a bot token, and if no GitHub token is available it sends
+nothing. Turning the setting off stops AO from sending your handle on future
+events immediately. It is forward-only: a person property already stored in
+PostHog from earlier events is not deleted by turning the setting off.
 
 ## Turn desktop and daemon telemetry off
 

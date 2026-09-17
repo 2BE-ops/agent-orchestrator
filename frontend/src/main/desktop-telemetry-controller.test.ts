@@ -26,6 +26,23 @@ describe("DesktopTelemetryController", () => {
 		expect(visibility.closeAndDrain).toHaveBeenCalled();
 	});
 
+	it("toggles the GitHub-handle opt-in without touching failure-reporting transport", async () => {
+		const authority = new AuthorityFake(true, "generation-on");
+		const transport = { closeAndDrain: vi.fn(), capture: vi.fn(), clearCache: vi.fn() };
+		const daemon = {
+			prepareDisable: vi.fn().mockResolvedValue({ status: "applied", consentGeneration: "generation-on", eventsEnabled: false, gateDrained: true, purgeConfirmed: false }),
+			applyPolicy: vi.fn().mockImplementation(async (generation: string, enabled: boolean) => ({ status: "applied", consentGeneration: generation, eventsEnabled: enabled, gateDrained: !enabled, purgeConfirmed: !enabled })),
+		};
+		const controller = new DesktopTelemetryController({ authority, daemon, transportFactory: async () => transport, environmentAllowsEvents: true, productionEnabled: true });
+		await controller.initialize();
+		const off = await controller.setGithubIdentityEnabled(false);
+		expect(off).toMatchObject({ githubIdentityEnabled: false, eventsEnabled: true });
+		expect(transport.closeAndDrain).not.toHaveBeenCalled();
+		expect(daemon.prepareDisable).not.toHaveBeenCalled();
+		const on = await controller.setGithubIdentityEnabled(true);
+		expect(on).toMatchObject({ githubIdentityEnabled: true, eventsEnabled: true });
+	});
+
 	it("keeps opt-out cleanup pending when any desktop purge fails", async () => {
 		const authority = new AuthorityFake(true, "generation-on");
 		const transport = { closeAndDrain: vi.fn(), capture: vi.fn(), clearCache: vi.fn().mockRejectedValue(new Error("cache purge failed")) };
@@ -483,10 +500,11 @@ class AuthorityFake {
 	failWrites = false;
 	writeSpy = vi.fn();
 	private current: TelemetryPolicySnapshot;
-	constructor(enabled: boolean, generation: string) { this.current = { eventsEnabled: enabled, consentGeneration: generation, updatedAt: "2026-08-28T10:15:30.000Z", acknowledged: true, consentRenewalRequired: false }; }
+	constructor(enabled: boolean, generation: string) { this.current = { eventsEnabled: enabled, githubIdentityEnabled: true, consentGeneration: generation, updatedAt: "2026-08-28T10:15:30.000Z", acknowledged: true, consentRenewalRequired: false }; }
 	snapshot() { return { ...this.current }; }
 	async load() { return this.snapshot(); }
-	async setEventsEnabled(enabled: boolean) { this.writes.push(enabled); this.writeSpy(); if (this.failWrites) throw new Error("write failed"); this.current = { eventsEnabled: enabled, consentGeneration: `generation-${this.writes.length}`, updatedAt: "2026-08-28T10:15:31.000Z", acknowledged: true, consentRenewalRequired: false }; return this.snapshot(); }
+	async setEventsEnabled(enabled: boolean) { this.writes.push(enabled); this.writeSpy(); if (this.failWrites) throw new Error("write failed"); this.current = { eventsEnabled: enabled, githubIdentityEnabled: this.current.githubIdentityEnabled, consentGeneration: `generation-${this.writes.length}`, updatedAt: "2026-08-28T10:15:31.000Z", acknowledged: true, consentRenewalRequired: false }; return this.snapshot(); }
+	async setGithubIdentityEnabled(enabled: boolean) { if (this.failWrites) throw new Error("write failed"); this.current = { ...this.current, githubIdentityEnabled: enabled, updatedAt: "2026-08-28T10:15:31.000Z" }; return this.snapshot(); }
 	async retryPendingReplacement() { if (this.failWrites) throw new Error("write failed"); this.current = { ...this.current, acknowledged: true }; return this.snapshot(); }
 	readonly durabilitySupported = true;
 }

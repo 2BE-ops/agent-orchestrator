@@ -2102,6 +2102,10 @@ ipcMain.handle("telemetry:setEventsEnabled", (_event, input: { eventsEnabled?: u
 	if (!telemetryPolicyController || typeof input?.eventsEnabled !== "boolean" || typeof input.expectedGeneration !== "string") throw new Error("invalid telemetry policy request");
 	return telemetryPolicyController.setEventsEnabled(input.eventsEnabled, input.expectedGeneration);
 });
+ipcMain.handle("telemetry:setGithubIdentityEnabled", (_event, input: { githubIdentityEnabled?: unknown }) => {
+	if (!telemetryPolicyController || typeof input?.githubIdentityEnabled !== "boolean") throw new Error("invalid telemetry policy request");
+	return telemetryPolicyController.setGithubIdentityEnabled(input.githubIdentityEnabled);
+});
 ipcMain.on(TELEMETRY_RENDERER_QUEUES_CLEARED_CHANNEL, (event, input: unknown) => {
 	const trustedSender = trustedShellWebContents.get(event.sender.id);
 	if (!trustedSender || trustedSender !== event.sender || trustedSender.isDestroyed()) return;
@@ -2124,7 +2128,7 @@ ipcMain.on(AGENT_SWITCH_VISIBILITY_IPC_CHANNEL, (event, request: unknown) => {
 });
 
 function failClosedTelemetryPolicyView(): TelemetryPolicyView {
-	return { eventsEnabled: false, consentGeneration: "unavailable", updatedAt: new Date(0).toISOString(), acknowledged: false, consentRenewalRequired: false, state: "cleanup_failed", environmentVeto: true, durabilitySupported: false, reason: "invalid_authority" };
+	return { eventsEnabled: false, githubIdentityEnabled: false, consentGeneration: "unavailable", updatedAt: new Date(0).toISOString(), acknowledged: false, consentRenewalRequired: false, state: "cleanup_failed", environmentVeto: true, durabilitySupported: false, reason: "invalid_authority" };
 }
 async function chooseDirectory(title: string, defaultPath?: string): Promise<string | null> {
 	if (defaultPath) await mkdir(defaultPath, { recursive: true });

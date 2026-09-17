@@ -22,6 +22,13 @@ type AgentSwitchFailureAuthorityReader interface {
 	ReadAgentSwitchFailureAuthority(context.Context) (AgentSwitchFailureAuthoritySnapshot, error)
 }
 
+// GithubIdentityConsentReader reports whether the operator opted in to attaching
+// their GitHub handle to product telemetry. This opt-in defaults ON: an absent
+// authority file reads as enabled, and only an explicit opt-out disables it.
+type GithubIdentityConsentReader interface {
+	ReadGithubIdentityConsent(context.Context) (bool, error)
+}
+
 // AgentSwitchFailureEncodedEvent is the opaque output of the provider adapter.
 type AgentSwitchFailureEncodedEvent struct {
 	EnvelopeEncodingVersion int

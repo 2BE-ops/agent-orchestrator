@@ -316,6 +316,100 @@ func TestReviewPayloadAllowlistRejectsIdentifyingKeys(t *testing.T) {
 
 // The submitted event's own sanitizer pass has to drop an unknown key rather
 // than trust the emit site.
+func TestPostHogSinkSetsPersonPropertyForConsentedGithubActor(t *testing.T) {
+	requests := make(chan map[string]any, 1)
+	sink, err := NewPostHogSink(t.TempDir(), "phc_test", "https://us.i.posthog.com", "", "", roundTripClient(func(req *http.Request) (*http.Response, error) {
+		defer req.Body.Close()
+		var body map[string]any
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			return nil, err
+		}
+		requests <- body
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: http.NoBody}, nil
+	}), nil)
+	if err != nil {
+		t.Fatalf("NewPostHogSink: %v", err)
+	}
+
+	sink.Emit(context.Background(), ports.TelemetryEvent{
+		Name:       "ao.session.spawned",
+		Source:     "session_service",
+		OccurredAt: time.Unix(1700000000, 0).UTC(),
+		Level:      ports.TelemetryLevelInfo,
+		Payload:    map[string]any{"kind": "worker", "github_actor": "octocat"},
+		PersonSet:  map[string]any{"github_actor": "octocat"},
+	})
+	if err := sink.Close(context.Background()); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	select {
+	case req := <-requests:
+		props, ok := req["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("properties type = %T, want map[string]any", req["properties"])
+		}
+		if props["github_actor"] != "octocat" {
+			t.Fatalf("properties.github_actor = %#v, want octocat", props["github_actor"])
+		}
+		if props["$process_person_profile"] != true {
+			t.Fatalf("properties.$process_person_profile = %#v, want true", props["$process_person_profile"])
+		}
+		set, ok := props["$set"].(map[string]any)
+		if !ok {
+			t.Fatalf("properties.$set type = %T, want map[string]any", props["$set"])
+		}
+		if set["github_actor"] != "octocat" {
+			t.Fatalf("$set.github_actor = %#v, want octocat", set["github_actor"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("PostHog sink did not send request")
+	}
+}
+
+func TestPostHogSinkKeepsAnonymousWithoutPersonSet(t *testing.T) {
+	requests := make(chan map[string]any, 1)
+	sink, err := NewPostHogSink(t.TempDir(), "phc_test", "https://us.i.posthog.com", "", "", roundTripClient(func(req *http.Request) (*http.Response, error) {
+		defer req.Body.Close()
+		var body map[string]any
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			return nil, err
+		}
+		requests <- body
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: http.NoBody}, nil
+	}), nil)
+	if err != nil {
+		t.Fatalf("NewPostHogSink: %v", err)
+	}
+
+	sink.Emit(context.Background(), ports.TelemetryEvent{
+		Name:       "ao.session.spawned",
+		Source:     "session_service",
+		OccurredAt: time.Unix(1700000000, 0).UTC(),
+		Level:      ports.TelemetryLevelInfo,
+		Payload:    map[string]any{"kind": "worker"},
+	})
+	if err := sink.Close(context.Background()); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	select {
+	case req := <-requests:
+		props, ok := req["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("properties type = %T, want map[string]any", req["properties"])
+		}
+		if props["$process_person_profile"] != false {
+			t.Fatalf("properties.$process_person_profile = %#v, want false", props["$process_person_profile"])
+		}
+		if _, ok := props["$set"]; ok {
+			t.Fatalf("$set should be absent without PersonSet: %#v", props["$set"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("PostHog sink did not send request")
+	}
+}
+
 func TestSanitizeRemotePayloadDropsUnlistedReviewKeys(t *testing.T) {
 	got := sanitizeRemotePayload("ao.review.submitted", map[string]any{
 		"verdict": "changes_requested",

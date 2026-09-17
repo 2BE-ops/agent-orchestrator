@@ -33,6 +33,11 @@ type TelemetryEvent struct {
 	SessionID  *domain.SessionID
 	RequestID  string
 	Payload    map[string]any
+	// PersonSet, when non-empty, carries PostHog person properties to `$set` on
+	// the shared install person. Only populated for consented events (currently
+	// the operator's GitHub handle); sinks that do not model person profiles may
+	// ignore it. Its keys must be allowlisted at the call site like Payload.
+	PersonSet map[string]any
 }
 
 // EventSink consumes structured telemetry events. Implementations should be

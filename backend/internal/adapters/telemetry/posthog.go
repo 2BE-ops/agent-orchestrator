@@ -198,9 +198,10 @@ var remotePayloadAllowlist = map[string]map[string]struct{}{
 		"operation":   {},
 	},
 	"ao.session.spawned": {
-		"duration_ms": {},
-		"harness":     {},
-		"kind":        {},
+		"duration_ms":  {},
+		"harness":      {},
+		"kind":         {},
+		"github_actor": {},
 	},
 	"ao.session.waiting_input_entered": {
 		"state": {},
@@ -446,6 +447,14 @@ func (s *PostHogSink) properties(ev ports.TelemetryEvent) map[string]any {
 	}
 	for k, v := range sanitizeRemotePayload(ev.Name, ev.Payload) {
 		props[k] = v
+	}
+	// Person properties are set only for consented events that carry them (the
+	// operator's GitHub handle). Setting $set flips this one event to identified
+	// so a person-property breakdown by github_actor becomes possible; every
+	// other event keeps the anonymous default above.
+	if personSet := sanitizeRemotePayload(ev.Name, ev.PersonSet); len(personSet) > 0 {
+		props["$set"] = personSet
+		props["$process_person_profile"] = true
 	}
 	return props
 }

@@ -329,14 +329,25 @@ export default function PrivacyPage() {
               </Bullet>
             </Bullets>
             <p>
-              Events are sent as <Strong>anonymous</Strong> PostHog events — no
-              person profiles are created and the app never calls{" "}
-              <Code>identify()</Code>. A random install identifier generated on
-              first run and stored at{" "}
+              Events are otherwise <Strong>anonymous</Strong> PostHog events. A
+              random install identifier generated on first run and stored at{" "}
               <Code>~/.ao/data/telemetry_install_id</Code> is used to
-              deduplicate counts. It is not linked to any account, email, or
-              name. Approximate country is derived by PostHog from the
-              connection's IP address; AO itself never sends location data.
+              deduplicate counts. It is not linked to any email or name.
+              Approximate country is derived by PostHog from the connection's IP
+              address; AO itself never sends location data.
+            </p>
+            <p>
+              One exception: while the{" "}
+              <Strong>Share your GitHub handle</Strong> setting under Settings
+              &gt; Privacy is on, AO sends the GitHub username signed in to its
+              GitHub integration on session-start events, both as an event
+              property and as a PostHog person property, so we can see which
+              developers are most active. This setting is{" "}
+              <Strong>on by default</Strong> and can be turned off at any time in
+              Settings &gt; Privacy. AO only
+              sends a personal (human) account, never an organization or a bot
+              token. Turning it off stops future sends immediately; a person
+              property already stored in PostHog is not deleted.
             </p>
             <p>
               The desktop app does <Strong>not</Strong> currently send PostHog{" "}
