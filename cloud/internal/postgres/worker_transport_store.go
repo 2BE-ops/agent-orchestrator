@@ -369,6 +369,14 @@ func (s *Store) IssueTerminalTicket(
 					  AND terminal.session_id = session.id
 					  AND terminal.kind = 'agent'
 					  AND terminal.state IN ('closed', 'failed')
+					  AND NOT EXISTS (
+					  	SELECT 1 FROM ao_terminal_sessions live
+					  	WHERE live.org_id = terminal.org_id
+					  	  AND live.session_id = terminal.session_id
+					  	  AND live.kind = 'agent'
+					  	  AND live.state IN ('opening', 'open')
+					  	  AND live.worker_epoch = terminal.worker_epoch
+					  )
 					  AND terminal.worker_epoch = (
 						SELECT MAX(latest.worker_epoch) FROM ao_terminal_sessions latest
 						WHERE latest.org_id = session.org_id
@@ -495,6 +503,14 @@ func (s *Store) IssueTerminalTicket(
 						  AND terminal.session_id = session.id
 						  AND terminal.kind = 'agent'
 						  AND terminal.state IN ('closed', 'failed')
+						  AND NOT EXISTS (
+						  	SELECT 1 FROM ao_terminal_sessions live
+						  	WHERE live.org_id = terminal.org_id
+						  	  AND live.session_id = terminal.session_id
+						  	  AND live.kind = 'agent'
+						  	  AND live.state IN ('opening', 'open')
+						  	  AND live.worker_epoch = terminal.worker_epoch
+						  )
 						  AND terminal.worker_epoch = (
 							SELECT MAX(latest.worker_epoch) FROM ao_terminal_sessions latest
 							WHERE latest.org_id = session.org_id
