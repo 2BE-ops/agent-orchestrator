@@ -355,12 +355,26 @@ func (s *Store) IssueTerminalTicket(
 		var exited bool
 		err := s.withSessionAccess(ctx, principal, orgID, sessionID, func(tx pgx.Tx, _ sessionAccess) error {
 			return tx.QueryRow(ctx,
+				// Exit detection must look only at the LATEST worker epoch's agent
+				// terminal. A restore provisions a fresh box under a NEW epoch and
+				// closes the old epoch's terminal, so an old 'closed' row is expected
+				// and must NOT read as "agent exited" while a newer epoch is live.
+				// Scoping the closed/failed check to MAX(worker_epoch) is provider
+				// agnostic: it does not depend on ao_worker_connections, which nodeops
+				// sessions do not populate (so the previous open+live-worker guard
+				// false-fired a 410 on every nodeops restore).
 				`SELECT session.is_terminated OR session.activity_state = 'exited' OR EXISTS (
 					SELECT 1 FROM ao_terminal_sessions terminal
 					WHERE terminal.org_id = session.org_id
 					  AND terminal.session_id = session.id
 					  AND terminal.kind = 'agent'
 					  AND terminal.state IN ('closed', 'failed')
+					  AND terminal.worker_epoch = (
+						SELECT MAX(latest.worker_epoch) FROM ao_terminal_sessions latest
+						WHERE latest.org_id = session.org_id
+						  AND latest.session_id = session.id
+						  AND latest.kind = 'agent'
+					  )
 				)
 				FROM ao_sessions session
 				WHERE session.org_id = $1 AND session.id = $2`,
@@ -472,12 +486,21 @@ func (s *Store) IssueTerminalTicket(
 			if kind == "agent" {
 				var exited bool
 				lookupErr := tx.QueryRow(ctx,
+					// See IssueTerminalTicket: only the LATEST epoch's agent terminal
+					// state signals a real exit. An old 'closed' row from a restore
+					// under a superseded epoch must not read as exited.
 					`SELECT session.is_terminated OR session.activity_state = 'exited' OR EXISTS (
 						SELECT 1 FROM ao_terminal_sessions terminal
 						WHERE terminal.org_id = session.org_id
 						  AND terminal.session_id = session.id
 						  AND terminal.kind = 'agent'
 						  AND terminal.state IN ('closed', 'failed')
+						  AND terminal.worker_epoch = (
+							SELECT MAX(latest.worker_epoch) FROM ao_terminal_sessions latest
+							WHERE latest.org_id = session.org_id
+							  AND latest.session_id = session.id
+							  AND latest.kind = 'agent'
+						  )
 					)
 					FROM ao_sessions session
 					WHERE session.org_id = $1 AND session.id = $2`,
