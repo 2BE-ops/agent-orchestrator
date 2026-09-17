@@ -33,6 +33,10 @@ const (
 	// no Git index to hide that infrastructure from the review surfaces, so the
 	// filesystem readers honor the same ownership marker directly.
 	aoManagedGitignoreSentinel = "# managed by agent-orchestrator: AO hook files stay out of git status"
+	// Copilot profiles are ignored through .git/info/exclude in project
+	// worktrees, but standalone workspaces have no Git metadata. The profile
+	// carries its own ownership marker so scratch readers can hide it directly.
+	aoManagedCopilotProfileSentinel = "<!-- managed by agent-orchestrator: copilot agent profile -->"
 	// maxWorkspaceImageBytes caps a single image revision streamed to the diff
 	// viewer. Anything larger is refused rather than buffered.
 	maxWorkspaceImageBytes = 16 * 1024 * 1024
@@ -1422,6 +1426,26 @@ func scratchAOManagedPaths(rootResolved string) (map[string]struct{}, error) {
 			return nil
 		}
 		if entry.Name() != ".gitignore" {
+			rel, err := filepath.Rel(rootResolved, fullPath)
+			if err != nil {
+				return err
+			}
+			rel = filepath.ToSlash(rel)
+			name := path.Base(rel)
+			if path.Dir(rel) != ".github/agents" || !strings.HasPrefix(name, "ao-") || !strings.HasSuffix(name, ".agent.md") {
+				return nil
+			}
+			_, include, err := scratchWorkspaceFileInfo(rootResolved, fullPath, entry)
+			if err != nil || !include {
+				return err
+			}
+			content, binary, _, err := readWorkspaceTextFile(fullPath, 64*1024)
+			if err != nil {
+				return err
+			}
+			if !binary && strings.Contains(content, aoManagedCopilotProfileSentinel) {
+				managed[rel] = struct{}{}
+			}
 			return nil
 		}
 		_, include, err := scratchWorkspaceFileInfo(rootResolved, fullPath, entry)

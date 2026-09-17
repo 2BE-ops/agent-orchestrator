@@ -776,6 +776,26 @@ func TestListWorkspaceFilesHidesAOManagedStandaloneFiles(t *testing.T) {
 	}
 }
 
+func TestListWorkspaceFilesHidesAOManagedCopilotProfile(t *testing.T) {
+	workspace := t.TempDir()
+	writeWorkspaceFile(t, workspace, ".github/agents/ao-standalone-4.agent.md", "---\nname: ao-standalone-4\ntarget: github-copilot\n---\n\n<!-- managed by agent-orchestrator: copilot agent profile -->\n\nAO instructions\n")
+	writeWorkspaceFile(t, workspace, "result.md", "agent-created work\n")
+	st := newFakeStore()
+	st.sessions["standalone-4"] = domain.SessionRecord{
+		ID:       "standalone-4",
+		Kind:     domain.KindWorker,
+		Metadata: domain.SessionMetadata{WorkspacePath: workspace},
+	}
+
+	got, err := (&Service{store: st}).ListWorkspaceFiles(context.Background(), "standalone-4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Files) != 1 || got.Files[0].Path != "result.md" {
+		t.Fatalf("standalone files = %#v, want only agent-created result.md", got.Files)
+	}
+}
+
 func TestListWorkspaceFilesTreatsMigratedScratchWorkerAsNonGitWorkspace(t *testing.T) {
 	workspace := t.TempDir()
 	writeWorkspaceFile(t, workspace, "notes.txt", "migrated scratch note\n")

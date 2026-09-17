@@ -207,6 +207,26 @@ func TestListWorkspaceTreeHidesDirectoriesContainingOnlyAOManagedFiles(t *testin
 	}
 }
 
+func TestListWorkspaceTreeHidesAOManagedCopilotProfileDirectory(t *testing.T) {
+	root := t.TempDir()
+	writeWorkspaceFile(t, root, ".github/agents/ao-standalone-4.agent.md", "---\nname: ao-standalone-4\ntarget: github-copilot\n---\n\n<!-- managed by agent-orchestrator: copilot agent profile -->\n\nAO instructions\n")
+
+	st := newFakeStore()
+	st.sessions["standalone-4"] = domain.SessionRecord{
+		ID:       "standalone-4",
+		Kind:     domain.KindWorker,
+		Metadata: domain.SessionMetadata{WorkspacePath: root},
+	}
+
+	tree, err := (&Service{store: st}).ListWorkspaceTree(context.Background(), "standalone-4", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tree.Entries) != 0 {
+		t.Fatalf("standalone root entries = %#v, want AO-managed Copilot profile hidden", tree.Entries)
+	}
+}
+
 func TestListWorkspaceTreeKeepsAgentDirectoryContainingUserWork(t *testing.T) {
 	root := t.TempDir()
 	writeWorkspaceFile(t, root, ".kimi/.gitignore", "# managed by agent-orchestrator: AO hook files stay out of git status\n/.gitignore\n/AGENTS.md\n")
