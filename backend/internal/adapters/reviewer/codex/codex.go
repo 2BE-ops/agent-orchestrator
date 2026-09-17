@@ -19,8 +19,19 @@ type Reviewer struct {
 }
 
 // New builds the codex reviewer adapter.
-func New() *Reviewer {
-	return &Reviewer{agent: workeragent.New()}
+func New(discovery ...ports.AgentBinaryDiscovery) *Reviewer {
+	r := &Reviewer{agent: workeragent.New()}
+	if len(discovery) > 0 {
+		r.SetBinaryDiscovery(discovery[0])
+	}
+	return r
+}
+
+func (r *Reviewer) SetBinaryDiscovery(d ports.AgentBinaryDiscovery) {
+	r.agent.(ports.AgentBinaryDiscoveryProvider).SetBinaryDiscovery(d)
+}
+func (r *Reviewer) AugmentBinaryRuntimeEnv(ctx context.Context, env map[string]string, argv []string, pinnedDir string) {
+	r.agent.(ports.AgentBinaryRuntimeEnvironment).AugmentBinaryRuntimeEnv(ctx, env, argv, pinnedDir)
 }
 
 // Harness identifies this reviewer in the reviewer registry.

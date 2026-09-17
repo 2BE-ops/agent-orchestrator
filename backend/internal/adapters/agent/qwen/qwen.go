@@ -217,6 +217,10 @@ func ResolveQwenBinary(ctx context.Context) (string, error) {
 }
 
 func (p *Plugin) qwenBinary(ctx context.Context) (string, error) {
+	if path, err, shared := p.DiscoveredBinary(ctx, p.Manifest().ID, ports.BinaryResolveLaunch); shared {
+		return path, err
+	}
+
 	p.binaryMu.Lock()
 	defer p.binaryMu.Unlock()
 

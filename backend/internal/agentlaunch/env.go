@@ -88,9 +88,17 @@ func AugmentRuntimePATHForLaunchBinary(ctx context.Context, env map[string]strin
 		return
 	}
 	dirs := []string{launchDir}
-	if isNodeLaunchBinary(bin) {
+	interpreter := launchInterpreter(bin)
+	if interpreter == "node" {
 		if nodeDir := nodeRuntimeDir(ctx, lookPath); nodeDir != "" && nodeDir != launchDir {
 			dirs = append(dirs, nodeDir)
+		}
+	} else if interpreter == "python" || interpreter == "python3" {
+		if lookPath == nil {
+			lookPath = exec.LookPath
+		}
+		if path, err := lookPath(interpreter); err == nil && filepath.IsAbs(path) {
+			dirs = append(dirs, filepath.Dir(path))
 		}
 	}
 	var parts []string
@@ -139,13 +147,17 @@ func launchBinary(argv []string) (string, bool) {
 }
 
 func isNodeLaunchBinary(path string) bool {
+	return launchInterpreter(path) == "node"
+}
+
+func launchInterpreter(path string) string {
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() {
-		return false
+		return ""
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return false
+		return ""
 	}
 	defer func() { _ = f.Close() }()
 	const maxShebangBytes = 4096
@@ -156,14 +168,15 @@ func isNodeLaunchBinary(path string) bool {
 		line = line[:newline]
 	}
 	if !strings.HasPrefix(line, "#!") {
-		return false
+		return ""
 	}
 	for _, field := range strings.Fields(strings.TrimPrefix(line, "#!")) {
-		if filepath.Base(field) == "node" {
-			return true
+		name := filepath.Base(field)
+		if name == "node" || name == "python" || name == "python3" {
+			return name
 		}
 	}
-	return false
+	return ""
 }
 
 func containsPathDir(parts []string, dir string) bool {

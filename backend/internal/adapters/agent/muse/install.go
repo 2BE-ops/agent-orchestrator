@@ -2,6 +2,7 @@ package muse
 
 import (
 	"context"
+	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/binaryutil"
 )
@@ -16,5 +17,8 @@ func (p *Plugin) ResolveBinary(ctx context.Context) (string, error) {
 // an agent binary exists; full adapter resolution still validates Muse before
 // a session can launch.
 func (p *Plugin) ResolveBinaryPresence(ctx context.Context) (string, error) {
+	if path, err, shared := p.DiscoveredBinary(ctx, p.Manifest().ID, ports.BinaryResolvePresence); shared {
+		return path, err
+	}
 	return binaryutil.ResolveBinary(ctx, museBinarySpec)
 }

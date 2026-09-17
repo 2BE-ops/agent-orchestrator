@@ -4,6 +4,7 @@ package cline
 import (
 	"context"
 	"fmt"
+	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/agentbase"
 	"os"
 	"strings"
 
@@ -18,11 +19,25 @@ const HostTrustWarning = "experimental user-approved reviewer: Cline uses normal
 
 // Reviewer builds Cline's persistent interactive reviewer command.
 type Reviewer struct {
+	agentbase.Base
 	resolveBinary func(context.Context) (string, error)
 }
 
 // New returns the production Cline reviewer adapter.
-func New() *Reviewer { return &Reviewer{resolveBinary: workercline.ResolveClineBinary} }
+func New(discovery ...ports.AgentBinaryDiscovery) *Reviewer {
+	r := &Reviewer{resolveBinary: workercline.ResolveClineBinary}
+	if len(discovery) > 0 {
+		r.SetBinaryDiscovery(discovery[0])
+	}
+	return r
+}
+func (r *Reviewer) SetBinaryDiscovery(d ports.AgentBinaryDiscovery) {
+	r.Base.SetBinaryDiscovery(d)
+	r.resolveBinary = func(ctx context.Context) (string, error) {
+		v, e := d.Resolve(ctx, domain.AgentHarness(r.Harness()), ports.BinaryResolveLaunch)
+		return v.Executable, e
+	}
+}
 
 // Harness returns Cline's reviewer identity.
 func (*Reviewer) Harness() domain.ReviewerHarness { return domain.ReviewerCline }

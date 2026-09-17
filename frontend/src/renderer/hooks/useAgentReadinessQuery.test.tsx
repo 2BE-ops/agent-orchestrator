@@ -80,3 +80,49 @@ describe("agent readiness query", () => {
 		});
 	});
 });
+
+it("keeps a newer discovery result when an older missing response arrives", () => {
+ const installed = agentReadiness("codex", "Codex", { authentication: "unauthorized" });
+ installed.installation.attemptedAt = "2026-09-17T10:00:01Z";
+ installed.installation.checkedAt = "2026-09-17T10:00:01Z";
+ const missing = agentReadiness("codex", "Codex", { installation: "not_installed", authentication: "unknown" });
+ expect(mergeAgentReadiness({agents:[installed]}, {agents:[missing]}).agents[0]?.installation).toEqual(installed.installation);
+});
+
+it("updates pending discovery automatically while the consumer is mounted", async () => {
+ const pending = agentReadiness("codex", "Codex", {installation:"unknown",authentication:"unknown",freshness:"checking"});
+ const found = agentReadiness("codex", "Codex", {authentication:"unauthorized"});
+ postMock.mockResolvedValueOnce({data:{agents:[pending]}}).mockResolvedValue({data:{agents:[found]}});
+ const queryClient = new QueryClient();
+ const {unmount} = renderHook(() => useEnsureAgentReadiness({agentIds:["codex"]}), {wrapper:wrapper(queryClient)});
+ await waitFor(() => expect(queryClient.getQueryData(agentReadinessQueryKey)).toEqual({agents:[pending]}));
+ await waitFor(() => expect(queryClient.getQueryData(agentReadinessQueryKey)).toEqual({agents:[found]}), {timeout:4000});
+ unmount();
+});
+
+it("merges a new authentication result independently of older installation data", () => {
+	const installed = agentReadiness("codex", "Codex", { authentication: "unknown" });
+	installed.installation.attemptedAt = "2026-09-17T10:00:01Z";
+	const signedIn = agentReadiness("codex", "Codex", { installation: "unknown" });
+	signedIn.authentication.attemptedAt = "2026-09-17T10:00:02Z";
+	const result = mergeAgentReadiness({ agents: [installed] }, { agents: [signedIn] }).agents[0];
+	expect(result?.installation).toEqual(installed.installation);
+	expect(result?.authentication).toEqual(signedIn.authentication);
+	expect(result?.effectiveReadiness).toBe("ready");
+});
+
+it("preserves completed discovery when the initial GET finishes late", async () => {
+	const installed = agentReadiness("codex", "Codex");
+	installed.installation.attemptedAt = "2026-09-17T10:00:01Z";
+	const missing = agentReadiness("codex", "Codex", { installation: "not_installed" });
+	let finishGet!: (value: unknown) => void;
+	getMock.mockReturnValue(new Promise((resolve) => { finishGet = resolve; }));
+	const queryClient = new QueryClient();
+	const { result, unmount } = renderHook(() => useAgentReadinessQuery(), { wrapper: wrapper(queryClient) });
+	await waitFor(() => expect(getMock).toHaveBeenCalled());
+	queryClient.setQueryData(agentReadinessQueryKey, { agents: [installed] });
+	finishGet({ data: { agents: [missing] } });
+	await waitFor(() => expect(result.current.isFetching).toBe(false));
+	expect(result.current.data?.agents[0]?.installation).toEqual(installed.installation);
+	unmount();
+});
