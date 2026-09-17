@@ -1375,7 +1375,10 @@ export function CloudProjectCard({
 			{dialog && onClose ? (
 				<button
 					type="button"
-					className="settings-close-button absolute right-4 top-4"
+					// Sit on the card's own padding, so the control lines up with the
+					// title's optical centre and the content column instead of floating
+					// a corner inset up and out (the card pads 32px, not the usual 16).
+					className="settings-close-button absolute right-(--size-import-modal-padding) top-(--size-import-modal-padding)"
 					aria-label={t("createProject.closeDialog")}
 					disabled={isCreating}
 					onClick={onClose}

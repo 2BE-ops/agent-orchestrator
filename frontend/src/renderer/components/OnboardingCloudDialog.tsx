@@ -1,4 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
+import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useCloudSession } from "../lib/cloud-session";
 import { CloudProjectCard, CloudSignInPanel } from "./CreateProjectFlow";
@@ -19,11 +20,23 @@ export function OnboardingCloudDialog({ onClose, onCreated }: { onClose: () => v
 				<Dialog.Content className="fixed left-1/2 top-1/2 z-overlay flex max-h-[min(640px,calc(100svh-24px))] w-[min(560px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden focus:outline-none data-[state=open]:animate-modal-in data-[state=closed]:animate-modal-out motion-reduce:animate-none">
 					<Dialog.Title className="sr-only">{t("onboarding.createCloudProject")}</Dialog.Title>
 					<Dialog.Description className="sr-only">{t("onboarding.cloudDialogDescription")}</Dialog.Description>
-					<div className="min-h-0 overflow-y-auto">
+					<div className="relative min-h-0 overflow-y-auto">
 						{signedIn ? (
 							<CloudProjectCard dialog onClose={onClose} onCreated={onCreated} />
 						) : (
-							<CloudSignInPanel dialog disabled={false} onSignIn={signIn} />
+							<>
+								<CloudSignInPanel dialog disabled={false} onSignIn={signIn} />
+								{/* The project card brings its own close control; the sign-in
+								    panel does not, so the modal supplies one. */}
+								<button
+									type="button"
+									aria-label={t("common.close")}
+									className="settings-close-button absolute right-(--size-import-modal-padding) top-(--size-import-modal-padding)"
+									onClick={onClose}
+								>
+									<X className="size-4" aria-hidden="true" />
+								</button>
+							</>
 						)}
 					</div>
 				</Dialog.Content>
