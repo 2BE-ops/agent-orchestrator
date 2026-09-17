@@ -63,15 +63,19 @@ export function useGitHubSetup({ poll = false }: { poll?: boolean } = {}) {
 	// finish after its terminal is gone).
 	const cliMissing = gh?.satisfied === false;
 	const authSatisfied = Boolean(auth.data?.satisfied);
+	// "Not yet confirmed" is not the same as "needs nothing": a probe that ran
+	// before the daemon was reachable leaves gh unknown, and that has to keep
+	// polling or the page sits on its checking state forever.
+	const cliReady = gh?.satisfied === true;
 	useEffect(() => {
-		if (!poll || (!cliMissing && authSatisfied)) return;
+		if (!poll || (cliReady && authSatisfied)) return;
 		const timer = window.setInterval(() => {
 			// Each half is only worth probing while it can still change.
-			if (cliMissing) void requirementsRef.current();
+			if (!cliReady) void requirementsRef.current();
 			if (!authSatisfied) void authRef.current();
 		}, STEP_POLL_INTERVAL_MS);
 		return () => window.clearInterval(timer);
-	}, [authSatisfied, cliMissing, poll]);
+	}, [authSatisfied, cliReady, poll]);
 
 	const pollInstall = useCallback(() => {
 		stopPolling();

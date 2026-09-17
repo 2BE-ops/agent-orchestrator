@@ -8,7 +8,7 @@ export function SetupList({ children, className }: { children: ReactNode; classN
 	return <div className={cn("flex w-full flex-col divide-y divide-border/60", className)}>{children}</div>;
 }
 
-export function SetupRow({ icon, label, description, trailing, disabled, selected, onClick, ariaLabel }: {
+export function SetupRow({ icon, label, description, trailing, disabled, selected, onClick, ariaLabel, variant = "row" }: {
 	icon: ReactNode;
 	label: string;
 	description?: string;
@@ -17,7 +17,11 @@ export function SetupRow({ icon, label, description, trailing, disabled, selecte
 	selected?: boolean;
 	onClick?: () => void;
 	ariaLabel?: string;
+	/** `row` sits in a shared list with dividers and no surface of its own;
+	 *  `card` is the standalone rounded surface the project step uses. */
+	variant?: "row" | "card";
 }) {
+	const isCard = variant === "card";
 	return (
 		<button
 			type="button"
@@ -26,11 +30,14 @@ export function SetupRow({ icon, label, description, trailing, disabled, selecte
 			disabled={disabled}
 			onClick={onClick}
 			className={cn(
-				"flex w-full items-center gap-3.5 px-1 py-3.5 text-left transition-colors hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-50",
-				selected && "bg-foreground/[0.03]",
+				"flex w-full items-center text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-50",
+				isCard
+					? "gap-3 rounded-lg bg-card px-4 py-3 hover:bg-muted active:scale-[0.99]"
+					: "gap-3.5 px-1 py-3.5 hover:bg-foreground/[0.04]",
+				!isCard && selected && "bg-foreground/[0.03]",
 			)}
 		>
-			<span className="grid size-6 shrink-0 place-items-center text-muted-foreground [&_svg]:size-5">{icon}</span>
+			<span className={cn("grid shrink-0 place-items-center text-muted-foreground", isCard ? "size-8 [&_svg]:size-4" : "size-6 [&_svg]:size-5")}>{icon}</span>
 			<span className="min-w-0 flex-1">
 				<span className="block text-sm font-medium leading-5 text-foreground">{label}</span>
 				{description ? <span className="mt-0.5 block text-caption leading-snug text-muted-foreground">{description}</span> : null}

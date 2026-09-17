@@ -9,7 +9,7 @@ import {
 	type PreparedProjectInput,
 } from "./CreateProjectFlow";
 import { OnboardingCloudDialog } from "./OnboardingCloudDialog";
-import { SetupList, SetupRow } from "./SetupList";
+import { SetupRow } from "./SetupList";
 
 type ProjectMode = "folder" | "git";
 
@@ -91,8 +91,9 @@ export function OnboardingProjectSetup({
 
 	return (
 		<>
-			<SetupList className="max-w-[520px]">
+			<div className="flex w-full max-w-[520px] flex-col gap-3">
 				<SetupRow
+					variant="card"
 					disabled={isSelectingFolder}
 					icon={<GitFork aria-hidden="true" />}
 					label="Clone from Git"
@@ -100,6 +101,7 @@ export function OnboardingProjectSetup({
 					onClick={() => void startImport("git")}
 				/>
 				<SetupRow
+					variant="card"
 					disabled={isSelectingFolder}
 					icon={<FolderOpen aria-hidden="true" />}
 					label="Open local folder"
@@ -108,6 +110,7 @@ export function OnboardingProjectSetup({
 				/>
 				{cloudEnabled ? (
 					<SetupRow
+						variant="card"
 						disabled={isSelectingFolder}
 						icon={<Cloud aria-hidden="true" />}
 						label={t("onboarding.createCloudProject")}
@@ -116,7 +119,7 @@ export function OnboardingProjectSetup({
 					/>
 				) : null}
 				{folderError ? <p className="col-span-full text-center text-xs text-destructive">{folderError}</p> : null}
-			</SetupList>
+			</div>
 			{cloudEnabled && showCloud ? (
 				<OnboardingCloudDialog onClose={() => setShowCloud(false)} onCreated={onCloudProjectCreated} />
 			) : null}
@@ -143,4 +146,3 @@ export function OnboardingProjectSetup({
 		</>
 	);
 }
-

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useCloudGate } from "../hooks/useCloudGate";
 import { useUpdateCloudOffering } from "../hooks/useSettings";
-import { SetupList, SetupRow } from "./SetupList";
+import { SetupRow } from "./SetupList";
 
 /** Step: cloud. One decision, so it reads as two options rather than a switch
  *  plus explanatory prose. The choice applies optimistically: the row marks
@@ -24,8 +24,9 @@ export function OnboardingCloudStep({ cloudEnabled, onChoose }: { cloudEnabled: 
 
 	return (
 		<div className="flex w-full max-w-[440px] flex-col gap-4 text-left">
-			<SetupList>
+			<div className="flex w-full flex-col gap-3">
 				<SetupRow
+					variant="card"
 					icon={<Cloud aria-hidden="true" />}
 					label={t("onboarding.cloudOptionYesLabel")}
 					description={t("onboarding.cloudOptionYesDetail")}
@@ -34,6 +35,7 @@ export function OnboardingCloudStep({ cloudEnabled, onChoose }: { cloudEnabled: 
 					onClick={() => choose(true)}
 				/>
 				<SetupRow
+					variant="card"
 					icon={<Cloud aria-hidden="true" />}
 					label={t("onboarding.cloudOptionNoLabel")}
 					description={t("onboarding.cloudOptionNoDetail")}
@@ -41,7 +43,7 @@ export function OnboardingCloudStep({ cloudEnabled, onChoose }: { cloudEnabled: 
 					trailing={!selected ? <Check aria-hidden="true" className="size-3.5 text-status-ready" /> : undefined}
 					onClick={() => choose(false)}
 				/>
-			</SetupList>
+			</div>
 			<p className="px-1 text-center text-caption leading-snug text-muted-foreground/80">{t("onboarding.cloudCaveat")}</p>
 			{offering.error ? (
 				<p className="px-1 text-center text-caption leading-snug text-destructive" role="alert">
