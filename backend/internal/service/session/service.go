@@ -198,7 +198,7 @@ type Service struct {
 	// test path) disables it and the emitter degrades to anonymous. There is no
 	// dedicated opt-out: the handle is part of telemetry and stops when telemetry
 	// is turned off, which prevents the carrier event from being emitted at all.
-	githubIdentity ports.SCMIdentityResolver
+	githubIdentity ports.ScopedIdentityResolver
 }
 
 // SetChatProviderPreserver wires the live Chat lifetime observation after both
@@ -237,7 +237,7 @@ type Deps struct {
 	SignalCapable func(domain.AgentHarness) bool
 	// GithubIdentity resolves the operator's authenticated GitHub account so the
 	// handle rides along with product telemetry. Nil disables it.
-	GithubIdentity ports.SCMIdentityResolver
+	GithubIdentity ports.ScopedIdentityResolver
 }
 
 // NewWithDeps wires a session service with optional PR-claim dependencies.
@@ -395,10 +395,8 @@ func (s *Service) emitSpawned(ctx context.Context, rec domain.SessionRecord, dur
 		"harness":     string(rec.Harness),
 		"duration_ms": durationMs,
 	}
-	var personSet map[string]any
 	if actor, ok := s.githubActor(ctx); ok {
 		payload["github_actor"] = actor
-		personSet = map[string]any{"github_actor": actor}
 	}
 	s.telemetry.Emit(context.Background(), ports.TelemetryEvent{
 		Name:       "ao.session.spawned",
@@ -409,7 +407,6 @@ func (s *Service) emitSpawned(ctx context.Context, rec domain.SessionRecord, dur
 		SessionID:  &sessionID,
 		RequestID:  reqid.FromContext(ctx),
 		Payload:    payload,
-		PersonSet:  personSet,
 	})
 }
 
@@ -419,12 +416,12 @@ func (s *Service) emitSpawned(ctx context.Context, rec domain.SessionRecord, dur
 // ("", false) so the event stays anonymous. There is no separate consent gate:
 // the handle is part of product telemetry, so turning telemetry off stops the
 // carrier event before it is ever emitted. The identity lookup is cached by the
-// SCM provider.
+// SCM provider. Host is left empty because GitHub identity is not host-scoped.
 func (s *Service) githubActor(ctx context.Context) (string, bool) {
 	if s.githubIdentity == nil {
 		return "", false
 	}
-	identity, err := s.githubIdentity.AuthenticatedIdentity(ctx)
+	identity, err := s.githubIdentity.AuthenticatedIdentityForProvider(ctx, "github", "")
 	if err != nil || !identity.Human || identity.Login == "" {
 		return "", false
 	}

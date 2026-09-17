@@ -263,7 +263,7 @@ func startSession(ctx context.Context, cfg config.Config, runtime runtimeselect.
 	})
 	mgr.SetAgentReadiness(agentReadiness)
 	scmProvider := newMultiSCMProvider(cfg.GitLab, log)
-	sessionSvc := sessionsvc.NewWithDeps(sessionsvc.Deps{
+	sessionDeps := sessionsvc.Deps{
 		Manager:           mgr,
 		Store:             store,
 		PRClaimer:         store,
@@ -277,11 +277,16 @@ func startSession(ctx context.Context, cfg config.Config, runtime runtimeselect.
 		// no_signal only makes sense for harnesses with complete lifecycle signal
 		// coverage; partial callbacks cannot prove that silence is abnormal.
 		SignalCapable: activitydispatch.FullySupportsHarness,
-		// Attach the operator's GitHub login to product telemetry. This degrades to
-		// anonymous when the account cannot be resolved, and stops entirely when
-		// telemetry is turned off (the carrier event is then never emitted).
-		GithubIdentity: newGithubIdentityResolver(scmProvider),
-	})
+	}
+	// Attach the operator's GitHub login to product telemetry. The multi provider
+	// already resolves the authenticated identity, so reuse it as the resolver.
+	// Guard the typed-nil: with no SCM provider the interface must stay nil so the
+	// emitter degrades to anonymous instead of calling a nil provider. This stops
+	// entirely when telemetry is turned off (the carrier event is then never emitted).
+	if scmProvider != nil {
+		sessionDeps.GithubIdentity = scmProvider
+	}
+	sessionSvc := sessionsvc.NewWithDeps(sessionDeps)
 	// Triggering a review spawns a reviewer over the worker's worktree, resolved
 	// from the reviewer registry (distinct from the worker agent set). The
 	// reviewer posts its review to the PR itself, so the service needs no SCM

@@ -11,7 +11,6 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/config"
 	"github.com/aoagents/agent-orchestrator/backend/internal/lifecycle"
 	scmobserve "github.com/aoagents/agent-orchestrator/backend/internal/observe/scm"
-	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite"
 )
 
@@ -95,26 +94,6 @@ func newMultiSCMProvider(gitlabCfg config.GitLabConfig, logger *slog.Logger) *sc
 		return nil
 	}
 	return scmmulti.New(named...)
-}
-
-// githubIdentityResolver adapts a multi SCM provider to
-// ports.SCMIdentityResolver by resolving the GitHub sub-provider's
-// authenticated account. It backs the default-on GitHub-handle telemetry
-// opt-in and is the only consumer of that account login.
-type githubIdentityResolver struct{ provider *scmmulti.Provider }
-
-func (g githubIdentityResolver) AuthenticatedIdentity(ctx context.Context) (ports.SCMIdentity, error) {
-	return g.provider.AuthenticatedIdentityForProvider(ctx, "github", "")
-}
-
-// newGithubIdentityResolver returns a resolver over the multi provider, or nil
-// when no SCM provider is configured so the session service degrades to
-// anonymous telemetry.
-func newGithubIdentityResolver(provider *scmmulti.Provider) ports.SCMIdentityResolver {
-	if provider == nil {
-		return nil
-	}
-	return githubIdentityResolver{provider: provider}
 }
 
 // newMultiSCMMerger builds a multi-merger for PR merge actions, registering

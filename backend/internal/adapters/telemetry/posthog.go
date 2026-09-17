@@ -456,12 +456,12 @@ func (s *PostHogSink) properties(ev ports.TelemetryEvent) map[string]any {
 	for k, v := range sanitizeRemotePayload(ev.Name, ev.Payload) {
 		props[k] = v
 	}
-	// Person properties are set only for consented events that carry them (the
-	// operator's GitHub handle). Setting $set flips this one event to identified
-	// so a person-property breakdown by github_actor becomes possible; every
-	// other event keeps the anonymous default above.
-	if personSet := sanitizeRemotePayload(ev.Name, ev.PersonSet); len(personSet) > 0 {
-		props["$set"] = personSet
+	// The operator's GitHub handle is the one product-telemetry property tied to a
+	// person. When the sanitized payload carries it, mirror it into a person `$set`
+	// and flip this single event to identified so a breakdown by github_actor
+	// becomes possible; every other event keeps the anonymous default above.
+	if actor, ok := props["github_actor"]; ok {
+		props["$set"] = map[string]any{"github_actor": actor}
 		props["$process_person_profile"] = true
 	}
 	return props
