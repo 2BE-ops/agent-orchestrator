@@ -648,7 +648,7 @@
 	"onboarding.githubConnectedDetail": "Agenten können Pull Requests öffnen und Issues lesen.",
 	"onboarding.cloudFeature.sandboxes": "Auf diesem Rechner läuft nichts Schweres, während ein Agent arbeitet.",
 	"onboarding.cloudFeature.mobile": "Dieselben Sitzungen sind über AO Mobile erreichbar.",
-	"onboarding.cloudCaveat": "Frühe Vorschau: Sandboxes können langsam starten und Arbeit verlieren. Standardmäßig aus und in den Einstellungen änderbar.",
+	"onboarding.cloudCaveat": "Frühe Vorschau: Sandboxes können langsam starten und Arbeit verlieren.",
 	"onboarding.cloudToggleLabel": "Cloud-Sitzungen",
 	"onboarding.cloudToggleDetail": "Fügt beim Anlegen eines Projekts eine Cloud-Projekt-Option hinzu.",
 	"onboarding.createCloudProject": "Cloud-Projekt erstellen",

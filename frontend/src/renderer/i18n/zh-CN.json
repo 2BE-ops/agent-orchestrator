@@ -648,7 +648,7 @@
 	"onboarding.githubConnectedDetail": "代理可以创建拉取请求并读取议题。",
 	"onboarding.cloudFeature.sandboxes": "代理工作时本机不会承担繁重负载。",
 	"onboarding.cloudFeature.mobile": "可在 AO 手机端访问相同的会话。",
-	"onboarding.cloudCaveat": "早期预览：沙箱启动可能较慢，也可能丢失工作。默认关闭，可在设置中更改。",
+	"onboarding.cloudCaveat": "早期预览：沙箱启动可能较慢，也可能丢失工作。",
 	"onboarding.cloudToggleLabel": "云端会话",
 	"onboarding.cloudToggleDetail": "在设置项目时增加“云端项目”选项。",
 	"onboarding.createCloudProject": "创建云端项目",
