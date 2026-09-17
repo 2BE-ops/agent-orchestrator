@@ -39,29 +39,6 @@ func (claimContractSCM) FetchReviewThreads(context.Context, ports.SCMPRRef) (por
 	return ports.SCMReviewObservation{}, nil
 }
 
-type claimResponseRecorder struct {
-	transport http.RoundTripper
-	body      []byte
-}
-
-func (r *claimResponseRecorder) RoundTrip(req *http.Request) (*http.Response, error) {
-	resp, err := r.transport.RoundTrip(req)
-	if err != nil || req.Method != http.MethodPost || !strings.HasSuffix(req.URL.Path, "/pr/claim") {
-		return resp, err
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		_ = resp.Body.Close()
-		return nil, err
-	}
-	if err := resp.Body.Close(); err != nil {
-		return nil, err
-	}
-	r.body = append([]byte(nil), body...)
-	resp.Body = io.NopCloser(bytes.NewReader(body))
-	return resp, nil
-}
-
 // This guards the complete metadata-only claim contract: the production
 // service's BranchChanged=false must survive controller serialization and CLI
 // decoding, while the command leaves the real workspace branch and HEAD alone.
@@ -126,12 +103,26 @@ func TestE2E_ClaimPRMetadataOnlyContract(t *testing.T) {
 	})
 	startDriftTestDaemon(t, svc, &fakeProjectManager{})
 
-	recorder := &claimResponseRecorder{transport: http.DefaultTransport}
+	var responseBody []byte
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		resp, err := http.DefaultTransport.RoundTrip(req)
+		if err != nil || req.Method != http.MethodPost || !strings.HasSuffix(req.URL.Path, "/pr/claim") {
+			return resp, err
+		}
+		body, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		responseBody = body
+		resp.Body = io.NopCloser(bytes.NewReader(responseBody))
+		return resp, nil
+	})
 	var out bytes.Buffer
 	root := NewRootCommand(Deps{
 		Out:          &out,
 		Err:          &out,
-		HTTPClient:   &http.Client{Transport: recorder},
+		HTTPClient:   &http.Client{Transport: transport},
 		ProcessAlive: func(int) bool { return true },
 	})
 	root.SetArgs([]string{"session", "claim-pr", string(session.ID), "https://github.com/acme/repo/pull/7"})
@@ -143,8 +134,8 @@ func TestE2E_ClaimPRMetadataOnlyContract(t *testing.T) {
 		t.Fatalf("claim-pr output = %q, want %q", out.String(), want)
 	}
 	var response map[string]json.RawMessage
-	if err := json.Unmarshal(recorder.body, &response); err != nil {
-		t.Fatalf("decode controller response %q: %v", recorder.body, err)
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		t.Fatalf("decode controller response %q: %v", responseBody, err)
 	}
 	rawBranchChanged, ok := response["branchChanged"]
 	if !ok || string(rawBranchChanged) != "false" {
