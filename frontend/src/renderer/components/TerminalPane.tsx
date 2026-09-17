@@ -1191,10 +1191,7 @@ function AttachedTerminal({
 				)}
 				{isBoxComingUp && !showReplayCover && (
 					<div className="terminal-surface absolute inset-0 grid place-items-center font-mono text-control">
-						<div className="text-center">
-							<div className="text-terminal">{t("terminal.connecting")}</div>
-							<div className="mt-2 text-terminal-dim">{t("terminal.connectingRestoredContext")}</div>
-						</div>
+						<div className="text-terminal">{t("terminal.connecting")}</div>
 					</div>
 				)}
 				{showReplayCover && <ReplayCover message={attachSession?.cloud ? t("terminal.connecting") : undefined} />}
