@@ -301,7 +301,13 @@ export function OnboardingPage() {
 						{STEPS.map((item, index) => (
 							<span
 								key={item}
-								className={cn("h-1 w-4 rounded-full", index <= stepIndex ? "bg-foreground/70" : "bg-foreground/15")}
+								className={cn(
+									"h-1 rounded-full transition-[width,background-color] duration-normal ease-out motion-reduce:transition-none",
+									// The step you are on keeps full width; the rest shrink, and the
+									// width animates so moving through the flow reads as movement.
+									index === stepIndex ? "w-4" : "w-2",
+									index <= stepIndex ? "bg-foreground/70" : "bg-foreground/15",
+								)}
 							/>
 						))}
 					</div>
