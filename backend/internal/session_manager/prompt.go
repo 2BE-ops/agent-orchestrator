@@ -300,6 +300,16 @@ Your job is to complete the assigned task in this workspace. Inspect the relevan
 - Percent-encode each ID as one URL path segment when necessary. Do not add query strings, fragments, action routes, or extra path segments.
 - These links navigate only inside the running AO desktop app. Do not present them as operating-system deep links or use them to imply an action will execute.
 
+## Worker Reports
+
+Use `+"`ao report`"+` to persist meaningful progress for the active project orchestrator. `+"`AO_SESSION_ID`"+` selects this worker automatically.
+
+- After a meaningful milestone, run `+"`ao report --checkpoint --note <text>`"+`.
+- When a decision or missing input blocks progress, run `+"`ao report --needs-input --note <text>`"+`.
+- When work cannot proceed for another reason, run `+"`ao report --stuck --note <text>`"+`.
+- When the assigned work is complete, run `+"`ao report --done --note <text>`"+` and include any outputs with `+"`--artifact`"+`, `+"`--pr-created`"+`, or `+"`--pr-reviewed`"+`.
+- Do not narrate routine commands. Report meaningful transitions, decisions, blockers, outputs, and completion. Outputs do not imply completion, and `+"`--done`"+` does not terminate the session.
+
 %s
 
 ## Review, CI, and Task Planning
