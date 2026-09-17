@@ -328,10 +328,10 @@ export function OnboardingPage() {
 						aria-labelledby={`onboarding-title-${step}`}
 					>
 						<div className={cn("flex flex-col justify-end pb-7", (isAgentStep || isGuideStep) && "justify-center pb-5")}>
-							<h1 id={`onboarding-title-${step}`} className={cn(isAgentStep || isGuideStep ? "max-w-[500px]" : "max-w-[410px]", "text-[clamp(2rem,3.2vw,3.15rem)] font-normal leading-[1.02] tracking-[-0.045em] text-balance", isProjectStep && "mx-auto max-w-none whitespace-nowrap")}>
+							<h1 id={`onboarding-title-${step}`} className={cn(isAgentStep || isGuideStep ? "max-w-[500px]" : "max-w-[410px]", "text-[clamp(2rem,3.2vw,3.15rem)] font-normal leading-[1.02] tracking-[-0.045em] text-balance", isListStep && "mx-auto", isProjectStep && "max-w-none whitespace-nowrap")}>
 								{t(details.title)}
 							</h1>
-							<p className={cn("mt-5 max-w-[350px] text-[15px] leading-6 text-muted-foreground text-pretty", (isAgentStep || isGuideStep) && "max-w-[430px]", isProjectStep && "mx-auto")}>{t(details.subtitle)}</p>
+							<p className={cn("mt-5 max-w-[350px] text-[15px] leading-6 text-muted-foreground text-pretty", (isAgentStep || isGuideStep) && "max-w-[430px]", isListStep && "mx-auto")}>{t(details.subtitle)}</p>
 						</div>
 						<div className={cn("min-h-0 pt-2", isListStep && "flex justify-center")}>
 							{isAgentStep && (
