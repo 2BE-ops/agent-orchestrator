@@ -4886,20 +4886,14 @@ func (m *Manager) waitForPromptReadiness(ctx context.Context, agent ports.Agent,
 		lines = 80
 	}
 
-	waitTimeout := hints.Timeout
-	if hasCallerDeadline {
-		remainingForReadiness := time.Until(callerDeadline) - promptDeliveryDeadlineReserve
-		if remainingForReadiness <= 0 {
-			m.logger.Warn("prompt readiness skipped to preserve caller deadline for fallback delivery",
-				"sessionID", cfg.SessionID,
-				"kind", string(cfg.Kind),
-				"configuredTimeout", hints.Timeout.String(),
-			)
-			return nil
-		}
-		if remainingForReadiness < waitTimeout {
-			waitTimeout = remainingForReadiness
-		}
+	waitTimeout, hasReadinessBudget := promptReadinessWaitTimeout(hints.Timeout, callerDeadline, hasCallerDeadline)
+	if !hasReadinessBudget {
+		m.logger.Warn("prompt readiness skipped to preserve caller deadline for fallback delivery",
+			"sessionID", cfg.SessionID,
+			"kind", string(cfg.Kind),
+			"configuredTimeout", hints.Timeout.String(),
+		)
+		return nil
 	}
 
 	deadline := time.NewTimer(waitTimeout)
@@ -4931,6 +4925,17 @@ func (m *Manager) waitForPromptReadiness(ctx context.Context, agent ports.Agent,
 		case <-ticker.C:
 		}
 	}
+}
+
+func promptReadinessWaitTimeout(configured time.Duration, callerDeadline time.Time, hasCallerDeadline bool) (time.Duration, bool) {
+	if !hasCallerDeadline {
+		return configured, true
+	}
+	remaining := time.Until(callerDeadline) - promptDeliveryDeadlineReserve
+	if remaining <= 0 {
+		return 0, false
+	}
+	return min(configured, remaining), true
 }
 
 func promptOutputContains(output string, patterns []string) bool {

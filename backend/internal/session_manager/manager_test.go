@@ -2375,6 +2375,17 @@ func TestSpawn_AfterStartPromptReservesCallerDeadlineForFallbackDelivery(t *test
 	}
 }
 
+func TestPromptReadinessWaitTimeoutCapsNinetySecondsToSixtySecondRequest(t *testing.T) {
+	deadline := time.Now().Add(60 * time.Second)
+	wait, ok := promptReadinessWaitTimeout(90*time.Second, deadline, true)
+	if !ok {
+		t.Fatal("prompt readiness budget unexpectedly exhausted")
+	}
+	if wait < 54*time.Second || wait > 55*time.Second {
+		t.Fatalf("prompt readiness wait = %v, want approximately 55s with delivery reserve", wait)
+	}
+}
+
 type deadlineConsumingRuntime struct {
 	*fakeRuntime
 }
