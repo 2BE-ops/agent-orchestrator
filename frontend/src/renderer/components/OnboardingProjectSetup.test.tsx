@@ -4,6 +4,11 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 const bridgeMocks = vi.hoisted(() => ({ chooseDirectory: vi.fn(), getRepositoryBranch: vi.fn() }));
 const apiMocks = vi.hoisted(() => ({ POST: vi.fn() }));
+const cloudMocks = vi.hoisted(() => ({
+	cloudEnabled: false,
+	signIn: vi.fn(),
+	status: "unauthenticated" as "authenticated" | "unauthenticated",
+}));
 
 vi.mock("../lib/bridge", () => ({
 	aoBridge: { app: { chooseDirectory: bridgeMocks.chooseDirectory, getRepositoryBranch: bridgeMocks.getRepositoryBranch } },
@@ -15,12 +20,24 @@ vi.mock("../lib/api-client", () => ({
 }));
 
 vi.mock("./CreateProjectFlow", () => ({
+	CloudProjectCard: () => <div data-testid="cloud-project-card" />,
+	CloudSignInPanel: () => <div data-testid="cloud-sign-in-panel" />,
 	CreateProjectFlow: () => null,
+}));
+
+vi.mock("../hooks/useCloudGate", () => ({
+	useCloudGate: () => ({ client: "", cloudEnabled: cloudMocks.cloudEnabled, localEnabled: true }),
+}));
+
+vi.mock("../lib/cloud-session", () => ({
+	useCloudSession: () => ({ signIn: cloudMocks.signIn, status: cloudMocks.status }),
 }));
 
 import { OnboardingProjectSetup } from "./OnboardingProjectSetup";
 
 beforeEach(() => {
+	cloudMocks.cloudEnabled = false;
+	cloudMocks.status = "unauthenticated";
 	bridgeMocks.chooseDirectory.mockReset();
 	bridgeMocks.getRepositoryBranch.mockReset().mockResolvedValue("main");
 	apiMocks.POST.mockReset().mockResolvedValue({
@@ -32,6 +49,44 @@ beforeEach(() => {
 	});
 });
 
+it("offers cloud as a project source once the cloud step enabled it", async () => {
+	cloudMocks.cloudEnabled = true;
+	const user = userEvent.setup();
+
+	render(
+		<OnboardingProjectSetup
+			mode="folder"
+			onCloudProjectCreated={vi.fn()}
+			onModeChange={vi.fn()}
+			onPrepared={vi.fn()}
+			preparedProject={null}
+		/>,
+	);
+
+	expect(screen.queryByTestId("cloud-sign-in-panel")).not.toBeInTheDocument();
+	await user.click(screen.getByRole("button", { name: "Cloud" }));
+	expect(await screen.findByTestId("cloud-sign-in-panel")).toBeInTheDocument();
+});
+
+it("goes straight to the cloud project form when the account is signed in", async () => {
+	cloudMocks.cloudEnabled = true;
+	cloudMocks.status = "authenticated";
+	const user = userEvent.setup();
+
+	render(
+		<OnboardingProjectSetup
+			mode="folder"
+			onCloudProjectCreated={vi.fn()}
+			onModeChange={vi.fn()}
+			onPrepared={vi.fn()}
+			preparedProject={null}
+		/>,
+	);
+
+	await user.click(screen.getByRole("button", { name: "Cloud" }));
+	expect(await screen.findByTestId("cloud-project-card")).toBeInTheDocument();
+});
+
 it("advances with the folder returned by the native picker", async () => {
 	bridgeMocks.chooseDirectory.mockResolvedValue("/repo/project");
 	const onPrepared = vi.fn();
@@ -40,6 +95,7 @@ it("advances with the folder returned by the native picker", async () => {
 		<OnboardingProjectSetup
 			mode="folder"
 			onModeChange={vi.fn()}
+			onCloudProjectCreated={vi.fn()}
 			onPrepared={onPrepared}
 			preparedProject={null}
 		/>,
@@ -69,6 +125,7 @@ it("carries initialization requirements forward for a plain folder", async () =>
 		<OnboardingProjectSetup
 			mode="folder"
 			onModeChange={vi.fn()}
+			onCloudProjectCreated={vi.fn()}
 			onPrepared={onPrepared}
 			preparedProject={null}
 		/>,

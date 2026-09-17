@@ -269,6 +269,13 @@ export function OnboardingPage() {
 		openGlobalSettings("mobile");
 	}, [clearOnboardingFinishError, navigate, openGlobalSettings]);
 
+	// A cloud project is created by the flow that owns it, so onboarding just
+	// records completion and hands off to the app.
+	const handleCloudProjectCreated = useCallback(() => {
+		markOnboardingComplete();
+		void navigate({ to: "/" });
+	}, [navigate]);
+
 	const isProjectStep = step === "project";
 	const isAgentStep = step === "orchestrator" || step === "workers";
 	const isGuideStep = step === "guide";
@@ -365,11 +372,12 @@ export function OnboardingPage() {
 									<OnboardingProjectSetup
 										mode={projectMode}
 										onModeChange={setProjectMode}
-										onPrepared={(project) => {
-											setPreparedProject(project);
-											if (project) setStep("orchestrator");
-										}}
-										preparedProject={preparedProject}
+									onPrepared={(project) => {
+										setPreparedProject(project);
+										if (project) setStep("orchestrator");
+									}}
+									onCloudProjectCreated={handleCloudProjectCreated}
+									preparedProject={preparedProject}
 									/>
 								</div>
 							)}

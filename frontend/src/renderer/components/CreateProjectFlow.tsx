@@ -1238,7 +1238,7 @@ function CreateProjectSourceDialog({
  * vs. each session in its own cloud sandbox) so the decision is explicit rather
  * than a subtle toggle that is easy to miss.
  */
-function ProjectOfferingTabs({
+export function ProjectOfferingTabs({
 	disabled,
 	offering,
 	onOfferingChange,
@@ -1273,7 +1273,7 @@ function ProjectOfferingTabs({
  * option discoverable and actionable from the create-project flow instead of
  * silently hiding it: a single button starts the WorkOS sign-in.
  */
-function CloudSignInPanel({
+export function CloudSignInPanel({
 	disabled,
 	onSignIn,
 }: {
@@ -1307,7 +1307,7 @@ function isHttpsRepositoryUrl(raw: string): boolean {
 // Cloud project creation goes straight to the control plane
 // (client.createProject) instead of the daemon POST the local flow uses; the
 // repository is cloned in a cloud sandbox, so no folder picker or agent sheet.
-function CloudProjectCard({
+export function CloudProjectCard({
 	dialog = false,
 	onClose,
 	onCreated,

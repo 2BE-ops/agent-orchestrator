@@ -1,8 +1,13 @@
-import { FolderOpen, GitFork } from "lucide-react";
+import { Cloud, FolderOpen, GitFork } from "lucide-react";
 import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { apiClient, apiErrorMessage } from "../lib/api-client";
 import { aoBridge } from "../lib/bridge";
+import { useCloudGate } from "../hooks/useCloudGate";
+import { useCloudSession } from "../lib/cloud-session";
 import {
+	CloudProjectCard,
+	CloudSignInPanel,
 	CreateProjectFlow,
 	type PreparedProjectInput,
 } from "./CreateProjectFlow";
@@ -13,22 +18,35 @@ export function OnboardingProjectSetup({
 	mode,
 	onModeChange,
 	onPrepared,
+	onCloudProjectCreated,
 	preparedProject,
 }: {
 	mode: ProjectMode;
 	onModeChange: (mode: ProjectMode) => void;
 	onPrepared: (input: PreparedProjectInput | null) => void;
+	onCloudProjectCreated: () => void;
 	preparedProject: PreparedProjectInput | null;
 }) {
+	const { t } = useTranslation();
+	const { cloudEnabled } = useCloudGate();
+	const { status: cloudSessionStatus, signIn: cloudSignIn } = useCloudSession();
 	const [triggerNonce, setTriggerNonce] = useState(0);
 	const [folderError, setFolderError] = useState<string | null>(null);
 	const [isSelectingFolder, setIsSelectingFolder] = useState(false);
+	const [showCloud, setShowCloud] = useState(false);
+	const cloudAvailable = cloudEnabled && cloudSessionStatus === "authenticated";
 	const lastPreparedPath = useRef<string | null>(preparedProject?.path ?? null);
 
 	const resetPrepared = useCallback(() => {
 		lastPreparedPath.current = null;
 		onPrepared(null);
 	}, [onPrepared]);
+
+	const startCloud = useCallback(() => {
+		resetPrepared();
+		setFolderError(null);
+		setShowCloud(true);
+	}, [resetPrepared]);
 
 	const startImport = useCallback(
 		async (next: ProjectMode) => {
@@ -89,8 +107,25 @@ export function OnboardingProjectSetup({
 					label="Open local folder"
 					onClick={() => void startImport("folder")}
 				/>
+				{cloudEnabled ? (
+					<ProjectSourceButton
+						disabled={isSelectingFolder}
+						icon={<Cloud aria-hidden="true" />}
+						label={t("createProject.kindCloud")}
+						onClick={startCloud}
+					/>
+				) : null}
 				{folderError ? <p className="col-span-full text-center text-xs text-destructive">{folderError}</p> : null}
 			</div>
+			{cloudEnabled && showCloud ? (
+				<div className="w-full max-w-[520px]">
+					{cloudAvailable ? (
+						<CloudProjectCard onCreated={onCloudProjectCreated} />
+					) : (
+						<CloudSignInPanel disabled={isSelectingFolder} onSignIn={cloudSignIn} />
+					)}
+				</div>
+			) : null}
 			<CreateProjectFlow
 				mode="choose"
 				variant="onboarding"
