@@ -76,6 +76,15 @@ export function createCloudTerminalMux(options: CloudTerminalMuxOptions): Termin
 	};
 	let disposed = false;
 	let exited = false;
+	// A nodeops worker's FIRST agent-terminal attempt can fail then REOPEN at the
+	// same epoch within ~40s (a stale 'failed' row beside the live 'open' one). The
+	// control plane correctly reports that transient gap as a 410, so a single 410
+	// must NOT be treated as a permanent exit. Retry a bounded run of 410s as
+	// "waiting" (reusing the 1s readiness poll — no new timer) so a fail->reopen
+	// self-heals; only surface the permanent banner once it keeps reporting exited
+	// past the transient window, which is a genuine agent exit. ~60 x 1s ~= 60s.
+	let terminalExitRetries = 0;
+	const maxTerminalExitRetries = 60;
 	let connectionState: MuxConnectionState | undefined;
 	let pendingResize: { cols: number; rows: number } | null = null;
 	const pendingInput: string[] = [];
@@ -183,11 +192,18 @@ export function createCloudTerminalMux(options: CloudTerminalMuxOptions): Termin
 			ticket = await options.mintTicket(kind);
 		} catch (error) {
 			if (disposed) return;
-			// A control plane that reports the agent terminal has exited (410
-			// TERMINAL_SESSION_EXITED) is terminal: surface it and stop, rather than
-			// looping the ticket mint forever as if the worker were merely not up yet
-			// (the "Connected, but stuck Connecting…" symptom).
+			// A 410 TERMINAL_SESSION_EXITED can be transient on nodeops (a failed
+			// first attempt that reopens at the same epoch). Retry a bounded run of
+			// them as "waiting" so a fail->reopen self-heals; only surface the
+			// permanent banner once the exit persists past the transient window,
+			// which is a genuine agent exit (not the "stuck Connecting…" symptom,
+			// because the retry budget is bounded and reset on any successful mint).
 			if (terminalExited(error)) {
+				terminalExitRetries += 1;
+				if (terminalExitRetries <= maxTerminalExitRetries) {
+					setConnectionState("waiting");
+					return;
+				}
 				reportTerminalExited();
 				return;
 			}
@@ -202,6 +218,9 @@ export function createCloudTerminalMux(options: CloudTerminalMuxOptions): Termin
 			return;
 		}
 		if (disposed) return;
+		// A successful mint clears the transient-exit retry budget: any later 410 is
+		// a fresh exit that gets its own full bounded window before the banner.
+		terminalExitRetries = 0;
 		openSocket(kind, ticket);
 	};
 
