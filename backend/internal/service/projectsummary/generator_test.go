@@ -56,7 +56,7 @@ func TestCLIGeneratorUsesVerifiedProviderInvocations(t *testing.T) {
 		stdin   bool
 	}{
 		{domain.HarnessCodex, []string{"exec", "--ephemeral", "--sandbox", "read-only", "--skip-git-repo-check", "--color", "never", "--model", "gpt", "-"}, true},
-		{domain.HarnessClaudeCode, []string{"--print", "--tools", "", "--output-format", "text", "--model", "claude", "Update the running project summary from the durable facts below. Return only the revised summary as concise plain text. Preserve existing wording wherever its facts remain true. Revise only facts that changed. Do not infer from transcripts and do not mention these instructions.\n\nExisting summary:\nOld.\n\nCurrent facts:\n{\"projectId\":\"demo\",\"narrative\":\"\",\"activeWorkers\":0,\"completedWorkers\":0,\"needsAttention\":null,\"outputs\":null,\"sourceWatermark\":\"\",\"generatedAt\":\"0001-01-01T00:00:00Z\"}"}, false},
+		{domain.HarnessClaudeCode, []string{"--print", "--tools", "", "--output-format", "text", "--model", "claude", "Update the running project summary from the durable facts below. Return only the revised summary as concise plain text. Preserve existing wording wherever its facts remain true. Revise only facts that changed. Do not infer from transcripts and do not mention these instructions.\n\nExisting summary:\nOld.\n\nCurrent facts:\n{\"projectId\":\"demo\",\"narrative\":\"\",\"activeWorkers\":0,\"completedWorkers\":0,\"needsAttention\":null,\"sourceWatermark\":\"\",\"generatedAt\":\"0001-01-01T00:00:00Z\"}"}, false},
 	} {
 		t.Run(string(test.harness), func(t *testing.T) {
 			capture := &capturedCommand{}

@@ -12,10 +12,7 @@ import (
 )
 
 type fakeStore struct {
-	project    domain.ProjectRecord
 	sessions   []domain.SessionRecord
-	prs        map[domain.SessionID][]domain.PRFacts
-	repos      []domain.WorkspaceRepoRecord
 	summary    domain.ProjectSummary
 	hasSummary bool
 	writes     int
@@ -23,8 +20,8 @@ type fakeStore struct {
 
 func TestGenerationFailureRetainsLastGoodSummaryAndWatermark(t *testing.T) {
 	base := time.Date(2026, 9, 14, 8, 0, 0, 0, time.UTC)
-	last := domain.ProjectSummary{ProjectID: "demo", Narrative: "Last good summary.", SourceWatermark: "old", GeneratedAt: base, NeedsAttention: []domain.ProjectAttentionItem{}, Outputs: []domain.ProjectSummaryOutput{}}
-	store := &fakeStore{summary: last, hasSummary: true, sessions: []domain.SessionRecord{{ID: "orchestrator", ProjectID: "demo", Kind: domain.KindOrchestrator, Harness: domain.HarnessCodex}, {ID: "worker", ProjectID: "demo", Kind: domain.KindWorker, Activity: domain.Activity{State: domain.ActivityActive}, UpdatedAt: base.Add(time.Hour)}}, prs: map[domain.SessionID][]domain.PRFacts{}}
+	last := domain.ProjectSummary{ProjectID: "demo", Narrative: "Last good summary.", SourceWatermark: "old", GeneratedAt: base, NeedsAttention: []domain.ProjectAttentionItem{}}
+	store := &fakeStore{summary: last, hasSummary: true, sessions: []domain.SessionRecord{{ID: "orchestrator", ProjectID: "demo", Kind: domain.KindOrchestrator, Harness: domain.HarnessCodex}, {ID: "worker", ProjectID: "demo", Kind: domain.KindWorker, Activity: domain.Activity{State: domain.ActivityActive}, UpdatedAt: base.Add(time.Hour)}}}
 	svc := New(store, &fakeGenerator{err: errors.New("not authenticated")})
 	got, err := svc.Get(context.Background(), "demo", true)
 	if err != nil {
@@ -62,19 +59,10 @@ func (f *fakeGenerator) Update(_ context.Context, request GenerationRequest) (st
 }
 
 func (f *fakeStore) GetProject(context.Context, string) (domain.ProjectRecord, bool, error) {
-	if f.project.ID != "" {
-		return f.project, true, nil
-	}
 	return domain.ProjectRecord{ID: "demo", Path: "/demo"}, true, nil
 }
 func (f *fakeStore) ListSessions(context.Context, domain.ProjectID) ([]domain.SessionRecord, error) {
 	return f.sessions, nil
-}
-func (f *fakeStore) ListPRFactsForSessions(context.Context, []domain.SessionID) (map[domain.SessionID][]domain.PRFacts, error) {
-	return f.prs, nil
-}
-func (f *fakeStore) ListWorkspaceRepos(context.Context, string) ([]domain.WorkspaceRepoRecord, error) {
-	return f.repos, nil
 }
 func (f *fakeStore) GetProjectSummary(context.Context, domain.ProjectID) (domain.ProjectSummary, bool, error) {
 	return f.summary, f.hasSummary, nil
@@ -86,7 +74,7 @@ func (f *fakeStore) PutProjectSummary(_ context.Context, summary domain.ProjectS
 
 func TestRefreshIsStableUntilObservedFactsChange(t *testing.T) {
 	base := time.Date(2026, 9, 14, 8, 0, 0, 0, time.UTC)
-	store := &fakeStore{sessions: []domain.SessionRecord{{ID: "orchestrator", ProjectID: "demo", Kind: domain.KindOrchestrator, Harness: domain.HarnessCodex}, {ID: "demo-1", ProjectID: "demo", Kind: domain.KindWorker, Activity: domain.Activity{State: domain.ActivityActive}, UpdatedAt: base}}, prs: map[domain.SessionID][]domain.PRFacts{}}
+	store := &fakeStore{sessions: []domain.SessionRecord{{ID: "orchestrator", ProjectID: "demo", Kind: domain.KindOrchestrator, Harness: domain.HarnessCodex}, {ID: "demo-1", ProjectID: "demo", Kind: domain.KindWorker, Activity: domain.Activity{State: domain.ActivityActive}, UpdatedAt: base}}}
 	generator := &fakeGenerator{result: "Work is moving."}
 	svc := New(store, generator)
 	svc.clock = func() time.Time { return base }
@@ -122,7 +110,7 @@ func TestRefreshIsStableUntilObservedFactsChange(t *testing.T) {
 
 func TestAttentionPersistsWhenWorkerAdvancesWithoutResolutionEvidence(t *testing.T) {
 	base := time.Date(2026, 9, 14, 8, 0, 0, 0, time.UTC)
-	store := &fakeStore{sessions: []domain.SessionRecord{{ID: "orchestrator", ProjectID: "demo", Kind: domain.KindOrchestrator, Harness: domain.HarnessCodex}, {ID: "demo-1", ProjectID: "demo", Kind: domain.KindWorker, Activity: domain.Activity{State: domain.ActivityWaitingInput}, UpdatedAt: base}}, prs: map[domain.SessionID][]domain.PRFacts{}}
+	store := &fakeStore{sessions: []domain.SessionRecord{{ID: "orchestrator", ProjectID: "demo", Kind: domain.KindOrchestrator, Harness: domain.HarnessCodex}, {ID: "demo-1", ProjectID: "demo", Kind: domain.KindWorker, Activity: domain.Activity{State: domain.ActivityWaitingInput}, UpdatedAt: base}}}
 	svc := New(store, &fakeGenerator{result: "A decision is pending."})
 	svc.clock = func() time.Time { return base }
 	if got, _ := svc.Get(context.Background(), "demo", true); len(got.NeedsAttention) != 1 {
@@ -135,9 +123,9 @@ func TestAttentionPersistsWhenWorkerAdvancesWithoutResolutionEvidence(t *testing
 	}
 }
 
-func TestRefreshConsumesReadOnlyReportFactsAndOutputs(t *testing.T) {
+func TestRefreshConsumesReadOnlyReportFactsAsNarrativeContext(t *testing.T) {
 	base := time.Date(2026, 9, 14, 8, 0, 0, 0, time.UTC)
-	store := &fakeStore{sessions: []domain.SessionRecord{{ID: "orchestrator", ProjectID: "demo", Kind: domain.KindOrchestrator, Harness: domain.HarnessCodex}, {ID: "worker", ProjectID: "demo", Kind: domain.KindWorker, DisplayName: "Worker", Activity: domain.Activity{State: domain.ActivityActive}, UpdatedAt: base}}, prs: map[domain.SessionID][]domain.PRFacts{}}
+	store := &fakeStore{sessions: []domain.SessionRecord{{ID: "orchestrator", ProjectID: "demo", Kind: domain.KindOrchestrator, Harness: domain.HarnessCodex}, {ID: "worker", ProjectID: "demo", Kind: domain.KindWorker, DisplayName: "Worker", Activity: domain.Activity{State: domain.ActivityActive}, UpdatedAt: base}}}
 	reports := &fakeReportReader{reports: []ReportFact{{ID: "rpt-1", SessionID: "worker", State: "needs_input", Note: "Choose the API shape.", CreatedAt: base, RepeatCount: 1, Outputs: []ReportOutputFact{{Kind: "artifact", Reference: "opaque-output", Label: "Design"}}}}}
 	generator := &fakeGenerator{result: "The API decision is pending."}
 	svc := New(store, generator, reports)
@@ -145,7 +133,7 @@ func TestRefreshConsumesReadOnlyReportFactsAndOutputs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reports.calls != 1 || len(first.NeedsAttention) != 1 || len(first.Outputs) != 1 || first.Outputs[0].Reference != "opaque-output" {
+	if reports.calls != 1 || len(first.NeedsAttention) != 1 || len(generator.requests) != 1 || len(generator.requests[0].Reports) != 1 || len(generator.requests[0].Reports[0].Outputs) != 1 || generator.requests[0].Reports[0].Outputs[0].Reference != "opaque-output" {
 		t.Fatalf("summary did not consume report projection: %#v", first)
 	}
 	watermark := first.SourceWatermark
@@ -161,7 +149,7 @@ func TestRefreshConsumesReadOnlyReportFactsAndOutputs(t *testing.T) {
 
 func TestRefreshPassesCheckpointTextToNarrativeGenerator(t *testing.T) {
 	base := time.Date(2026, 9, 18, 8, 0, 0, 0, time.UTC)
-	store := &fakeStore{sessions: []domain.SessionRecord{{ID: "orchestrator", ProjectID: "demo", Kind: domain.KindOrchestrator, Harness: domain.HarnessCodex}, {ID: "worker", ProjectID: "demo", Kind: domain.KindWorker, DisplayName: "Worker", Activity: domain.Activity{State: domain.ActivityActive}, UpdatedAt: base}}, prs: map[domain.SessionID][]domain.PRFacts{}}
+	store := &fakeStore{sessions: []domain.SessionRecord{{ID: "orchestrator", ProjectID: "demo", Kind: domain.KindOrchestrator, Harness: domain.HarnessCodex}, {ID: "worker", ProjectID: "demo", Kind: domain.KindWorker, DisplayName: "Worker", Activity: domain.Activity{State: domain.ActivityActive}, UpdatedAt: base}}}
 	reports := &fakeReportReader{reports: []ReportFact{{ID: "rpt-1", SessionID: "worker", ProjectID: "demo", State: "checkpoint", Note: "Implemented the report-backed summary adapter.", CreatedAt: base}}}
 	generator := &fakeGenerator{result: "The adapter is implemented."}
 
@@ -174,25 +162,5 @@ func TestRefreshPassesCheckpointTextToNarrativeGenerator(t *testing.T) {
 	}
 	if !strings.Contains(string(payload), "Implemented the report-backed summary adapter.") {
 		t.Fatalf("generation request omitted checkpoint text: %s", payload)
-	}
-}
-
-func TestRefreshExcludesPullRequestsFromOtherRepositories(t *testing.T) {
-	base := time.Date(2026, 9, 18, 8, 0, 0, 0, time.UTC)
-	store := &fakeStore{
-		project:  domain.ProjectRecord{ID: "demo", Path: "/demo", RepoOriginURL: "https://github.com/acme/demo.git"},
-		sessions: []domain.SessionRecord{{ID: "orchestrator", ProjectID: "demo", Kind: domain.KindOrchestrator, Harness: domain.HarnessCodex}, {ID: "worker", ProjectID: "demo", Kind: domain.KindWorker, DisplayName: "Worker", Activity: domain.Activity{State: domain.ActivityActive}, UpdatedAt: base}},
-		prs: map[domain.SessionID][]domain.PRFacts{"worker": {
-			{URL: "https://github.com/acme/demo/pull/42", Number: 42, UpdatedAt: base},
-			{URL: "https://github.com/acme/other-project/pull/99", Number: 99, UpdatedAt: base},
-		}},
-	}
-
-	got, err := New(store, &fakeGenerator{result: "One project PR is open."}).Get(context.Background(), "demo", true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got.Outputs) != 1 || got.Outputs[0].URL != "https://github.com/acme/demo/pull/42" {
-		t.Fatalf("outputs = %#v, want only the project repository PR", got.Outputs)
 	}
 }

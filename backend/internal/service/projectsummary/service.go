@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -14,19 +13,17 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 )
 
-const summaryProjectionVersion = "2"
+const summaryProjectionVersion = "3"
 
 // Store supplies the durable facts and projection used by the summary service.
 type Store interface {
 	GetProject(ctx context.Context, id string) (domain.ProjectRecord, bool, error)
 	ListSessions(ctx context.Context, project domain.ProjectID) ([]domain.SessionRecord, error)
-	ListPRFactsForSessions(ctx context.Context, ids []domain.SessionID) (map[domain.SessionID][]domain.PRFacts, error)
-	ListWorkspaceRepos(ctx context.Context, projectID string) ([]domain.WorkspaceRepoRecord, error)
 	GetProjectSummary(ctx context.Context, projectID domain.ProjectID) (domain.ProjectSummary, bool, error)
 	PutProjectSummary(ctx context.Context, summary domain.ProjectSummary) error
 }
 
-// ReportOutputFact is an opaque output reference from a persisted worker report.
+// ReportOutputFact is an opaque output reference included only as narrative context.
 type ReportOutputFact struct {
 	Kind      string `json:"kind"`
 	Reference string `json:"reference"`
@@ -101,26 +98,12 @@ func (s *Service) Get(ctx context.Context, projectID domain.ProjectID, refresh b
 	if err != nil {
 		return domain.ProjectSummary{}, err
 	}
-	workerIDs := make([]domain.SessionID, 0, len(sessions))
 	workers := make([]domain.SessionRecord, 0, len(sessions))
 	for _, session := range sessions {
 		if session.Kind == domain.KindWorker {
 			workers = append(workers, session)
-			workerIDs = append(workerIDs, session.ID)
 		}
 	}
-	prs, err := s.store.ListPRFactsForSessions(ctx, workerIDs)
-	if err != nil {
-		return domain.ProjectSummary{}, err
-	}
-	var workspaceRepos []domain.WorkspaceRepoRecord
-	if projectRecord.Kind.WithDefault() == domain.ProjectKindWorkspace {
-		workspaceRepos, err = s.store.ListWorkspaceRepos(ctx, projectRecord.ID)
-		if err != nil {
-			return domain.ProjectSummary{}, fmt.Errorf("list workspace repositories: %w", err)
-		}
-	}
-	prs = projectPRFacts(projectRecord, workspaceRepos, prs)
 	var reports []ReportFact
 	if s.reports != nil {
 		reports, err = s.reports.ListProject(ctx, projectID)
@@ -128,7 +111,7 @@ func (s *Service) Get(ctx context.Context, projectID domain.ProjectID, refresh b
 			return domain.ProjectSummary{}, fmt.Errorf("list project reports: %w", err)
 		}
 	}
-	next := project(projectID, workers, prs, reports, s.clock())
+	next := project(projectID, workers, reports, s.clock())
 	current, ok, err := s.store.GetProjectSummary(ctx, projectID)
 	if err != nil {
 		return domain.ProjectSummary{}, err
@@ -178,77 +161,9 @@ func generationReports(reports []ReportFact, workers []domain.SessionRecord) []G
 	return result
 }
 
-func projectPRFacts(project domain.ProjectRecord, repos []domain.WorkspaceRepoRecord, facts map[domain.SessionID][]domain.PRFacts) map[domain.SessionID][]domain.PRFacts {
-	allowed := make([]domain.RepositoryIdentity, 0, len(repos)+2)
-	for _, raw := range append([]string{project.RepoOriginURL, project.Config.CanonicalRepoURL}, repoOrigins(repos)...) {
-		if identity, err := domain.ParseRepositoryIdentity(raw); err == nil {
-			allowed = append(allowed, identity)
-		}
-	}
-	if len(allowed) == 0 {
-		return facts
-	}
-	filtered := make(map[domain.SessionID][]domain.PRFacts, len(facts))
-	for sessionID, rows := range facts {
-		filtered[sessionID] = []domain.PRFacts{}
-		for _, row := range rows {
-			identity, ok := pullRequestRepository(row.URL)
-			if ok && repositoryAllowed(identity, allowed) {
-				filtered[sessionID] = append(filtered[sessionID], row)
-			}
-		}
-	}
-	return filtered
-}
-
-func repoOrigins(repos []domain.WorkspaceRepoRecord) []string {
-	result := make([]string, 0, len(repos))
-	for _, repo := range repos {
-		result = append(result, repo.RepoOriginURL)
-	}
-	return result
-}
-
-func pullRequestRepository(raw string) (domain.RepositoryIdentity, bool) {
-	u, err := url.Parse(raw)
-	if err != nil || !strings.EqualFold(u.Scheme, "https") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return domain.RepositoryIdentity{}, false
-	}
-	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	repoParts := []string(nil)
-	if domain.RepositoryProvider(u.Hostname()) == "github" {
-		if len(parts) != 4 || parts[2] != "pull" {
-			return domain.RepositoryIdentity{}, false
-		}
-		repoParts = parts[:2]
-	} else {
-		for i := 2; i+2 < len(parts); i++ {
-			if parts[i] == "-" && parts[i+1] == "merge_requests" {
-				repoParts = parts[:i]
-				break
-			}
-		}
-		if len(repoParts) < 2 {
-			return domain.RepositoryIdentity{}, false
-		}
-	}
-	identity, err := domain.ParseRepositoryIdentity("https://" + u.Host + "/" + strings.Join(repoParts, "/"))
-	return identity, err == nil
-}
-
-func repositoryAllowed(candidate domain.RepositoryIdentity, allowed []domain.RepositoryIdentity) bool {
-	for _, identity := range allowed {
-		if strings.EqualFold(candidate.Host, identity.Host) && strings.EqualFold(candidate.Namespace, identity.Namespace) && strings.EqualFold(candidate.Name, identity.Name) {
-			return true
-		}
-	}
-	return false
-}
-
 func failedGeneration(current domain.ProjectSummary, exists bool, message string) domain.ProjectSummary {
 	if !exists {
 		current.NeedsAttention = []domain.ProjectAttentionItem{}
-		current.Outputs = []domain.ProjectSummaryOutput{}
 	}
 	current.GenerationError = message
 	return current
@@ -270,11 +185,11 @@ func preserveAttention(previous, observed []domain.ProjectAttentionItem) []domai
 	return result
 }
 
-func project(projectID domain.ProjectID, workers []domain.SessionRecord, prs map[domain.SessionID][]domain.PRFacts, reports []ReportFact, at time.Time) domain.ProjectSummary {
+func project(projectID domain.ProjectID, workers []domain.SessionRecord, reports []ReportFact, at time.Time) domain.ProjectSummary {
 	sort.Slice(workers, func(i, j int) bool { return workers[i].ID < workers[j].ID })
 	h := sha256.New()
 	_, _ = fmt.Fprintf(h, "projection:%s;", summaryProjectionVersion)
-	result := domain.ProjectSummary{ProjectID: projectID, GeneratedAt: at, NeedsAttention: []domain.ProjectAttentionItem{}, Outputs: []domain.ProjectSummaryOutput{}}
+	result := domain.ProjectSummary{ProjectID: projectID, GeneratedAt: at, NeedsAttention: []domain.ProjectAttentionItem{}}
 	for _, worker := range workers {
 		_, _ = fmt.Fprintf(h, "%s|%s|%t|%s|%s;", worker.ID, worker.Activity.State, worker.IsTerminated, worker.UpdatedAt.UTC(), worker.DisplayName)
 		if worker.IsTerminated {
@@ -288,22 +203,6 @@ func project(projectID domain.ProjectID, workers []domain.SessionRecord, prs map
 				question = "This worker needs a decision before it can continue."
 			}
 			result.NeedsAttention = append(result.NeedsAttention, domain.ProjectAttentionItem{SessionID: worker.ID, SessionName: displayName(worker), Question: question})
-		}
-		rows := append([]domain.PRFacts(nil), prs[worker.ID]...)
-		sort.Slice(rows, func(i, j int) bool { return rows[i].URL < rows[j].URL })
-		for _, pr := range rows {
-			_, _ = fmt.Fprintf(h, "%s|%s|%s|%s;", pr.URL, pr.CI, pr.Review, pr.UpdatedAt.UTC())
-			state := "Open"
-			if pr.Merged {
-				state = "Merged"
-			} else if pr.Closed {
-				state = "Closed"
-			} else if pr.CI == domain.CIFailing {
-				state = "Checks failing"
-			} else if pr.CI == domain.CIPassing {
-				state = "Checks passing"
-			}
-			result.Outputs = append(result.Outputs, domain.ProjectSummaryOutput{SessionID: worker.ID, SessionName: displayName(worker), Kind: "pull_request", URL: pr.URL, Number: pr.Number, State: state})
 		}
 	}
 	for _, report := range reports {
@@ -319,7 +218,6 @@ func project(projectID domain.ProjectID, workers []domain.SessionRecord, prs map
 		}
 		for _, output := range report.Outputs {
 			_, _ = fmt.Fprintf(h, "%s|%s|%s;", output.Kind, output.Reference, output.Label)
-			result.Outputs = append(result.Outputs, domain.ProjectSummaryOutput{SessionID: report.SessionID, SessionName: workerName(workers, report.SessionID), Kind: output.Kind, Reference: output.Reference, Label: output.Label})
 		}
 	}
 	result.SourceWatermark = hex.EncodeToString(h.Sum(nil))

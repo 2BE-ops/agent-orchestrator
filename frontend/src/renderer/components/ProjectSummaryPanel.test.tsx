@@ -52,4 +52,11 @@ describe("ProjectSummaryPanel", () => {
 		rerender(<ProjectSummaryPanel onClose={() => {}} orchestrator={{ ...orchestrator, workspaceId: "next", workspaceName: "Next" }} />);
 		expect(useSummary).toHaveBeenLastCalledWith("next", true);
 	});
+
+	it("does not render a project output inventory", () => {
+		render(<ProjectSummaryPanel onClose={() => {}} orchestrator={orchestrator} />);
+
+		expect(screen.queryByText("Meaningful outputs")).not.toBeInTheDocument();
+		expect(screen.queryByText("PR #42")).not.toBeInTheDocument();
+	});
 });
