@@ -42,11 +42,19 @@ AO sends structured events in a few broad categories:
   identifiers when an event needs them
 - Coarse mobile-app usage, such as pairing, reconnecting, completing onboarding,
   opening a notification, or using a core action
+- Coarse geographic location (country, and where available region and city),
+  derived by PostHog from the connection's IP address at the time each event is
+  received. AO does not resolve or send precise coordinates, and does not store
+  your IP address itself. This is on for all installs and is used only in
+  aggregate, to understand which areas AO is used in. It is not tied to your
+  GitHub handle and there is no separate opt-out for it; turning telemetry off
+  (see below) stops it along with everything else
 
 AO uses [PostHog](https://posthog.com/privacy) to process remote product
 telemetry. PostHog receives standard connection and device metadata, including
-the connection's IP address, device type, and operating system, and may use it
-to derive approximate geographic information.
+the connection's IP address, device type, and operating system, and AO leaves
+PostHog's IP-based location derivation enabled so this coarse geography is
+available for aggregate analysis.
 
 The installation identifier lets PostHog group activity from one AO
 installation over time. Hashed project and session identifiers can likewise

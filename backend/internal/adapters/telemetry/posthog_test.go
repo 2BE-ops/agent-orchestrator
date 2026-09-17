@@ -67,6 +67,9 @@ func TestPostHogSinkCapturesEvent(t *testing.T) {
 		if props["$process_person_profile"] != false {
 			t.Fatalf("properties.$process_person_profile = %#v, want false", props["$process_person_profile"])
 		}
+		if props["$geoip_disable"] != false {
+			t.Fatalf("properties.$geoip_disable = %#v, want false so PostHog derives coarse location", props["$geoip_disable"])
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("PostHog sink did not send request")
 	}

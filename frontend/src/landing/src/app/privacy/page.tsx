@@ -333,8 +333,14 @@ export default function PrivacyPage() {
               random install identifier generated on first run and stored at{" "}
               <Code>~/.ao/data/telemetry_install_id</Code> is used to
               deduplicate counts. It is not linked to any email or name.
-              Approximate country is derived by PostHog from the connection's IP
-              address; AO itself never sends location data.
+              Approximate location (country, and where available region and
+              city) is derived by PostHog from the connection's IP address when
+              each event is received, and AO leaves this enabled so it can
+              understand which areas AO is used in. This applies to all installs,
+              is used only in aggregate, and is not tied to your GitHub handle. AO
+              itself never resolves or sends precise location and does not store
+              your IP address. There is no separate switch for it; turning
+              telemetry off stops it with everything else.
             </p>
             <p>
               One exception: while the{" "}

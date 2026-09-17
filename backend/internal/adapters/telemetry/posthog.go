@@ -407,6 +407,14 @@ func (s *PostHogSink) properties(ev ports.TelemetryEvent) map[string]any {
 		// so skip PostHog person-profile processing: identified events bill at
 		// several times the anonymous rate and the profiles would hold nothing.
 		"$process_person_profile": false,
+		// Location: let PostHog derive coarse geography (country, region, city)
+		// from the connection IP at ingestion, so aggregate "which areas hold the
+		// most installs" breakdowns by $geoip_country_name work. Set explicitly
+		// rather than relying on a library default so the behaviour is intentional
+		// and cannot silently flip. It stays anonymous: $process_person_profile
+		// above remains false unless a consented event sets it, and we never
+		// resolve or send precise coordinates ourselves.
+		"$geoip_disable": false,
 	}
 	if remoteEventName(ev.Name) != ev.Name {
 		props["legacy_event_name"] = ev.Name
