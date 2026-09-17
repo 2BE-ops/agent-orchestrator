@@ -20,6 +20,14 @@ const routeMocks = vi.hoisted(() => ({
 	agentsQuery: {} as MockAgentsQuery,
 	requestOnboardingFinish: vi.fn(),
 	openGlobalSettings: vi.fn(),
+	clearOnboardingFinishError: vi.fn(),
+	onboardingFinishRequest: null as null | {
+		path: string;
+		orchestratorAgent: string;
+		workerAgent: string;
+		nonce: number;
+	},
+	onboardingFinishError: null as null | { message: string; nonce: number },
 }));
 
 const apiMocks = vi.hoisted(() => ({
@@ -48,6 +56,9 @@ vi.mock("../stores/ui-store", () => ({
 		selector({
 			openGlobalSettings: routeMocks.openGlobalSettings,
 			requestOnboardingFinish: routeMocks.requestOnboardingFinish,
+			clearOnboardingFinishError: routeMocks.clearOnboardingFinishError,
+			onboardingFinishRequest: routeMocks.onboardingFinishRequest,
+			onboardingFinishError: routeMocks.onboardingFinishError,
 		}),
 }));
 
@@ -93,6 +104,9 @@ beforeEach(() => {
 	routeMocks.navigate.mockReset();
 	routeMocks.requestOnboardingFinish.mockReset();
 	routeMocks.openGlobalSettings.mockReset();
+	routeMocks.clearOnboardingFinishError.mockReset();
+	routeMocks.onboardingFinishRequest = null;
+	routeMocks.onboardingFinishError = null;
 	apiMocks.GET.mockReset();
 	apiMocks.POST.mockReset();
 	apiMocks.DELETE.mockReset();
@@ -275,7 +289,45 @@ describe("onboarding route", () => {
 			});
 			expect(routeMocks.navigate).toHaveBeenCalledWith({ to: "/" });
 		});
-		expect(window.localStorage.getItem("ao.onboarding.completed")).toBe("1");
+		// Completion is recorded by the handoff, not by leaving the last step.
+		expect(window.localStorage.getItem("ao.onboarding.completed")).toBeNull();
+	});
+
+	it("does not record completion until the handoff succeeds", async () => {
+		const user = userEvent.setup();
+		await renderOnboarding();
+		await goToOrchestratorStep(user);
+		const orchestrators = screen.getByRole("region", { name: "Orchestrator agent" });
+		await user.click(within(orchestrators).getByRole("button", { name: "Claude Code" }));
+		await user.click(screen.getByRole("button", { name: "Choose workers" }));
+		const workers = await screen.findByRole("region", { name: "Worker agents" });
+		await user.click(within(workers).getByRole("button", { name: "Codex" }));
+		await user.click(screen.getByRole("button", { name: "See how it works" }));
+		await screen.findByRole("heading", { name: "Give your orchestrator a goal." });
+
+		// The old flow marked onboarding complete before creating anything, so a
+		// failed project left the user on an empty board with the flow spent.
+		await user.click(screen.getByRole("button", { name: "Continue to orchestrator" }));
+		expect(routeMocks.requestOnboardingFinish).toHaveBeenCalled();
+		expect(window.localStorage.getItem("ao.onboarding.completed")).toBeNull();
+	});
+
+	it("shows a failed handoff in place with a retry", async () => {
+		routeMocks.onboardingFinishRequest = {
+			nonce: 1,
+			orchestratorAgent: "claude-code",
+			path: "/tmp/acme/project",
+			workerAgent: "codex",
+		};
+		routeMocks.onboardingFinishError = { message: "clone failed: repository not found", nonce: 1 };
+		await renderOnboarding();
+
+		expect(await screen.findByText("Setup could not finish")).toBeInTheDocument();
+		expect(screen.getByText("clone failed: repository not found")).toBeInTheDocument();
+
+		await userEvent.setup().click(screen.getByRole("button", { name: "Try again" }));
+		expect(routeMocks.clearOnboardingFinishError).toHaveBeenCalled();
+		expect(routeMocks.navigate).toHaveBeenCalledWith({ to: "/" });
 	});
 
 	it("installs a missing harness in place instead of leaving onboarding", async () => {

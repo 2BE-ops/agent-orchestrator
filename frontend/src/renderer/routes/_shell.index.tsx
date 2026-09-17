@@ -3,9 +3,8 @@ import { useEffect } from "react";
 import { MigrationPopup } from "../components/MigrationPopup";
 import { SessionsBoard } from "../components/SessionsBoard";
 import { useWorkspaceQuery } from "../hooks/useWorkspaceQuery";
+import { hasCompletedOnboarding } from "../lib/onboarding-finish";
 import { useUiStore } from "../stores/ui-store";
-
-const ONBOARDING_COMPLETE_STORAGE_KEY = "ao.onboarding.completed";
 
 export const Route = createFileRoute("/_shell/")({
 	component: ShellIndex,
@@ -17,7 +16,7 @@ function ShellIndex() {
 	const settingsModal = useUiStore((state) => state.settingsModal);
 
 	useEffect(() => {
-		if (!settingsModal && !window.localStorage.getItem(ONBOARDING_COMPLETE_STORAGE_KEY)) {
+		if (!settingsModal && !hasCompletedOnboarding()) {
 			void navigate({ to: "/onboarding", replace: true });
 		}
 	}, [navigate, settingsModal]);

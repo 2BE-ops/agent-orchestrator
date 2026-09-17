@@ -26,8 +26,6 @@ import codexLogo from "../assets/agents/codex.svg";
 import cursorLogo from "../assets/agents/cursor.svg";
 import opencodeLogo from "../assets/agents/opencode.svg";
 
-export const ONBOARDING_COMPLETE_STORAGE_KEY = "ao.onboarding.completed";
-
 type Step = "welcome" | "feedback" | "project" | "orchestrator" | "workers" | "guide";
 
 type StepDetails = {
@@ -96,6 +94,9 @@ export function OnboardingPage() {
 	const navigate = useNavigate();
 	const { t } = useTranslation();
 	const requestOnboardingFinish = useUiStore((state) => state.requestOnboardingFinish);
+	const onboardingFinishRequest = useUiStore((state) => state.onboardingFinishRequest);
+	const onboardingFinishError = useUiStore((state) => state.onboardingFinishError);
+	const clearOnboardingFinishError = useUiStore((state) => state.clearOnboardingFinishError);
 	const agentsQuery = useAgentsQuery();
 	const harnessSetup = useHarnessSetup();
 	const [freshAgentCatalog, setFreshAgentCatalog] = useState<AgentCatalog | null>(null);
@@ -175,6 +176,27 @@ export function OnboardingPage() {
 		});
 	}, []);
 
+	// A failed handoff comes back here with its request still in the store.
+	// Restore the choices that produced it so the next attempt does not make the
+	// user redo the project and agent steps.
+	const restoredFailureRef = useRef<number | null>(null);
+	useEffect(() => {
+		if (!onboardingFinishError || !onboardingFinishRequest) return;
+		if (onboardingFinishError.nonce !== onboardingFinishRequest.nonce) return;
+		if (restoredFailureRef.current === onboardingFinishError.nonce) return;
+		restoredFailureRef.current = onboardingFinishError.nonce;
+		setPreparedProject({
+			asWorkspace: onboardingFinishRequest.asWorkspace,
+			clonePreparationId: onboardingFinishRequest.clonePreparationId,
+			defaultBranch: onboardingFinishRequest.defaultBranch,
+			path: onboardingFinishRequest.path,
+			repositorySetup: onboardingFinishRequest.repositorySetup ?? null,
+		});
+		setOrchestratorAgent(onboardingFinishRequest.orchestratorAgent);
+		setWorkerAgent(onboardingFinishRequest.workerAgent);
+		setStep("guide");
+	}, [onboardingFinishError, onboardingFinishRequest]);
+
 	const goToStep = useCallback((index: number) => {
 		if (index >= 0 && index < STEPS.length) setStep(STEPS[index]);
 	}, []);
@@ -182,7 +204,9 @@ export function OnboardingPage() {
 	const next = useCallback(() => {
 		if (step === "guide") {
 			if (!preparedProject || !orchestratorAgent || !workerAgent) return;
-			window.localStorage.setItem(ONBOARDING_COMPLETE_STORAGE_KEY, "1");
+			// Completion is recorded by the handoff itself, once the project is
+			// actually registered. Marking it here stranded anyone whose project
+			// failed to create on an empty board with onboarding already spent.
 			requestOnboardingFinish({
 				...preparedProject,
 				orchestratorAgent,
@@ -299,7 +323,36 @@ export function OnboardingPage() {
 									<OnboardingGitHubSetup />
 								</div>
 							)}
-							{isGuideStep && <OnboardingGuide />}
+							{isGuideStep &&
+								(onboardingFinishError ? (
+									<div className="w-full max-w-[500px] text-left" role="alert">
+										<p className="text-sm font-medium text-foreground">{t("onboarding.finishFailedTitle")}</p>
+										<p className="mt-1 text-caption leading-snug text-muted-foreground">
+											{onboardingFinishError.message || t("onboarding.finishFailedBody")}
+										</p>
+										<div className="mt-3 flex flex-wrap items-center gap-2">
+											<button
+												type="button"
+												onClick={() => {
+													clearOnboardingFinishError();
+													void navigate({ to: "/" });
+												}}
+												className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+											>
+												{t("onboarding.finishRetry")}
+											</button>
+											<button
+												type="button"
+												onClick={clearOnboardingFinishError}
+												className="inline-flex h-9 items-center rounded-md border border-border px-3 text-sm text-muted-foreground hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+											>
+												{t("onboarding.finishChangeSetup")}
+											</button>
+										</div>
+									</div>
+								) : (
+									<OnboardingGuide />
+								))}
 						</div>
 					</section>
 

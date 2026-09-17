@@ -42,6 +42,7 @@ import { applyDocumentTheme, applyDocumentThemeStyle } from "../lib/theme";
 import { aoBridge } from "../lib/bridge";
 import { handleModifierLinkClick } from "../lib/external-link-policy";
 import { recordProjectOpened } from "../lib/project-history";
+import { runOnboardingFinish } from "../lib/onboarding-finish";
 import { cn } from "../lib/utils";
 import {
 	isLinuxPlatform,
@@ -190,6 +191,8 @@ function ShellLayout() {
 	const newShellTerminalNonce = useUiStore((state) => state.newShellTerminalNonce);
 	const onboardingFinishRequest = useUiStore((state) => state.onboardingFinishRequest);
 	const clearOnboardingFinishRequest = useUiStore((state) => state.clearOnboardingFinishRequest);
+	const setOnboardingFinishError = useUiStore((state) => state.setOnboardingFinishError);
+	const clearOnboardingFinishError = useUiStore((state) => state.clearOnboardingFinishError);
 	const setActiveShellTerminal = useUiStore((state) => state.setActiveShellTerminal);
 	const openShellTerminal = useOpenShellTerminal();
 	// Single subscription for sidebar clearance + drag strip (macOS no-ops inside the hook).
@@ -889,38 +892,22 @@ function ShellLayout() {
 		if (handledOnboardingFinishNonceRef.current === onboardingFinishRequest.nonce) return;
 		handledOnboardingFinishNonceRef.current = onboardingFinishRequest.nonce;
 
-		const {
-			asWorkspace,
-			clonePreparationId,
-			orchestratorAgent,
-			path,
-			repositorySetup,
-			workerAgent,
-		} = onboardingFinishRequest;
 		void (async () => {
-			try {
-				if (repositorySetup) {
-					await initializeProjectRepository(path);
-				}
-				await createProject({
-					asWorkspace,
-					clonePreparationId,
-					orchestratorAgent,
-					path,
-					workerAgent,
-				});
-			} catch (error) {
-				console.error("Failed to finish onboarding:", error);
-				showGlobalToast(
-					"Could not finish setup",
-					error instanceof Error ? error.message : "Something went wrong",
-					"error",
-				);
-			} finally {
+			const outcome = await runOnboardingFinish(onboardingFinishRequest, {
+				createProject,
+				initializeProjectRepository,
+			});
+			if (outcome.ok) {
+				clearOnboardingFinishError();
 				clearOnboardingFinishRequest(onboardingFinishRequest.nonce);
+				return;
 			}
+			// Hand the failure back to onboarding instead of quitting it: the user
+			// keeps the project and agents they picked and can retry from there.
+			setOnboardingFinishError({ message: outcome.message, nonce: onboardingFinishRequest.nonce });
+			await navigate({ replace: true, to: "/onboarding" });
 		})();
-	}, [clearOnboardingFinishRequest, createProject, initializeProjectRepository, onboardingFinishRequest, showGlobalToast]);
+	}, [clearOnboardingFinishError, clearOnboardingFinishRequest, createProject, initializeProjectRepository, navigate, onboardingFinishRequest, setOnboardingFinishError]);
 
 	useEffect(
 		() => aoBridge.app.onOpenSettingsShortcut(() => useUiStore.getState().openGlobalSettings()),
