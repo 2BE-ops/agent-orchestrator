@@ -18,12 +18,14 @@ vi.mock("motion/react", async (importOriginal) => {
 const {
 	navigateMock,
 	notificationShowMock,
+	postMock,
 	workspaceQueryMock,
 	usageQueryMock,
 	boardActionsInPanelMock,
 } = vi.hoisted(() => ({
 	navigateMock: vi.fn(),
 	notificationShowMock: vi.fn(),
+	postMock: vi.fn(),
 	workspaceQueryMock: vi.fn(),
 	usageQueryMock: vi.fn(),
 	boardActionsInPanelMock: vi.fn(() => false),
@@ -47,6 +49,11 @@ vi.mock("../hooks/useWorkspaceQuery", () => ({
 
 vi.mock("../hooks/useSessionUsageSummaries", () => ({
 	useSessionUsageSummaries: usageQueryMock,
+}));
+
+vi.mock("../lib/api-client", () => ({
+	apiClient: { POST: (...args: unknown[]) => postMock(...args) },
+	apiErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
 
 vi.mock("../lib/bridge", () => ({
@@ -99,6 +106,7 @@ async function expandArchive() {
 beforeEach(() => {
 	navigateMock.mockReset();
 	notificationShowMock.mockReset().mockResolvedValue(undefined);
+	postMock.mockReset().mockResolvedValue({ data: {} });
 	workspaceQueryMock.mockReset().mockReturnValue({ data: [], isError: false });
 	usageQueryMock.mockReset().mockReturnValue({ data: new Map() });
 	window.localStorage.removeItem("ao.board.archive.layout");
