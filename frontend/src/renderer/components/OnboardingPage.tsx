@@ -9,7 +9,6 @@ import visibilityBackground from "../../landing/public/optimized/feature.webp";
 import { FeedbackLoopDemo } from "../../landing/src/app/components/FeaturesSection/components/FeedbackLoopDemo/FeedbackLoopDemo";
 import { FleetBoardDemo, type FleetBoardAssets } from "../../landing/src/app/components/FeaturesSection/components/FleetBoardDemo/FleetBoardDemo";
 import { OnboardingProjectSetup } from "./OnboardingProjectSetup";
-import { OnboardingAuthStep } from "./OnboardingAuthStep";
 import { OnboardingCloudStep } from "./OnboardingCloudStep";
 import { OnboardingGitHubStep } from "./OnboardingGitHubStep";
 import { AuthTerminalPanel } from "./AuthTerminalPanel";
@@ -32,7 +31,7 @@ import codexLogo from "../assets/agents/codex.svg";
 import cursorLogo from "../assets/agents/cursor.svg";
 import opencodeLogo from "../assets/agents/opencode.svg";
 
-type Step = "welcome" | "feedback" | "auth" | "github" | "cloud" | "project" | "orchestrator" | "workers" | "guide";
+type Step = "welcome" | "feedback" | "github" | "cloud" | "project" | "orchestrator" | "workers" | "guide";
 
 type StepDetails = {
 	title: MessageKey;
@@ -40,7 +39,7 @@ type StepDetails = {
 	nextLabel: MessageKey;
 };
 
-const STEPS: Step[] = ["welcome", "feedback", "auth", "github", "cloud", "project", "orchestrator", "workers", "guide"];
+const STEPS: Step[] = ["welcome", "feedback", "github", "cloud", "project", "orchestrator", "workers", "guide"];
 
 const STEP_DETAILS: Record<Step, StepDetails> = {
 	welcome: {
@@ -52,11 +51,6 @@ const STEP_DETAILS: Record<Step, StepDetails> = {
 		title: "onboarding.step.feedback.title",
 		subtitle: "onboarding.step.feedback.subtitle",
 		nextLabel: "onboarding.step.feedback.next",
-	},
-	auth: {
-		title: "onboarding.step.auth.title",
-		subtitle: "onboarding.step.auth.subtitle",
-		nextLabel: "onboarding.step.auth.next",
 	},
 	github: {
 		title: "onboarding.step.github.title",
@@ -279,7 +273,7 @@ export function OnboardingPage() {
 	const isProjectStep = step === "project";
 	const isAgentStep = step === "orchestrator" || step === "workers";
 	const isGuideStep = step === "guide";
-	const isSetupStep = step === "auth" || step === "github" || step === "cloud";
+	const isSetupStep = step === "github" || step === "cloud";
 	const isListStep = isProjectStep || isSetupStep;
 
 	useLayoutEffect(() => {
@@ -355,14 +349,6 @@ export function OnboardingPage() {
 								onWorkerHover={setHoveredWorker}
 								onOrchestratorSelect={setOrchestratorAgent}
 								onWorkerSelect={setWorkerAgent}
-								/>
-							)}
-							{step === "auth" && (
-								<OnboardingAuthStep
-									agents={agents.map((agent) => ({ ...agent, iconUrl: agentIcon(agent.id) }))}
-									setup={harnessSetup}
-									onInstalled={() => void refreshAgentsIfStale()}
-									onSignedIn={() => void refreshAgentsIfStale()}
 								/>
 							)}
 							{step === "github" && <OnboardingGitHubStep setup={githubSetup} />}

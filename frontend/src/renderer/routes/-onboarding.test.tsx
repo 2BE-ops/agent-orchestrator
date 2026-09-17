@@ -106,8 +106,6 @@ async function goToProjectStep(user: ReturnType<typeof userEvent.setup>) {
 async function goToGitHubStep(user: ReturnType<typeof userEvent.setup>) {
 	await user.click(screen.getByRole("button", { name: "Continue" }));
 	await user.click(await screen.findByRole("button", { name: "Create your project" }));
-	await screen.findByRole("heading", { name: "Sign in to your agent" });
-	await user.click(screen.getByRole("button", { name: "Continue" }));
 	await screen.findByRole("heading", { name: "Connect GitHub" });
 }
 
@@ -221,8 +219,8 @@ describe("onboarding route", () => {
 			await act(async () => {
 				fireEvent.click(screen.getByRole("button", { name: "Create your project" }));
 			});
-			// Pass the agent sign-in, GitHub, and cloud steps to reach the project step.
-			for (let index = 0; index < 3; index += 1) {
+			// Pass the GitHub and cloud steps to reach the project step.
+			for (let index = 0; index < 2; index += 1) {
 				await act(async () => {
 					fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 				});
@@ -250,9 +248,8 @@ describe("onboarding route", () => {
 		await user.click(screen.getByRole("button", { name: "Continue" }));
 		expect(await screen.findByRole("heading", { name: "Keep the loop moving." })).toBeInTheDocument();
 		await user.click(screen.getByRole("button", { name: "Create your project" }));
-		// Agent sign-in, then GitHub, then cloud, then the project step.
-		expect(await screen.findByRole("heading", { name: "Sign in to your agent" })).toBeInTheDocument();
-		await user.click(screen.getByRole("button", { name: "Continue" }));
+		// GitHub, then cloud, then the project step. Agent sign-in lives in the
+		// orchestrator and worker steps instead of a page of its own.
 		expect(await screen.findByRole("heading", { name: "Connect GitHub" })).toBeInTheDocument();
 		await user.click(screen.getByRole("button", { name: "Continue" }));
 		expect(await screen.findByRole("heading", { name: "Run sessions in the cloud" })).toBeInTheDocument();
@@ -293,8 +290,6 @@ describe("onboarding route", () => {
 
 		await user.click(screen.getByRole("button", { name: "Continue" }));
 		await user.click(await screen.findByRole("button", { name: "Create your project" }));
-		await screen.findByRole("heading", { name: "Sign in to your agent" });
-		await user.click(screen.getByRole("button", { name: "Continue" }));
 		await screen.findByRole("heading", { name: "Connect GitHub" });
 		await user.click(screen.getByRole("button", { name: "Continue" }));
 		await screen.findByRole("heading", { name: "Run sessions in the cloud" });
@@ -446,25 +441,6 @@ describe("onboarding route", () => {
 		const picker = screen.getByRole("region", { name: "Orchestrator agent" });
 		expect(within(picker).getByRole("button", { name: "Open the setup guide for Kiro" })).toBeEnabled();
 		expect(within(picker).queryByRole("button", { name: "Sign in to Kiro" })).not.toBeInTheDocument();
-	});
-
-	it("signs an agent in from the agent step and nudges that sign-in is required", async () => {
-		const user = userEvent.setup();
-		await renderOnboarding();
-		await user.click(screen.getByRole("button", { name: "Continue" }));
-		await user.click(await screen.findByRole("button", { name: "Create your project" }));
-
-		expect(await screen.findByRole("heading", { name: "Sign in to your agent" })).toBeInTheDocument();
-		expect(screen.getByText(/need a sign-in before they can run a session/)).toBeInTheDocument();
-
-		await user.click(screen.getByRole("button", { name: "Sign in to Kiro" }));
-		await waitFor(() => {
-			expect(apiMocks.POST).toHaveBeenCalledWith(
-				"/api/v1/agents/{agent}/auth",
-				expect.objectContaining({ params: { path: { agent: "kiro" } } }),
-			);
-		});
-		expect(routeMocks.navigate).not.toHaveBeenCalled();
 	});
 
 	it("turns cloud on from the cloud step", async () => {
