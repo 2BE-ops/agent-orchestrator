@@ -534,6 +534,34 @@ func (s *Store) IssueTerminalTicket(
 		if err != nil {
 			return err
 		}
+		// The worker connection registers on bootstrap, but the coding agent only
+		// starts after the repository checkout (tens of seconds later), and the
+		// worker creates the agent terminal (EnsureWorkerAgentTerminal, state
+		// 'open') at that point. Issuing a browser agent ticket on worker-connection
+		// alone lets the browser attach and find-or-create an agent terminal that no
+		// agent is serving; it then times out to 'failed' and poisons the next mint
+		// as a 410. Gate the agent ticket on an already-live agent terminal at this
+		// epoch: until the worker has started the agent, report the worker as merely
+		// unavailable (409) so the browser keeps waiting on "Connecting" instead.
+		// The workspace shell terminal is deliberately available earlier, so this
+		// only applies to kind == "agent".
+		if kind == "agent" {
+			var agentTerminalLive bool
+			if err := tx.QueryRow(ctx,
+				`SELECT EXISTS (
+					SELECT 1 FROM ao_terminal_sessions
+					WHERE org_id = $1 AND session_id = $2 AND worker_epoch = $3
+					  AND kind = 'agent' AND state IN ('opening', 'open')
+					  AND expires_at > now()
+				)`,
+				orgID, sessionID, epoch,
+			).Scan(&agentTerminalLive); err != nil {
+				return err
+			}
+			if !agentTerminalLive {
+				return ErrWorkerUnavailable
+			}
+		}
 		mode = effectiveMode(mode, access.ModeCap)
 		deniedCommands = effectiveDeniedCommands(deniedCommands, access.DeniedCommands)
 		scopes = []string{"terminal:read"}
