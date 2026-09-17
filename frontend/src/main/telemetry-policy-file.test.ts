@@ -26,11 +26,13 @@ describe("TelemetryPolicyAuthority", () => {
 		expect(snapshot.eventsEnabled).toBe(true);
 		expect(snapshot.acknowledged).toBe(true);
 		expect(mode).toBe(0o600);
+		expect(snapshot.githubIdentityEnabled).toBe(true);
 		expect(JSON.parse(await readFile(policyPath, "utf8"))).toEqual({
-			schema_version: 2,
+			schema_version: 3,
 			events_enabled: true,
 			consent_generation: snapshot.consentGeneration,
 			consent_production_enabled: false,
+			github_identity_enabled: true,
 			updated_at: snapshot.updatedAt,
 		});
 	});
