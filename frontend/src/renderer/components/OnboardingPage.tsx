@@ -352,10 +352,7 @@ export function OnboardingPage() {
 							)}
 							{step === "github" && <OnboardingGitHubStep setup={githubSetup} />}
 							{step === "cloud" && (
-								<OnboardingCloudStep
-									cloudEnabled={cloudEnabled}
-									onChoose={() => goToStep(stepIndex + 1)}
-								/>
+								<OnboardingCloudStep cloudEnabled={cloudEnabled} />
 							)}
 							{step === "project" && (
 								<div className="flex w-full flex-col items-center gap-4">

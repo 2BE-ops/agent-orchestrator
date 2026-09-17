@@ -1,14 +1,14 @@
-import { Check, Cloud } from "lucide-react";
+import { Check, Cloud, Laptop } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useCloudGate } from "../hooks/useCloudGate";
 import { useUpdateCloudOffering } from "../hooks/useSettings";
 import { SetupRow } from "./SetupList";
 
-/** Step: cloud. One decision, so it reads as two options rather than a switch
- *  plus explanatory prose. The choice applies optimistically: the row marks
- *  itself selected and the daemon is told in the background. */
-export function OnboardingCloudStep({ cloudEnabled, onChoose }: { cloudEnabled: boolean; onChoose: () => void }) {
+/** Step: cloud. Cloud is additive, so the options read as "add it" or "leave it
+ *  alone" rather than a mode switch. Choosing marks the row and tells the
+ *  daemon in the background; Continue moves the flow on. */
+export function OnboardingCloudStep({ cloudEnabled }: { cloudEnabled: boolean }) {
 	const { t } = useTranslation();
 	const gate = useCloudGate();
 	const offering = useUpdateCloudOffering();
@@ -19,7 +19,6 @@ export function OnboardingCloudStep({ cloudEnabled, onChoose }: { cloudEnabled: 
 	const choose = (next: boolean) => {
 		setChoice(next);
 		offering.update(next);
-		onChoose();
 	};
 
 	return (
@@ -36,7 +35,7 @@ export function OnboardingCloudStep({ cloudEnabled, onChoose }: { cloudEnabled: 
 				/>
 				<SetupRow
 					variant="card"
-					icon={<Cloud aria-hidden="true" />}
+					icon={<Laptop aria-hidden="true" />}
 					label={t("onboarding.cloudOptionNoLabel")}
 					description={t("onboarding.cloudOptionNoDetail")}
 					selected={!selected}
