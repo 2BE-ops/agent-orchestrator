@@ -2997,6 +2997,13 @@ describe("SessionView", () => {
 		expect(useUiStore.getState().inspectorSessions["sess-orch"]?.view).toBe("browser");
 	});
 
+	it("keeps project summary available when the orchestrator has a Browser inspector", () => {
+		render(<SessionView sessionId="sess-orch" />);
+
+		expect(screen.getByRole("button", { name: "Open Browser" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Open project summary" })).toBeInTheDocument();
+	});
+
 	it("opens orchestrator chat files in the center without revealing Browser", async () => {
 		workerSession("sess-orch").mode = "chat";
 		render(<SessionView sessionId="sess-orch" />);
