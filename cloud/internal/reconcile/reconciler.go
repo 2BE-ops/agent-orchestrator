@@ -562,7 +562,16 @@ func (r *Reconciler) reconcileSandbox(ctx context.Context, record domain.Sandbox
 	case sandbox.StateDeleting:
 		return r.observe(ctx, record, string(environment.ID), domain.SandboxObservedDeleting, "", 2*time.Second)
 	case sandbox.StateStopped, sandbox.StatePaused:
-		if environment.StopCause == sandbox.StopCauseExternalIdle && !record.KeepAlive {
+		// An in-progress bring-up must survive an idle-stop race. A user resume
+		// sets startup_started_at and a short interaction lease, but a slow coder
+		// restore can outlast that lease; if the provider then auto-stops the
+		// still-starting box for idleness we must NOT accept the pause, or the
+		// resume flips back to "resuming" just as the terminal is coming up.
+		// Refusing here falls through to restore, keeping the bring-up alive. The
+		// guard is bounded by the startup window (startingUp), so a box that never
+		// converges ages out and is paused/failed normally rather than looping.
+		if environment.StopCause == sandbox.StopCauseExternalIdle && !record.KeepAlive &&
+			!r.startingUp(record) {
 			accepted, err := r.store.AcceptSandboxProviderPause(
 				ctx, r.owner, record.OrgID, record.SessionID,
 				string(environment.ID), time.Now().Add(30*time.Second),
@@ -903,6 +912,18 @@ func (r *Reconciler) refreshRestoredWorker(
 	}
 	return r.observe(ctx, record, string(environment.ID),
 		domain.SandboxObservedBootstrapping, "", r.options.Interval)
+}
+
+// startingUp reports whether the sandbox is inside an active bring-up window: a
+// resume or (re)bootstrap stamped startup_started_at and the startup deadline
+// has not yet elapsed. The reconciler uses it to refuse a provider idle-stop
+// mid-resume so a slow restore is not re-paused underneath a user who is
+// attaching. It is deliberately bounded by StartupTimeout: a bring-up that never
+// converges ages out of the window and is then paused or failed normally,
+// instead of holding the box awake (and billed) forever.
+func (r *Reconciler) startingUp(record domain.Sandbox) bool {
+	return record.StartupStartedAt != nil &&
+		time.Since(*record.StartupStartedAt) < r.options.StartupTimeout
 }
 
 func (r *Reconciler) startupDeadlineElapsed(record domain.Sandbox) bool {
