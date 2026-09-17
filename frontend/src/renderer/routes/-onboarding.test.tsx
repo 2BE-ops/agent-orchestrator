@@ -450,7 +450,8 @@ describe("onboarding route", () => {
 		await user.click(screen.getByRole("button", { name: "Continue" }));
 
 		expect(await screen.findByRole("heading", { name: "Run sessions in the cloud" })).toBeInTheDocument();
-		expect(screen.getByText(/Agents run in remote sandboxes/)).toBeInTheDocument();
+		expect(screen.getByText("Optional, and off by default.")).toBeInTheDocument();
+		expect(screen.getByText(/Runs agents in a remote sandbox/)).toBeInTheDocument();
 		expect(screen.getByText(/Early preview/)).toBeInTheDocument();
 
 		await user.click(screen.getByRole("switch", { name: "Cloud sessions" }));
