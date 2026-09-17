@@ -138,13 +138,19 @@ func (s *Store) RestoreSession(
 	orgID, sessionID string,
 ) error {
 	return s.withTenant(ctx, principal, orgID, func(tx pgx.Tx) error {
+		// Restore reverses a delete, so it is only valid on a TERMINATED session.
+		// Gating on is_terminated=true (with the row lock this UPDATE takes) makes
+		// restore idempotent: once the first restore un-terminates the session, a
+		// rapid second restore matches 0 rows and returns without re-arming the
+		// sandbox — which would otherwise fence the first restore's in-flight
+		// provision and start a second one, crossing the session/workspace mapping.
 		tag, err := tx.Exec(
 			ctx,
 			`UPDATE ao_sessions
 			SET is_terminated = false,
 				activity_state = 'idle',
 				updated_at = now()
-			WHERE id = $1 AND org_id = $2`,
+			WHERE id = $1 AND org_id = $2 AND is_terminated = true`,
 			sessionID, orgID,
 		)
 		if err != nil {
@@ -153,12 +159,32 @@ func (s *Store) RestoreSession(
 			return normalizeConstraintError(err)
 		}
 		if tag.RowsAffected() == 0 {
-			return ErrNotFound
+			// Either the session does not exist, or it is already active (a restore
+			// is already in progress, or it was never deleted). Restoring an
+			// already-active session is an idempotent no-op: return without
+			// re-arming the sandbox, so any in-flight provision is left untouched.
+			var exists bool
+			if err := tx.QueryRow(
+				ctx,
+				`SELECT true FROM ao_sessions WHERE id = $1 AND org_id = $2`,
+				sessionID, orgID,
+			).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
+				return ErrNotFound
+			} else if err != nil {
+				return err
+			}
+			return nil
 		}
 		// Re-arm the sandbox for reconciliation. A deleted sandbox row survives
 		// with observed_state='deleted' and reconcile_after ~100 years out, so
 		// resetting desired_state, the startup window, and the deletion/failure
 		// artifacts is what lets the reconciler pick it up and provision anew.
+		// Do NOT touch the reconcile lease: an expired/free lease is already
+		// claimable (ClaimSandboxes keys on reconcile_lease_until, not owner), and
+		// clearing a LIVE lease would fence whichever reconciler currently holds it
+		// — the exact stomp that let a rapid second restore start a parallel
+		// provision. A stuck lease expires within its TTL, so the worst case is a
+		// slightly slower re-provision, never a fenced in-flight operation.
 		if _, err := tx.Exec(
 			ctx,
 			`UPDATE ao_sandboxes
@@ -169,8 +195,6 @@ func (s *Store) RestoreSession(
 				consecutive_failures = 0,
 				startup_attempts = 0,
 				last_error = '',
-				reconcile_lease_owner = '',
-				reconcile_lease_until = NULL,
 				updated_at = now()
 			WHERE session_id = $1 AND org_id = $2`,
 			sessionID, orgID,
