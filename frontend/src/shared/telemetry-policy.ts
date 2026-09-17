@@ -24,7 +24,7 @@ export type TelemetryPolicySnapshot = {
 
 // Default for the GitHub-handle opt-in when no explicit v3 choice exists yet
 // (fresh install or a pre-v3 record). Product decision: default ON with a
-// Settings > Privacy opt-out and a one-time first-run notice.
+// Settings > Privacy opt-out and no other proactive surface.
 export const GITHUB_IDENTITY_DEFAULT_ENABLED = true;
 
 export type TelemetryPolicyApplyState = "applied" | "cleanup_pending" | "cleanup_failed";
