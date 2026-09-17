@@ -356,7 +356,9 @@ func startInteractiveAgent(
 		"to submit an AO-triggered review verdict."
 	agentTerminal, err := client.ensureAgentTerminal(ctx)
 	if err != nil {
-		agentCommand.Cleanup()
+		if agentCommand.Cleanup != nil {
+			agentCommand.Cleanup()
+		}
 		return fmt.Errorf("initialize agent terminal: %w", err)
 	}
 	if err := transportSupervisor.StartAgent(ctx, agentCommand, agentTerminal.TerminalID); err != nil {
