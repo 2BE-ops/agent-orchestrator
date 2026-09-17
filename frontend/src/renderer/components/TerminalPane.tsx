@@ -998,16 +998,27 @@ function AttachedTerminal({
 	}, [onTerminalStateChange, state]);
 	// The immediate reconnecting signal a restore/resume sets (terminal-reset
 	// store). Reactive so the "Connecting…" surface shows the instant restore is
-	// clicked, before the polled runtimeConnected catches up; cleared the moment
-	// the new box's terminal attaches.
+	// clicked, before the polled runtimeConnected catches up; cleared once the
+	// worker actually connects (not merely when the PTY attaches).
 	const isReconnecting = useTerminalResetStore((store) =>
 		session?.id ? Boolean(store.reconnecting[session.id]) : false,
 	);
+	// The box is "fully up" only when its WORKER has connected (runtimeConnected),
+	// not merely when the PTY attached — a restored terminal can attach to the
+	// sandbox and replay the transcript while the worker is still coming up (or
+	// stuck), which is the "Restoring agent, can't type" state. Latch it: once the
+	// worker has connected once for this pane, a later transient reconnect must not
+	// re-show the Connecting cover (that uses the subtle banner instead). Resets
+	// naturally on restore, which mounts a fresh pane.
+	const [workerHasConnected, setWorkerHasConnected] = useState(false);
 	useEffect(() => {
-		if (state === "attached" && session?.id) {
+		if (session?.runtimeConnected && !workerHasConnected) setWorkerHasConnected(true);
+	}, [session?.runtimeConnected, workerHasConnected]);
+	useEffect(() => {
+		if (workerHasConnected && session?.id) {
 			useTerminalResetStore.getState().markAttached(session.id);
 		}
-	}, [state, session?.id]);
+	}, [workerHasConnected, session?.id]);
 	useEffect(() => {
 		if (!terminal || state !== "attached" || !inputRequest) return;
 		if (lastInputRequestIdRef.current === inputRequest.id) return;
@@ -1146,15 +1157,16 @@ function AttachedTerminal({
 	// the "process exited" strip: the user is connecting to a new box with their
 	// saved state, not looking at a broken session. Lifts the instant the new
 	// terminal attaches. Cloud only, so local terminals are unchanged.
+	// Show the Connecting cover until the box is fully up: its WORKER connected,
+	// not merely the PTY attached. Gating on !workerHasConnected (latched) means a
+	// restored session that attaches its terminal but whose worker is still coming
+	// up (or stuck) shows "Connecting" rather than a terminal you cannot type in;
+	// once the worker has connected, a transient reconnect never re-covers (that
+	// uses the subtle reattaching banner). A restore mounts a fresh pane so the
+	// latch resets.
 	const isBoxComingUp =
 		Boolean(session?.cloud) &&
-		// Gate on !hasAttached, not state !== "attached": once this pane has ever
-		// attached, a transient reconnect (e.g. on the first keystroke, while the
-		// polled runtimeConnected still lags) must NOT pull the full Connecting
-		// cover back over a live terminal — that window uses the subtle reattaching
-		// banner instead. A restore mounts a fresh pane, so hasAttached resets and
-		// the cover correctly shows until the new box attaches.
-		!hasAttached &&
+		!workerHasConnected &&
 		// isReconnecting fires synchronously on the restore/resume click; the
 		// runtimeConnected clause keeps the surface up through the rest of the
 		// fresh box's boot once the poll catches up.
