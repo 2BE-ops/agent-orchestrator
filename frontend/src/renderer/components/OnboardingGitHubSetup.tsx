@@ -76,6 +76,7 @@ export function OnboardingGitHubSetup() {
 							onRetry={setup.signIn}
 							onTerminalState={setup.handleTerminalState}
 							closeLabel={t("common.close")}
+							terminalHeightClass="h-[200px]"
 							testId="github-auth-terminal"
 						/>
 					) : null}

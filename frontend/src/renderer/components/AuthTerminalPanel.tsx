@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { components } from "../../api/schema";
 import type { TerminalSessionState } from "../hooks/useTerminalSession";
 import { useShellMaybe } from "../lib/shell-context";
+import { cn } from "../lib/utils";
 import { useResolvedTheme } from "../stores/ui-store";
 import { TerminalPane } from "./TerminalPane";
 import { Button } from "./ui/button";
@@ -31,12 +32,13 @@ export type AuthWorkflow<AgentId extends string = string> = {
 	startedAt: number;
 };
 
-export function AuthTerminalPanel<AgentId extends string>({ workflow, onClose, onRetry, onTerminalState, closeLabel, testId = "harness-auth-terminal" }: {
+export function AuthTerminalPanel<AgentId extends string>({ workflow, onClose, onRetry, onTerminalState, closeLabel, terminalHeightClass = "h-[300px]", testId = "harness-auth-terminal" }: {
 	workflow: AuthWorkflow<AgentId>;
 	onClose: () => void;
 	onRetry: () => void;
 	onTerminalState: (state: TerminalSessionState) => void;
 	closeLabel?: string;
+	terminalHeightClass?: string;
 	testId?: string;
 }) {
 	const { t } = useTranslation();
@@ -87,7 +89,7 @@ export function AuthTerminalPanel<AgentId extends string>({ workflow, onClose, o
 					<button type="button" aria-label={closeLabel ?? t("settings.close")} className="grid size-7 place-items-center rounded text-settings-muted hover:bg-interactive-hover" disabled={workflow.phase === "closing" || workflow.phase === "verifying"} onClick={onClose}><X className="size-4" aria-hidden="true" /></button>
 				</div>
 			</div>
-			<div className="h-[300px] min-h-0"><TerminalPane daemonReady={shell ? shell.daemonStatus.state === "ready" : true} fontSize={12} inputRequest={inputRequest} onInputRequestResult={handleInputRequestResult} onTerminalStateChange={handleTerminalState} terminalTarget={{ kind: "shell", handleId: workflow.terminal.handleId, generation: workflow.terminal.createdAt, title: workflow.terminal.title }} theme={theme} /></div>
+			<div className={cn(terminalHeightClass, "min-h-0")}><TerminalPane daemonReady={shell ? shell.daemonStatus.state === "ready" : true} fontSize={12} inputRequest={inputRequest} onInputRequestResult={handleInputRequestResult} onTerminalStateChange={handleTerminalState} terminalTarget={{ kind: "shell", handleId: workflow.terminal.handleId, generation: workflow.terminal.createdAt, title: workflow.terminal.title }} theme={theme} /></div>
 			{retryable ? <div className="flex items-center justify-end border-t border-(--color-border-settings-input) bg-surface/90 px-3 py-2"><Button type="button" size="sm" variant="outline" onClick={workflow.phase === "cleanup_failed" ? onClose : onRetry}>{workflow.phase === "cleanup_failed" ? t("settings.harness.retry") : workflow.action === "setup" ? t("settings.harness.setup") : t("settings.harness.login")}</Button></div> : null}
 		</div>
 	);
