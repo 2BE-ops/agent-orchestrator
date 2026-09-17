@@ -1234,6 +1234,44 @@ func TestMarkPRCommentResolved(t *testing.T) {
 	}
 }
 
+func TestMarkPRReviewThreadResolved(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	seedProject(t, s, "mer")
+	r, _ := s.CreateSession(ctx, sampleRecord("mer"))
+	now := time.Now().UTC().Truncate(time.Second)
+	pr := domain.PullRequest{URL: "https://github.com/o/r/pull/1", SessionID: r.ID, Number: 1, UpdatedAt: now}
+	if err := s.WriteSCMObservation(ctx, pr, nil, nil,
+		[]domain.PullRequestReviewThread{
+			{ThreadID: "thread-1", UpdatedAt: now},
+			{ThreadID: "thread-2", UpdatedAt: now},
+		},
+		[]domain.PullRequestComment{
+			{ID: "comment-1", ThreadID: "thread-1", Body: "fix", CreatedAt: now},
+			{ID: "comment-2", ThreadID: "thread-2", Body: "keep", CreatedAt: now},
+		}, ports.ReviewWriteReplace); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.MarkPRReviewThreadResolved(ctx, pr.URL, "thread-1"); err != nil {
+		t.Fatal(err)
+	}
+	threads, err := s.ListPRReviewThreads(ctx, pr.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	comments, err := s.ListPRComments(ctx, pr.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(threads) != 2 || !threads[0].Resolved || threads[1].Resolved {
+		t.Fatalf("threads = %+v, want only thread-1 resolved", threads)
+	}
+	if len(comments) != 2 || !comments[0].Resolved || comments[1].Resolved {
+		t.Fatalf("comments = %+v, want only comment-1 resolved", comments)
+	}
+}
+
 func TestWriteSCMObservationPersistsMetadataChecksReviewsAndComments(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

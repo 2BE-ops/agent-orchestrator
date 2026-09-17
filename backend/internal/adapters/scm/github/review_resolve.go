@@ -37,7 +37,8 @@ func (p *Provider) ResolveReviewThread(ctx context.Context, request ports.SCMRev
 	if returnedThreadID != threadID {
 		return fmt.Errorf("github scm: resolve review thread returned unexpected thread %q", returnedThreadID)
 	}
-	if resolved, ok := thread["isResolved"].(bool); ok && !resolved {
+	resolved, ok := thread["isResolved"].(bool)
+	if !ok || !resolved {
 		return fmt.Errorf("github scm: resolve review thread was not confirmed resolved")
 	}
 	return nil

@@ -3,6 +3,7 @@ package pr
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
@@ -10,12 +11,13 @@ import (
 )
 
 type fakeActionStore struct {
-	pr       domain.PullRequest
-	ok       bool
-	checks   []domain.PullRequestCheck
-	comments []domain.PullRequestComment
-	threads  []domain.PullRequestReviewThread
-	reviews  []domain.PullRequestReview
+	pr          domain.PullRequest
+	ok          bool
+	checks      []domain.PullRequestCheck
+	comments    []domain.PullRequestComment
+	threads     []domain.PullRequestReviewThread
+	reviews     []domain.PullRequestReview
+	activeCount int
 }
 
 func (f *fakeActionStore) GetPR(context.Context, string) (domain.PullRequest, bool, error) {
@@ -24,6 +26,16 @@ func (f *fakeActionStore) GetPR(context.Context, string) (domain.PullRequest, bo
 
 func (f *fakeActionStore) GetPRByNumber(_ context.Context, number int) (domain.PullRequest, bool, error) {
 	return f.pr, f.ok && f.pr.Number == number, nil
+}
+
+func (f *fakeActionStore) CountActivePRsByNumber(context.Context, int) (int, error) {
+	if f.activeCount > 0 {
+		return f.activeCount, nil
+	}
+	if f.ok {
+		return 1, nil
+	}
+	return 0, nil
 }
 
 func (f *fakeActionStore) ListChecks(context.Context, string) ([]domain.PullRequestCheck, error) {
@@ -43,10 +55,13 @@ func (f *fakeActionStore) ListPRReviews(context.Context, string) ([]domain.PullR
 }
 
 type fakeActionWriter struct {
-	writeCalls int
-	threads    []domain.PullRequestReviewThread
-	comments   []domain.PullRequestComment
-	writeErr   error
+	writeCalls       int
+	threadWriteCalls int
+	resolvedThreads  []string
+	threads          []domain.PullRequestReviewThread
+	comments         []domain.PullRequestComment
+	writeErr         error
+	threadWriteErr   error
 }
 
 func (f *fakeActionWriter) WriteSCMObservation(_ context.Context, _ domain.PullRequest, _ []domain.PullRequestCheck, _ []domain.PullRequestReview, threads []domain.PullRequestReviewThread, comments []domain.PullRequestComment, _ ports.ReviewWriteMode) error {
@@ -59,6 +74,15 @@ func (f *fakeActionWriter) WriteSCMObservation(_ context.Context, _ domain.PullR
 	return nil
 }
 
+func (f *fakeActionWriter) MarkPRReviewThreadResolved(_ context.Context, _ string, threadID string) error {
+	f.threadWriteCalls++
+	if f.threadWriteErr != nil {
+		return f.threadWriteErr
+	}
+	f.resolvedThreads = append(f.resolvedThreads, threadID)
+	return nil
+}
+
 type fakeSCMAction struct {
 	observation     ports.SCMObservation
 	review          ports.SCMReviewObservation
@@ -66,6 +90,7 @@ type fakeSCMAction struct {
 	request         ports.SCMMergeRequest
 	mergeCalls      int
 	resolveErr      error
+	resolveErrs     []error
 	resolveCalls    int
 	resolveRequests []ports.SCMReviewResolveRequest
 }
@@ -85,9 +110,13 @@ func (f *fakeSCMAction) MergePullRequest(_ context.Context, request ports.SCMMer
 }
 
 func (f *fakeSCMAction) ResolveReviewThread(_ context.Context, request ports.SCMReviewResolveRequest) error {
+	err := f.resolveErr
+	if len(f.resolveErrs) >= f.resolveCalls+1 {
+		err = f.resolveErrs[f.resolveCalls]
+	}
 	f.resolveCalls++
 	f.resolveRequests = append(f.resolveRequests, request)
-	return f.resolveErr
+	return err
 }
 
 func mergeableActionFixture() (domain.PullRequest, *fakeSCMAction) {
@@ -244,28 +273,25 @@ func TestActionServiceResolveComments_ResolvesRemoteThreadsBeforeWritingLocalSta
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Resolved != 2 || scm.resolveCalls != 2 || writer.writeCalls != 1 {
-		t.Fatalf("result=%+v resolveCalls=%d writeCalls=%d", result, scm.resolveCalls, writer.writeCalls)
+	if result.Resolved != 2 || scm.resolveCalls != 2 || writer.threadWriteCalls != 2 {
+		t.Fatalf("result=%+v resolveCalls=%d threadWriteCalls=%d", result, scm.resolveCalls, writer.threadWriteCalls)
 	}
 	for _, request := range scm.resolveRequests {
 		if request.PR.Number != 42 || request.PR.Repo.Owner != "acme" || request.PR.Repo.Name != "widgets" {
 			t.Fatalf("resolve request = %+v", request)
 		}
 	}
-	for _, thread := range writer.threads {
-		if !thread.Resolved {
-			t.Fatalf("thread %q was not marked resolved", thread.ThreadID)
-		}
-	}
-	for _, comment := range writer.comments {
-		if !comment.Resolved {
-			t.Fatalf("comment %q was not marked resolved", comment.ID)
-		}
+	if got := strings.Join(writer.resolvedThreads, ","); got != "thread-1,thread-3" {
+		t.Fatalf("resolved thread ids = %q", got)
 	}
 }
 
 func TestActionServiceResolveComments_ExplicitIDsAreDeduplicated(t *testing.T) {
 	pr, scm := mergeableActionFixture()
+	scm.review = ports.SCMReviewObservation{Threads: []ports.SCMReviewThreadObservation{
+		{ID: "thread-1", Comments: []ports.SCMReviewCommentObservation{{ID: "comment-1"}}},
+		{ID: "thread-2", Comments: []ports.SCMReviewCommentObservation{{ID: "comment-2"}}},
+	}}
 	store := &fakeActionStore{pr: pr, ok: true}
 	writer := &fakeActionWriter{}
 	svc := NewActionService(ActionDeps{Store: store, Reader: scm, Resolver: scm, Writer: writer})
@@ -274,8 +300,72 @@ func TestActionServiceResolveComments_ExplicitIDsAreDeduplicated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Resolved != 2 || scm.resolveCalls != 2 {
+	if result.Resolved != 2 || scm.resolveCalls != 2 || writer.threadWriteCalls != 2 {
 		t.Fatalf("result=%+v resolveCalls=%d", result, scm.resolveCalls)
+	}
+}
+
+func TestActionServiceResolveComments_MapsCommentIDsAndRejectsUnknownIDs(t *testing.T) {
+	pr, scm := mergeableActionFixture()
+	scm.review = ports.SCMReviewObservation{Threads: []ports.SCMReviewThreadObservation{
+		{ID: "thread-1", Comments: []ports.SCMReviewCommentObservation{{ID: "comment-1"}}},
+	}}
+	store := &fakeActionStore{pr: pr, ok: true}
+	writer := &fakeActionWriter{}
+	svc := NewActionService(ActionDeps{Store: store, Reader: scm, Resolver: scm, Writer: writer})
+
+	result, err := svc.ResolveComments(context.Background(), "42", []string{"comment-1"})
+	if err != nil || result.Resolved != 1 || len(scm.resolveRequests) != 1 || scm.resolveRequests[0].ThreadID != "thread-1" {
+		t.Fatalf("comment id result=%+v err=%v requests=%+v", result, err, scm.resolveRequests)
+	}
+
+	scm.resolveRequests = nil
+	_, err = svc.ResolveComments(context.Background(), "42", []string{"foreign-comment"})
+	if !errors.Is(err, ErrPRPreconditions) || scm.resolveCalls != 1 {
+		t.Fatalf("unknown id err=%v resolveCalls=%d, want precondition without provider mutation", err, scm.resolveCalls)
+	}
+}
+
+func TestActionServiceResolveComments_RejectsPartialProviderListing(t *testing.T) {
+	pr, scm := mergeableActionFixture()
+	scm.review = ports.SCMReviewObservation{Partial: true, Threads: []ports.SCMReviewThreadObservation{{ID: "thread-1"}}}
+	store := &fakeActionStore{pr: pr, ok: true}
+	writer := &fakeActionWriter{}
+	svc := NewActionService(ActionDeps{Store: store, Reader: scm, Resolver: scm, Writer: writer})
+
+	if _, err := svc.ResolveComments(context.Background(), "42", []string{"thread-1"}); !errors.Is(err, ErrPRPreconditions) {
+		t.Fatalf("error = %v, want incomplete observation precondition", err)
+	}
+	if scm.resolveCalls != 0 || writer.threadWriteCalls != 0 {
+		t.Fatalf("remote resolves=%d local writes=%d, want 0", scm.resolveCalls, writer.threadWriteCalls)
+	}
+}
+
+func TestActionServiceResolveComments_RejectsAmbiguousActivePRNumber(t *testing.T) {
+	pr, scm := mergeableActionFixture()
+	store := &fakeActionStore{pr: pr, ok: true, activeCount: 2}
+	writer := &fakeActionWriter{}
+	svc := NewActionService(ActionDeps{Store: store, Reader: scm, Resolver: scm, Writer: writer})
+
+	if _, err := svc.ResolveComments(context.Background(), "42", nil); !errors.Is(err, ErrPRPreconditions) {
+		t.Fatalf("error = %v, want ambiguous PR precondition", err)
+	}
+	if scm.resolveCalls != 0 || writer.threadWriteCalls != 0 {
+		t.Fatalf("remote resolves=%d local writes=%d, want 0", scm.resolveCalls, writer.threadWriteCalls)
+	}
+}
+
+func TestActionServiceResolveComments_PersistsSuccessfulSubsetBeforeProviderFailure(t *testing.T) {
+	pr, scm := mergeableActionFixture()
+	scm.review = ports.SCMReviewObservation{Threads: []ports.SCMReviewThreadObservation{{ID: "thread-1"}, {ID: "thread-2"}}}
+	scm.resolveErrs = []error{nil, errors.New("provider unavailable")}
+	store := &fakeActionStore{pr: pr, ok: true}
+	writer := &fakeActionWriter{}
+	svc := NewActionService(ActionDeps{Store: store, Reader: scm, Resolver: scm, Writer: writer})
+
+	result, err := svc.ResolveComments(context.Background(), "42", nil)
+	if err == nil || result.Resolved != 1 || writer.threadWriteCalls != 1 || len(writer.resolvedThreads) != 1 || writer.resolvedThreads[0] != "thread-1" {
+		t.Fatalf("result=%+v err=%v writes=%d ids=%v", result, err, writer.threadWriteCalls, writer.resolvedThreads)
 	}
 }
 
@@ -290,8 +380,8 @@ func TestActionServiceResolveComments_RemoteFailureDoesNotWriteLocalState(t *tes
 	if _, err := svc.ResolveComments(context.Background(), "42", nil); err == nil {
 		t.Fatal("expected provider error")
 	}
-	if writer.writeCalls != 0 {
-		t.Fatalf("writeCalls=%d, want 0", writer.writeCalls)
+	if writer.threadWriteCalls != 0 {
+		t.Fatalf("threadWriteCalls=%d, want 0", writer.threadWriteCalls)
 	}
 }
 

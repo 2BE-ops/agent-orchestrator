@@ -112,6 +112,11 @@ ORDER BY
     updated_at DESC
 LIMIT 1;
 
+-- name: CountActivePRsByNumber :one
+SELECT COUNT(*)
+FROM pr
+WHERE number = ? AND pr_state NOT IN ('merged', 'closed');
+
 -- name: GetPRByURLOrAlias :one
 SELECT pr.*
 FROM pr
