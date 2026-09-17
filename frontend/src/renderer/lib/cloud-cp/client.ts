@@ -43,7 +43,6 @@ import type {
 	CloudCpUpdateProjectRequest,
 	CloudCpValidateRepositoryAccessRequest,
 	CloudCpValidateRepositoryAccessResponse,
-	CloudCpWakeSessionsResponse,
 } from "./types";
 
 const API_PREFIX = "/api/cloud/v1";
