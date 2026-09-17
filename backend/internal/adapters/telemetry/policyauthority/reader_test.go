@@ -133,11 +133,11 @@ func TestReaderRejectsRecordsWhoseShapeDoesNotMatchTheirVersion(t *testing.T) {
 		"version 2 null gate state":    `{"schema_version":2,"events_enabled":true,"consent_generation":"` + generation + `","consent_production_enabled":null,"updated_at":"2026-08-28T10:15:30.000Z"}`,
 		"version 2 string gate state":  `{"schema_version":2,"events_enabled":true,"consent_generation":"` + generation + `","consent_production_enabled":"yes","updated_at":"2026-08-28T10:15:30.000Z"}`,
 		"unknown version":              `{"schema_version":4,"events_enabled":true,"consent_generation":"` + generation + `","consent_production_enabled":true,"updated_at":"2026-08-28T10:15:30.000Z"}`,
-		"version 3 without identity":    `{"schema_version":3,"events_enabled":true,"consent_generation":"` + generation + `","consent_production_enabled":true,"updated_at":"2026-08-28T10:15:30.000Z"}`,
-		"version 3 null identity":       `{"schema_version":3,"events_enabled":true,"consent_generation":"` + generation + `","consent_production_enabled":true,"github_identity_enabled":null,"updated_at":"2026-08-28T10:15:30.000Z"}`,
-		"version 3 string identity":     `{"schema_version":3,"events_enabled":true,"consent_generation":"` + generation + `","consent_production_enabled":true,"github_identity_enabled":"yes","updated_at":"2026-08-28T10:15:30.000Z"}`,
-		"version 1 with identity":       `{"schema_version":1,"events_enabled":true,"consent_generation":"` + generation + `","github_identity_enabled":true,"updated_at":"2026-08-28T10:15:30.000Z"}`,
-		"version 2 with identity":       `{"schema_version":2,"events_enabled":true,"consent_generation":"` + generation + `","consent_production_enabled":true,"github_identity_enabled":true,"updated_at":"2026-08-28T10:15:30.000Z"}`,
+		"version 3 without identity":   `{"schema_version":3,"events_enabled":true,"consent_generation":"` + generation + `","consent_production_enabled":true,"updated_at":"2026-08-28T10:15:30.000Z"}`,
+		"version 3 null identity":      `{"schema_version":3,"events_enabled":true,"consent_generation":"` + generation + `","consent_production_enabled":true,"github_identity_enabled":null,"updated_at":"2026-08-28T10:15:30.000Z"}`,
+		"version 3 string identity":    `{"schema_version":3,"events_enabled":true,"consent_generation":"` + generation + `","consent_production_enabled":true,"github_identity_enabled":"yes","updated_at":"2026-08-28T10:15:30.000Z"}`,
+		"version 1 with identity":      `{"schema_version":1,"events_enabled":true,"consent_generation":"` + generation + `","github_identity_enabled":true,"updated_at":"2026-08-28T10:15:30.000Z"}`,
+		"version 2 with identity":      `{"schema_version":2,"events_enabled":true,"consent_generation":"` + generation + `","consent_production_enabled":true,"github_identity_enabled":true,"updated_at":"2026-08-28T10:15:30.000Z"}`,
 		"unknown extra key":            `{"schema_version":2,"events_enabled":true,"consent_generation":"` + generation + `","consent_production_enabled":true,"updated_at":"2026-08-28T10:15:30.000Z","extra":1}`,
 	} {
 		t.Run(name, func(t *testing.T) {

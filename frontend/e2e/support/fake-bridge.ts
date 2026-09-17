@@ -146,8 +146,9 @@ export async function installFakeBridge(page: Page, opts: FakeBridgeOptions = {}
 				},
 				telemetry: {
 					getBootstrap: async () => null,
-					getPolicy: async () => ({ eventsEnabled: false, consentGeneration: "e2e", updatedAt: new Date(0).toISOString(), acknowledged: false, consentRenewalRequired: false, state: "applied", environmentVeto: true, durabilitySupported: false, reason: "environment_veto" }),
-					setEventsEnabled: async () => ({ eventsEnabled: false, consentGeneration: "e2e", updatedAt: new Date(0).toISOString(), acknowledged: false, consentRenewalRequired: false, state: "applied", environmentVeto: true, durabilitySupported: false, reason: "environment_veto" }),
+					getPolicy: async () => ({ eventsEnabled: false, githubIdentityEnabled: false, consentGeneration: "e2e", updatedAt: new Date(0).toISOString(), acknowledged: false, consentRenewalRequired: false, state: "applied", environmentVeto: true, durabilitySupported: false, reason: "environment_veto" }),
+					setEventsEnabled: async () => ({ eventsEnabled: false, githubIdentityEnabled: false, consentGeneration: "e2e", updatedAt: new Date(0).toISOString(), acknowledged: false, consentRenewalRequired: false, state: "applied", environmentVeto: true, durabilitySupported: false, reason: "environment_veto" }),
+					setGithubIdentityEnabled: async () => ({ eventsEnabled: false, githubIdentityEnabled: false, consentGeneration: "e2e", updatedAt: new Date(0).toISOString(), acknowledged: false, consentRenewalRequired: false, state: "applied", environmentVeto: true, durabilitySupported: false, reason: "environment_veto" }),
 					onPolicy: () => () => false,
 					onClearQueues: () => () => false,
 					capture: async () => false,
@@ -703,8 +704,9 @@ export async function installFakeAgent(page: Page, opts: FakeAgentOptions = {}):
 				},
 				telemetry: {
 					getBootstrap: async () => null,
-					getPolicy: async () => ({ eventsEnabled: false, consentGeneration: "e2e", updatedAt: new Date(0).toISOString(), acknowledged: false, consentRenewalRequired: false, state: "applied", environmentVeto: true, durabilitySupported: false, reason: "environment_veto" }),
-					setEventsEnabled: async () => ({ eventsEnabled: false, consentGeneration: "e2e", updatedAt: new Date(0).toISOString(), acknowledged: false, consentRenewalRequired: false, state: "applied", environmentVeto: true, durabilitySupported: false, reason: "environment_veto" }),
+					getPolicy: async () => ({ eventsEnabled: false, githubIdentityEnabled: false, consentGeneration: "e2e", updatedAt: new Date(0).toISOString(), acknowledged: false, consentRenewalRequired: false, state: "applied", environmentVeto: true, durabilitySupported: false, reason: "environment_veto" }),
+					setEventsEnabled: async () => ({ eventsEnabled: false, githubIdentityEnabled: false, consentGeneration: "e2e", updatedAt: new Date(0).toISOString(), acknowledged: false, consentRenewalRequired: false, state: "applied", environmentVeto: true, durabilitySupported: false, reason: "environment_veto" }),
+					setGithubIdentityEnabled: async () => ({ eventsEnabled: false, githubIdentityEnabled: false, consentGeneration: "e2e", updatedAt: new Date(0).toISOString(), acknowledged: false, consentRenewalRequired: false, state: "applied", environmentVeto: true, durabilitySupported: false, reason: "environment_veto" }),
 					onPolicy: () => () => false,
 					onClearQueues: () => () => false,
 					capture: async () => false,
