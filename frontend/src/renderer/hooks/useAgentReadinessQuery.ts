@@ -12,6 +12,7 @@ export const agentReadinessQueryKey = ["agent-readiness"] as const;
 async function fetchAgentReadiness(): Promise<AgentReadiness> {
 	const { data, error } = await apiClient.GET("/api/v1/agents/readiness");
 	if (error) throw new Error(apiErrorMessage(error));
+	if (!data || !Array.isArray(data.agents)) throw new Error("Invalid agent readiness response");
 	return data as AgentReadiness;
 }
 
@@ -23,6 +24,7 @@ export async function ensureAgentReadiness(
 		body: { agentIds, purpose },
 	});
 	if (error) throw new Error(apiErrorMessage(error));
+	if (!data || !Array.isArray(data.agents)) throw new Error("Invalid agent readiness response");
 	return data as AgentReadiness;
 }
 

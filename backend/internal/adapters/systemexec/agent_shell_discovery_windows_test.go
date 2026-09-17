@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAgentShellCommandUsesNativePowerShellApplicationLookup(t *testing.T) {
@@ -32,7 +33,10 @@ func TestAgentShellCommandUsesNativePowerShellApplicationLookup(t *testing.T) {
 }
 
 func TestAgentShellProbeNativeWindowsFakeCLI(t *testing.T) {
-	shell, err := exec.LookPath("powershell.exe")
+	shell, err := exec.LookPath("pwsh.exe")
+	if err != nil {
+		shell, err = exec.LookPath("powershell.exe")
+	}
 	if err != nil {
 		t.Skip("PowerShell unavailable")
 	}
@@ -43,7 +47,9 @@ func TestAgentShellProbeNativeWindowsFakeCLI(t *testing.T) {
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	before := os.Getenv("PATH")
+	started := time.Now()
 	got, err := (AgentShellProbe{Shell: shell}).ProbeAgentShell(context.Background(), []string{"ao-discovery-fixture.cmd"})
+	t.Logf("native shell %s completed in %s", filepath.Base(shell), time.Since(started))
 	if err != nil {
 		t.Fatal(err)
 	}

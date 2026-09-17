@@ -195,7 +195,7 @@ func ResolveAiderBinary(ctx context.Context) (string, error) {
 }
 
 func (p *Plugin) aiderBinary(ctx context.Context) (string, error) {
-	if path, err, shared := p.DiscoveredBinary(ctx, p.Manifest().ID, ports.BinaryResolveLaunch); shared {
+	if path, shared, err := p.DiscoveredBinary(ctx, p.Manifest().ID, ports.BinaryResolveLaunch); shared {
 		return path, err
 	}
 

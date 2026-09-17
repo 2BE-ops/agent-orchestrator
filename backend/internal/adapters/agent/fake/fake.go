@@ -141,7 +141,7 @@ func isTruthy(raw string) bool {
 // fails cleanly — rather than reporting installed via a hard-coded /bin/sh and
 // then failing later in Manager.Spawn's argv[0] lookup.
 func (p *Plugin) ResolveBinary(ctx context.Context) (string, error) {
-	if path, err, shared := p.DiscoveredBinary(ctx, p.Manifest().ID, ports.BinaryResolveLaunch); shared {
+	if path, shared, err := p.DiscoveredBinary(ctx, p.Manifest().ID, ports.BinaryResolveLaunch); shared {
 		return path, err
 	}
 

@@ -179,7 +179,7 @@ func (f *AccountFactory) detectCapabilities(ctx context.Context, bin string) dom
 	return capabilities
 }
 
-func probeCodexCLISurface(ctx context.Context, bin string, env []string, args []string, supportedReason string) domain.CodexCapabilityObservation {
+func probeCodexCLISurface(ctx context.Context, bin string, env, args []string, supportedReason string) domain.CodexCapabilityObservation {
 	cmd := aoprocess.CommandContext(ctx, bin, args...)
 	cmd.Env = env
 	cmd.Stdout = io.Discard

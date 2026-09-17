@@ -26,11 +26,22 @@ func New(discovery ...ports.AgentBinaryDiscovery) *Reviewer {
 	return r
 }
 
+// SetBinaryDiscovery injects the daemon-owned executable resolver.
 func (r *Reviewer) SetBinaryDiscovery(d ports.AgentBinaryDiscovery) {
-	r.agent.(ports.AgentBinaryDiscoveryProvider).SetBinaryDiscovery(d)
+	provider, ok := r.agent.(ports.AgentBinaryDiscoveryProvider)
+	if !ok {
+		panic("cursor reviewer agent lacks binary discovery")
+	}
+	provider.SetBinaryDiscovery(d)
 }
+
+// AugmentBinaryRuntimeEnv adds interpreter paths needed by the selected executable.
 func (r *Reviewer) AugmentBinaryRuntimeEnv(ctx context.Context, env map[string]string, argv []string, pinnedDir string) {
-	r.agent.(ports.AgentBinaryRuntimeEnvironment).AugmentBinaryRuntimeEnv(ctx, env, argv, pinnedDir)
+	augmenter, ok := r.agent.(ports.AgentBinaryRuntimeEnvironment)
+	if !ok {
+		panic("cursor reviewer agent lacks runtime environment augmentation")
+	}
+	augmenter.AugmentBinaryRuntimeEnv(ctx, env, argv, pinnedDir)
 }
 
 type agent interface {

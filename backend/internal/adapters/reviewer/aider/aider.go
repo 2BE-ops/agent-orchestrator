@@ -3,8 +3,8 @@ package aider
 
 import (
 	"context"
-	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/agentbase"
 
+	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/agentbase"
 	workeraider "github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/aider"
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
@@ -24,6 +24,8 @@ func New(discovery ...ports.AgentBinaryDiscovery) *Reviewer {
 	}
 	return r
 }
+
+// SetBinaryDiscovery injects the daemon-owned executable resolver.
 func (r *Reviewer) SetBinaryDiscovery(d ports.AgentBinaryDiscovery) {
 	r.Base.SetBinaryDiscovery(d)
 	r.resolveBinary = func(ctx context.Context) (string, error) {

@@ -89,11 +89,12 @@ func AugmentRuntimePATHForLaunchBinary(ctx context.Context, env map[string]strin
 	}
 	dirs := []string{launchDir}
 	interpreter := launchInterpreter(bin)
-	if interpreter == "node" {
+	switch interpreter {
+	case "node":
 		if nodeDir := nodeRuntimeDir(ctx, lookPath); nodeDir != "" && nodeDir != launchDir {
 			dirs = append(dirs, nodeDir)
 		}
-	} else if interpreter == "python" || interpreter == "python3" {
+	case "python", "python3":
 		if lookPath == nil {
 			lookPath = exec.LookPath
 		}
@@ -144,10 +145,6 @@ func launchBinary(argv []string) (string, bool) {
 		return arg, true
 	}
 	return "", false
-}
-
-func isNodeLaunchBinary(path string) bool {
-	return launchInterpreter(path) == "node"
 }
 
 func launchInterpreter(path string) string {

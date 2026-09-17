@@ -4,10 +4,10 @@ package grok
 import (
 	"context"
 	"fmt"
-	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/agentbase"
 	"os"
 	"strings"
 
+	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/agentbase"
 	workergrok "github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/grok"
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
@@ -31,6 +31,8 @@ func New(discovery ...ports.AgentBinaryDiscovery) *Reviewer {
 	}
 	return r
 }
+
+// SetBinaryDiscovery injects the daemon-owned executable resolver.
 func (r *Reviewer) SetBinaryDiscovery(d ports.AgentBinaryDiscovery) {
 	r.Base.SetBinaryDiscovery(d)
 	r.resolveBinary = func(ctx context.Context) (string, error) {

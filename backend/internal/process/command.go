@@ -31,11 +31,12 @@ func ApplyCommandEnvironment(ctx context.Context, cmd *exec.Cmd) {
 			next := values[:0]
 			for _, entry := range values {
 				name, _, _ := strings.Cut(entry, "=")
-				if name != key && !(runtime.GOOS == "windows" && strings.EqualFold(name, key)) {
+				if name != key && (runtime.GOOS != "windows" || !strings.EqualFold(name, key)) {
 					next = append(next, entry)
 				}
 			}
-			values = append(next, key+"="+value)
+			next = append(next, key+"="+value)
+			values = next
 		}
 		cmd.Env = values
 	}

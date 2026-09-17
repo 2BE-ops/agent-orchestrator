@@ -23,7 +23,13 @@ func agentShellCommand(ctx context.Context, configured, marker string, names []s
 	shell := strings.TrimSpace(configured)
 	if shell == "" {
 		var err error
-		shell, err = exec.LookPath("powershell.exe")
+		// Match the automatic terminal preference: current PowerShell first.
+		for _, candidate := range []string{"pwsh.exe", "powershell.exe"} {
+			shell, err = exec.LookPath(candidate)
+			if err == nil {
+				break
+			}
+		}
 		if err != nil {
 			return nil, fmt.Errorf("find PowerShell: %w", err)
 		}

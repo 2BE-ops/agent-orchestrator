@@ -65,9 +65,13 @@ func Constructors(discovery ...ports.AgentBinaryDiscovery) []Adapter {
 	}
 	if len(discovery) > 0 && discovery[0] != nil {
 		for _, item := range items {
-			item.(interface {
+			provider, ok := item.(interface {
 				SetBinaryDiscovery(ports.AgentBinaryDiscovery)
-			}).SetBinaryDiscovery(discovery[0])
+			})
+			if !ok {
+				panic(fmt.Sprintf("reviewer %q lacks binary discovery", item.Harness()))
+			}
+			provider.SetBinaryDiscovery(discovery[0])
 		}
 	}
 	return items

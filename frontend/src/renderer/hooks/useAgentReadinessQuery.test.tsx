@@ -17,6 +17,7 @@ vi.mock("../lib/api-client", () => ({
 import {
 	agentReadinessQueryOptions,
 	agentReadinessQueryKey,
+	ensureAgentReadiness,
 	mergeAgentReadiness,
 	useAgentReadinessQuery,
 	useEnsureAgentReadiness,
@@ -40,6 +41,27 @@ beforeEach(() => {
 });
 
 describe("agent readiness query", () => {
+	it("rejects malformed ensure responses before they can enter the cache", async () => {
+		postMock.mockResolvedValue({ data: { reviews: [] } });
+		await expect(ensureAgentReadiness()).rejects.toThrow("Invalid agent readiness response");
+	});
+
+	it("loads a valid snapshot after a malformed ensure response", async () => {
+		postMock.mockResolvedValue({ data: { reviews: [] } });
+		let finishGet!: (value: unknown) => void;
+		getMock.mockReturnValue(new Promise((resolve) => { finishGet = resolve; }));
+		const queryClient = new QueryClient();
+		const { result, unmount } = renderHook(() => {
+			useEnsureAgentReadiness();
+			return useAgentReadinessQuery();
+		}, { wrapper: wrapper(queryClient) });
+		await waitFor(() => expect(postMock).toHaveBeenCalled());
+		expect(queryClient.getQueryData(agentReadinessQueryKey)).toBeUndefined();
+		finishGet({ data: { agents: [agentReadiness("codex", "Codex")] } });
+		await waitFor(() => expect(result.current.data?.agents[0]?.id).toBe("codex"));
+		unmount();
+	});
+
 	it("leaves freshness policy to the daemon", () => {
 		expect(agentReadinessQueryOptions.staleTime).toBe(Number.POSITIVE_INFINITY);
 	});

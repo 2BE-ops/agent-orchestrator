@@ -32,6 +32,8 @@ func New(discovery ...ports.AgentBinaryDiscovery) *Reviewer {
 	}
 	return r
 }
+
+// SetBinaryDiscovery injects the daemon-owned executable resolver.
 func (r *Reviewer) SetBinaryDiscovery(d ports.AgentBinaryDiscovery) {
 	r.Base.SetBinaryDiscovery(d)
 	r.resolveBinary = func(ctx context.Context) (string, error) {

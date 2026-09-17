@@ -16,7 +16,7 @@ func (p *Plugin) BinaryDiscoverySpec() ports.AgentBinarySpec {
 
 // ResolveBinaryPresence never waits for shell initialization or runs identity probes.
 func (p *Plugin) ResolveBinaryPresence(ctx context.Context) (string, error) {
-	if path, err, shared := p.DiscoveredBinary(ctx, p.Manifest().ID, ports.BinaryResolvePresence); shared {
+	if path, shared, err := p.DiscoveredBinary(ctx, p.Manifest().ID, ports.BinaryResolvePresence); shared {
 		return path, err
 	}
 	return p.BinaryDiscoverySpec().Presence(ctx)

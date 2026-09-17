@@ -6,15 +6,15 @@ package nativeacp
 import (
 	"context"
 	"fmt"
-	"github.com/aoagents/agent-orchestrator/backend/internal/agentlaunch"
-	aoprocess "github.com/aoagents/agent-orchestrator/backend/internal/process"
 	"log/slog"
 	"os"
 	"time"
 
 	acpdriver "github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/acp"
+	"github.com/aoagents/agent-orchestrator/backend/internal/agentlaunch"
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
+	aoprocess "github.com/aoagents/agent-orchestrator/backend/internal/process"
 )
 
 // Plugin is the existing agent-plugin surface native ACP bindings reuse for

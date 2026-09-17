@@ -7,9 +7,9 @@ package agentbase
 
 import (
 	"context"
-	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"strings"
 
+	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 )
 
@@ -47,12 +47,12 @@ func (b *Base) SetBinaryDiscovery(discovery ports.AgentBinaryDiscovery) {
 }
 
 // DiscoveredBinary returns the shared selection when this adapter is daemon-owned.
-func (b *Base) DiscoveredBinary(ctx context.Context, harness string, purpose ports.BinaryResolvePurpose) (string, error, bool) {
+func (b *Base) DiscoveredBinary(ctx context.Context, harness string, purpose ports.BinaryResolvePurpose) (string, bool, error) {
 	if b.BinaryDiscovery == nil {
-		return "", nil, false
+		return "", false, nil
 	}
 	result, err := b.BinaryDiscovery.Resolve(ctx, domain.AgentHarness(harness), purpose)
-	return result.Executable, err, true
+	return result.Executable, true, err
 }
 
 // GetConfigSpec reports no agent-specific config keys.

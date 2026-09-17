@@ -35,7 +35,8 @@ func agentShellCommand(ctx context.Context, configured, marker string, names []s
 	if filepath.Base(shell) == "zsh" || filepath.Base(shell) == "bash" {
 		flags = "-lic"
 	}
-	args := []string{flags, unixAgentShellScript, "ao-agent-shell", marker}
+	args := make([]string, 0, 4+len(names))
+	args = append(args, flags, unixAgentShellScript, "ao-agent-shell", marker)
 	args = append(args, names...)
 	return exec.CommandContext(ctx, shell, args...), nil //nolint:gosec // shell is restricted and script is fixed.
 }
