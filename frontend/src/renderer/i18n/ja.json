@@ -1977,7 +1977,6 @@
 	"session.interfaceSwitchFailed": "インターフェースを切り替えられませんでした",
 	"session.dismissInterfaceSwitchError": "インターフェース切り替えエラーを閉じる",
 	"session.dismissInterfaceSwitchNotice": "閉じる",
-<<<<<<< HEAD
 	"chat.draft.acceptedMessage": "内容は受け付けられましたが、ローカルの下書きをまだ削除する必要があります。",
 	"chat.draft.steerRestart": "この内容がすでにエージェントに届いたかどうかを AO は判断できません。同じ配信 ID で安全に再試行するか、復元を中止して編集してください。中止後の再送信は重複する可能性があります。",
 	"chat.draft.sendRestart": "メッセージの配信が確認されていません。同じ配信 ID で再試行してください。確認されるまで下書きはロックされます。",
@@ -2029,8 +2028,7 @@
 	"chat.draftDiscard.leaveAnyway": "離れる",
 	"chat.edit.abandonRecovery": "編集の復旧を中止",
 	"settings.harness.summary": "{{installed}} of {{total}} installed",
-	"shell.goHome": "ホームに移動"
-=======
+	"shell.goHome": "ホームに移動",
 	"settings.cloudAgents.github.title": "GitHub private repositories",
 	"settings.cloudAgents.github.connected": "Connected",
 	"settings.cloudAgents.github.notConnected": "Not connected",
@@ -2041,5 +2039,4 @@
 	"settings.cloudAgents.github.remove": "Remove",
 	"settings.cloudAgents.github.errorSave": "Could not save the GitHub token.",
 	"settings.cloudAgents.github.errorRemove": "Could not remove the GitHub token."
->>>>>>> e5f4db7fe (fix: downgrade read-only token to soft warning and fix locale CI tests)
 }
