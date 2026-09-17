@@ -467,7 +467,25 @@ vi.mock("./SessionFileExplorer", () => ({
 	},
 }));
 vi.mock("./SessionFileWorkspace", () => ({
-	SessionFileWorkspace: ({ initialEditing, initialMode, path, split }: { initialEditing?: boolean; initialMode?: string; path: string; split: boolean }) => <div data-editing={String(Boolean(initialEditing))} data-mode={initialMode} data-split={String(split)} data-testid="session-file-workspace">{path}</div>,
+	SessionFileWorkspace: ({ annotation, initialEditing, initialMode, path, scope, split }: {
+		annotation: {
+			begin: (target: { path: string; scope: string; side: string; surface: string }) => void;
+			draft: string;
+			setDraft: (draft: string) => void;
+			target: { path: string } | null;
+		};
+		initialEditing?: boolean;
+		initialMode?: string;
+		path: string;
+		scope?: string;
+		split: boolean;
+	}) => (
+		<div data-editing={String(Boolean(initialEditing))} data-mode={initialMode} data-split={String(split)} data-testid="session-file-workspace">
+			{path}
+			<button onClick={() => annotation.begin({ path, scope: scope ?? "combined", side: "file", surface: "focused" })} type="button">header feedback</button>
+			{annotation.target ? <input aria-label="feedback draft" onChange={(event) => annotation.setDraft(event.target.value)} value={annotation.draft} /> : null}
+		</div>
+	),
 }));
 const { browserDestroy, browserViewOptions, browserViewState } = vi.hoisted(() => ({
 	browserDestroy: vi.fn(),
@@ -2830,33 +2848,20 @@ describe("SessionView", () => {
 		expect(inspectorWidthVariable()).toBe("340px");
 	});
 
-	it("resizes the inspector panel and terminal gap together on each animation frame", () => {
-		const frames: FrameRequestCallback[] = [];
-		const requestAnimationFrameSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-			frames.push(callback);
-			return frames.length;
-		});
-		try {
-			render(<SessionView sessionId="sess-1" />);
-			frames.length = 0;
-			const handle = screen.getByTestId("inspector-resize-handle");
-			expect(document.documentElement.style.getPropertyValue("--ao-inspector-w")).toBe("");
+	it("resizes the inspector panel and terminal gap together synchronously while dragging", () => {
+		render(<SessionView sessionId="sess-1" />);
+		const handle = screen.getByTestId("inspector-resize-handle");
+		expect(document.documentElement.style.getPropertyValue("--ao-inspector-w")).toBe("");
 
-			fireEvent.pointerDown(handle, { clientX: 100 });
-			fireEvent.pointerMove(window, { clientX: 200 });
-			expect(inspectorWidthVariable()).toBe("500px");
-			expect(frames).toHaveLength(1);
+		fireEvent.pointerDown(handle, { clientX: 100 });
+		fireEvent.pointerMove(window, { clientX: 200 });
+		// Sync apply during drag (no rAF) so the grip can follow the painted border 1:1.
+		expect(inspectorWidthVariable()).toBe("400px");
+		expect(inspectorPanelWidthVariable()).toBe("400px");
 
-			act(() => frames.shift()?.(performance.now()));
-			expect(inspectorWidthVariable()).toBe("400px");
-			expect(inspectorPanelWidthVariable()).toBe("400px");
-
-			fireEvent.pointerUp(window);
-			expect(inspectorWidthVariable()).toBe("400px");
-			expect(inspectorPanelWidthVariable()).toBe("400px");
-		} finally {
-			requestAnimationFrameSpy.mockRestore();
-		}
+		fireEvent.pointerUp(window);
+		expect(inspectorWidthVariable()).toBe("400px");
+		expect(inspectorPanelWidthVariable()).toBe("400px");
 	});
 
 	it("grows Browser into a co-work canvas while utility surfaces stay consistent", async () => {
@@ -3112,6 +3117,20 @@ describe("SessionView", () => {
 		fireEvent.click(screen.getByRole("button", { name: "select agent tab" }));
 		expect(screen.queryByTestId("session-file-workspace")).not.toBeInTheDocument();
 		expect(screen.getByRole("tab", { name: "App.tsx" })).toHaveAttribute("aria-selected", "false");
+	});
+
+	it("treats tab and header whole-file feedback as the same focused composer", async () => {
+		act(() => useUiStore.getState().setInspectorOpen("sess-1", true));
+		render(<SessionView sessionId="sess-1" />);
+
+		fireEvent.click(screen.getByRole("button", { name: "open files" }));
+		fireEvent.click(screen.getByRole("button", { name: "select src/App.tsx" }));
+		fireEvent.click(screen.getByRole("button", { name: "Add feedback for file src/App.tsx" }));
+		await userEvent.type(screen.getByRole("textbox", { name: "feedback draft" }), "keep this draft");
+
+		fireEvent.click(screen.getByRole("button", { name: "header feedback" }));
+
+		expect(screen.queryByRole("textbox", { name: "feedback draft" })).not.toBeInTheDocument();
 	});
 
 	it("applies the Files split preference to a diff opened in the center", () => {

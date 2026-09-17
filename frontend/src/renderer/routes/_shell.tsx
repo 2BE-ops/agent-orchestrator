@@ -128,11 +128,17 @@ const ShellCenter = memo(function ShellCenter({
 	selfFramedCenterPanel: boolean;
 }) {
 	const panelClassName = isSessionRoute ? "center-panel-shell--session" : undefined;
+	// Only frameless session chrome needs this strip. On macOS and Linux the
+	// session tabs sit flush against the top edge with no OS titlebar, so without
+	// it there is no window-drag target. Windows must stay excluded: WindowTitlebar
+	// already paints a full-width drag region above every route, and adding the
+	// strip there would duplicate that region and leave a dead 8px band below it.
+	const draggableSessionFrame = isSessionRoute && !isWindows;
 	if (hideShellTopbar) {
 		return selfFramedCenterPanel ? (
 			<Outlet />
 		) : (
-			<CenterPanelShell className={panelClassName}>
+			<CenterPanelShell className={panelClassName} draggableSessionFrame={draggableSessionFrame}>
 				<div className="flex min-h-0 flex-1 flex-col">
 					<Outlet />
 				</div>
@@ -141,7 +147,7 @@ const ShellCenter = memo(function ShellCenter({
 	}
 	if (framedAppTopbar) {
 		return (
-			<CenterPanelShell className={panelClassName}>
+			<CenterPanelShell className={panelClassName} draggableSessionFrame={draggableSessionFrame}>
 				{isSessionRoute ? null : <ShellTopbar />}
 				<div className="flex min-h-0 flex-1 flex-col">
 					<Outlet />
@@ -150,7 +156,7 @@ const ShellCenter = memo(function ShellCenter({
 		);
 	}
 	return (
-		<CenterPanelShell className={panelClassName}>
+		<CenterPanelShell className={panelClassName} draggableSessionFrame={draggableSessionFrame}>
 			<div className="flex min-h-0 flex-1 flex-col">
 				<Outlet />
 			</div>
@@ -743,8 +749,8 @@ function ShellLayout() {
 
 	// A daemon port is not enough to render a trustworthy empty state: the
 	// route loader may have cached [] before Electron reported the port. Fetch
-	// against each ready daemon, then wait for session recovery before the board decides
-	// between projects and the first-run import flow.
+	// against each ready daemon before the board decides between projects and the
+	// first-run import flow. Per-session recovery renders on the cards themselves.
 	useEffect(() => {
 		let active = true;
 		if (usesPreviewWorkspaceData) {
@@ -767,8 +773,8 @@ function ShellLayout() {
 		setWorkspaceStartupState("loading");
 		void queryClient
 			.fetchQuery({ ...workspaceQueryOptions, staleTime: 0 })
-			.then((workspaces) => {
-				if (active && !workspaceStatusesChecking(workspaces)) setWorkspaceStartupState("ready");
+			.then(() => {
+				if (active) setWorkspaceStartupState("ready");
 			})
 			.catch((error) => {
 				if (active && !isCancelledError(error)) setWorkspaceStartupState("error");
@@ -789,7 +795,6 @@ function ShellLayout() {
 			daemonStatus.state !== "ready" ||
 			workspaceStartupState === "ready" ||
 			!workspaceQuery.isSuccess ||
-			workspaceStatusesChecking(workspaceQuery.data) ||
 			workspaceQuery.dataUpdatedAt <= workspaceStartupBaselineRef.current
 		) {
 			return;
@@ -798,7 +803,6 @@ function ShellLayout() {
 	}, [
 		daemonStatus.state,
 		workspaceQuery.dataUpdatedAt,
-		workspaceQuery.data,
 		workspaceQuery.isSuccess,
 		workspaceStartupState,
 	]);

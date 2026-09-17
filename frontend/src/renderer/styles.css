@@ -518,6 +518,18 @@
 	padding: 0;
 }
 
+/* Keep the session card intact: this strip belongs to its slate outer frame,
+ * above the complete card (tabs and inspector alike), so it is a native macOS
+ * or Linux drag target without introducing a seam inside session content. */
+.center-panel-shell--draggable-session-frame {
+	flex-direction: column;
+}
+
+.center-panel-session-drag-strip {
+	flex: 0 0 var(--space-2);
+	-webkit-app-region: drag;
+}
+
 /* Sidebar closed on mac: content panel expands to fill the full window.
  * Remove all padding and strip the surface border + radius so it's flush. */
 .sidebar-hidden .center-panel-shell.center-panel-shell--mac {
@@ -2021,14 +2033,12 @@ textarea,
 	}
 }
 
-/* ── Global resize state (sidebar drag) ─────────────────────────────────── */
+/* ── Global resize state (sidebar / inspector drag) ─────────────────────── */
+/* Grip paint lives on ResizeHandle's fixed span — DO NOT restore
+   `body.is-resizing-x [data-slot="resize-handle"]::after` (rejected chrome). */
 body.is-resizing-x {
 	cursor: col-resize;
 	user-select: none;
-}
-
-body.is-resizing-x [data-slot="resize-handle"]::after {
-	background: var(--color-border);
 }
 
 body.is-resizing-x [data-slot="sidebar-gap"],
@@ -2062,8 +2072,10 @@ body.is-resizing-x .session-split[data-workspace-resizing="true"] [data-slot="in
 	}
 }
 
-/* Keep keyboard focus visible without adding a ring to the sidebar chrome. */
-.sidebar-focusless :focus-visible {
+/* Keep keyboard focus visible without adding a ring to the sidebar chrome.
+   Opt out elements that own their own fill (icon actions, brand, folder toggle,
+   NavRowHighlight hosts) so each new control does not need another !important. */
+.sidebar-focusless :focus-visible:not(.sidebar-icon-action):not([data-sidebar-brand]):not([data-project-folder]) {
 	background-color: var(--color-interactive-hover) !important;
 	outline: none !important;
 	box-shadow: none !important;
@@ -2086,6 +2098,15 @@ body.is-resizing-x .session-split[data-workspace-resizing="true"] [data-slot="in
    never paint the sidebar focus fill on it. */
 .sidebar-focusless [data-project-folder]:focus-visible {
 	background-color: transparent !important;
+}
+
+/* Brand → home is opted out of the wash above; still needs a keyboard cue.
+   Beats the global `:focus-visible { outline: none !important }` via specificity. */
+.sidebar-focusless [data-sidebar-brand]:focus-visible {
+	outline: 2px solid color-mix(in oklab, var(--color-ring) 55%, transparent) !important;
+	outline-offset: 2px !important;
+	background-color: transparent !important;
+	box-shadow: none !important;
 }
 
 /* Keyboard focus for the growing pill: focus-visible only (not focus-within),
@@ -3672,7 +3693,7 @@ html.sidebar-reordering * {
 }
 
 .session-inspector__topbar--browser:has(.browser-panel__address-bar--editing) {
-	grid-template-columns: minmax(0, 1fr) clamp(240px, 58cqw, 640px) minmax(0, 1fr);
+	grid-template-columns: minmax(0, 1fr) clamp(240px, 52cqw, 560px) minmax(0, 1fr);
 }
 
 .session-inspector__topbar--browser > .session-inspector__tablist {
@@ -3683,6 +3704,10 @@ html.sidebar-reordering * {
 .session-inspector__topbar > .browser-panel__topbar-host {
 	grid-column: 2;
 	width: 100%;
+}
+
+.session-inspector__topbar > .browser-panel__topbar-host > .browser-panel__address-bar {
+	transform: translateX(clamp(32px, 6cqw, 48px));
 }
 
 .session-inspector__topbar--browser > .session-inspector-actions-spacer {
@@ -3716,6 +3741,12 @@ html.sidebar-reordering * {
 		width: 180px;
 		justify-self: center;
 		transition: width var(--duration-fast) ease;
+	}
+
+	.session-inspector__topbar--browser
+		> .browser-panel__topbar-host
+		> .browser-panel__address-bar {
+		transform: none;
 	}
 
 	.session-inspector__topbar--browser:has(.browser-panel__address-bar--editing)
