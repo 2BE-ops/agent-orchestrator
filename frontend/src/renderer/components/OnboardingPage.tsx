@@ -452,7 +452,7 @@ export function OnboardingPage() {
 					) : step === "welcome" || step === "feedback" ? <PreviewStage step={step} /> : null}
 				</div>
 
-				<footer className="flex items-start justify-between pt-4">
+				<footer className="flex items-center justify-between pt-4">
 					<button
 						type="button"
 						onClick={() => goToStep(stepIndex - 1)}
@@ -472,7 +472,7 @@ export function OnboardingPage() {
 						// agents cannot open pull requests or read issues without it.
 						(step === "github" && !githubSetup.authSatisfied)
 					}
-						className="inline-flex h-10 w-auto items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-30"
+						className="relative inline-flex w-auto items-center justify-center whitespace-nowrap rounded-xl bg-primary px-4 py-2 text-sm font-semibold! text-primary-foreground transition-[scale,opacity] duration-150 ease-out after:absolute after:inset-x-0 after:-inset-y-0.5 after:content-[''] hover:opacity-85 active:not-disabled:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-30"
 					>
 						{t(details.nextLabel)}
 					</button>
