@@ -1409,6 +1409,7 @@
 	"terminal.closeNamed": "ターミナル {{title}} を閉じる",
 	"terminal.closeSessionTab": "セッションタブ {{label}} を閉じる",
 	"terminal.connecting": "接続中…",
+	"terminal.connectingRestoredContext": "新しいボックスに接続しています。保存されたコンテキストを復元しています。",
 	"terminal.connectionFailed": "接続に失敗しました",
 	"terminal.decreaseFontSize": "ターミナルのフォントサイズを小さくする",
 	"terminal.controlsAria": "ターミナル表示コントロール",

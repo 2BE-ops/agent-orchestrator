@@ -1431,6 +1431,7 @@
 	"terminal.closeNamed": "Fermer le terminal {{title}}",
 	"terminal.closeSessionTab": "Fermer l'onglet de session {{label}}",
 	"terminal.connecting": "Connexion…",
+	"terminal.connectingRestoredContext": "Connexion à une nouvelle instance. Votre contexte enregistré est en cours de restauration.",
 	"terminal.connectionFailed": "échec de la connexion",
 	"terminal.decreaseFontSize": "Réduire la taille de police du terminal",
 	"terminal.controlsAria": "Contrôles d'affichage du terminal",

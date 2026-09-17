@@ -1431,6 +1431,7 @@
 	"terminal.closeNamed": "Fechar terminal {{title}}",
 	"terminal.closeSessionTab": "Fechar aba da sessão {{label}}",
 	"terminal.connecting": "Conectando…",
+	"terminal.connectingRestoredContext": "Conectando a uma nova instância. Seu contexto salvo está sendo restaurado.",
 	"terminal.connectionFailed": "falha na conexão",
 	"terminal.decreaseFontSize": "Diminuir tamanho da fonte do terminal",
 	"terminal.controlsAria": "Controles de exibição do terminal",

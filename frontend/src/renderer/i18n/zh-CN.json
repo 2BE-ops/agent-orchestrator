@@ -1410,6 +1410,7 @@
 	"terminal.closeNamed": "关闭终端 {{title}}",
 	"terminal.closeSessionTab": "关闭会话标签页 {{label}}",
 	"terminal.connecting": "正在连接…",
+	"terminal.connectingRestoredContext": "正在连接到新的实例。正在恢复您保存的上下文。",
 	"terminal.connectionFailed": "连接失败",
 	"terminal.decreaseFontSize": "减小终端字体大小",
 	"terminal.controlsAria": "终端显示控件",

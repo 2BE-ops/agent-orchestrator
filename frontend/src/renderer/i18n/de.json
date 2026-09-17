@@ -1409,6 +1409,7 @@
 	"terminal.closeNamed": "Terminal {{title}} schließen",
 	"terminal.closeSessionTab": "Sitzungs-Tab {{label}} schließen",
 	"terminal.connecting": "Verbindung wird hergestellt…",
+	"terminal.connectingRestoredContext": "Verbindung zu einer neuen Box wird hergestellt. Dein gespeicherter Kontext wird wiederhergestellt.",
 	"terminal.connectionFailed": "Verbindung fehlgeschlagen",
 	"terminal.decreaseFontSize": "Terminal-Schriftgröße verkleinern",
 	"terminal.controlsAria": "Terminal-Anzeigesteuerung",

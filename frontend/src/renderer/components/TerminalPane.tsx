@@ -1128,7 +1128,18 @@ function AttachedTerminal({
 		Boolean(handleId) &&
 		(!replaySettled || replayPaintPending) &&
 		(state === "connecting" || state === "attached");
-	const showEndedState = state === "exited" || canRestoreSession;
+	// A restored or resuming cloud session brings up a FRESH box (a new sandbox /
+	// container) that rehydrates the saved context. Until its worker connects,
+	// show a calm "Connecting…" instead of the previous box's dead terminal or
+	// the "process exited" strip: the user is connecting to a new box with their
+	// saved state, not looking at a broken session. Lifts the instant the new
+	// terminal attaches. Cloud only, so local terminals are unchanged.
+	const isBoxComingUp =
+		Boolean(session?.cloud) &&
+		isSessionActive &&
+		session?.runtimeConnected !== true &&
+		state !== "attached";
+	const showEndedState = (state === "exited" || canRestoreSession) && !isBoxComingUp;
 	const emptyStateTitle = session ? t("terminal.startingSession") : "Agent Orchestrator";
 	const emptyStateMessage = session
 		? session.kind === "orchestrator"
@@ -1175,6 +1186,14 @@ function AttachedTerminal({
 						<div className="text-center">
 							<div className="text-terminal">{emptyStateTitle}</div>
 							<div className="mt-2 text-terminal-dim">{emptyStateMessage}</div>
+						</div>
+					</div>
+				)}
+				{isBoxComingUp && !showReplayCover && (
+					<div className="terminal-surface absolute inset-0 grid place-items-center font-mono text-control">
+						<div className="text-center">
+							<div className="text-terminal">{t("terminal.connecting")}</div>
+							<div className="mt-2 text-terminal-dim">{t("terminal.connectingRestoredContext")}</div>
 						</div>
 					</div>
 				)}

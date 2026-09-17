@@ -1550,6 +1550,7 @@
 	"terminal.closeNamed": "Close terminal {{title}}",
 	"terminal.closeSessionTab": "Close session tab {{label}}",
 	"terminal.connecting": "Connecting…",
+	"terminal.connectingRestoredContext": "Connecting to a fresh box. Your saved context is being restored.",
 	"terminal.connectionFailed": "connection failed",
 	"terminal.decreaseFontSize": "Decrease terminal font size",
 	"terminal.controlsAria": "Terminal display controls",
