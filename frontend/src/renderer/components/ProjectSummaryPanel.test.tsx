@@ -11,6 +11,7 @@ const useSummary = vi.fn();
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate }));
 vi.mock("../lib/chat-drafts", () => ({ writeChatComposerText: (...args: unknown[]) => writeDraft(...args) }));
 vi.mock("../hooks/useProjectSummary", () => ({ useProjectSummary: (...args: unknown[]) => useSummary(...args) }));
+vi.mock("../hooks/useWorkspaceQuery", () => ({ useWorkspaceQuery: () => ({ data: [{ id: "demo", sessions: [{ id: "demo-2", createdAt: "2026-09-14T09:00:00Z" }] }] }) }));
 
 const orchestrator = {
 	id: "demo-orch",
@@ -38,8 +39,10 @@ describe("ProjectSummaryPanel", () => {
 		render(<ProjectSummaryPanel onClose={close} orchestrator={orchestrator} />);
 		await user.click(screen.getByRole("button", { name: "API work" }));
 		expect(navigate).toHaveBeenCalledWith({ to: "/projects/$projectId/sessions/$sessionId", params: { projectId: "demo", sessionId: "demo-2" } });
+		navigate.mockClear();
 		await user.click(screen.getByRole("button", { name: "Discuss in chat" }));
-		expect(writeDraft).toHaveBeenCalledWith({ sessionId: "demo-orch", incarnation: orchestrator.createdAt }, "Regarding API work: Choose the response shape.");
+		expect(writeDraft).toHaveBeenCalledWith({ sessionId: "demo-2", incarnation: "2026-09-14T09:00:00Z" }, "Regarding API work: Choose the response shape.");
+		expect(navigate).toHaveBeenCalledWith({ to: "/projects/$projectId/sessions/$sessionId", params: { projectId: "demo", sessionId: "demo-2" } });
 		expect(close).toHaveBeenCalled();
 	});
 

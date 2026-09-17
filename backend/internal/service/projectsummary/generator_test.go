@@ -3,6 +3,7 @@ package projectsummary
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
@@ -82,5 +83,21 @@ func TestCLIGeneratorRejectsUnsupportedProvider(t *testing.T) {
 	g := &CLIGenerator{}
 	if _, err := g.Update(context.Background(), GenerationRequest{Harness: domain.HarnessCursor}); err == nil {
 		t.Fatal("expected unsupported provider error")
+	}
+}
+
+func TestCLIGeneratorIncludesWorkerReportTextInPrompt(t *testing.T) {
+	capture := &capturedCommand{}
+	g := &CLIGenerator{agents: generatorAgents{domain.HarnessCodex: generatorAgent{binary: "/bin/codex"}}, runner: capture}
+	_, err := g.Update(context.Background(), GenerationRequest{
+		Harness: domain.HarnessCodex,
+		Facts:   domain.ProjectSummary{ProjectID: "demo"},
+		Reports: []GenerationReport{{SessionID: "worker", SessionName: "Worker", State: "checkpoint", Note: "Implemented the summary adapter."}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(capture.stdin), `"note":"Implemented the summary adapter."`) {
+		t.Fatalf("prompt omitted report text: %s", capture.stdin)
 	}
 }
