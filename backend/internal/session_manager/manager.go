@@ -2130,28 +2130,56 @@ func (m *Manager) ReleaseTerminatedOrchestratorWorkspaces(ctx context.Context, p
 		if rec.Kind != domain.KindOrchestrator || !rec.IsTerminated {
 			continue
 		}
-		hasWorktree := rec.Metadata.WorkspacePath != "" && rec.Metadata.Branch != ""
-		if hasWorktree {
-			if _, statErr := os.Stat(rec.Metadata.WorkspacePath); statErr != nil {
-				hasWorktree = false // already reclaimed
-			}
-		}
-		if hasWorktree {
-			// Release before touching the markers: the workspace-project teardown
-			// resolves its per-repo worktrees from those same rows.
-			if err := m.releaseTerminatedWorkspace(ctx, rec); err != nil {
-				m.logger.Warn("release terminated orchestrator: worktree release failed", "sessionID", rec.ID, "error", err)
-				continue
-			}
-		}
-		// Superseded either way: drop restore markers even when the worktree is
-		// already gone (crash-finalized), so RestoreAll cannot resurrect an old
-		// orchestrator onto the branch the replacement now owns.
-		if err := m.store.DeleteSessionWorktrees(ctx, rec.ID); err != nil {
-			m.logger.Warn("release terminated orchestrator: clear restore markers failed", "sessionID", rec.ID, "error", err)
-		}
+		m.releaseTerminatedOrchestrator(ctx, rec.ID)
 	}
 	return nil
+}
+
+// releaseTerminatedOrchestrator reclaims one terminated orchestrator's leftover
+// worktree and restore markers under the session's exclusive operation gate, so
+// this GC pass can never destroy a worktree or drop restore markers out from
+// under a concurrent Restore reviving the same orchestrator onto the branch its
+// replacement now owns. A busy session is left for the next pass.
+func (m *Manager) releaseTerminatedOrchestrator(ctx context.Context, id domain.SessionID) {
+	if err := m.beginAgentOperation(ctx, id, agentOperationCleanup); err != nil {
+		if !errors.Is(err, errAgentOperationInProgress) {
+			m.logger.Warn("release terminated orchestrator: gate failed", "sessionID", id, "error", err)
+		}
+		return
+	}
+	defer m.endAgentOperation(id, agentOperationCleanup)
+
+	// Re-read under the gate: a Restore may have revived the orchestrator
+	// between the candidate listing and the gate acquisition.
+	rec, ok, err := m.store.GetSession(ctx, id)
+	if err != nil {
+		m.logger.Warn("release terminated orchestrator: re-read failed", "sessionID", id, "error", err)
+		return
+	}
+	if !ok || rec.Kind != domain.KindOrchestrator || !rec.IsTerminated {
+		return
+	}
+
+	hasWorktree := rec.Metadata.WorkspacePath != "" && rec.Metadata.Branch != ""
+	if hasWorktree {
+		if _, statErr := os.Stat(rec.Metadata.WorkspacePath); statErr != nil {
+			hasWorktree = false // already reclaimed
+		}
+	}
+	if hasWorktree {
+		// Release before touching the markers: the workspace-project teardown
+		// resolves its per-repo worktrees from those same rows.
+		if err := m.releaseTerminatedWorkspace(ctx, rec); err != nil {
+			m.logger.Warn("release terminated orchestrator: worktree release failed", "sessionID", rec.ID, "error", err)
+			return
+		}
+	}
+	// Superseded either way: drop restore markers even when the worktree is
+	// already gone (crash-finalized), so RestoreAll cannot resurrect an old
+	// orchestrator onto the branch the replacement now owns.
+	if err := m.store.DeleteSessionWorktrees(ctx, rec.ID); err != nil {
+		m.logger.Warn("release terminated orchestrator: clear restore markers failed", "sessionID", rec.ID, "error", err)
+	}
 }
 
 // releaseTerminatedWorkspace captures and force-removes one terminated
@@ -2909,6 +2937,20 @@ func (m *Manager) saveAndTeardownOne(ctx context.Context, rec domain.SessionReco
 // The session therefore stays restorable — Restore recreates the worktree and
 // replays the preserved ref — and its branch is freed for a replacement spawn.
 func (m *Manager) FinalizeCrashedSession(ctx context.Context, id domain.SessionID) error {
+	// Take the session's exclusive operation gate so the crash finalizer can
+	// never destroy a worktree out from under a concurrent Restore/Resume
+	// reviving the same session; a busy session is left for the next pass.
+	if err := m.beginAgentOperation(ctx, id, agentOperationCleanup); err != nil {
+		if errors.Is(err, errAgentOperationInProgress) {
+			m.logger.Warn("finalize crashed: session busy, skipping", "sessionID", id)
+			return nil
+		}
+		return fmt.Errorf("finalize crashed %s: %w", id, err)
+	}
+	defer m.endAgentOperation(id, agentOperationCleanup)
+
+	// Re-read under the gate: a Restore may have revived the session between
+	// the LCM's terminal decision and the gate acquisition.
 	rec, ok, err := m.store.GetSession(ctx, id)
 	if err != nil {
 		return fmt.Errorf("finalize crashed %s: %w", id, err)
