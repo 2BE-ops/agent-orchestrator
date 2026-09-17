@@ -333,11 +333,29 @@ func TestActionServiceResolveComments_RejectsPartialProviderListing(t *testing.T
 	writer := &fakeActionWriter{}
 	svc := NewActionService(ActionDeps{Store: store, Reader: scm, Resolver: scm, Writer: writer})
 
-	if _, err := svc.ResolveComments(context.Background(), "42", []string{"thread-1"}); !errors.Is(err, ErrPRPreconditions) {
+	if _, err := svc.ResolveComments(context.Background(), "42", nil); !errors.Is(err, ErrPRPreconditions) {
 		t.Fatalf("error = %v, want incomplete observation precondition", err)
 	}
 	if scm.resolveCalls != 0 || writer.threadWriteCalls != 0 {
 		t.Fatalf("remote resolves=%d local writes=%d, want 0", scm.resolveCalls, writer.threadWriteCalls)
+	}
+}
+
+func TestActionServiceResolveComments_AllowsKnownExplicitIDFromPartialListing(t *testing.T) {
+	pr, scm := mergeableActionFixture()
+	scm.review = ports.SCMReviewObservation{Partial: true, Threads: []ports.SCMReviewThreadObservation{{ID: "thread-1"}}}
+	store := &fakeActionStore{pr: pr, ok: true}
+	writer := &fakeActionWriter{}
+	svc := NewActionService(ActionDeps{Store: store, Reader: scm, Resolver: scm, Writer: writer})
+
+	result, err := svc.ResolveComments(context.Background(), "42", []string{"thread-1"})
+	if err != nil || result.Resolved != 1 || scm.resolveCalls != 1 || writer.threadWriteCalls != 1 {
+		t.Fatalf("result=%+v err=%v resolves=%d writes=%d", result, err, scm.resolveCalls, writer.threadWriteCalls)
+	}
+
+	_, err = svc.ResolveComments(context.Background(), "42", []string{"unknown-thread"})
+	if !errors.Is(err, ErrPRPreconditions) || scm.resolveCalls != 1 {
+		t.Fatalf("unknown id err=%v resolves=%d, want precondition without mutation", err, scm.resolveCalls)
 	}
 }
 

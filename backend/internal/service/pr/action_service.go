@@ -241,8 +241,9 @@ func scmRepoForPR(pr domain.PullRequest) (ports.SCMRepo, bool) {
 // successful mutation locally. Empty commentIDs resolves every unresolved
 // thread returned by the provider. Supplied IDs may be either provider thread
 // IDs or comment IDs; comment IDs are mapped to their owning thread before the
-// mutation. A partial provider listing is never used for mutation because it
-// cannot prove that an explicit ID belongs to this pull request.
+// mutation. Resolve-all requires a complete provider listing; an explicit ID
+// may still be used when it is present in a partial listing, while unknown IDs
+// are rejected because the response cannot prove their membership.
 func (s *ActionService) ResolveComments(ctx context.Context, prID string, commentIDs []string) (ResolveResult, error) {
 	if s.resolve == nil || s.reader == nil || s.resolver == nil || s.threadWriter == nil {
 		return ResolveResult{}, errors.New("pr: resolve-comments action is not configured")
@@ -267,8 +268,8 @@ func (s *ActionService) ResolveComments(ctx context.Context, prID string, commen
 		}
 		return ResolveResult{}, fmt.Errorf("refresh pull request reviews before resolving comments: %w", err)
 	}
-	if review.Partial {
-		return ResolveResult{}, fmt.Errorf("%w: review thread listing is incomplete", ErrPRPreconditions)
+	if review.Partial && len(commentIDs) == 0 {
+		return ResolveResult{}, fmt.Errorf("%w: review thread listing is incomplete; provide an explicit thread or comment id", ErrPRPreconditions)
 	}
 
 	threadIDs, err := requestedThreadIDs(review, commentIDs)
