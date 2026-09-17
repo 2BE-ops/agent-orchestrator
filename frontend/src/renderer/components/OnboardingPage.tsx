@@ -472,9 +472,7 @@ export function OnboardingPage() {
 						// agents cannot open pull requests or read issues without it.
 						(step === "github" && !githubSetup.authSatisfied)
 					}
-						className="group relative inline-flex h-10 w-auto items-center justify-center overflow-hidden whitespace-nowrap rounded-md px-4 text-sm font-medium text-[#010101] bg-[linear-gradient(180deg,#CACACA_0%,#FDFDFD_100%)] shadow-[inset_0_-4px_16px_rgba(0,0,0,0.25),inset_0_4px_10px_rgba(255,255,255,0.39)] transition-[filter] hover:brightness-[1.04] active:brightness-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-						// Inline so the hairline leaves box-shadow free for the focus ring.
-						style={{ outline: "1px solid white", outlineOffset: "-1px" }}
+						className="inline-flex h-10 w-auto items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-30"
 					>
 						{t(details.nextLabel)}
 					</button>
