@@ -140,6 +140,50 @@ func TestActiveWorkRestoresStoppedCoderWorkspace(t *testing.T) {
 	}
 }
 
+func TestStartingUpCoderWorkspaceIgnoresIdleStop(t *testing.T) {
+	// A user resume is in flight: the short interaction lease has already lapsed
+	// (KeepAlive false), but startup_started_at is recent, so the box is still
+	// coming up. A provider idle-stop in this window must be refused and the box
+	// restored, not accepted as a pause — otherwise the resume flips back to
+	// "resuming" as the terminal is about to appear.
+	store := &lifecycleStore{acceptedPause: true}
+	provider := &lifecycleProvider{environment: sandbox.Environment{
+		ID: "workspace-1", State: sandbox.StateStopped, StopCause: sandbox.StopCauseExternalIdle,
+	}}
+	record := runningRecord(false)
+	record.ObservedState = domain.SandboxObservedRestoring
+	startedAt := time.Now()
+	record.StartupStartedAt = &startedAt
+	if err := testReconciler(store, provider).reconcileSandbox(context.Background(), record); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if store.acceptCalls != 0 || provider.starts != 1 {
+		t.Fatalf("accept calls = %d, starts = %d; want 0, 1", store.acceptCalls, provider.starts)
+	}
+	if len(store.observations) != 1 || store.observations[0] != domain.SandboxObservedRestoring {
+		t.Fatalf("observations = %v, want restoring", store.observations)
+	}
+}
+
+func TestStaleStartupCoderWorkspaceAcceptsIdleStop(t *testing.T) {
+	// A bring-up that never converged has aged past the startup window. The idle
+	// guard must no longer hold the box awake: accept the provider pause so
+	// compute (and billing) stops instead of looping restores forever.
+	store := &lifecycleStore{acceptedPause: true}
+	provider := &lifecycleProvider{environment: sandbox.Environment{
+		ID: "workspace-1", State: sandbox.StateStopped, StopCause: sandbox.StopCauseExternalIdle,
+	}}
+	record := runningRecord(false)
+	stale := time.Now().Add(-2 * DefaultStartupTimeout)
+	record.StartupStartedAt = &stale
+	if err := testReconciler(store, provider).reconcileSandbox(context.Background(), record); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if store.acceptCalls != 1 || provider.starts != 0 {
+		t.Fatalf("accept calls = %d, starts = %d; want 1, 0", store.acceptCalls, provider.starts)
+	}
+}
+
 func TestAmbiguousProviderStopPreservesExistingRestoreBehavior(t *testing.T) {
 	store := &lifecycleStore{acceptedPause: true}
 	provider := &lifecycleProvider{environment: sandbox.Environment{
