@@ -334,7 +334,7 @@ describe("useWorkspaceQuery", () => {
 		});
 	});
 
-	it("groups projectless sessions as ad hoc agents after projects", async () => {
+	it("groups projectless sessions in Scratchpad after projects", async () => {
 		respondWith({
 			projects: { data: { projects: [{ id: "proj-1", name: "my-app", path: "/p" }] }, error: undefined },
 			sessions: {
@@ -360,13 +360,13 @@ describe("useWorkspaceQuery", () => {
 		expect(result.current.data?.map((workspace) => workspace.id)).toEqual(["proj-1", "__standalone__"]);
 		expect(result.current.data?.[1]).toMatchObject({
 			id: "__standalone__",
-			name: "Ad hoc agents",
+			name: "Scratchpad",
 			kind: "standalone",
 		});
 		expect(result.current.data?.[1].sessions[0]).toMatchObject({
 			id: "standalone-1",
 			workspaceId: "__standalone__",
-			workspaceName: "Ad hoc agents",
+			workspaceName: "Scratchpad",
 			title: "Research",
 			branch: undefined,
 		});
@@ -554,7 +554,7 @@ describe("useWorkspaceQuery", () => {
 			path: "",
 			sessions: [],
 		});
-		expect(result.current.data?.[2]).toMatchObject({ id: "__standalone__", name: "Ad hoc agents" });
+		expect(result.current.data?.[2]).toMatchObject({ id: "__standalone__", name: "Scratchpad" });
 		expect(listProjectsMock).toHaveBeenCalledWith("org-1", { limit: 100 });
 	});
 

@@ -748,6 +748,34 @@ func TestListWorkspaceFilesTreatsStandaloneWorkerAsNonGitWorkspace(t *testing.T)
 	}
 }
 
+func TestListWorkspaceFilesHidesAOManagedStandaloneFiles(t *testing.T) {
+	workspace := t.TempDir()
+	writeWorkspaceFile(t, workspace, ".kimi/.gitignore", "# managed by agent-orchestrator: AO hook files stay out of git status\n/.gitignore\n/AGENTS.md\n")
+	writeWorkspaceFile(t, workspace, ".kimi/AGENTS.md", "AO instructions\n")
+	writeWorkspaceFile(t, workspace, ".kimi/draft.md", "agent-created work\n")
+	writeWorkspaceFile(t, workspace, "notes.txt", "user work\n")
+	st := newFakeStore()
+	st.sessions["standalone-1"] = domain.SessionRecord{
+		ID:       "standalone-1",
+		Kind:     domain.KindWorker,
+		Metadata: domain.SessionMetadata{WorkspacePath: workspace},
+	}
+
+	got, err := (&Service{store: st}).ListWorkspaceFiles(context.Background(), "standalone-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{".kimi/draft.md", "notes.txt"}
+	if len(got.Files) != len(want) {
+		t.Fatalf("standalone files = %#v, want user-created files %v", got.Files, want)
+	}
+	for i, path := range want {
+		if got.Files[i].Path != path {
+			t.Fatalf("standalone file[%d] = %q, want %q", i, got.Files[i].Path, path)
+		}
+	}
+}
+
 func TestListWorkspaceFilesTreatsMigratedScratchWorkerAsNonGitWorkspace(t *testing.T) {
 	workspace := t.TempDir()
 	writeWorkspaceFile(t, workspace, "notes.txt", "migrated scratch note\n")

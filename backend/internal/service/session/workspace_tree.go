@@ -336,6 +336,10 @@ func scratchWorkspaceTreeChildren(root, dir string) ([]WorkspaceTreeEntry, bool,
 	if err != nil {
 		return nil, false, err
 	}
+	managed, err := scratchAOManagedPaths(rootResolved)
+	if err != nil {
+		return nil, false, err
+	}
 	target := rootResolved
 	if dir != "" {
 		target = filepath.Join(rootResolved, filepath.FromSlash(dir))
@@ -391,7 +395,13 @@ func scratchWorkspaceTreeChildren(root, dir string) ([]WorkspaceTreeEntry, bool,
 			continue
 		}
 		if entry.IsDir() {
+			if scratchDirectoryOnlyAOManaged(rootResolved, rel, managed) {
+				continue
+			}
 			entries = append(entries, WorkspaceTreeEntry{Name: name, Path: rel, Type: WorkspaceTreeDir, HasChanges: true})
+			continue
+		}
+		if _, hidden := managed[rel]; hidden {
 			continue
 		}
 		info, err := entry.Info()

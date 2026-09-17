@@ -186,6 +186,58 @@ func TestListWorkspaceTreeScratchUsesFilesystem(t *testing.T) {
 	}
 }
 
+func TestListWorkspaceTreeHidesDirectoriesContainingOnlyAOManagedFiles(t *testing.T) {
+	root := t.TempDir()
+	writeWorkspaceFile(t, root, ".kimi/.gitignore", "# managed by agent-orchestrator: AO hook files stay out of git status\n/.gitignore\n/AGENTS.md\n")
+	writeWorkspaceFile(t, root, ".kimi/AGENTS.md", "AO instructions\n")
+
+	st := newFakeStore()
+	st.sessions["standalone-1"] = domain.SessionRecord{
+		ID:       "standalone-1",
+		Kind:     domain.KindWorker,
+		Metadata: domain.SessionMetadata{WorkspacePath: root},
+	}
+
+	tree, err := (&Service{store: st}).ListWorkspaceTree(context.Background(), "standalone-1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tree.Entries) != 0 {
+		t.Fatalf("standalone root entries = %#v, want AO-managed files hidden", tree.Entries)
+	}
+}
+
+func TestListWorkspaceTreeKeepsAgentDirectoryContainingUserWork(t *testing.T) {
+	root := t.TempDir()
+	writeWorkspaceFile(t, root, ".kimi/.gitignore", "# managed by agent-orchestrator: AO hook files stay out of git status\n/.gitignore\n/AGENTS.md\n")
+	writeWorkspaceFile(t, root, ".kimi/AGENTS.md", "AO instructions\n")
+	writeWorkspaceFile(t, root, ".kimi/draft.md", "agent-created work\n")
+
+	st := newFakeStore()
+	st.sessions["standalone-1"] = domain.SessionRecord{
+		ID:       "standalone-1",
+		Kind:     domain.KindWorker,
+		Metadata: domain.SessionMetadata{WorkspacePath: root},
+	}
+	svc := &Service{store: st}
+
+	rootTree, err := svc.ListWorkspaceTree(context.Background(), "standalone-1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rootTree.Entries) != 1 || rootTree.Entries[0].Path != ".kimi" {
+		t.Fatalf("standalone root entries = %#v, want visible .kimi work directory", rootTree.Entries)
+	}
+
+	kimiTree, err := svc.ListWorkspaceTree(context.Background(), "standalone-1", ".kimi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(kimiTree.Entries) != 1 || kimiTree.Entries[0].Path != ".kimi/draft.md" {
+		t.Fatalf("standalone .kimi entries = %#v, want only agent-created draft", kimiTree.Entries)
+	}
+}
+
 func TestListWorkspaceTreeGlobalCapNotPerDirectory(t *testing.T) {
 	repo := newWorkspaceRepo(t)
 	for i := 0; i < maxWorkspaceFiles+50; i++ {

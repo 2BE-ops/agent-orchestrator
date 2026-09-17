@@ -28,6 +28,11 @@ const (
 	maxWorkspaceFiles     = 5000
 	maxWorkspaceFileBytes = 256 * 1024
 	maxWorkspaceDiffBytes = 512 * 1024
+	// AO's agent adapters write this marker into self-ignoring .gitignore
+	// files beside their workspace-local control files. Scratch workspaces have
+	// no Git index to hide that infrastructure from the review surfaces, so the
+	// filesystem readers honor the same ownership marker directly.
+	aoManagedGitignoreSentinel = "# managed by agent-orchestrator: AO hook files stay out of git status"
 	// maxWorkspaceImageBytes caps a single image revision streamed to the diff
 	// viewer. Anything larger is refused rather than buffered.
 	maxWorkspaceImageBytes = 16 * 1024 * 1024
@@ -1338,6 +1343,10 @@ func scratchWorkspaceFiles(root string) ([]WorkspaceFileSummary, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
+	managed, err := scratchAOManagedPaths(rootResolved)
+	if err != nil {
+		return nil, false, err
+	}
 	var files []WorkspaceFileSummary
 	truncated := false
 	err = filepath.WalkDir(rootResolved, func(fullPath string, entry fs.DirEntry, walkErr error) error {
@@ -1356,6 +1365,9 @@ func scratchWorkspaceFiles(root string) ([]WorkspaceFileSummary, bool, error) {
 			if entry.IsDir() {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+		if _, hidden := managed[rel]; hidden {
 			return nil
 		}
 		if entry.IsDir() {
@@ -1391,6 +1403,100 @@ func scratchWorkspaceFiles(root string) ([]WorkspaceFileSummary, bool, error) {
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files, truncated, nil
+}
+
+// scratchAOManagedPaths returns the workspace-relative files claimed by
+// AO-managed .gitignore files. Each adapter writes one beside its control
+// files and anchors every entry to that directory; user-owned .gitignore files
+// lack the sentinel and remain ordinary visible scratch files.
+func scratchAOManagedPaths(rootResolved string) (map[string]struct{}, error) {
+	managed := make(map[string]struct{})
+	err := filepath.WalkDir(rootResolved, func(fullPath string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			if entry.Name() == ".git" && fullPath != rootResolved {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.Name() != ".gitignore" {
+			return nil
+		}
+		_, include, err := scratchWorkspaceFileInfo(rootResolved, fullPath, entry)
+		if err != nil || !include {
+			return err
+		}
+		content, binary, _, err := readWorkspaceTextFile(fullPath, 64*1024)
+		if err != nil {
+			return err
+		}
+		if binary || !strings.Contains(content, aoManagedGitignoreSentinel) {
+			return nil
+		}
+		dirRel, err := filepath.Rel(rootResolved, filepath.Dir(fullPath))
+		if err != nil {
+			return err
+		}
+		prefix := ""
+		if dirRel != "." {
+			prefix = filepath.ToSlash(dirRel)
+		}
+		for _, rawLine := range strings.Split(content, "\n") {
+			line := strings.TrimSpace(rawLine)
+			if !strings.HasPrefix(line, "/") || strings.HasPrefix(line, "//") {
+				continue
+			}
+			name := path.Clean(strings.TrimPrefix(line, "/"))
+			if name == "." || name == ".." || strings.HasPrefix(name, "../") {
+				continue
+			}
+			managed[joinWorkspaceRelative(prefix, name)] = struct{}{}
+		}
+		return nil
+	})
+	return managed, err
+}
+
+// scratchDirectoryOnlyAOManaged reports whether a directory contains control
+// files but no user-visible file. This keeps an otherwise empty .kimi,
+// .claude, or similar adapter directory from surviving as a misleading folder
+// in the Files tree after its contents have been filtered.
+func scratchDirectoryOnlyAOManaged(rootResolved, rel string, managed map[string]struct{}) bool {
+	hasManaged := false
+	hasVisible := false
+	target := filepath.Join(rootResolved, filepath.FromSlash(rel))
+	err := filepath.WalkDir(target, func(fullPath string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			if entry.Name() == ".git" && fullPath != target {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		pathRel, err := filepath.Rel(rootResolved, fullPath)
+		if err != nil {
+			return err
+		}
+		workspaceRel := filepath.ToSlash(pathRel)
+		if _, hidden := managed[workspaceRel]; hidden {
+			hasManaged = true
+			return nil
+		}
+		_, include, err := scratchWorkspaceFileInfo(rootResolved, fullPath, entry)
+		if err != nil {
+			return err
+		}
+		if include {
+			hasVisible = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return err == nil && hasManaged && !hasVisible
 }
 
 func isStandaloneScratchWorkspace(rec domain.SessionRecord) bool {
