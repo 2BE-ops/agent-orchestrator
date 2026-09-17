@@ -201,6 +201,14 @@ export interface CloudCpSession {
 	runtimeState?: string;
 	runtimeError?: string;
 	isTerminated: boolean;
+	/**
+	 * Highest worker epoch the session has minted for its agent terminal. It
+	 * advances on every fresh worker connection (resume from idle-pause,
+	 * restore, re-provision), so the terminal can key on it and re-attach to the
+	 * live agent instead of the dead epoch's exited terminal. Absent/0 when no
+	 * worker has connected yet.
+	 */
+	workerEpoch?: number;
 	createdAt: string;
 	updatedAt: string;
 }

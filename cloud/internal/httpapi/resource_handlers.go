@@ -81,8 +81,12 @@ type sessionResponse struct {
 	RuntimeState     string    `json:"runtimeState,omitempty"`
 	RuntimeError     string    `json:"runtimeError,omitempty"`
 	IsTerminated     bool      `json:"isTerminated"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	// WorkerEpoch advances on every fresh worker connection (resume, restore,
+	// re-provision). Clients key their terminal on it so a resumed session
+	// re-attaches to the live agent instead of the dead epoch's terminal.
+	WorkerEpoch int64     `json:"workerEpoch,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 type pageInfo struct {
@@ -702,6 +706,7 @@ func toSessionResponse(session domain.Session, prs []contract.PRFacts) sessionRe
 		RuntimeState:     session.RuntimeState,
 		RuntimeError:     session.RuntimeError,
 		IsTerminated:     session.IsTerminated,
+		WorkerEpoch:      session.WorkerEpoch,
 		CreatedAt:        session.CreatedAt,
 		UpdatedAt:        session.UpdatedAt,
 	}
