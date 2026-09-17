@@ -347,8 +347,8 @@ func normalizeThreadIDs(ids []string) []string {
 	return out
 }
 
-// requestedThreadIDs validates explicit IDs against the complete provider
-// observation and maps documented comment IDs to their owning thread IDs.
+// requestedThreadIDs validates explicit IDs against the provider observation
+// and maps documented comment IDs to their owning thread IDs.
 func requestedThreadIDs(review ports.SCMReviewObservation, commentIDs []string) ([]string, error) {
 	if len(commentIDs) == 0 {
 		return nil, nil
