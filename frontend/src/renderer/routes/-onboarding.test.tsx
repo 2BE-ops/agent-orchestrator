@@ -34,13 +34,14 @@ const apiMocks = vi.hoisted(() => ({
 	GET: vi.fn(),
 	POST: vi.fn(),
 	DELETE: vi.fn(),
+	PATCH: vi.fn(),
 }));
 
 vi.mock("../lib/api-client", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("../lib/api-client")>();
 	return {
 		...actual,
-		apiClient: { ...actual.apiClient, GET: apiMocks.GET, POST: apiMocks.POST, DELETE: apiMocks.DELETE },
+		apiClient: { ...actual.apiClient, DELETE: apiMocks.DELETE, GET: apiMocks.GET, PATCH: apiMocks.PATCH, POST: apiMocks.POST },
 	};
 });
 
@@ -88,16 +89,26 @@ async function renderOnboarding() {
 }
 
 async function goToOrchestratorStep(user: ReturnType<typeof userEvent.setup>) {
-	await user.click(screen.getByRole("button", { name: "Continue" }));
-	await user.click(await screen.findByRole("button", { name: "Create your project" }));
+	await goToProjectStep(user);
 	await user.click(await screen.findByRole("button", { name: "Prepare project" }));
 	await screen.findByRole("heading", { name: "Pick your orchestrator agent." });
 }
 
 async function goToProjectStep(user: ReturnType<typeof userEvent.setup>) {
+	await goToGitHubStep(user);
+	await user.click(screen.getByRole("button", { name: "Continue" }));
+	await screen.findByRole("heading", { name: "Run sessions in the cloud" });
+	await user.click(screen.getByRole("button", { name: "Continue" }));
+	await screen.findByRole("heading", { name: "Create your first project." });
+}
+
+/** The GitHub page sits between the agent sign-in step and the cloud step. */
+async function goToGitHubStep(user: ReturnType<typeof userEvent.setup>) {
 	await user.click(screen.getByRole("button", { name: "Continue" }));
 	await user.click(await screen.findByRole("button", { name: "Create your project" }));
-	await screen.findByRole("heading", { name: "Create your first project." });
+	await screen.findByRole("heading", { name: "Sign in to your agent" });
+	await user.click(screen.getByRole("button", { name: "Continue" }));
+	await screen.findByRole("heading", { name: "Connect GitHub" });
 }
 
 beforeEach(() => {
@@ -110,6 +121,8 @@ beforeEach(() => {
 	apiMocks.GET.mockReset();
 	apiMocks.POST.mockReset();
 	apiMocks.DELETE.mockReset();
+	apiMocks.PATCH.mockReset();
+	apiMocks.PATCH.mockResolvedValue({ data: {} });
 	apiMocks.GET.mockImplementation(async (path: string) => {
 		if (path === "/api/v1/agents/installers") return { data: { agents: [] } };
 		if (path === "/api/v1/agents/install-jobs") return { data: { jobs: [] } };
@@ -208,6 +221,12 @@ describe("onboarding route", () => {
 			await act(async () => {
 				fireEvent.click(screen.getByRole("button", { name: "Create your project" }));
 			});
+			// Pass the agent sign-in, GitHub, and cloud steps to reach the project step.
+			for (let index = 0; index < 3; index += 1) {
+				await act(async () => {
+					fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+				});
+			}
 			await act(async () => {
 				fireEvent.click(screen.getByRole("button", { name: "Prepare project" }));
 			});
@@ -231,6 +250,13 @@ describe("onboarding route", () => {
 		await user.click(screen.getByRole("button", { name: "Continue" }));
 		expect(await screen.findByRole("heading", { name: "Keep the loop moving." })).toBeInTheDocument();
 		await user.click(screen.getByRole("button", { name: "Create your project" }));
+		// Agent sign-in, then GitHub, then cloud, then the project step.
+		expect(await screen.findByRole("heading", { name: "Sign in to your agent" })).toBeInTheDocument();
+		await user.click(screen.getByRole("button", { name: "Continue" }));
+		expect(await screen.findByRole("heading", { name: "Connect GitHub" })).toBeInTheDocument();
+		await user.click(screen.getByRole("button", { name: "Continue" }));
+		expect(await screen.findByRole("heading", { name: "Run sessions in the cloud" })).toBeInTheDocument();
+		await user.click(screen.getByRole("button", { name: "Continue" }));
 		expect(await screen.findByRole("heading", { name: "Create your first project." })).toBeInTheDocument();
 		await user.click(screen.getByRole("button", { name: "Prepare project" }));
 
@@ -267,6 +293,12 @@ describe("onboarding route", () => {
 
 		await user.click(screen.getByRole("button", { name: "Continue" }));
 		await user.click(await screen.findByRole("button", { name: "Create your project" }));
+		await screen.findByRole("heading", { name: "Sign in to your agent" });
+		await user.click(screen.getByRole("button", { name: "Continue" }));
+		await screen.findByRole("heading", { name: "Connect GitHub" });
+		await user.click(screen.getByRole("button", { name: "Continue" }));
+		await screen.findByRole("heading", { name: "Run sessions in the cloud" });
+		await user.click(screen.getByRole("button", { name: "Continue" }));
 		expect(await screen.findByRole("heading", { name: "Create your first project." })).toBeInTheDocument();
 		await user.click(screen.getByRole("button", { name: "Prepare project" }));
 		expect(await screen.findByRole("heading", { name: "Pick your orchestrator agent." })).toBeInTheDocument();
@@ -416,10 +448,63 @@ describe("onboarding route", () => {
 		expect(within(picker).queryByRole("button", { name: "Sign in to Kiro" })).not.toBeInTheDocument();
 	});
 
+	it("signs an agent in from the agent step and nudges that sign-in is required", async () => {
+		const user = userEvent.setup();
+		await renderOnboarding();
+		await user.click(screen.getByRole("button", { name: "Continue" }));
+		await user.click(await screen.findByRole("button", { name: "Create your project" }));
+
+		expect(await screen.findByRole("heading", { name: "Sign in to your agent" })).toBeInTheDocument();
+		expect(screen.getByText(/need a sign-in before they can run a session/)).toBeInTheDocument();
+
+		await user.click(screen.getByRole("button", { name: "Sign in to Kiro" }));
+		await waitFor(() => {
+			expect(apiMocks.POST).toHaveBeenCalledWith(
+				"/api/v1/agents/{agent}/auth",
+				expect.objectContaining({ params: { path: { agent: "kiro" } } }),
+			);
+		});
+		expect(routeMocks.navigate).not.toHaveBeenCalled();
+	});
+
+	it("turns cloud on from the cloud step", async () => {
+		const user = userEvent.setup();
+		await renderOnboarding();
+		await goToGitHubStep(user);
+		await user.click(screen.getByRole("button", { name: "Continue" }));
+
+		expect(await screen.findByRole("heading", { name: "Run sessions in the cloud" })).toBeInTheDocument();
+		expect(screen.getByText(/remote sandboxes instead of on this machine/)).toBeInTheDocument();
+
+		await user.click(screen.getByRole("button", { name: "Enable cloud" }));
+		await waitFor(() => {
+			expect(apiMocks.PATCH).toHaveBeenCalledWith("/api/v1/settings/cloud-offering", { body: { enabled: true } });
+		});
+	});
+
+	it("offers mobile pairing from the last step", async () => {
+		const user = userEvent.setup();
+		await renderOnboarding();
+		await goToOrchestratorStep(user);
+		const orchestrators = screen.getByRole("region", { name: "Orchestrator agent" });
+		await user.click(within(orchestrators).getByRole("button", { name: "Claude Code" }));
+		await user.click(screen.getByRole("button", { name: "Choose workers" }));
+		const workers = await screen.findByRole("region", { name: "Worker agents" });
+		await user.click(within(workers).getByRole("button", { name: "Codex" }));
+		await user.click(screen.getByRole("button", { name: "See how it works" }));
+		await screen.findByRole("heading", { name: "Give your orchestrator a goal." });
+
+		await user.click(screen.getByRole("button", { name: "Set up AO mobile" }));
+
+		expect(window.localStorage.getItem("ao.onboarding.completed")).toBe("1");
+		expect(routeMocks.navigate).toHaveBeenCalledWith({ to: "/" });
+		expect(routeMocks.openGlobalSettings).toHaveBeenCalledWith("mobile");
+	});
+
 	it("installs the GitHub CLI in place when it is missing", async () => {
 		const user = userEvent.setup();
 		await renderOnboarding();
-		await goToProjectStep(user);
+		await goToGitHubStep(user);
 
 		expect(await screen.findByText("Install GitHub CLI and sign in before asking agents to open pull requests.")).toBeInTheDocument();
 		await user.click(screen.getByRole("button", { name: "Install gh" }));
@@ -456,7 +541,7 @@ describe("onboarding route", () => {
 		});
 		const user = userEvent.setup();
 		await renderOnboarding();
-		await goToProjectStep(user);
+		await goToGitHubStep(user);
 
 		await user.click(await screen.findByRole("button", { name: "Sign in with GitHub" }));
 

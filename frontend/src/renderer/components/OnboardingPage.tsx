@@ -9,10 +9,16 @@ import visibilityBackground from "../../landing/public/optimized/feature.webp";
 import { FeedbackLoopDemo } from "../../landing/src/app/components/FeaturesSection/components/FeedbackLoopDemo/FeedbackLoopDemo";
 import { FleetBoardDemo, type FleetBoardAssets } from "../../landing/src/app/components/FeaturesSection/components/FleetBoardDemo/FleetBoardDemo";
 import { OnboardingProjectSetup } from "./OnboardingProjectSetup";
-import { OnboardingGitHubSetup } from "./OnboardingGitHubSetup";
+import { OnboardingAuthStep } from "./OnboardingAuthStep";
+import { OnboardingCloudStep } from "./OnboardingCloudStep";
+import { OnboardingGitHubStep } from "./OnboardingGitHubStep";
 import { AuthTerminalPanel } from "./AuthTerminalPanel";
 import { refreshAgentsIfStale, useAgentsQuery, type AgentCatalog } from "../hooks/useAgentsQuery";
 import { useHarnessSetup } from "../hooks/useHarnessSetup";
+import { useDaemonStatus } from "../hooks/useDaemonStatus";
+import { useCloudGate } from "../hooks/useCloudGate";
+import { useGitHubSetup } from "../hooks/useGitHubSetup";
+import { markOnboardingComplete } from "../lib/onboarding-finish";
 import { aoBridge } from "../lib/bridge";
 import { AGENT_OPTIONS, agentLabel } from "../lib/agent-options";
 import type { MessageKey } from "../i18n";
@@ -26,7 +32,7 @@ import codexLogo from "../assets/agents/codex.svg";
 import cursorLogo from "../assets/agents/cursor.svg";
 import opencodeLogo from "../assets/agents/opencode.svg";
 
-type Step = "welcome" | "feedback" | "project" | "orchestrator" | "workers" | "guide";
+type Step = "welcome" | "feedback" | "auth" | "github" | "cloud" | "project" | "orchestrator" | "workers" | "guide";
 
 type StepDetails = {
 	title: MessageKey;
@@ -34,7 +40,7 @@ type StepDetails = {
 	nextLabel: MessageKey;
 };
 
-const STEPS: Step[] = ["welcome", "feedback", "project", "orchestrator", "workers", "guide"];
+const STEPS: Step[] = ["welcome", "feedback", "auth", "github", "cloud", "project", "orchestrator", "workers", "guide"];
 
 const STEP_DETAILS: Record<Step, StepDetails> = {
 	welcome: {
@@ -46,6 +52,21 @@ const STEP_DETAILS: Record<Step, StepDetails> = {
 		title: "onboarding.step.feedback.title",
 		subtitle: "onboarding.step.feedback.subtitle",
 		nextLabel: "onboarding.step.feedback.next",
+	},
+	auth: {
+		title: "onboarding.step.auth.title",
+		subtitle: "onboarding.step.auth.subtitle",
+		nextLabel: "onboarding.step.auth.next",
+	},
+	github: {
+		title: "onboarding.step.github.title",
+		subtitle: "onboarding.step.github.subtitle",
+		nextLabel: "onboarding.step.github.next",
+	},
+	cloud: {
+		title: "onboarding.step.cloud.title",
+		subtitle: "onboarding.step.cloud.subtitle",
+		nextLabel: "onboarding.step.cloud.next",
 	},
 	project: {
 		title: "onboarding.step.project.title",
@@ -97,8 +118,18 @@ export function OnboardingPage() {
 	const onboardingFinishRequest = useUiStore((state) => state.onboardingFinishRequest);
 	const onboardingFinishError = useUiStore((state) => state.onboardingFinishError);
 	const clearOnboardingFinishError = useUiStore((state) => state.clearOnboardingFinishError);
+	const openGlobalSettings = useUiStore((state) => state.openGlobalSettings);
 	const agentsQuery = useAgentsQuery();
+	// The shell normally publishes the daemon port that API calls need. Loading
+	// straight onto onboarding (a reload mid-setup, or a deep link) skips that,
+	// which left every probe on this screen answering 503.
+	useDaemonStatus();
 	const harnessSetup = useHarnessSetup();
+	// Both prerequisite checks run from the first step's mount, so the agent and
+	// GitHub pages open already knowing their state instead of probing when the
+	// user arrives.
+	const githubSetup = useGitHubSetup();
+	const { cloudEnabled } = useCloudGate();
 	const [freshAgentCatalog, setFreshAgentCatalog] = useState<AgentCatalog | null>(null);
 	const [step, setStep] = useState<Step>("welcome");
 	const [orchestratorAgent, setOrchestratorAgent] = useState<string | null>(null);
@@ -229,9 +260,20 @@ export function OnboardingPage() {
 		void harnessSetup.startAuth(agentId);
 	}, [harnessSetup]);
 
+	// Optional exit from the last step: keep the setup the user already did,
+	// finish onboarding, and land in the app with mobile pairing open.
+	const handleMobileSetup = useCallback(() => {
+		markOnboardingComplete();
+		clearOnboardingFinishError();
+		void navigate({ to: "/" });
+		openGlobalSettings("mobile");
+	}, [clearOnboardingFinishError, navigate, openGlobalSettings]);
+
 	const isProjectStep = step === "project";
 	const isAgentStep = step === "orchestrator" || step === "workers";
 	const isGuideStep = step === "guide";
+	const isSetupStep = step === "auth" || step === "github" || step === "cloud";
+	const isListStep = isProjectStep || isSetupStep;
 
 	useLayoutEffect(() => {
 		// Onboarding is a branded first-run surface: keep it dark and on the
@@ -267,7 +309,7 @@ export function OnboardingPage() {
 
 				<div className={cn(
 					"min-h-0",
-					isProjectStep
+					isListStep
 						? "flex items-center justify-center overflow-y-auto"
 						: isAgentStep || isGuideStep
 							? "grid grid-cols-[minmax(360px,1.1fr)_minmax(300px,0.9fr)] items-center gap-10 max-[1040px]:grid-cols-[minmax(340px,1.15fr)_minmax(240px,0.85fr)] max-[1040px]:gap-6"
@@ -278,10 +320,9 @@ export function OnboardingPage() {
 						className={cn(
 							"grid h-[360px] grid-rows-[180px_180px]",
 							(isAgentStep || isGuideStep) && "h-[480px] grid-rows-[210px_minmax(0,1fr)]",
-							// The project step also carries the GitHub readiness card. Let it
-							// size to content so a missing CLI adds a block instead of
-							// overflowing the fixed wizard height on a short window.
-							isProjectStep && "h-auto min-h-[280px] w-full max-w-[680px] grid-rows-[auto_auto] text-center",
+							// Setup steps size to content so a missing prerequisite adds a
+							// block instead of overflowing the fixed wizard height.
+							isListStep && "h-auto min-h-[280px] w-full max-w-[680px] grid-rows-[auto_auto] text-center",
 						)}
 						aria-labelledby={`onboarding-title-${step}`}
 					>
@@ -291,7 +332,7 @@ export function OnboardingPage() {
 							</h1>
 							<p className={cn("mt-5 max-w-[350px] text-[15px] leading-6 text-muted-foreground text-pretty", (isAgentStep || isGuideStep) && "max-w-[430px]", isProjectStep && "mx-auto")}>{t(details.subtitle)}</p>
 						</div>
-						<div className={cn("min-h-0 pt-2", isProjectStep && "flex justify-center")}>
+						<div className={cn("min-h-0 pt-2", isListStep && "flex justify-center")}>
 							{isAgentStep && (
 								<AgentPicker
 									role={step === "orchestrator" ? "orchestrator" : "worker"}
@@ -309,6 +350,16 @@ export function OnboardingPage() {
 								onWorkerSelect={setWorkerAgent}
 								/>
 							)}
+							{step === "auth" && (
+								<OnboardingAuthStep
+									agents={agents.map((agent) => ({ ...agent, iconUrl: agentIcon(agent.id) }))}
+									setup={harnessSetup}
+									onInstalled={() => void refreshAgentsIfStale()}
+									onSignedIn={() => void refreshAgentsIfStale()}
+								/>
+							)}
+							{step === "github" && <OnboardingGitHubStep setup={githubSetup} />}
+							{step === "cloud" && <OnboardingCloudStep cloudEnabled={cloudEnabled} />}
 							{step === "project" && (
 								<div className="flex w-full flex-col items-center gap-4">
 									<OnboardingProjectSetup
@@ -320,7 +371,6 @@ export function OnboardingPage() {
 										}}
 										preparedProject={preparedProject}
 									/>
-									<OnboardingGitHubSetup />
 								</div>
 							)}
 							{isGuideStep &&
@@ -351,7 +401,16 @@ export function OnboardingPage() {
 										</div>
 									</div>
 								) : (
-									<OnboardingGuide />
+									<div className="flex w-full max-w-[500px] flex-col items-start gap-4">
+										<OnboardingGuide />
+										<button
+											type="button"
+											onClick={handleMobileSetup}
+											className="px-1 text-caption text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+										>
+											{t("onboarding.mobileSetup")}
+										</button>
+									</div>
 								))}
 						</div>
 					</section>
