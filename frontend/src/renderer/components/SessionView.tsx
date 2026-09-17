@@ -2140,6 +2140,12 @@ export function SessionView({ sessionId }: SessionViewProps) {
 								: isInspectorOpen ? t("shell.closeInspectorTitle") : t("shell.openInspectorTitle")}
 						</TooltipContent>
 					</Tooltip>
+					{isOrchestrator ? (
+						<TopbarButton aria-label={projectSummaryOpen ? t("projectSummary.close") : t("projectSummary.open")} aria-pressed={projectSummaryOpen} onClick={() => setProjectSummaryOpen((open) => !open)} variant="icon">
+							<PanelRight className="size-icon-md" aria-hidden="true" />
+							{projectSummaryAttention > 0 ? <span className="min-w-4 rounded-full bg-warning px-1 font-mono text-[9px] leading-4 text-warning-foreground">{projectSummaryAttention}</span> : null}
+						</TopbarButton>
+					) : null}
 					{/* Keep the global notification action trailing at the window edge. */}
 					<NotificationCenter style={noDragStyle} />
 				</div>
