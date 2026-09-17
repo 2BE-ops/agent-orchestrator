@@ -613,18 +613,22 @@ func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "invalid_request", "orgId and sessionId must be UUIDs.")
 		return
 	}
-	if err := s.store.SetSandboxDesiredState(
+	// Terminate the session AND request its sandbox teardown atomically, so the
+	// board archives it on this request (is_terminated) instead of waiting for
+	// the reconciler — which the idle scanner can race by resetting the sandbox
+	// desired_state, leaving the session active and the card re-appearing. This
+	// makes delete land on the first click, symmetric with restore.
+	if err := s.store.TerminateSession(
 		r.Context(),
 		principalFrom(r),
 		orgID,
 		sessionID,
-		domain.SandboxDesiredDeleted,
 	); err != nil {
 		s.writeStoreError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{
-		"session": map[string]any{"id": sessionID, "desiredState": domain.SandboxDesiredDeleted},
+		"session": map[string]any{"id": sessionID, "isTerminated": true, "desiredState": domain.SandboxDesiredDeleted},
 	})
 }
 

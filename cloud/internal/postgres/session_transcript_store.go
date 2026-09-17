@@ -78,6 +78,55 @@ func (s *Store) GetSessionTranscript(
 	return agentSessionID, harness, transcript, preservedGitRef, err
 }
 
+// TerminateSession performs a cloud delete: it marks the session terminated AND
+// requests its sandbox teardown, atomically. Terminating the session row up
+// front (rather than only setting the sandbox desired_state and waiting for the
+// reconciler) is what makes a delete land on the first click: the board archives
+// a session by is_terminated, and the idle scanner can otherwise race a
+// sandbox-only delete by resetting desired_state back to 'paused', which left
+// the session active and the card re-appearing on the next poll. This is the
+// exact inverse of RestoreSession, so delete and restore are symmetric.
+func (s *Store) TerminateSession(
+	ctx context.Context,
+	principal domain.Principal,
+	orgID, sessionID string,
+) error {
+	return s.withTenant(ctx, principal, orgID, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(
+			ctx,
+			`UPDATE ao_sessions
+			SET is_terminated = true,
+				activity_state = 'exited',
+				updated_at = now()
+			WHERE id = $1 AND org_id = $2`,
+			sessionID, orgID,
+		)
+		if err != nil {
+			return normalizeConstraintError(err)
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		// Tear the sandbox down. A session may have no sandbox row yet (created
+		// but never provisioned), so this update affecting no rows is fine — the
+		// session is already terminated, which is what archives it.
+		if _, err := tx.Exec(
+			ctx,
+			`UPDATE ao_sandboxes
+			SET desired_state = 'deleted',
+				deletion_requested_at = COALESCE(deletion_requested_at, now()),
+				startup_started_at = NULL,
+				reconcile_after = now(),
+				updated_at = now()
+			WHERE session_id = $1 AND org_id = $2`,
+			sessionID, orgID,
+		); err != nil {
+			return fmt.Errorf("request sandbox deletion: %w", err)
+		}
+		return nil
+	})
+}
+
 // RestoreSession reverses a cloud delete: it un-terminates the SAME session_id
 // and queues a fresh sandbox provision, mirroring SetSandboxDesiredState's
 // 'running' intent. Preserving the session_id keeps parent_session_id links

@@ -59,6 +59,7 @@ type Store interface {
 	SendMessage(context.Context, domain.Principal, string, string, string, string) (domain.ClientEvent, error)
 	ListClientEvents(context.Context, domain.Principal, string, string, int64, int) ([]domain.ClientEvent, bool, error)
 	SetSandboxDesiredState(ctx context.Context, principal domain.Principal, orgID, sessionID, desiredState string) error
+	TerminateSession(ctx context.Context, principal domain.Principal, orgID, sessionID string) error
 	RestoreSession(ctx context.Context, principal domain.Principal, orgID, sessionID string) error
 	ResumeSession(context.Context, domain.Principal, string, string) (domain.SandboxLifecycle, error)
 	WakePausedSessions(context.Context, domain.Principal, string) (int64, error)
