@@ -296,7 +296,7 @@ export function OnboardingPage() {
 				style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
 			/>
 
-			<div className="mx-auto grid h-full w-full max-w-[1240px] grid-rows-[80px_minmax(0,1fr)_88px] px-8 max-[1040px]:px-6">
+			<div className="mx-auto grid h-full w-full max-w-[1240px] grid-rows-[80px_minmax(0,1fr)_104px] px-8 max-[1040px]:px-6">
 				<header className="flex items-end justify-between pb-3" aria-label={t("onboarding.progressLabel")}>
 					{isFeatureStep ? (
 						// The mark moves above the headline on these two pages. The spacer
@@ -452,7 +452,7 @@ export function OnboardingPage() {
 					) : step === "welcome" || step === "feedback" ? <PreviewStage step={step} /> : null}
 				</div>
 
-				<footer className="flex items-center justify-between pt-4">
+				<footer className="flex items-center justify-between">
 					<button
 						type="button"
 						onClick={() => goToStep(stepIndex - 1)}
