@@ -36,6 +36,7 @@ import { useWorkspaceQuery, workspaceQueryKey } from "../hooks/useWorkspaceQuery
 import { useRestoreSession } from "../hooks/useRestoreSession";
 import { useShellTerminals } from "../hooks/useShellTerminals";
 import { useCloudCp } from "../hooks/useCloudCp";
+import { terminalResetNonce, useTerminalResetStore } from "../stores/terminal-reset-store";
 import { createCloudTerminalMux } from "../lib/cloud-terminal-mux";
 import { subscribeSessionEventsBridged } from "../lib/cloud-cp/stream-bridge";
 import { XtermTerminal } from "./XtermTerminal";
@@ -158,8 +159,15 @@ function cacheDescriptor(
 	if (!session?.id || !handleId) return null;
 	const ownerKey = `session:${session.id}:worker`;
 	const generation = session.terminalGeneration ?? "";
+	// The reset nonce discriminates a restored session (same id, new worker epoch,
+	// dead old terminal) from the live one: folding it into the cache key alone
+	// makes restore mount a brand-new entry (which re-mints against the new epoch)
+	// while `generation` stays the raw value the workspace reconcile loop compares
+	// against session.terminalGeneration — so a restore does not look like a
+	// generation change that would dispose the fresh terminal on the next render.
+	const nonce = terminalResetNonce(session.id);
 	return {
-		cacheKey: `${ownerKey}|handle:${handleId}|generation:${generation}`,
+		cacheKey: `${ownerKey}|handle:${handleId}|generation:${generation}|reset:${nonce}`,
 		generation,
 		handleId,
 		kind: "worker",
@@ -317,7 +325,12 @@ export function TerminalCacheProvider({
 			if (!cloud) return muxPool.acquire;
 			const kind = cloudTerminalKind(terminalTarget);
 			const identity = terminalTarget?.kind === "shell" ? terminalTarget.handleId : "agent";
-			const factoryKey = `${paneSession.id}:${kind}:${identity}`;
+			// Include the reset nonce so a restored session (new worker epoch) gets a
+			// brand-new factory closure — and therefore a fresh cursor at 0 — instead
+			// of the cached one whose cursor still points at the dead epoch's replay
+			// position. Without this the rebuilt mux dials `after=<stale>` and the new
+			// epoch (which replays from 0) never sends output, so the pane never opens.
+			const factoryKey = `${paneSession.id}:${kind}:${identity}:${terminalResetNonce(paneSession.id)}`;
 			const cached = cloudMuxFactoriesRef.current.get(factoryKey);
 			if (cached) return cached;
 			const sessionId = paneSession.id;
@@ -666,6 +679,13 @@ export function TerminalPane({
 	const isOptimisticShell =
 		terminalTarget.kind === "shell" && terminalTarget.handleId.startsWith("pending-shell:");
 	const cache = useContext(TerminalCacheContext);
+	// Subscribe to this session's terminal-reset nonce so a restore (which bumps
+	// it) re-renders the pane and recomputes the descriptor/mux key below, forcing
+	// a fresh mount against the new worker epoch. Reading through the store hook is
+	// what makes the bump reactive; cacheDescriptor/resolveCreateMux read the same
+	// value non-reactively. Placed above the early returns so the hook order is
+	// stable regardless of the render path.
+	useTerminalResetStore((state) => (session?.id ? (state.nonces[session.id] ?? 0) : 0));
 	const terminalKey =
 		terminalTarget?.kind === "reviewer" || terminalTarget?.kind === "shell"
 			? terminalTarget.handleId

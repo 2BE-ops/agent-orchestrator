@@ -6,6 +6,7 @@ import type { CloudCpSession } from "../lib/cloud-cp";
 import { createRendererCloudCpClient } from "./useCloudCp";
 import { settingsQueryKey, type Settings } from "./useSettings";
 import { cloudSessionsQueryKey, workspaceQueryKey } from "./useWorkspaceQuery";
+import { useTerminalResetStore } from "../stores/terminal-reset-store";
 
 export type RestoreSessionResult =
 	{ status: "success" } | { status: "not_resumable"; message: string } | { status: "error"; message: string };
@@ -47,6 +48,11 @@ export function useRestoreSession(): (sessionId: string) => Promise<RestoreSessi
 					// listing (and the merged board) so the UI reflects it immediately.
 					await queryClient.invalidateQueries({ queryKey: cloudSessionsQueryKey });
 					await queryClient.invalidateQueries({ queryKey: workspaceQueryKey });
+					// Restore re-provisions a fresh sandbox under the same session id but
+					// a NEW worker epoch, so the old terminal is dead. Bump the reset nonce
+					// so the pane rebuilds from scratch (new mux factory, cursor at 0) and
+					// re-mints against the new epoch instead of clinging to the exited one.
+					useTerminalResetStore.getState().bump(sessionId);
 					return { status: "success" };
 				} catch (err) {
 					return {
