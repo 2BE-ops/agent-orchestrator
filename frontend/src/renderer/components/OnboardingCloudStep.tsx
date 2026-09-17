@@ -1,4 +1,4 @@
-import { Check, Cloud, Laptop } from "lucide-react";
+import { Cloud, Laptop } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useCloudGate } from "../hooks/useCloudGate";
@@ -30,7 +30,6 @@ export function OnboardingCloudStep({ cloudEnabled }: { cloudEnabled: boolean })
 					label={t("onboarding.cloudOptionYesLabel")}
 					description={t("onboarding.cloudOptionYesDetail")}
 					selected={selected}
-					trailing={selected ? <Check aria-hidden="true" className="size-3.5 text-status-ready" /> : undefined}
 					onClick={() => choose(true)}
 				/>
 				<SetupRow
@@ -39,7 +38,6 @@ export function OnboardingCloudStep({ cloudEnabled }: { cloudEnabled: boolean })
 					label={t("onboarding.cloudOptionNoLabel")}
 					description={t("onboarding.cloudOptionNoDetail")}
 					selected={!selected}
-					trailing={!selected ? <Check aria-hidden="true" className="size-3.5 text-status-ready" /> : undefined}
 					onClick={() => choose(false)}
 				/>
 			</div>

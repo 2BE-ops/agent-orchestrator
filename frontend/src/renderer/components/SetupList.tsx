@@ -32,9 +32,12 @@ export function SetupRow({ icon, label, description, trailing, disabled, selecte
 			className={cn(
 				"flex w-full items-center text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-50",
 				isCard
-					? "gap-3 rounded-lg bg-card px-4 py-3 hover:bg-muted active:scale-[0.99]"
+					// The border is always there so selecting a row changes colour
+					// instead of nudging the text sideways.
+					? "gap-3 rounded-lg border border-transparent bg-card px-4 py-3 hover:bg-muted active:scale-[0.99]"
 					: "gap-3.5 px-1 py-3.5 hover:bg-foreground/[0.04]",
 				!isCard && selected && "bg-foreground/[0.03]",
+				isCard && selected && "border-accent bg-accent-weak",
 			)}
 		>
 			<span className={cn("grid shrink-0 place-items-center text-muted-foreground", isCard ? "size-8 [&_svg]:size-4" : "size-6 [&_svg]:size-5")}>{icon}</span>
