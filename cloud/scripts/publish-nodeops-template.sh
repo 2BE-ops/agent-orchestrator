@@ -95,6 +95,21 @@ if [[ -z "$base_url" || -z "$api_key" ]]; then
     exit 1
 fi
 
+# Idempotent reuse: if a template with this exact name is already built and
+# ready, reuse it instead of submitting a duplicate build. A per-release name
+# (see deploy-staging.sh) means a redeploy of an unchanged release short-circuits
+# here and skips the multi-minute NodeOps build. limit=500 returns the full list
+# (createos paginates at 50 by default), so a name on a later page is not missed.
+existing_status="$(curl --fail --silent --show-error \
+    "$base_url/v1/templates?limit=500" \
+    -H "X-Api-Key: $api_key" |
+    jq -r --arg name "$TEMPLATE_NAME" \
+        'first(.data.data[]? | select(.name == $name) | .status) // empty')"
+if [[ "$existing_status" == "ready" ]]; then
+    echo "NodeOps template $TEMPLATE_NAME already ready; reusing (no rebuild)."
+    exit 0
+fi
+
 composed="$workdir/Dockerfile"
 if [[ "$HARNESS" == "all" ]]; then
     cat "$DOCKERFILE" > "$composed"

@@ -68,6 +68,33 @@ secret_arn() {
 		--output text
 }
 
+# persist_rootfs_by_harness writes the given rootfs_by_harness JSON back into the
+# sandbox secret's rootfs_by_harness key, preserving every other key. It reads
+# the current secret, sets only that one field, and puts it back. The secret
+# value is never echoed (this script runs without set -x). Returns non-zero on
+# any failure so the caller can warn without aborting the rollout.
+persist_rootfs_by_harness() {
+	local secret_id="$1" mapping="$2" current updated
+	current="$(
+		aws_cli secretsmanager get-secret-value \
+			--secret-id "$secret_id" \
+			--query SecretString \
+			--output text
+	)" || return 1
+	updated="$(jq -c --argjson rf "$mapping" '.rootfs_by_harness = $rf' <<<"$current")" || {
+		unset current
+		return 1
+	}
+	unset current
+	aws_cli secretsmanager put-secret-value \
+		--secret-id "$secret_id" \
+		--secret-string "$updated" >/dev/null || {
+		unset updated
+		return 1
+	}
+	unset updated
+}
+
 provider_secret_arn="$(secret_arn "${AO_CLOUD_PROVIDER_SECRET_ID:-ao-cloud/staging/provider-secret-key}")"
 nodeops_secret_arn="$(secret_arn "$NODEOPS_SECRET_ID")"
 worker_secret_arn="$(secret_arn "$WORKER_SECRET_ID")"
@@ -204,14 +231,48 @@ scan_image "$WORKER_REPOSITORY" "$worker_image_digest"
 # PTY upload (internal/sandbox/coder/client.go preinstalledCheck). Rebuild and
 # publish it here, before the rollout, from the exact control-plane digest so the
 # baked binaries are byte-identical to what the reconciler advertises
-# (AO_WORKER_EXPECTED_SHA256). The nodeops path is unaffected: its template is
-# published out of band by scripts/publish-nodeops-template.sh.
+# (AO_WORKER_EXPECTED_SHA256).
 if [[ "$SANDBOX_PROVIDER" == "coder" ]]; then
 	AWS_REGION="$REGION" \
 		AO_CLOUD_CP_IMAGE="$control_image" \
 		AO_CLOUD_CODER_SECRET_ID="$CODER_SECRET_ID" \
 		AO_CLOUD_CODER_WORKSPACE_IMAGE_TAG="${IMAGE_TAG}" \
 		./scripts/publish-coder-workspace.sh
+fi
+
+# NodeOps bakes ao-worker + ao into its rootfs template the same way, so a worker
+# change likewise goes stale unless the template is rebaked, and every spawn then
+# pays the self-heal download. Rebake the claude-code template from the exact
+# control-plane image and repoint rootfs_by_harness at it, mirroring the coder
+# path above so a worker-changing deploy can never silently leave nodeops stale.
+# The template is named per release so NodeOps builds a fresh one; a redeploy of
+# an unchanged release reuses the existing ready template (publish script's
+# idempotent reuse), so the multi-minute build only runs when the worker changed.
+# Set AO_CLOUD_SKIP_NODEOPS_REBAKE=1 for a control-plane-only deploy whose worker
+# is unchanged, to keep the current template without rebuilding.
+if [[ "$SANDBOX_PROVIDER" == "nodeops" && "${AO_CLOUD_SKIP_NODEOPS_REBAKE:-0}" != "1" ]]; then
+	nodeops_template_name="ao-worker-claude-${IMAGE_TAG}"
+	AWS_REGION="$REGION" \
+		AO_CLOUD_CP_IMAGE="$control_image" \
+		AO_CLOUD_NODEOPS_SECRET_ID="$sandbox_secret_id" \
+		AO_CLOUD_NODEOPS_HARNESS=claude-code \
+		AO_CLOUD_NODEOPS_TEMPLATE_NAME="$nodeops_template_name" \
+		./scripts/publish-nodeops-template.sh
+	# Repoint the claude-code entry at the freshly baked template, preserving any
+	# other harness keys. The task-def render below reads this shell variable, so
+	# the rollout carries the new template without a second deploy.
+	rootfs_by_harness="$(
+		jq -c --arg name "$nodeops_template_name" \
+			'. + {"claude-code": $name}' <<<"$rootfs_by_harness"
+	)"
+	# Persist the new mapping to the sandbox secret so a later worker-unchanged
+	# deploy (which reads rootfs_by_harness from the secret) keeps the fresh
+	# template. Best effort: the task-def already carries the correct name via the
+	# shell variable, so a writeback failure must not fail the rollout.
+	if ! persist_rootfs_by_harness "$sandbox_secret_id" "$rootfs_by_harness"; then
+		echo "WARN: could not persist rootfs_by_harness to $sandbox_secret_id;" \
+			"this rollout still uses $nodeops_template_name." >&2
+	fi
 fi
 
 register_task_definition() {
