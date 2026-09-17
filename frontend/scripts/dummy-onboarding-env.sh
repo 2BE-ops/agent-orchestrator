@@ -24,6 +24,11 @@
 #   "not installed" this way. For a genuine bare-machine run use a fresh macOS
 #   user account or a VM, which is also the closest match to a new Mac.
 #
+#   Sign out of AO Cloud. Cloud auth resolves to ~/.ao/dev for any dev build
+#   (cloudDataDir() in src/main.ts), ignoring AO_DATA_DIR, so the cloud project
+#   flow opens already signed in and its sign-in panel is unreachable here.
+#   Move ~/.ao/dev/cloud-auth.bin aside first to walk that path.
+#
 # Usage
 #   scripts/dummy-onboarding-env.sh [--skip-build] [--dry-run]
 #                                   [-- <extra electron-forge args>]
