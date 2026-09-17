@@ -83,7 +83,7 @@ func (b HarnessBuilder) BuildInteractive(
 	var providerArgs []string
 	switch launch.Harness {
 	case "codex":
-		providerArgs = codexActivityHookArgs()
+		providerArgs = codexActivityHookArgs(hookHelperPath(b.DataDir))
 	case "cursor":
 		providerArgs = []string{"--trust"}
 	}
@@ -144,7 +144,7 @@ func (b HarnessBuilder) BuildInteractive(
 		}
 	}
 	if launch.Harness == "cursor" {
-		if err := installCursorActivityHooks(workspace); err != nil {
+		if err := installCursorActivityHooks(hookHelperPath(b.DataDir), workspace); err != nil {
 			if command.Cleanup != nil {
 				command.Cleanup()
 			}
@@ -330,9 +330,10 @@ func (b HarnessBuilder) prepareClaudeCloudExperience(command *Command, workspace
 	}); err != nil {
 		return fmt.Errorf("prepare Claude settings: %w", err)
 	}
+	helperBinary := hookHelperPath(b.DataDir)
 	if err := updateJSONFile(
 		filepath.Join(workspace, ".claude", "settings.local.json"),
-		installClaudeActivityHooks,
+		func(settings map[string]any) { installClaudeActivityHooks(helperBinary, settings) },
 	); err != nil {
 		return fmt.Errorf("install Claude activity hooks: %w", err)
 	}

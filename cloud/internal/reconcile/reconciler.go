@@ -486,8 +486,13 @@ func (r *Reconciler) reconcileSandbox(ctx context.Context, record domain.Sandbox
 	// A terminated sandbox is parked: repairs have been abandoned, so do not
 	// probe or resume its compute (a probe would resume an auto-paused VM and
 	// restart the very repair storm termination stopped). It stays down until a
-	// deleted desired state, handled above, cleans it up.
-	if record.ObservedState == domain.SandboxObservedTerminated {
+	// deleted desired state, handled above, cleans it up — or until a restore
+	// re-asserts a running intent, in which case it must re-enter provisioning
+	// rather than stay parked. (A deleted-then-restored session already carries
+	// observed_state 'deleted' with no provider id and provisions below; this
+	// also covers un-terminating a session parked by the repair-storm ceiling.)
+	if record.ObservedState == domain.SandboxObservedTerminated &&
+		record.DesiredState != domain.SandboxDesiredRunning {
 		return r.observe(ctx, record, record.ProviderEnvironmentID,
 			domain.SandboxObservedTerminated, record.LastError, 24*time.Hour)
 	}

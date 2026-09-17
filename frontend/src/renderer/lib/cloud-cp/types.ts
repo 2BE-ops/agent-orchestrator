@@ -201,6 +201,14 @@ export interface CloudCpSession {
 	runtimeState?: string;
 	runtimeError?: string;
 	isTerminated: boolean;
+	/**
+	 * Highest worker epoch the session has minted for its agent terminal. It
+	 * advances on every fresh worker connection (resume from idle-pause,
+	 * restore, re-provision), so the terminal can key on it and re-attach to the
+	 * live agent instead of the dead epoch's exited terminal. Absent/0 when no
+	 * worker has connected yet.
+	 */
+	workerEpoch?: number;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -259,6 +267,18 @@ export interface CloudCpResumeSessionResponse {
 		sandboxProvider: string;
 		desiredState: string;
 		observedState: string;
+	};
+}
+
+/**
+ * POST /orgs/{orgId}/sessions/{sessionId}/restore responds 202: a deleted
+ * session is re-provisioned with its conversation and work intact, and the
+ * reconciler owns bringing it back — the response only echoes the new intent.
+ */
+export interface CloudCpRestoreSessionResponse {
+	session: {
+		id: string;
+		desiredState: string;
 	};
 }
 

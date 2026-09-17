@@ -37,6 +37,7 @@ import type {
 	CloudCpSessionDeletedResponse,
 	CloudCpSessionListResponse,
 	CloudCpResumeSessionResponse,
+	CloudCpRestoreSessionResponse,
 	CloudCpSessionResponse,
 	CloudCpTerminalTicketRequest,
 	CloudCpTerminalTicketResponse,
@@ -136,6 +137,12 @@ export interface CloudCpClient {
 		sessionId: string,
 		options?: CloudCpRequestOptions,
 	): Promise<CloudCpResumeSessionResponse>;
+	/** Re-provision a deleted session, keeping its conversation and work intact. */
+	restoreSession(
+		orgId: string,
+		sessionId: string,
+		options?: CloudCpRequestOptions,
+	): Promise<CloudCpRestoreSessionResponse>;
 
 	sendSessionMessage(
 		orgId: string,
@@ -386,6 +393,10 @@ export function createCloudCpClient(options: CloudCpClientOptions): CloudCpClien
 			requestJson("DELETE", `/orgs/${seg(orgId)}/sessions/${seg(sessionId)}`, { signal: o?.signal }),
 		resumeSession: (orgId, sessionId, o) =>
 			requestJson("POST", `/orgs/${seg(orgId)}/sessions/${seg(sessionId)}/resume`, {
+				signal: o?.signal,
+			}),
+		restoreSession: (orgId, sessionId, o) =>
+			requestJson("POST", `/orgs/${seg(orgId)}/sessions/${seg(sessionId)}/restore`, {
 				signal: o?.signal,
 			}),
 

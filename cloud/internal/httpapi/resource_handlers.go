@@ -63,26 +63,30 @@ type createSessionRequest struct {
 }
 
 type sessionResponse struct {
-	ID               string    `json:"id"`
-	OrgID            string    `json:"orgId"`
-	ProjectID        string    `json:"projectId"`
-	Kind             string    `json:"kind"`
-	Harness          string    `json:"harness"`
-	DisplayName      string    `json:"displayName"`
-	Branch           string    `json:"branch"`
-	Mode             string    `json:"mode"`
-	DeniedCommands   []string  `json:"deniedCommands"`
-	ActivityState    string    `json:"activityState"`
-	Status           string    `json:"status"`
-	RuntimeConnected bool      `json:"runtimeConnected"`
-	SandboxProvider  string    `json:"sandboxProvider,omitempty"`
-	DesiredState     string    `json:"desiredState,omitempty"`
-	ObservedState    string    `json:"observedState,omitempty"`
-	RuntimeState     string    `json:"runtimeState,omitempty"`
-	RuntimeError     string    `json:"runtimeError,omitempty"`
-	IsTerminated     bool      `json:"isTerminated"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	ID               string   `json:"id"`
+	OrgID            string   `json:"orgId"`
+	ProjectID        string   `json:"projectId"`
+	Kind             string   `json:"kind"`
+	Harness          string   `json:"harness"`
+	DisplayName      string   `json:"displayName"`
+	Branch           string   `json:"branch"`
+	Mode             string   `json:"mode"`
+	DeniedCommands   []string `json:"deniedCommands"`
+	ActivityState    string   `json:"activityState"`
+	Status           string   `json:"status"`
+	RuntimeConnected bool     `json:"runtimeConnected"`
+	SandboxProvider  string   `json:"sandboxProvider,omitempty"`
+	DesiredState     string   `json:"desiredState,omitempty"`
+	ObservedState    string   `json:"observedState,omitempty"`
+	RuntimeState     string   `json:"runtimeState,omitempty"`
+	RuntimeError     string   `json:"runtimeError,omitempty"`
+	IsTerminated     bool     `json:"isTerminated"`
+	// WorkerEpoch advances on every fresh worker connection (resume, restore,
+	// re-provision). Clients key their terminal on it so a resumed session
+	// re-attaches to the live agent instead of the dead epoch's terminal.
+	WorkerEpoch int64     `json:"workerEpoch,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 type pageInfo struct {
@@ -609,18 +613,22 @@ func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "invalid_request", "orgId and sessionId must be UUIDs.")
 		return
 	}
-	if err := s.store.SetSandboxDesiredState(
+	// Terminate the session AND request its sandbox teardown atomically, so the
+	// board archives it on this request (is_terminated) instead of waiting for
+	// the reconciler — which the idle scanner can race by resetting the sandbox
+	// desired_state, leaving the session active and the card re-appearing. This
+	// makes delete land on the first click, symmetric with restore.
+	if err := s.store.TerminateSession(
 		r.Context(),
 		principalFrom(r),
 		orgID,
 		sessionID,
-		domain.SandboxDesiredDeleted,
 	); err != nil {
 		s.writeStoreError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{
-		"session": map[string]any{"id": sessionID, "desiredState": domain.SandboxDesiredDeleted},
+		"session": map[string]any{"id": sessionID, "isTerminated": true, "desiredState": domain.SandboxDesiredDeleted},
 	})
 }
 
@@ -702,6 +710,7 @@ func toSessionResponse(session domain.Session, prs []contract.PRFacts) sessionRe
 		RuntimeState:     session.RuntimeState,
 		RuntimeError:     session.RuntimeError,
 		IsTerminated:     session.IsTerminated,
+		WorkerEpoch:      session.WorkerEpoch,
 		CreatedAt:        session.CreatedAt,
 		UpdatedAt:        session.UpdatedAt,
 	}
