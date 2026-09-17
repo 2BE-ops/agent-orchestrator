@@ -472,7 +472,7 @@ export function OnboardingPage() {
 						// agents cannot open pull requests or read issues without it.
 						(step === "github" && !githubSetup.authSatisfied)
 					}
-						className="group relative inline-flex h-10 w-auto items-center justify-center overflow-hidden whitespace-nowrap rounded-md px-4 text-sm font-medium text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-30"
+						className="group relative inline-flex h-10 w-auto items-center justify-center overflow-hidden whitespace-nowrap rounded-md px-4 text-sm font-medium text-background ring-1 ring-foreground/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-30"
 					>
 						{/* Emphasis fill: a white gradient with a highlight along the top
 						    edge, which brightens on hover. The fill lives entirely in this
