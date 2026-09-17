@@ -565,6 +565,8 @@ func TestSubmitManyRejectsOnlySupersededRuns(t *testing.T) {
 		RunID: "run-1", Verdict: domain.VerdictApproved,
 	}}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("err = %v, want ErrInvalid", err)
+	} else if !strings.Contains(err.Error(), "superseded: run-1") {
+		t.Fatalf("err = %v, want rejected run id", err)
 	}
 	if reducer.batchCalls != 0 {
 		t.Fatalf("only superseded runs must not trigger delivery: batchCalls=%d", reducer.batchCalls)

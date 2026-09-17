@@ -653,6 +653,7 @@ func (s *Service) SubmitMany(ctx context.Context, workerID domain.SessionID, rev
 		return nil, fmt.Errorf("review service store is not configured")
 	}
 	runs := make([]domain.ReviewRun, 0, len(reviews))
+	var supersededRunIDs []string
 	for _, review := range reviews {
 		run, err := s.submitOne(ctx, workerID, review)
 		if err != nil {
@@ -660,6 +661,7 @@ func (s *Service) SubmitMany(ctx context.Context, workerID domain.SessionID, rev
 			// run terminal while the reviewer was working. That run is no longer
 			// submittable, but it must not prevent valid siblings from delivery.
 			if errors.Is(err, errRunSuperseded) {
+				supersededRunIDs = append(supersededRunIDs, review.RunID)
 				continue
 			}
 			return nil, err
@@ -667,6 +669,9 @@ func (s *Service) SubmitMany(ctx context.Context, workerID domain.SessionID, rev
 		runs = append(runs, run)
 	}
 	if len(runs) == 0 {
+		if len(supersededRunIDs) > 0 {
+			return nil, fmt.Errorf("%w: no submittable review runs in submission (superseded: %s)", ErrInvalid, strings.Join(supersededRunIDs, ", "))
+		}
 		return nil, fmt.Errorf("%w: no submittable review runs in submission", ErrInvalid)
 	}
 	if s.lifecycle == nil {
