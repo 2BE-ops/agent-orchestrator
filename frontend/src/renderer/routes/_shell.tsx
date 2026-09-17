@@ -64,7 +64,17 @@ export const Route = createFileRoute("/_shell")({
 	loader: async ({ context }) => {
 		await refreshDaemonStatus().catch(() => undefined);
 		if (!usesPreviewWorkspaceData && !hasTrustedApiBaseUrl()) return;
-		return context.queryClient.fetchQuery({ ...workspaceQueryOptions, staleTime: 0 });
+		try {
+			return await context.queryClient.fetchQuery({ ...workspaceQueryOptions, staleTime: 0 });
+		} catch (error) {
+			// staleTime: 0 means every navigation refetches, so an overlapping
+			// invalidate (spawning an orchestrator, pinning, terminating) can
+			// cancel this fetch mid-flight. A superseded read is not a failed
+			// load: hand back the cache rather than failing the whole shell
+			// route, which would surface as an unrecoverable error screen.
+			if (!isCancelledError(error)) throw error;
+			return context.queryClient.getQueryData<WorkspaceSummary[]>(workspaceQueryKey);
+		}
 	},
 	component: ShellLayout,
 });
