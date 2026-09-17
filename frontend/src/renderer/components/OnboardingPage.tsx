@@ -274,6 +274,8 @@ export function OnboardingPage() {
 	const isGuideStep = step === "guide";
 	const isSetupStep = step === "github" || step === "cloud";
 	const isListStep = isProjectStep || isSetupStep;
+	// The two feature pages open on the product mark; setup pages want the space.
+	const isFeatureStep = step === "welcome" || step === "feedback";
 
 	useLayoutEffect(() => {
 		// Onboarding is a branded first-run surface: keep it dark and on the
@@ -296,7 +298,16 @@ export function OnboardingPage() {
 
 			<div className="mx-auto grid h-full w-full max-w-[1240px] grid-rows-[80px_minmax(0,1fr)_88px] px-8 max-[1040px]:px-6">
 				<header className="flex items-end justify-between pb-3" aria-label={t("onboarding.progressLabel")}>
-					<img src={aoLogo} alt={t("onboarding.logoAlt")} className="h-6 w-7 object-contain" />
+					<img
+						src={aoLogo}
+						alt={t("onboarding.logoAlt")}
+						className={cn(
+							"h-6 w-7 origin-top-left object-contain transition-transform duration-300 ease-out motion-reduce:transition-none",
+							// Scaled, not resized: the box keeps its 24x28 footprint, so the
+							// header and everything below it stay exactly where they are.
+							isFeatureStep && "scale-[500%]",
+						)}
+					/>
 					<div className="flex gap-1.5" aria-label={t("onboarding.stepOf", { current: stepIndex + 1, total: STEPS.length })}>
 						{STEPS.map((item, index) => (
 							<span
