@@ -1148,7 +1148,13 @@ function AttachedTerminal({
 	// terminal attaches. Cloud only, so local terminals are unchanged.
 	const isBoxComingUp =
 		Boolean(session?.cloud) &&
-		state !== "attached" &&
+		// Gate on !hasAttached, not state !== "attached": once this pane has ever
+		// attached, a transient reconnect (e.g. on the first keystroke, while the
+		// polled runtimeConnected still lags) must NOT pull the full Connecting
+		// cover back over a live terminal — that window uses the subtle reattaching
+		// banner instead. A restore mounts a fresh pane, so hasAttached resets and
+		// the cover correctly shows until the new box attaches.
+		!hasAttached &&
 		// isReconnecting fires synchronously on the restore/resume click; the
 		// runtimeConnected clause keeps the surface up through the rest of the
 		// fresh box's boot once the poll catches up.
