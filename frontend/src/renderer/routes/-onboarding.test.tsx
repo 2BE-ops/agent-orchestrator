@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -21,6 +22,20 @@ const routeMocks = vi.hoisted(() => ({
 	openGlobalSettings: vi.fn(),
 }));
 
+const apiMocks = vi.hoisted(() => ({
+	GET: vi.fn(),
+	POST: vi.fn(),
+	DELETE: vi.fn(),
+}));
+
+vi.mock("../lib/api-client", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../lib/api-client")>();
+	return {
+		...actual,
+		apiClient: { ...actual.apiClient, GET: apiMocks.GET, POST: apiMocks.POST, DELETE: apiMocks.DELETE },
+	};
+});
+
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@tanstack/react-router")>()),
 	createFileRoute: () => (options: unknown) => ({ options }),
@@ -28,6 +43,7 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 }));
 
 vi.mock("../stores/ui-store", () => ({
+	useResolvedTheme: () => "dark" as const,
 	useUiStore: (selector: (state: unknown) => unknown) =>
 		selector({
 			openGlobalSettings: routeMocks.openGlobalSettings,
@@ -52,14 +68,97 @@ import { OnboardingPage } from "../components/OnboardingPage";
 
 async function renderOnboarding() {
 	await act(async () => {
-		render(<OnboardingPage />);
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<OnboardingPage />
+			</QueryClientProvider>,
+		);
 	});
+}
+
+async function goToOrchestratorStep(user: ReturnType<typeof userEvent.setup>) {
+	await user.click(screen.getByRole("button", { name: "Continue" }));
+	await user.click(await screen.findByRole("button", { name: "Create your project" }));
+	await user.click(await screen.findByRole("button", { name: "Prepare project" }));
+	await screen.findByRole("heading", { name: "Pick your orchestrator agent." });
+}
+
+async function goToProjectStep(user: ReturnType<typeof userEvent.setup>) {
+	await user.click(screen.getByRole("button", { name: "Continue" }));
+	await user.click(await screen.findByRole("button", { name: "Create your project" }));
+	await screen.findByRole("heading", { name: "Create your first project." });
 }
 
 beforeEach(() => {
 	routeMocks.navigate.mockReset();
 	routeMocks.requestOnboardingFinish.mockReset();
 	routeMocks.openGlobalSettings.mockReset();
+	apiMocks.GET.mockReset();
+	apiMocks.POST.mockReset();
+	apiMocks.DELETE.mockReset();
+	apiMocks.GET.mockImplementation(async (path: string) => {
+		if (path === "/api/v1/agents/installers") return { data: { agents: [] } };
+		if (path === "/api/v1/agents/install-jobs") return { data: { jobs: [] } };
+		if (path === "/api/v1/agents/auth-plans") {
+			return {
+				data: {
+					plans: [
+						{ action: "login", agentId: "kiro", available: true, documentationUrl: "https://example.com/kiro", launchMode: "terminal" },
+					],
+				},
+			};
+		}
+		if (path === "/api/v1/shell-terminals") return { data: { terminals: [] } };
+		if (path === "/api/v1/system/requirements") {
+			return {
+				data: {
+					ready: true,
+					requirements: [
+						{ detail: "/usr/local/bin/gh", id: "gh", label: "GitHub CLI", required: false, satisfied: false },
+					],
+				},
+			};
+		}
+		if (path === "/api/v1/system/github-auth") {
+			return { data: { id: "github-auth", label: "GitHub account", required: false, satisfied: false } };
+		}
+		if (path === "/api/v1/system/install/{target}") {
+			return { data: { status: "idle", target: "gh" } };
+		}
+		return { data: undefined };
+	});
+	apiMocks.POST.mockImplementation(async (path: string) => {
+		if (path === "/api/v1/agents/{agent}/install") {
+			return { data: { status: "installing", target: "cursor" } };
+		}
+		if (path === "/api/v1/agents/{agent}/auth") {
+			return {
+				data: {
+					action: "login",
+					agentId: "kiro",
+					guidance: "Complete the native sign-in flow in the terminal.",
+					terminal: { createdAt: new Date().toISOString(), handleId: "auth-terminal-1", title: "Kiro sign-in", workingDir: "/tmp" },
+					terminalInput: "",
+				},
+			};
+		}
+		if (path === "/api/v1/system/install/{target}") {
+			return { data: { status: "installing", target: "gh" } };
+		}
+		if (path === "/api/v1/system/github-auth/terminal") {
+			return {
+				data: {
+					shellTerminal: {
+						createdAt: new Date().toISOString(),
+						handleId: "github-auth-terminal-1",
+						title: "Connect GitHub",
+						workingDir: "/tmp",
+					},
+				},
+			};
+		}
+		return { data: undefined };
+	});
 	routeMocks.agentsQuery = {
 		data: {
 			authorized: [
@@ -177,5 +276,142 @@ describe("onboarding route", () => {
 			expect(routeMocks.navigate).toHaveBeenCalledWith({ to: "/" });
 		});
 		expect(window.localStorage.getItem("ao.onboarding.completed")).toBe("1");
+	});
+
+	it("installs a missing harness in place instead of leaving onboarding", async () => {
+		const user = userEvent.setup();
+		await renderOnboarding();
+		await goToOrchestratorStep(user);
+
+		const picker = screen.getByRole("region", { name: "Orchestrator agent" });
+		await user.click(within(picker).getByRole("button", { name: "Install Cursor" }));
+
+		await waitFor(() => {
+			expect(apiMocks.POST).toHaveBeenCalledWith(
+				"/api/v1/agents/{agent}/install",
+				expect.objectContaining({
+					params: { path: { agent: "cursor" } },
+					body: expect.objectContaining({ operation: "install" }),
+				}),
+			);
+		});
+		// Sending the user to Settings and the home route used to drop them out of
+		// setup with no way back to the step they were on.
+		expect(routeMocks.navigate).not.toHaveBeenCalled();
+		expect(routeMocks.openGlobalSettings).not.toHaveBeenCalled();
+	});
+
+	it("surfaces a failed install with the reason and a retry in place", async () => {
+		apiMocks.GET.mockImplementation(async (path: string) => {
+			if (path === "/api/v1/agents/installers") return { data: { agents: [] } };
+			if (path === "/api/v1/agents/install-jobs") {
+				return { data: { jobs: [{ error: "brew is not installed", status: "failed", target: "cursor" }] } };
+			}
+			if (path === "/api/v1/agents/auth-plans") return { data: { plans: [] } };
+			return { data: undefined };
+		});
+		const user = userEvent.setup();
+		await renderOnboarding();
+		await goToOrchestratorStep(user);
+
+		const picker = screen.getByRole("region", { name: "Orchestrator agent" });
+		expect(await within(picker).findByText("brew is not installed")).toBeInTheDocument();
+		expect(within(picker).getByRole("button", { name: "Try again to install Cursor" })).toBeEnabled();
+	});
+
+	it("offers an in-place sign-in for an installed harness that is not authenticated", async () => {
+		const user = userEvent.setup();
+		await renderOnboarding();
+		await goToOrchestratorStep(user);
+
+		const picker = screen.getByRole("region", { name: "Orchestrator agent" });
+		await user.click(within(picker).getByRole("button", { name: "Sign in to Kiro" }));
+
+		await waitFor(() => {
+			expect(apiMocks.POST).toHaveBeenCalledWith(
+				"/api/v1/agents/{agent}/auth",
+				expect.objectContaining({ params: { path: { agent: "kiro" } } }),
+			);
+		});
+		expect(await screen.findByTestId("harness-auth-terminal")).toBeInTheDocument();
+		expect(routeMocks.navigate).not.toHaveBeenCalled();
+	});
+
+	it("sends a harness with no terminal login flow to its setup guide", async () => {
+		apiMocks.GET.mockImplementation(async (path: string) => {
+			if (path === "/api/v1/agents/auth-plans") {
+				return {
+					data: {
+						plans: [
+							{ action: "setup", agentId: "kiro", available: false, documentationUrl: "https://example.com/kiro-setup", launchMode: "documentation", reason: "No native login command" },
+						],
+					},
+				};
+			}
+			if (path === "/api/v1/agents/installers") return { data: { agents: [] } };
+			if (path === "/api/v1/agents/install-jobs") return { data: { jobs: [] } };
+			if (path === "/api/v1/shell-terminals") return { data: { terminals: [] } };
+			if (path === "/api/v1/system/requirements") return { data: { ready: true, requirements: [] } };
+			if (path === "/api/v1/system/github-auth") return { data: { id: "github-auth", label: "GitHub account", required: false, satisfied: true } };
+			return { data: undefined };
+		});
+		const user = userEvent.setup();
+		await renderOnboarding();
+		await goToOrchestratorStep(user);
+
+		const picker = screen.getByRole("region", { name: "Orchestrator agent" });
+		expect(within(picker).getByRole("button", { name: "Open the setup guide for Kiro" })).toBeEnabled();
+		expect(within(picker).queryByRole("button", { name: "Sign in to Kiro" })).not.toBeInTheDocument();
+	});
+
+	it("installs the GitHub CLI in place when it is missing", async () => {
+		const user = userEvent.setup();
+		await renderOnboarding();
+		await goToProjectStep(user);
+
+		expect(await screen.findByText("Install GitHub CLI and sign in before asking agents to open pull requests.")).toBeInTheDocument();
+		await user.click(screen.getByRole("button", { name: "Install gh" }));
+
+		await waitFor(() => {
+			expect(apiMocks.POST).toHaveBeenCalledWith(
+				"/api/v1/system/install/{target}",
+				expect.objectContaining({ params: { path: { target: "gh" } } }),
+			);
+		});
+		expect(routeMocks.navigate).not.toHaveBeenCalled();
+	});
+
+	it("signs in to GitHub in place once the CLI is present", async () => {
+		apiMocks.GET.mockImplementation(async (path: string) => {
+			if (path === "/api/v1/shell-terminals") return { data: { terminals: [] } };
+			if (path === "/api/v1/system/requirements") {
+				return {
+					data: {
+						ready: true,
+						requirements: [
+							{ detail: "/usr/local/bin/gh", id: "gh", label: "GitHub CLI", required: false, satisfied: true },
+						],
+					},
+				};
+			}
+			if (path === "/api/v1/system/github-auth") {
+				return { data: { id: "github-auth", label: "GitHub account", required: false, satisfied: false } };
+			}
+			if (path === "/api/v1/agents/installers") return { data: { agents: [] } };
+			if (path === "/api/v1/agents/install-jobs") return { data: { jobs: [] } };
+			if (path === "/api/v1/agents/auth-plans") return { data: { plans: [] } };
+			return { data: undefined };
+		});
+		const user = userEvent.setup();
+		await renderOnboarding();
+		await goToProjectStep(user);
+
+		await user.click(await screen.findByRole("button", { name: "Sign in with GitHub" }));
+
+		await waitFor(() => {
+			expect(apiMocks.POST).toHaveBeenCalledWith("/api/v1/system/github-auth/terminal");
+		});
+		expect(await screen.findByTestId("github-auth-terminal")).toBeInTheDocument();
+		expect(routeMocks.navigate).not.toHaveBeenCalled();
 	});
 });

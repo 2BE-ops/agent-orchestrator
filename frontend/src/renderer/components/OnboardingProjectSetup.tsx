@@ -76,7 +76,7 @@ export function OnboardingProjectSetup({
 
 	return (
 		<>
-			<div className="flex w-full max-w-[520px] flex-col gap-3 self-start">
+			<div className="flex w-full max-w-[520px] flex-col gap-3">
 				<ProjectSourceButton
 					disabled={isSelectingFolder}
 					icon={<GitFork aria-hidden="true" />}

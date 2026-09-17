@@ -977,8 +977,8 @@ function ShellLayout() {
 				<div className="flex flex-col items-center gap-4 text-center">
 					<Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden="true" />
 					<div>
-						<h1 className="text-xl font-medium tracking-[-0.02em]">Starting your orchestrator…</h1>
-						<p className="mt-2 text-sm text-muted-foreground">Preparing the project and waiting for the session to be ready.</p>
+						<h1 className="text-xl font-medium tracking-[-0.02em]">{t("onboarding.startingOrchestrator")}</h1>
+						<p className="mt-2 text-sm text-muted-foreground">{t("onboarding.preparingProject")}</p>
 					</div>
 				</div>
 			</main>

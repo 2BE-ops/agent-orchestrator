@@ -2,14 +2,20 @@ import { useNavigate } from "@tanstack/react-router";
 import { CircleDashed, Loader2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import aoLogo from "../../../assets/ao-logo.svg";
 import feedbackBackground from "../../landing/public/optimized/feature4.webp";
 import visibilityBackground from "../../landing/public/optimized/feature.webp";
 import { FeedbackLoopDemo } from "../../landing/src/app/components/FeaturesSection/components/FeedbackLoopDemo/FeedbackLoopDemo";
 import { FleetBoardDemo, type FleetBoardAssets } from "../../landing/src/app/components/FeaturesSection/components/FleetBoardDemo/FleetBoardDemo";
 import { OnboardingProjectSetup } from "./OnboardingProjectSetup";
+import { OnboardingGitHubSetup } from "./OnboardingGitHubSetup";
+import { AuthTerminalPanel } from "./AuthTerminalPanel";
 import { refreshAgentsIfStale, useAgentsQuery, type AgentCatalog } from "../hooks/useAgentsQuery";
+import { useHarnessSetup } from "../hooks/useHarnessSetup";
+import { aoBridge } from "../lib/bridge";
 import { AGENT_OPTIONS, agentLabel } from "../lib/agent-options";
+import type { MessageKey } from "../i18n";
 import { buildRankedAgentOptions, DEFAULT_AGENT_PRIORITY_RANK, unknownAgentReadiness } from "../lib/agent-select-options";
 import { cn } from "../lib/utils";
 import { useUiStore } from "../stores/ui-store";
@@ -25,43 +31,43 @@ export const ONBOARDING_COMPLETE_STORAGE_KEY = "ao.onboarding.completed";
 type Step = "welcome" | "feedback" | "project" | "orchestrator" | "workers" | "guide";
 
 type StepDetails = {
-	title: string;
-	subtitle: string;
-	nextLabel: string;
+	title: MessageKey;
+	subtitle: MessageKey;
+	nextLabel: MessageKey;
 };
 
 const STEPS: Step[] = ["welcome", "feedback", "project", "orchestrator", "workers", "guide"];
 
 const STEP_DETAILS: Record<Step, StepDetails> = {
 	welcome: {
-		title: "Stop babysitting agents.",
-		subtitle: "Run coding agents in parallel without losing track.",
-		nextLabel: "Continue",
+		title: "onboarding.step.welcome.title",
+		subtitle: "onboarding.step.welcome.subtitle",
+		nextLabel: "onboarding.step.welcome.next",
 	},
 	feedback: {
-		title: "Keep the loop moving.",
-		subtitle: "CI and review feedback return to the right agent.",
-		nextLabel: "Create your project",
+		title: "onboarding.step.feedback.title",
+		subtitle: "onboarding.step.feedback.subtitle",
+		nextLabel: "onboarding.step.feedback.next",
 	},
 	project: {
-		title: "Create your first project.",
-		subtitle: "Choose a local folder or connect a Git repository to give your agents a place to work.",
-		nextLabel: "Choose orchestrator",
+		title: "onboarding.step.project.title",
+		subtitle: "onboarding.step.project.subtitle",
+		nextLabel: "onboarding.step.project.next",
 	},
 	orchestrator: {
-		title: "Pick your orchestrator agent.",
-		subtitle: "It turns your goal into a plan, coordinates workers, and keeps the project moving.",
-		nextLabel: "Choose workers",
+		title: "onboarding.step.orchestrator.title",
+		subtitle: "onboarding.step.orchestrator.subtitle",
+		nextLabel: "onboarding.step.orchestrator.next",
 	},
 	workers: {
-		title: "Pick your worker agents.",
-		subtitle: "Workers carry out the tasks your orchestrator delegates to them.",
-		nextLabel: "See how it works",
+		title: "onboarding.step.workers.title",
+		subtitle: "onboarding.step.workers.subtitle",
+		nextLabel: "onboarding.step.workers.next",
 	},
 	guide: {
-		title: "Give your orchestrator a goal.",
-		subtitle: "It breaks the work down, sends tasks to your workers, and keeps you updated as they make progress.",
-		nextLabel: "Continue to orchestrator",
+		title: "onboarding.step.guide.title",
+		subtitle: "onboarding.step.guide.subtitle",
+		nextLabel: "onboarding.step.guide.next",
 	},
 };
 
@@ -88,9 +94,10 @@ function agentIcon(agentId: string) {
 
 export function OnboardingPage() {
 	const navigate = useNavigate();
-	const openGlobalSettings = useUiStore((state) => state.openGlobalSettings);
+	const { t } = useTranslation();
 	const requestOnboardingFinish = useUiStore((state) => state.requestOnboardingFinish);
 	const agentsQuery = useAgentsQuery();
+	const harnessSetup = useHarnessSetup();
 	const [freshAgentCatalog, setFreshAgentCatalog] = useState<AgentCatalog | null>(null);
 	const [step, setStep] = useState<Step>("welcome");
 	const [orchestratorAgent, setOrchestratorAgent] = useState<string | null>(null);
@@ -187,10 +194,16 @@ export function OnboardingPage() {
 		goToStep(stepIndex + 1);
 	}, [goToStep, navigate, orchestratorAgent, preparedProject, requestOnboardingFinish, step, stepIndex, workerAgent]);
 
-	const handleInstallAgent = useCallback(async () => {
-		openGlobalSettings("harness");
-		await navigate({ to: "/" });
-	}, [navigate, openGlobalSettings]);
+	// Installing or signing in happens here rather than in Settings. Sending a
+	// first-run user out of onboarding lost their place, and it made the one
+	// thing they came to fix the one thing this screen could not do.
+	const handleInstallAgent = useCallback((agentId: string) => {
+		void harnessSetup.startInstall(agentId);
+	}, [harnessSetup]);
+
+	const handleSignInAgent = useCallback((agentId: string) => {
+		void harnessSetup.startAuth(agentId);
+	}, [harnessSetup]);
 
 	const isProjectStep = step === "project";
 	const isAgentStep = step === "orchestrator" || step === "workers";
@@ -216,9 +229,9 @@ export function OnboardingPage() {
 			/>
 
 			<div className="mx-auto grid h-full w-full max-w-[1240px] grid-rows-[80px_minmax(0,1fr)_88px] px-8 max-[1040px]:px-6">
-				<header className="flex items-end justify-between pb-3" aria-label="Onboarding progress">
-					<img src={aoLogo} alt="Agent Orchestrator" className="h-6 w-7 object-contain" />
-					<div className="flex gap-1.5" aria-label={`Step ${stepIndex + 1} of ${STEPS.length}`}>
+				<header className="flex items-end justify-between pb-3" aria-label={t("onboarding.progressLabel")}>
+					<img src={aoLogo} alt={t("onboarding.logoAlt")} className="h-6 w-7 object-contain" />
+					<div className="flex gap-1.5" aria-label={t("onboarding.stepOf", { current: stepIndex + 1, total: STEPS.length })}>
 						{STEPS.map((item, index) => (
 							<span
 								key={item}
@@ -231,7 +244,7 @@ export function OnboardingPage() {
 				<div className={cn(
 					"min-h-0",
 					isProjectStep
-						? "grid place-items-center"
+						? "flex items-center justify-center overflow-y-auto"
 						: isAgentStep || isGuideStep
 							? "grid grid-cols-[minmax(360px,1.1fr)_minmax(300px,0.9fr)] items-center gap-10 max-[1040px]:grid-cols-[minmax(340px,1.15fr)_minmax(240px,0.85fr)] max-[1040px]:gap-6"
 						: "grid grid-cols-[minmax(280px,0.72fr)_minmax(520px,1.35fr)] items-center gap-14 max-[1040px]:grid-cols-[minmax(270px,0.75fr)_minmax(0,1.25fr)] max-[1040px]:gap-8",
@@ -241,26 +254,31 @@ export function OnboardingPage() {
 						className={cn(
 							"grid h-[360px] grid-rows-[180px_180px]",
 							(isAgentStep || isGuideStep) && "h-[480px] grid-rows-[210px_minmax(0,1fr)]",
-							isProjectStep && "w-full max-w-[680px] text-center",
+							// The project step also carries the GitHub readiness card. Let it
+							// size to content so a missing CLI adds a block instead of
+							// overflowing the fixed wizard height on a short window.
+							isProjectStep && "h-auto min-h-[280px] w-full max-w-[680px] grid-rows-[auto_auto] text-center",
 						)}
 						aria-labelledby={`onboarding-title-${step}`}
 					>
 						<div className={cn("flex flex-col justify-end pb-7", (isAgentStep || isGuideStep) && "justify-center pb-5")}>
 							<h1 id={`onboarding-title-${step}`} className={cn(isAgentStep || isGuideStep ? "max-w-[500px]" : "max-w-[410px]", "text-[clamp(2rem,3.2vw,3.15rem)] font-normal leading-[1.02] tracking-[-0.045em] text-balance", isProjectStep && "mx-auto max-w-none whitespace-nowrap")}>
-								{details.title}
+								{t(details.title)}
 							</h1>
-							<p className={cn("mt-5 max-w-[350px] text-[15px] leading-6 text-muted-foreground text-pretty", (isAgentStep || isGuideStep) && "max-w-[430px]", isProjectStep && "mx-auto")}>{details.subtitle}</p>
+							<p className={cn("mt-5 max-w-[350px] text-[15px] leading-6 text-muted-foreground text-pretty", (isAgentStep || isGuideStep) && "max-w-[430px]", isProjectStep && "mx-auto")}>{t(details.subtitle)}</p>
 						</div>
 						<div className={cn("min-h-0 pt-2", isProjectStep && "flex justify-center")}>
 							{isAgentStep && (
 								<AgentPicker
 									role={step === "orchestrator" ? "orchestrator" : "worker"}
 									agents={agents}
+									harnessSetup={harnessSetup}
 									orchestratorAgent={orchestratorAgent}
 									workerAgent={workerAgent}
 									hoveredOrchestrator={hoveredOrchestrator}
 									hoveredWorker={hoveredWorker}
 									onInstall={handleInstallAgent}
+									onSignIn={handleSignInAgent}
 								onOrchestratorHover={setHoveredOrchestrator}
 								onWorkerHover={setHoveredWorker}
 								onOrchestratorSelect={setOrchestratorAgent}
@@ -268,27 +286,45 @@ export function OnboardingPage() {
 								/>
 							)}
 							{step === "project" && (
-								<OnboardingProjectSetup
-									mode={projectMode}
-									onModeChange={setProjectMode}
-									onPrepared={(project) => {
-										setPreparedProject(project);
-										if (project) setStep("orchestrator");
-									}}
-									preparedProject={preparedProject}
-								/>
+								<div className="flex w-full flex-col items-center gap-4">
+									<OnboardingProjectSetup
+										mode={projectMode}
+										onModeChange={setProjectMode}
+										onPrepared={(project) => {
+											setPreparedProject(project);
+											if (project) setStep("orchestrator");
+										}}
+										preparedProject={preparedProject}
+									/>
+									<OnboardingGitHubSetup />
+								</div>
 							)}
 							{isGuideStep && <OnboardingGuide />}
 						</div>
 					</section>
 
 					{isAgentStep || isGuideStep ? (
-						<AgentTopologyPreview
-							orchestratorAgent={orchestratorAgent}
-							workerAgent={workerAgent}
-							hoveredOrchestrator={hoveredOrchestrator}
-							hoveredWorker={hoveredWorker}
-						/>
+						harnessSetup.authWorkflow ? (
+							// The login terminal takes the illustration's place rather than
+							// floating over the step, so the primary action stays reachable
+							// while a first-run user completes sign-in.
+							<div className="w-full max-w-[460px] justify-self-center">
+								<AuthTerminalPanel
+									workflow={harnessSetup.authWorkflow}
+									onClose={() => void harnessSetup.closeAuth()}
+									onRetry={() => void harnessSetup.retryAuth()}
+									onTerminalState={harnessSetup.handleTerminalState}
+									closeLabel={t("common.close")}
+								/>
+							</div>
+						) : (
+							<AgentTopologyPreview
+								orchestratorAgent={orchestratorAgent}
+								workerAgent={workerAgent}
+								hoveredOrchestrator={hoveredOrchestrator}
+								hoveredWorker={hoveredWorker}
+							/>
+						)
 					) : step === "welcome" || step === "feedback" ? <PreviewStage step={step} /> : null}
 				</div>
 
@@ -299,7 +335,7 @@ export function OnboardingPage() {
 						disabled={stepIndex === 0}
 						className="h-10 px-1 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-0"
 					>
-						Back
+						{t("onboarding.back")}
 					</button>
 					<button
 						type="button"
@@ -307,11 +343,12 @@ export function OnboardingPage() {
 						disabled={(step === "project" && !preparedProject) || (step === "orchestrator" && !orchestratorAgent) || (step === "workers" && !workerAgent)}
 						className="inline-flex h-10 w-auto items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-30"
 					>
-						{details.nextLabel}
+						{t(details.nextLabel)}
 					</button>
-				</footer>
-			</div>
-		</main>
+					</footer>
+				</div>
+
+			</main>
 	);
 }
 
@@ -323,14 +360,15 @@ type OnboardingAgent = {
 };
 
 function OnboardingGuide() {
+	const { t } = useTranslation();
 	return (
 		<div className="w-full max-w-[500px] text-left">
-			<p className="mb-2 text-xs font-medium text-muted-foreground">Try a prompt like this</p>
+			<p className="mb-2 text-xs font-medium text-muted-foreground">{t("onboarding.guidePromptLabel")}</p>
 			<div className="rounded-lg bg-card px-3.5 py-3 font-mono text-[12px] leading-5 text-foreground/85">
-				Break this feature into 3 parallel tasks, assign each to a worker, and bring me the results when they are ready.
+				{t("onboarding.guidePrompt")}
 			</div>
 			<p className="mt-4 text-xs leading-5 text-muted-foreground">
-				Your orchestrator plans the work at the top. Three workers branch out below it, each in its own worktree.
+				{t("onboarding.guideExplainer")}
 			</p>
 		</div>
 	);
@@ -339,11 +377,13 @@ function OnboardingGuide() {
 function AgentPicker({
 	role,
 	agents,
+	harnessSetup,
 	orchestratorAgent,
 	workerAgent,
 	hoveredOrchestrator,
 	hoveredWorker,
 	onInstall,
+	onSignIn,
 	onOrchestratorHover,
 	onWorkerHover,
 	onOrchestratorSelect,
@@ -351,27 +391,32 @@ function AgentPicker({
 }: {
 	role: "orchestrator" | "worker";
 	agents: OnboardingAgent[];
+	harnessSetup: HarnessSetup;
 	orchestratorAgent: string | null;
 	workerAgent: string | null;
 	hoveredOrchestrator: string | null;
 	hoveredWorker: string | null;
 	onInstall: (id: string) => void;
+	onSignIn: (id: string) => void;
 	onOrchestratorHover: (id: string | null) => void;
 	onWorkerHover: (id: string | null) => void;
 	onOrchestratorSelect: (id: string) => void;
 	onWorkerSelect: (id: string) => void;
 }) {
+	const { t } = useTranslation();
 	const isOrchestrator = role === "orchestrator";
 	return (
 		<div className="w-full max-w-[440px] text-left">
 			<AgentRolePicker
-				label={isOrchestrator ? "Orchestrator agent" : "Worker agents"}
+				label={isOrchestrator ? t("onboarding.pickerOrchestratorLabel") : t("onboarding.pickerWorkersLabel")}
 				agents={agents}
+				harnessSetup={harnessSetup}
 				value={isOrchestrator ? orchestratorAgent : workerAgent}
 				hovered={isOrchestrator ? hoveredOrchestrator : hoveredWorker}
 				onHover={isOrchestrator ? onOrchestratorHover : onWorkerHover}
 				onSelect={isOrchestrator ? onOrchestratorSelect : onWorkerSelect}
 				onInstall={onInstall}
+				onSignIn={onSignIn}
 			/>
 		</div>
 	);
@@ -380,20 +425,25 @@ function AgentPicker({
 function AgentRolePicker({
 	label,
 	agents,
+	harnessSetup,
 	value,
 	hovered,
 	onHover,
 	onSelect,
 	onInstall,
+	onSignIn,
 }: {
 	label: string;
 	agents: OnboardingAgent[];
+	harnessSetup: HarnessSetup;
 	value: string | null;
 	hovered: string | null;
 	onHover: (id: string | null) => void;
 	onSelect: (id: string) => void;
 	onInstall: (id: string) => void;
+	onSignIn: (id: string) => void;
 }) {
+	const { t } = useTranslation();
 	const installed = agents.filter((agent) => agent.installed);
 	const available = agents.filter((agent) => !agent.installed);
 	const [showTopFade, setShowTopFade] = useState(false);
@@ -402,42 +452,67 @@ function AgentRolePicker({
 			<div className="relative">
 				<div className="max-h-[240px] space-y-0.5 overflow-y-auto rounded-lg pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" onScroll={(event) => setShowTopFade(event.currentTarget.scrollTop > 0)}>
 					{installed.map((agent) => (
-						<button
-							type="button"
-							key={agent.id}
-							onClick={() => onSelect(agent.id)}
-							onMouseEnter={() => onHover(agent.id)}
-							onMouseLeave={() => onHover(null)}
-							aria-pressed={value === agent.id}
-							aria-label={agent.name}
-							className={cn(
-								"flex h-10 w-full items-center gap-3 rounded-md px-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-								value === agent.id && "bg-foreground/15",
-								hovered === agent.id && value !== agent.id && "bg-foreground/[0.07] text-foreground",
-							)}
-						>
-							<img src={agentIcon(agent.id)} alt="" className="size-5 shrink-0 object-contain" />
-							<span className="min-w-0 flex-1 truncate">{agent.name}</span>
-							{value === agent.id ? <CheckIcon className="text-status-ready" /> : <AgentAvailabilityIndicator indicator={agent.indicator} />}
-						</button>
+						<div key={agent.id} className="flex flex-col">
+							<div className="flex items-center gap-2">
+								<button
+									type="button"
+									onClick={() => onSelect(agent.id)}
+									onMouseEnter={() => onHover(agent.id)}
+									onMouseLeave={() => onHover(null)}
+									aria-pressed={value === agent.id}
+									aria-label={agent.name}
+									className={cn(
+										"flex h-10 min-w-0 flex-1 items-center gap-3 rounded-md px-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+										value === agent.id && "bg-foreground/15",
+										hovered === agent.id && value !== agent.id && "bg-foreground/[0.07] text-foreground",
+									)}
+								>
+									<img src={agentIcon(agent.id)} alt="" className="size-5 shrink-0 object-contain" />
+									<span className="min-w-0 flex-1 truncate">{agent.name}</span>
+									{value === agent.id ? <CheckIcon className="text-status-ready" /> : <AgentAvailabilityIndicator indicator={agent.indicator} />}
+								</button>
+								{agent.indicator === "auth" && !harnessSetup.authWorkflow ? (
+									harnessSetup.authPlanFor(agent.id)?.available ? (
+										<button
+											type="button"
+											onClick={() => onSignIn(agent.id)}
+											aria-label={t("onboarding.signInToAgent", { agent: agent.name })}
+											className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+										>
+											{t("onboarding.signIn")}
+										</button>
+									) : harnessSetup.authPlanFor(agent.id)?.documentationUrl ? (
+										// Some harnesses have no terminal login flow. Sending the
+										// user to vendor setup beats a button that can only fail.
+										<button
+											type="button"
+											onClick={() => void aoBridge.app.openExternal(harnessSetup.authPlanFor(agent.id)!.documentationUrl)}
+											aria-label={t("onboarding.setupGuideForAgent", { agent: agent.name })}
+											className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+										>
+											{t("onboarding.setupGuide")}
+										</button>
+									) : (
+										<span className="shrink-0 text-[11px] text-muted-foreground">{t("onboarding.setupRequired")}</span>
+									)
+								) : null}
+							</div>
+							{harnessSetup.actionErrors[agent.id] ? (
+								<p className="px-2 pb-1 text-[11px] leading-4 text-warning" role="status">
+									{harnessSetup.actionErrors[agent.id]}
+								</p>
+							) : null}
+						</div>
 					))}
 					{available.map((agent) => (
-						<button
-							type="button"
+						<InstallableAgentRow
 							key={agent.id}
-							onClick={() => onInstall(agent.id)}
-							onMouseEnter={() => onHover(agent.id)}
-							onMouseLeave={() => onHover(null)}
-							aria-label={`Install ${agent.name}`}
-							className={cn(
-								"flex h-10 w-full items-center gap-3 rounded-md px-2 text-left text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-								hovered === agent.id && "bg-foreground/[0.07] text-foreground",
-							)}
-						>
-							<img src={agentIcon(agent.id)} alt="" className="size-5 shrink-0 object-contain opacity-65" />
-							<span className="min-w-0 flex-1 truncate">{agent.name}</span>
-							<span className="rounded-sm bg-foreground px-2 py-1 text-[10px] font-medium text-background">Install</span>
-						</button>
+							agent={agent}
+							hovered={hovered === agent.id}
+							onHover={onHover}
+							onInstall={onInstall}
+							setup={harnessSetup}
+						/>
 					))}
 				</div>
 				{showTopFade ? <div className="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-background via-background/80 to-transparent" aria-hidden="true" /> : null}
@@ -448,9 +523,62 @@ function AgentRolePicker({
 }
 
 function AgentAvailabilityIndicator({ indicator }: { indicator: OnboardingAgent["indicator"] }) {
-	if (indicator === "checking") return <Loader2 aria-label="Checking availability" className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />;
-	if (indicator === "auth") return <CircleDashed aria-label="Authorization unavailable" className="size-3.5 shrink-0 text-muted-foreground" />;
+	const { t } = useTranslation();
+	if (indicator === "checking") return <Loader2 aria-label={t("onboarding.checkingAvailability")} className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />;
+	if (indicator === "auth") return <CircleDashed aria-label={t("onboarding.notSignedIn")} className="size-3.5 shrink-0 text-muted-foreground" />;
 	return null;
+}
+
+type HarnessSetup = ReturnType<typeof useHarnessSetup>;
+
+/** A harness that is not on this machine yet. The row reports the real install
+ *  job (running, failed, retrying) instead of sending the user to Settings. */
+function InstallableAgentRow({ agent, hovered, onHover, onInstall, setup }: {
+	agent: OnboardingAgent;
+	hovered: boolean;
+	onHover: (id: string | null) => void;
+	onInstall: (id: string) => void;
+	setup: HarnessSetup;
+}) {
+	const { t } = useTranslation();
+	const job = setup.jobFor(agent.id);
+	const installing = setup.isInstalling(agent.id);
+	const failed = job?.status === "failed" || job?.status === "unsupported" || job?.status === "interrupted";
+	const error = setup.actionErrors[agent.id] ?? (failed ? job?.error : undefined);
+	return (
+		<div className="flex flex-col">
+			<button
+				type="button"
+				onClick={() => onInstall(agent.id)}
+				onMouseEnter={() => onHover(agent.id)}
+				onMouseLeave={() => onHover(null)}
+				disabled={installing}
+				aria-label={
+					installing
+						? t("onboarding.installingAgent", { agent: agent.name })
+						: failed
+							? t("onboarding.tryAgainToInstallAgent", { agent: agent.name })
+							: t("onboarding.installAgent", { agent: agent.name })
+				}
+				className={cn(
+					"flex h-10 w-full items-center gap-3 rounded-md px-2 text-left text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-progress disabled:opacity-80",
+					hovered && "bg-foreground/[0.07] text-foreground",
+				)}
+			>
+				<img src={agentIcon(agent.id)} alt="" className="size-5 shrink-0 object-contain opacity-65" />
+				<span className="min-w-0 flex-1 truncate">{agent.name}</span>
+				{installing ? (
+					<span className="flex shrink-0 items-center gap-1.5 text-[10px] font-medium">
+						<Loader2 aria-hidden="true" className="size-3.5 animate-spin motion-reduce:animate-none" />
+						{t("onboarding.installing")}
+					</span>
+				) : (
+					<span className="shrink-0 rounded-sm bg-foreground px-2 py-1 text-[10px] font-medium text-background">{failed ? t("onboarding.tryAgain") : t("onboarding.install")}</span>
+				)}
+			</button>
+			{error ? <p className="px-2 pb-1 text-[11px] leading-4 text-warning" role="status">{error}</p> : null}
+		</div>
+	);
 }
 
 function AgentTopologyPreview({
@@ -464,6 +592,7 @@ function AgentTopologyPreview({
 	hoveredOrchestrator: string | null;
 	hoveredWorker: string | null;
 }) {
+	const { t } = useTranslation();
 	const reduceMotion = useReducedMotion();
 	const signals = useTopologySignals(Boolean(reduceMotion));
 	// Before a choice is made the illustration previews the hovered option. Once
@@ -472,11 +601,11 @@ function AgentTopologyPreview({
 	const workerPreview = workerAgent ?? hoveredWorker;
 	const orchestratorSrc = (orchestratorPreview && agentIcon(orchestratorPreview)) || aoLogo;
 	const workerSrc = workerPreview ? agentIcon(workerPreview) : undefined;
-	const orchestratorName = "Orchestrator";
-	const workerName = "Worker agents";
+	const orchestratorName = t("onboarding.topologyOrchestrator");
+	const workerName = t("onboarding.topologyWorkers");
 
 	return (
-		<div className="relative mx-auto aspect-[560/430] w-full max-w-[400px] overflow-hidden rounded-2xl" aria-label="Agent hierarchy illustration">
+		<div className="relative mx-auto aspect-[560/430] w-full max-w-[400px] overflow-hidden rounded-2xl" aria-label={t("onboarding.hierarchyIllustration")}>
 			<svg viewBox="0 0 560 430" className="absolute inset-0 size-full text-foreground/20" fill="none" aria-hidden="true">
 				<path d="M280 160v46M120 206h320M120 206v30M280 206v30M440 206v30" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
 				{signals.map((signal) => <TopologySignal key={signal.id} signal={signal} />)}
