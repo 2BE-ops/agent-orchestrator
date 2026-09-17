@@ -2158,6 +2158,7 @@ ipcMain.handle("app:checkGitRepository", async (_event, remoteUrl: string) => {
 		await execFileAsync("git", ["ls-remote", "--quiet", remoteUrl, "HEAD"], {
 			env: daemonEnv(),
 			timeout: 8000,
+			windowsHide: true,
 		});
 		return true;
 	} catch {
@@ -2180,7 +2181,7 @@ ipcMain.handle("app:getGitHubLogin", async (_event, repoPath?: string) => {
 	await ensureShellEnv();
 	const gitConfig = async (args: string[]) => {
 		try {
-			const { stdout } = await execFileAsync("git", args, { env: daemonEnv(), timeout: 3000 });
+			const { stdout } = await execFileAsync("git", args, { env: daemonEnv(), timeout: 3000, windowsHide: true });
 			return stdout.trim();
 		} catch {
 			return "";
@@ -2195,6 +2196,7 @@ ipcMain.handle("app:getGitHubLogin", async (_event, repoPath?: string) => {
 		const { stdout } = await execFileAsync("gh", ["api", "user", "--jq", ".login"], {
 			env: daemonEnv(),
 			timeout: 5000,
+			windowsHide: true,
 		});
 		candidates.push(stdout.trim());
 	} catch {
@@ -2216,12 +2218,14 @@ async function refreshGitHubOwners(): Promise<GitHubOwner[]> {
 		const { stdout } = await execFileAsync("gh", ["api", "user", "--jq", "[.login, .avatar_url] | @tsv"], {
 			env: daemonEnv(),
 			timeout: 5000,
+			windowsHide: true,
 		});
 		let organizationOutput = "";
 		try {
 			({ stdout: organizationOutput } = await execFileAsync("gh", ["api", "user/memberships/orgs", "--paginate", "--jq", ".[] | [.organization.login, .organization.avatar_url] | @tsv"], {
 				env: daemonEnv(),
 				timeout: 8000,
+				windowsHide: true,
 			}));
 		} catch {
 			// The authenticated account may not have the read:org scope; the personal owner is still usable.
@@ -2250,6 +2254,7 @@ ipcMain.handle("app:checkGitHubRepositoryAvailability", async (_event, input: { 
 		await execFileAsync("gh", ["api", `repos/${owner}/${name}`], {
 			env: daemonEnv(),
 			timeout: 8000,
+			windowsHide: true,
 		});
 		return { available: false, message: "Repository name is already in use for this owner." };
 	} catch (error) {
