@@ -298,16 +298,13 @@ export function OnboardingPage() {
 
 			<div className="mx-auto grid h-full w-full max-w-[1240px] grid-rows-[80px_minmax(0,1fr)_88px] px-8 max-[1040px]:px-6">
 				<header className="flex items-end justify-between pb-3" aria-label={t("onboarding.progressLabel")}>
-					<img
-						src={aoLogo}
-						alt={t("onboarding.logoAlt")}
-						className={cn(
-							"h-6 w-7 origin-top-left object-contain transition-transform duration-300 ease-out motion-reduce:transition-none",
-							// Scaled, not resized: the box keeps its 24x28 footprint, so the
-							// header and everything below it stay exactly where they are.
-							isFeatureStep && "scale-[500%]",
-						)}
-					/>
+					{isFeatureStep ? (
+						// The mark moves above the headline on these two pages. The spacer
+						// keeps the progress bars where they were.
+						<span aria-hidden="true" className="h-6 w-7" />
+					) : (
+						<img src={aoLogo} alt={t("onboarding.logoAlt")} className="h-6 w-7 object-contain" />
+					)}
 					<div className="flex gap-1.5" aria-label={t("onboarding.stepOf", { current: stepIndex + 1, total: STEPS.length })}>
 						{STEPS.map((item, index) => (
 							<span
@@ -344,6 +341,9 @@ export function OnboardingPage() {
 						aria-labelledby={`onboarding-title-${step}`}
 					>
 						<div className={cn("flex flex-col justify-end pb-7", (isAgentStep || isGuideStep) && "justify-center pb-5")}>
+							{isFeatureStep ? (
+								<img src={aoLogo} alt="" aria-hidden="true" className="mb-5 h-30 w-35 object-contain" />
+							) : null}
 							<h1 id={`onboarding-title-${step}`} className={cn(isAgentStep || isGuideStep ? "max-w-[500px]" : "max-w-[410px]", "text-[clamp(2rem,3.2vw,3.15rem)] font-normal leading-[1.02] tracking-[-0.045em] text-balance", isListStep && "mx-auto", isProjectStep && "max-w-none whitespace-nowrap")}>
 								{t(details.title)}
 							</h1>
