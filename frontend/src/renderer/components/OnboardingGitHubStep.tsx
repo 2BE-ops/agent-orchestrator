@@ -1,8 +1,9 @@
-import { Check, GitPullRequest, Loader2, TerminalSquare } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { useGitHubSetup } from "../hooks/useGitHubSetup";
 import { AuthTerminalPanel } from "./AuthTerminalPanel";
 import { SetupActionButton } from "./SetupActionButton";
+import { GitHubMarkIcon } from "./icons";
 
 /** Step: GitHub. One page handles both halves of the prerequisite, because
  *  installing the CLI and signing in are one intention. The checks run from
@@ -24,9 +25,10 @@ export function OnboardingGitHubStep({ setup }: { setup: ReturnType<typeof useGi
 		return (
 			<div className="flex w-full max-w-[420px] flex-col gap-2 text-left">
 				<SetupActionButton
-					icon={<Check className="text-status-ready" aria-hidden="true" />}
+					icon={<GitHubMarkIcon aria-hidden="true" />}
 					label={t("startup.githubConnected")}
 					description={t("onboarding.githubConnectedDetail")}
+					trailing={<Check aria-hidden="true" className="size-3.5 text-status-ready" />}
 					disabled
 				/>
 			</div>
@@ -37,7 +39,7 @@ export function OnboardingGitHubStep({ setup }: { setup: ReturnType<typeof useGi
 		<div className="flex w-full max-w-[420px] flex-col gap-2 text-left">
 			{setup.cliMissing ? (
 				<SetupActionButton
-					icon={<TerminalSquare aria-hidden="true" />}
+					icon={<GitHubMarkIcon aria-hidden="true" />}
 					label={installFailed ? t("onboarding.tryAgain") : t("startup.installGh")}
 					description={t("startup.githubSetupMissingCli")}
 					disabled={setup.installing}
@@ -46,7 +48,7 @@ export function OnboardingGitHubStep({ setup }: { setup: ReturnType<typeof useGi
 				/>
 			) : (
 				<SetupActionButton
-					icon={<GitPullRequest aria-hidden="true" />}
+					icon={<GitHubMarkIcon aria-hidden="true" />}
 					label={setup.loginEnded ? t("startup.githubLoginTryAgain") : t("startup.githubLogin")}
 					description={t("startup.githubSetupSignedOut")}
 					disabled={setup.signInPending || setup.loginRunning}
@@ -64,15 +66,6 @@ export function OnboardingGitHubStep({ setup }: { setup: ReturnType<typeof useGi
 					{setup.signInError}
 				</p>
 			) : null}
-			{setup.loginRunning ? null : (
-				<button
-					type="button"
-					onClick={() => void setup.requirementsQuery.refetch()}
-					className="mt-1 self-start px-1 text-caption text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-				>
-					{t("startup.checkAgain")}
-				</button>
-			)}
 			{setup.workflow ? (
 				<AuthTerminalPanel
 					workflow={setup.workflow}

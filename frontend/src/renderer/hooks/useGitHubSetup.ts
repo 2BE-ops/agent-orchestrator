@@ -11,6 +11,9 @@ type InstallJob = components["schemas"]["InstallJob"];
 
 const GH_INSTALL_TARGET = "gh" as const;
 const POLL_INTERVAL_MS = 1_000;
+/** The GitHub page watches long-running external work (a package install, a
+ *  device-code sign-in), so it polls slowly rather than every second. */
+const STEP_POLL_INTERVAL_MS = 2_500;
 
 function isActiveJob(job: InstallJob | undefined): boolean {
 	return job?.status === "installing" || job?.status === "verifying" || job?.status === "running";
@@ -21,7 +24,7 @@ function isActiveJob(job: InstallJob | undefined): boolean {
  * then run the daemon-owned `gh auth login` terminal when it is present but
  * signed out. GitHub stays advisory, so nothing here blocks the rest of setup.
  */
-export function useGitHubSetup() {
+export function useGitHubSetup({ poll = false }: { poll?: boolean } = {}) {
 	const { t } = useTranslation();
 	const gate = useSystemRequirementsGate();
 	const terminalQuery = useGitHubAuthTerminal();
@@ -44,6 +47,8 @@ export function useGitHubSetup() {
 	const auth = useGitHubAuthRequirement(loginRunning);
 	const authRef = useRef(auth.refetch);
 	authRef.current = auth.refetch;
+	const requirementsRef = useRef(gate.query.refetch);
+	requirementsRef.current = gate.query.refetch;
 	const stopPolling = useCallback(() => {
 		if (pollRef.current !== null) {
 			window.clearInterval(pollRef.current);
@@ -51,6 +56,22 @@ export function useGitHubSetup() {
 		}
 	}, []);
 	useEffect(() => stopPolling, [stopPolling]);
+
+	// No manual re-check on the GitHub page: it polls until both halves settle.
+	// The CLI half matters while gh is missing (an install can land at any time)
+	// and the auth half while GitHub is still signed out (a device flow can
+	// finish after its terminal is gone).
+	const cliMissing = gh?.satisfied === false;
+	const authSatisfied = Boolean(auth.data?.satisfied);
+	useEffect(() => {
+		if (!poll || (!cliMissing && authSatisfied)) return;
+		const timer = window.setInterval(() => {
+			// Each half is only worth probing while it can still change.
+			if (cliMissing) void requirementsRef.current();
+			if (!authSatisfied) void authRef.current();
+		}, STEP_POLL_INTERVAL_MS);
+		return () => window.clearInterval(timer);
+	}, [authSatisfied, cliMissing, poll]);
 
 	const pollInstall = useCallback(() => {
 		stopPolling();
@@ -135,8 +156,8 @@ export function useGitHubSetup() {
 		: null;
 
 	return {
-		authSatisfied: Boolean(auth.data?.satisfied),
-		cliMissing: gh?.satisfied === false,
+		authSatisfied,
+		cliMissing,
 		closeSignIn,
 		gh,
 		handleTerminalState,

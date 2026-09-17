@@ -119,13 +119,12 @@ export function OnboardingPage() {
 	// which left every probe on this screen answering 503.
 	useDaemonStatus();
 	const harnessSetup = useHarnessSetup();
-	// Both prerequisite checks run from the first step's mount, so the agent and
-	// GitHub pages open already knowing their state instead of probing when the
-	// user arrives.
-	const githubSetup = useGitHubSetup();
 	const { cloudEnabled } = useCloudGate();
 	const [freshAgentCatalog, setFreshAgentCatalog] = useState<AgentCatalog | null>(null);
 	const [step, setStep] = useState<Step>("welcome");
+	// The GitHub checks run from the first step's mount, so that page opens
+	// already knowing its state; polling only runs while the page is showing.
+	const githubSetup = useGitHubSetup({ poll: step === "github" });
 	const [orchestratorAgent, setOrchestratorAgent] = useState<string | null>(null);
 	const [workerAgent, setWorkerAgent] = useState<string | null>(null);
 	const [hoveredOrchestrator, setHoveredOrchestrator] = useState<string | null>(null);
