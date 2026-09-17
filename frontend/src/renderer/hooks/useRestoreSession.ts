@@ -16,13 +16,22 @@ export type RestoreSessionResult =
  * terminated) so it can be restored, so a session id present there marks the
  * restore as control-plane rather than local. The listing's query key carries
  * the org the sessions belong to (`[...cloudSessionsQueryKey, baseUrl, orgId]`),
- * so read the org from the matching entry rather than re-subscribing to it.
+ * so read the org from the matching entry rather than re-subscribing to it. The
+ * session's CURRENT worker epoch is captured alongside so restore can baseline
+ * the "box is up" signal against it: the fresh box is genuinely up only once a
+ * NEW epoch appears past this one (see the terminal-reset store).
  */
-function findCloudSessionOrg(queryClient: QueryClient, sessionId: string): string | undefined {
+function findCloudSession(
+	queryClient: QueryClient,
+	sessionId: string,
+): { orgId: string; workerEpoch: number } | undefined {
 	for (const [key, sessions] of queryClient.getQueriesData<CloudCpSession[]>({ queryKey: cloudSessionsQueryKey })) {
-		if (sessions?.some((session) => session.id === sessionId)) {
+		const session = sessions?.find((entry) => entry.id === sessionId);
+		if (session) {
 			const orgId = key[2];
-			return typeof orgId === "string" && orgId !== "" ? orgId : undefined;
+			if (typeof orgId === "string" && orgId !== "") {
+				return { orgId, workerEpoch: session.workerEpoch ?? 0 };
+			}
 		}
 	}
 	return undefined;
@@ -35,8 +44,9 @@ export function useRestoreSession(): (sessionId: string) => Promise<RestoreSessi
 		async (sessionId: string) => {
 			// Cloud sessions re-provision through the control plane, not the local
 			// daemon: restore keeps the conversation and work intact server-side.
-			const cloudOrgId = findCloudSessionOrg(queryClient, sessionId);
-			if (cloudOrgId !== undefined) {
+			const cloudSession = findCloudSession(queryClient, sessionId);
+			if (cloudSession !== undefined) {
+				const { orgId: cloudOrgId, workerEpoch: baselineEpoch } = cloudSession;
 				const settings = queryClient.getQueryData<Settings>(settingsQueryKey);
 				const baseUrl = settings?.cloudControlPlaneUrl ?? "";
 				if (baseUrl === "") {
@@ -52,7 +62,10 @@ export function useRestoreSession(): (sessionId: string) => Promise<RestoreSessi
 					// a NEW worker epoch, so the old terminal is dead. Bump the reset nonce
 					// so the pane rebuilds from scratch (new mux factory, cursor at 0) and
 					// re-mints against the new epoch instead of clinging to the exited one.
-					useTerminalResetStore.getState().bump(sessionId);
+					// Pass the pre-restore epoch as the baseline: the pane shows "Connecting"
+					// until the worker epoch advances past it (the fresh worker's terminal
+					// exists), so the user never types into the old box's dead terminal.
+					useTerminalResetStore.getState().bump(sessionId, baselineEpoch);
 					return { status: "success" };
 				} catch (err) {
 					return {

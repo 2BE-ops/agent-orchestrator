@@ -1003,22 +1003,25 @@ function AttachedTerminal({
 	const isReconnecting = useTerminalResetStore((store) =>
 		session?.id ? Boolean(store.reconnecting[session.id]) : false,
 	);
-	// The box is "fully up" only when its WORKER has connected (runtimeConnected),
-	// not merely when the PTY attached — a restored terminal can attach to the
-	// sandbox and replay the transcript while the worker is still coming up (or
-	// stuck), which is the "Restoring agent, can't type" state. Latch it: once the
-	// worker has connected once for this pane, a later transient reconnect must not
-	// re-show the Connecting cover (that uses the subtle banner instead). Resets
-	// naturally on restore, which mounts a fresh pane.
-	const [workerHasConnected, setWorkerHasConnected] = useState(false);
+	// The fresh box is genuinely up only once a NEW worker epoch appears past the
+	// one recorded at restore (baselineEpoch). The session DTO reports the current
+	// epoch as terminalGeneration = MAX(agent terminal worker_epoch). Gating on the
+	// epoch — NOT runtimeConnected — is what makes a rapid delete→restore correct:
+	// the old worker's connection lingers for ~10s (so runtimeConnected stays true
+	// and a runtimeConnected-based latch lifts early), and the only attachable
+	// terminal in the provision+boot gap is the OLD epoch's — content shows but its
+	// box is being torn down, so you cannot type. Clear the reconnecting signal the
+	// instant the epoch advances past the baseline, which is also when the pane
+	// re-mints against the new epoch (terminalGeneration drives the mux key).
+	const currentEpoch = session?.terminalGeneration ? Number(session.terminalGeneration) || 0 : 0;
+	const baselineEpoch = useTerminalResetStore((store) =>
+		session?.id ? (store.baselineEpoch[session.id] ?? 0) : 0,
+	);
 	useEffect(() => {
-		if (session?.runtimeConnected && !workerHasConnected) setWorkerHasConnected(true);
-	}, [session?.runtimeConnected, workerHasConnected]);
-	useEffect(() => {
-		if (workerHasConnected && session?.id) {
-			useTerminalResetStore.getState().markAttached(session.id);
+		if (isReconnecting && session?.id && currentEpoch > baselineEpoch) {
+			useTerminalResetStore.getState().markConnected(session.id);
 		}
-	}, [workerHasConnected, session?.id]);
+	}, [isReconnecting, currentEpoch, baselineEpoch, session?.id]);
 	useEffect(() => {
 		if (!terminal || state !== "attached" || !inputRequest) return;
 		if (lastInputRequestIdRef.current === inputRequest.id) return;
@@ -1157,20 +1160,14 @@ function AttachedTerminal({
 	// the "process exited" strip: the user is connecting to a new box with their
 	// saved state, not looking at a broken session. Lifts the instant the new
 	// terminal attaches. Cloud only, so local terminals are unchanged.
-	// Show the Connecting cover until the box is fully up: its WORKER connected,
-	// not merely the PTY attached. Gating on !workerHasConnected (latched) means a
-	// restored session that attaches its terminal but whose worker is still coming
-	// up (or stuck) shows "Connecting" rather than a terminal you cannot type in;
-	// once the worker has connected, a transient reconnect never re-covers (that
-	// uses the subtle reattaching banner). A restore mounts a fresh pane so the
-	// latch resets.
-	const isBoxComingUp =
-		Boolean(session?.cloud) &&
-		!workerHasConnected &&
-		// isReconnecting fires synchronously on the restore/resume click; the
-		// runtimeConnected clause keeps the surface up through the rest of the
-		// fresh box's boot once the poll catches up.
-		(isReconnecting || (isSessionActive && session?.runtimeConnected !== true));
+	// Show the Connecting cover for a restore in flight: from the restore click
+	// (isReconnecting, set synchronously) until the fresh worker's epoch appears
+	// past the baseline (isReconnecting is then cleared, above). This spans the
+	// entire provision+boot gap in which the only attachable terminal is the old,
+	// dead epoch's — so the user sees a calm "Connecting" the whole time instead of
+	// a terminal they cannot type into, and it never flickers back once the new
+	// epoch attaches (the epoch only moves forward). Cloud only.
+	const isBoxComingUp = Boolean(session?.cloud) && isReconnecting;
 	const showEndedState = (state === "exited" || canRestoreSession) && !isBoxComingUp;
 	const emptyStateTitle = session ? t("terminal.startingSession") : "Agent Orchestrator";
 	const emptyStateMessage = session

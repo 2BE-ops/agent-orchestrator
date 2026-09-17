@@ -1,41 +1,47 @@
 import { create } from "zustand";
 
-// A per-session counter bumped whenever a session's terminal must be rebuilt
-// from scratch rather than reconnected to the running one. Restore is the case
-// that needs it: the control plane re-provisions a fresh sandbox under the SAME
-// session id but a NEW worker epoch, so the old terminal is dead and its replay
-// cursor is meaningless. The cloud terminal is otherwise keyed only on the
-// (unchanged) session id, so without a reset signal the pane keeps its cached
-// mux factory (and its stale cursor) and never re-mints against the new epoch —
-// the "connected but TERMINAL ENDED / can't type" symptom after restore.
+// Per-session terminal reset/reconnect signals for cloud sessions.
 //
-// Folding this nonce into the terminal cache key and the cloud mux factory key
-// makes a bump behave exactly like a fresh open: a new pane mounts and a new
-// factory closure is created with a fresh cursor at 0, so the rebuilt mux dials
-// `after=0` and replays the new epoch cleanly. Not persisted — it only matters
-// within a live session where a terminal is currently mounted.
+// A cloud terminal is otherwise keyed only on the (unchanged) session id, so a
+// restore — which re-provisions a FRESH box under the same id but a NEW worker
+// epoch — needs an explicit signal or the pane keeps its cached mux factory (and
+// stale cursor) and clings to the dead terminal. `bump` provides that:
+//
+//   - `nonces` bumps the terminal cache key + mux factory key, so the pane
+//     rebuilds from scratch (new factory closure, cursor at 0) and re-mints.
+//   - `reconnecting` marks the session as coming up on a fresh box. The terminal
+//     shows a calm "Connecting…" while true, instead of letting the user type
+//     into the previous box's dead terminal.
+//   - `baselineEpoch` records the worker epoch AT restore time. The box is only
+//     genuinely up once a NEW epoch appears (the fresh worker bootstrapped and
+//     created its terminal). Gating on the epoch — not runtimeConnected — is what
+//     makes a rapid delete→restore correct: the OLD worker's connection lingers
+//     briefly, so runtimeConnected stays true and the pane would otherwise attach
+//     to the old epoch's terminal (shows content, but the old worker is gone, so
+//     you cannot type). markConnected clears `reconnecting` the instant the epoch
+//     advances past the baseline.
+//
+// Not persisted — it only matters within a live session while a terminal is
+// mounted.
 type TerminalResetState = {
 	nonces: Record<string, number>;
-	// Sessions that are reconnecting to a fresh box (restore/resume) and have not
-	// re-attached yet. This is the IMMEDIATE, synchronous signal a restore sets:
-	// the polled runtimeConnected lags up to the 5s cloud poll, so on its own it
-	// leaves a window where the previous box's dead terminal still shows after a
-	// restore click. `bump` marks the session reconnecting; the terminal clears
-	// it via `markAttached` the instant it attaches to the new box.
 	reconnecting: Record<string, boolean>;
-	bump: (sessionId: string) => void;
-	markAttached: (sessionId: string) => void;
+	baselineEpoch: Record<string, number>;
+	bump: (sessionId: string, currentEpoch: number) => void;
+	markConnected: (sessionId: string) => void;
 };
 
 export const useTerminalResetStore = create<TerminalResetState>((set) => ({
 	nonces: {},
 	reconnecting: {},
-	bump: (sessionId) =>
+	baselineEpoch: {},
+	bump: (sessionId, currentEpoch) =>
 		set((state) => ({
 			nonces: { ...state.nonces, [sessionId]: (state.nonces[sessionId] ?? 0) + 1 },
 			reconnecting: { ...state.reconnecting, [sessionId]: true },
+			baselineEpoch: { ...state.baselineEpoch, [sessionId]: currentEpoch },
 		})),
-	markAttached: (sessionId) =>
+	markConnected: (sessionId) =>
 		set((state) =>
 			state.reconnecting[sessionId]
 				? { reconnecting: { ...state.reconnecting, [sessionId]: false } }
