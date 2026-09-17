@@ -351,7 +351,12 @@ export function OnboardingPage() {
 								/>
 							)}
 							{step === "github" && <OnboardingGitHubStep setup={githubSetup} />}
-							{step === "cloud" && <OnboardingCloudStep cloudEnabled={cloudEnabled} />}
+							{step === "cloud" && (
+								<OnboardingCloudStep
+									cloudEnabled={cloudEnabled}
+									onChoose={() => goToStep(stepIndex + 1)}
+								/>
+							)}
 							{step === "project" && (
 								<div className="flex w-full flex-col items-center gap-4">
 									<OnboardingProjectSetup
@@ -445,7 +450,14 @@ export function OnboardingPage() {
 					<button
 						type="button"
 						onClick={next}
-						disabled={(step === "project" && !preparedProject) || (step === "orchestrator" && !orchestratorAgent) || (step === "workers" && !workerAgent)}
+					disabled={
+						(step === "project" && !preparedProject) ||
+						(step === "orchestrator" && !orchestratorAgent) ||
+						(step === "workers" && !workerAgent) ||
+						// GitHub is the one prerequisite the flow will not let you skip:
+						// agents cannot open pull requests or read issues without it.
+						(step === "github" && !githubSetup.authSatisfied)
+					}
 						className="inline-flex h-10 w-auto items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-30"
 					>
 						{t(details.nextLabel)}

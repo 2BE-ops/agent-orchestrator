@@ -139,13 +139,15 @@ beforeEach(() => {
 				data: {
 					ready: true,
 					requirements: [
-						{ detail: "/usr/local/bin/gh", id: "gh", label: "GitHub CLI", required: false, satisfied: false },
+						// Connected by default so the flow can pass the GitHub step; the
+						// tests for that step override this.
+						{ detail: "/usr/local/bin/gh", id: "gh", label: "GitHub CLI", required: false, satisfied: true },
 					],
 				},
 			};
 		}
 		if (path === "/api/v1/system/github-auth") {
-			return { data: { id: "github-auth", label: "GitHub account", required: false, satisfied: false } };
+			return { data: { id: "github-auth", label: "GitHub account", required: false, satisfied: true } };
 		}
 		if (path === "/api/v1/system/install/{target}") {
 			return { data: { status: "idle", target: "gh" } };
@@ -387,6 +389,13 @@ describe("onboarding route", () => {
 				return { data: { jobs: [{ error: "brew is not installed", status: "failed", target: "cursor" }] } };
 			}
 			if (path === "/api/v1/agents/auth-plans") return { data: { plans: [] } };
+			if (path === "/api/v1/shell-terminals") return { data: { terminals: [] } };
+			if (path === "/api/v1/system/requirements") {
+				return { data: { ready: true, requirements: [{ detail: "/usr/local/bin/gh", id: "gh", label: "GitHub CLI", required: false, satisfied: true }] } };
+			}
+			if (path === "/api/v1/system/github-auth") {
+				return { data: { id: "github-auth", label: "GitHub account", required: false, satisfied: true } };
+			}
 			return { data: undefined };
 		});
 		const user = userEvent.setup();
@@ -451,13 +460,42 @@ describe("onboarding route", () => {
 
 		expect(await screen.findByRole("heading", { name: "Run sessions in the cloud" })).toBeInTheDocument();
 		expect(screen.getByText("Optional, and off by default.")).toBeInTheDocument();
-		expect(screen.getByText(/Runs agents in a remote sandbox/)).toBeInTheDocument();
+		expect(screen.getByText(/Agents run in a remote sandbox/)).toBeInTheDocument();
 		expect(screen.getByText(/Early preview/)).toBeInTheDocument();
 
-		await user.click(screen.getByRole("switch", { name: "Cloud sessions" }));
+		// Choosing an option applies it and moves on, with no spinner in between.
+		await user.click(screen.getByRole("button", { name: "Use cloud sessions" }));
 		await waitFor(() => {
 			expect(apiMocks.PATCH).toHaveBeenCalledWith("/api/v1/settings/cloud-offering", { body: { enabled: true } });
 		});
+		expect(await screen.findByRole("heading", { name: "Create your first project." })).toBeInTheDocument();
+	});
+
+	it("keeps the GitHub step from being skipped while GitHub is not connected", async () => {
+		apiMocks.GET.mockImplementation(async (path: string) => {
+			if (path === "/api/v1/system/requirements") {
+				return {
+					data: {
+						ready: true,
+						requirements: [{ detail: "/usr/local/bin/gh", id: "gh", label: "GitHub CLI", required: false, satisfied: true }],
+					},
+				};
+			}
+			if (path === "/api/v1/system/github-auth") {
+				return { data: { id: "github-auth", label: "GitHub account", required: false, satisfied: false } };
+			}
+			if (path === "/api/v1/shell-terminals") return { data: { terminals: [] } };
+			if (path === "/api/v1/agents/installers") return { data: { agents: [] } };
+			if (path === "/api/v1/agents/install-jobs") return { data: { jobs: [] } };
+			if (path === "/api/v1/agents/auth-plans") return { data: { plans: [] } };
+			return { data: undefined };
+		});
+		const user = userEvent.setup();
+		await renderOnboarding();
+		await goToGitHubStep(user);
+
+		expect(await screen.findByRole("button", { name: "Sign in with GitHub" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
 	});
 
 	it("offers mobile pairing from the last step", async () => {
@@ -480,11 +518,24 @@ describe("onboarding route", () => {
 	});
 
 	it("installs the GitHub CLI in place when it is missing", async () => {
+		apiMocks.GET.mockImplementation(async (path: string) => {
+			if (path === "/api/v1/system/requirements") {
+				return { data: { ready: true, requirements: [{ detail: "gh was not found on PATH.", id: "gh", label: "GitHub CLI", required: false, satisfied: false }] } };
+			}
+			if (path === "/api/v1/system/github-auth") {
+				return { data: { id: "github-auth", label: "GitHub account", required: false, satisfied: false } };
+			}
+			if (path === "/api/v1/shell-terminals") return { data: { terminals: [] } };
+			if (path === "/api/v1/agents/installers") return { data: { agents: [] } };
+			if (path === "/api/v1/agents/install-jobs") return { data: { jobs: [] } };
+			if (path === "/api/v1/agents/auth-plans") return { data: { plans: [] } };
+			return { data: undefined };
+		});
 		const user = userEvent.setup();
 		await renderOnboarding();
 		await goToGitHubStep(user);
 
-		expect(await screen.findByText("Install GitHub CLI and sign in before asking agents to open pull requests.")).toBeInTheDocument();
+		expect(await screen.findByText("Needed for pull requests and issues.")).toBeInTheDocument();
 		await user.click(screen.getByRole("button", { name: "Install gh" }));
 
 		await waitFor(() => {

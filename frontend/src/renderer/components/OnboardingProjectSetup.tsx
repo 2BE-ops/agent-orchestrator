@@ -1,5 +1,5 @@
 import { Cloud, FolderOpen, GitFork } from "lucide-react";
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { apiClient, apiErrorMessage } from "../lib/api-client";
 import { aoBridge } from "../lib/bridge";
@@ -9,6 +9,7 @@ import {
 	type PreparedProjectInput,
 } from "./CreateProjectFlow";
 import { OnboardingCloudDialog } from "./OnboardingCloudDialog";
+import { SetupList, SetupRow } from "./SetupList";
 
 type ProjectMode = "folder" | "git";
 
@@ -90,29 +91,32 @@ export function OnboardingProjectSetup({
 
 	return (
 		<>
-			<div className="flex w-full max-w-[520px] flex-col gap-3">
-				<ProjectSourceButton
+			<SetupList className="max-w-[520px]">
+				<SetupRow
 					disabled={isSelectingFolder}
 					icon={<GitFork aria-hidden="true" />}
 					label="Clone from Git"
+					description="Start from a remote repository using an HTTPS or SSH URL"
 					onClick={() => void startImport("git")}
 				/>
-				<ProjectSourceButton
+				<SetupRow
 					disabled={isSelectingFolder}
 					icon={<FolderOpen aria-hidden="true" />}
 					label="Open local folder"
+					description="Bring in a repository that is already on this machine"
 					onClick={() => void startImport("folder")}
 				/>
 				{cloudEnabled ? (
-					<ProjectSourceButton
+					<SetupRow
 						disabled={isSelectingFolder}
 						icon={<Cloud aria-hidden="true" />}
 						label={t("onboarding.createCloudProject")}
+						description={t("onboarding.createCloudProjectDetail")}
 						onClick={startCloud}
 					/>
 				) : null}
 				{folderError ? <p className="col-span-full text-center text-xs text-destructive">{folderError}</p> : null}
-			</div>
+			</SetupList>
 			{cloudEnabled && showCloud ? (
 				<OnboardingCloudDialog onClose={() => setShowCloud(false)} onCreated={onCloudProjectCreated} />
 			) : null}
@@ -140,17 +144,3 @@ export function OnboardingProjectSetup({
 	);
 }
 
-function ProjectSourceButton({ disabled, icon, label, onClick }: { disabled?: boolean; icon: ReactNode; label: string; onClick: () => void }) {
-	return (
-		<button
-			type="button"
-			onClick={onClick}
-			disabled={disabled}
-			aria-label={label}
-			className="flex w-full items-center gap-3 rounded-lg bg-card px-4 py-3 text-left hover:bg-muted hover:text-foreground active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-50"
-		>
-			<span className="grid size-8 shrink-0 place-items-center text-muted-foreground [&_svg]:size-4">{icon}</span>
-			<span className="min-w-0 text-sm font-medium leading-5 text-foreground">{label}</span>
-		</button>
-	);
-}

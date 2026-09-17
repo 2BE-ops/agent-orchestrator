@@ -2,7 +2,7 @@ import { Check, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { useGitHubSetup } from "../hooks/useGitHubSetup";
 import { AuthTerminalPanel } from "./AuthTerminalPanel";
-import { SetupActionButton } from "./SetupActionButton";
+import { SetupList, SetupRow } from "./SetupList";
 import { GitHubMarkIcon } from "./icons";
 
 /** Step: GitHub. One page handles both halves of the prerequisite, because
@@ -23,39 +23,41 @@ export function OnboardingGitHubStep({ setup }: { setup: ReturnType<typeof useGi
 
 	if (setup.authSatisfied) {
 		return (
-			<div className="flex w-full max-w-[420px] flex-col gap-2 text-left">
-				<SetupActionButton
+			<SetupList className="max-w-[420px]">
+				<SetupRow
 					icon={<GitHubMarkIcon aria-hidden="true" />}
 					label={t("startup.githubConnected")}
 					description={t("onboarding.githubConnectedDetail")}
 					trailing={<Check aria-hidden="true" className="size-3.5 text-status-ready" />}
 					disabled
 				/>
-			</div>
+			</SetupList>
 		);
 	}
 
 	return (
-		<div className="flex w-full max-w-[420px] flex-col gap-2 text-left">
+		<div className="flex w-full max-w-[420px] flex-col text-left">
+			<SetupList>
 			{setup.cliMissing ? (
-				<SetupActionButton
+				<SetupRow
 					icon={<GitHubMarkIcon aria-hidden="true" />}
 					label={installFailed ? t("onboarding.tryAgain") : t("startup.installGh")}
-					description={t("startup.githubSetupMissingCli")}
+					description={t("onboarding.githubInstallDetail")}
 					disabled={setup.installing}
 					onClick={() => void setup.install()}
 					trailing={setup.installing ? <Loader2 aria-hidden="true" className="size-3.5 animate-spin motion-reduce:animate-none" /> : undefined}
 				/>
 			) : (
-				<SetupActionButton
+				<SetupRow
 					icon={<GitHubMarkIcon aria-hidden="true" />}
 					label={setup.loginEnded ? t("startup.githubLoginTryAgain") : t("startup.githubLogin")}
-					description={t("startup.githubSetupSignedOut")}
+					description={t("onboarding.githubSignInDetail")}
 					disabled={setup.signInPending || setup.loginRunning}
 					onClick={setup.signIn}
 					trailing={setup.signInPending || setup.loginRunning ? <Loader2 aria-hidden="true" className="size-3.5 animate-spin motion-reduce:animate-none" /> : undefined}
 				/>
 			)}
+			</SetupList>
 			{installDetail ? (
 				<p className="px-4 text-caption leading-snug text-warning" role="status">
 					{installDetail}
