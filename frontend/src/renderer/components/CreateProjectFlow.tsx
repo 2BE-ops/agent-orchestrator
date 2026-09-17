@@ -1308,10 +1308,14 @@ function isHttpsRepositoryUrl(raw: string): boolean {
 // (client.createProject) instead of the daemon POST the local flow uses; the
 // repository is cloned in a cloud sandbox, so no folder picker or agent sheet.
 export function CloudProjectCard({
+	bare = false,
 	dialog = false,
 	onClose,
 	onCreated,
 }: {
+	/** Rendered inside a host dialog that already provides the chrome (title,
+	 *  back and close controls, surface, padding). */
+	bare?: boolean;
 	dialog?: boolean;
 	onClose?: () => void;
 	onCreated: () => void;
@@ -1358,21 +1362,28 @@ export function CloudProjectCard({
 	const description = <p className="import-description text-pretty">{t("createProject.cloudDescription")}</p>;
 
 	return (
-		<div className="relative isolate flex w-full max-w-(--size-import-modal-max) flex-col items-stretch gap-6 rounded-welcome-panel border border-[var(--color-border-import-modal)] bg-[var(--color-bg-import-modal)] p-(--size-import-modal-padding) shadow-[var(--shadow-import-modal)]">
-			<div className={cn("flex flex-col items-start gap-1", dialog && onClose && "pr-10")}>
-				{dialog ? (
-					<>
-						<Dialog.Title asChild>{title}</Dialog.Title>
-						<Dialog.Description asChild>{description}</Dialog.Description>
-					</>
-				) : (
-					<>
-						{title}
-						{description}
-					</>
-				)}
-			</div>
-			{dialog && onClose ? (
+		<div className={cn(
+			"relative isolate flex w-full flex-col",
+			bare
+				? "min-h-0"
+				: "max-w-(--size-import-modal-max) items-stretch gap-6 rounded-welcome-panel border border-[var(--color-border-import-modal)] bg-[var(--color-bg-import-modal)] p-(--size-import-modal-padding) shadow-[var(--shadow-import-modal)]",
+		)}>
+			{bare ? null : (
+				<div className={cn("flex flex-col items-start gap-1", dialog && onClose && "pr-10")}>
+					{dialog ? (
+						<>
+							<Dialog.Title asChild>{title}</Dialog.Title>
+							<Dialog.Description asChild>{description}</Dialog.Description>
+						</>
+					) : (
+						<>
+							{title}
+							{description}
+						</>
+					)}
+				</div>
+			)}
+			{bare || !dialog || !onClose ? null : (
 				<button
 					type="button"
 					// Sit on the card's own padding, so the control lines up with the
@@ -1385,8 +1396,9 @@ export function CloudProjectCard({
 				>
 					<X className="size-4" aria-hidden="true" />
 				</button>
-			) : null}
-			<form className="flex flex-col gap-5" onSubmit={(event) => void submit(event)}>
+			)}
+			<form className={cn(bare ? "flex min-h-0 flex-col overflow-y-auto" : "flex flex-col gap-5")} onSubmit={(event) => void submit(event)}>
+				<div className={cn(bare ? "space-y-4 px-4 pb-1 pt-4" : "contents")}>
 				{(submitError ?? orgFailure) ? (
 					<div
 						className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-pretty text-[12px] leading-5 text-destructive"
@@ -1494,7 +1506,8 @@ export function CloudProjectCard({
 						) : null}
 					</div>
 				</div>
-				<div className="flex items-center justify-end gap-3">
+				</div>
+				<div className={cn(bare ? "flex shrink-0 items-center justify-end gap-2 px-4 pb-4 pt-3" : "flex items-center justify-end gap-3")}>
 					{org === undefined && orgFailure === null ? (
 						<p className="mr-auto text-pretty text-[12px] leading-5 text-[var(--color-text-import-muted)]" role="status">
 							{t("createProject.cloudWorkspaceConnecting")}
