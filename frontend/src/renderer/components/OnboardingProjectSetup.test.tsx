@@ -64,7 +64,7 @@ it("offers cloud as a project source once the cloud step enabled it", async () =
 	);
 
 	expect(screen.queryByTestId("cloud-sign-in-panel")).not.toBeInTheDocument();
-	await user.click(screen.getByRole("button", { name: "Cloud" }));
+	await user.click(screen.getByRole("button", { name: "Create a cloud project" }));
 	expect(await screen.findByTestId("cloud-sign-in-panel")).toBeInTheDocument();
 });
 
@@ -83,7 +83,7 @@ it("goes straight to the cloud project form when the account is signed in", asyn
 		/>,
 	);
 
-	await user.click(screen.getByRole("button", { name: "Cloud" }));
+	await user.click(screen.getByRole("button", { name: "Create a cloud project" }));
 	expect(await screen.findByTestId("cloud-project-card")).toBeInTheDocument();
 });
 

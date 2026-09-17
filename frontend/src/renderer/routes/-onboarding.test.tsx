@@ -105,7 +105,7 @@ async function goToProjectStep(user: ReturnType<typeof userEvent.setup>) {
 /** The GitHub page sits between the agent sign-in step and the cloud step. */
 async function goToGitHubStep(user: ReturnType<typeof userEvent.setup>) {
 	await user.click(screen.getByRole("button", { name: "Continue" }));
-	await user.click(await screen.findByRole("button", { name: "Create your project" }));
+	await user.click(await screen.findByRole("button", { name: "Proceed to setup" }));
 	await screen.findByRole("heading", { name: "Connect GitHub" });
 }
 
@@ -217,7 +217,7 @@ describe("onboarding route", () => {
 				fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 			});
 			await act(async () => {
-				fireEvent.click(screen.getByRole("button", { name: "Create your project" }));
+				fireEvent.click(screen.getByRole("button", { name: "Proceed to setup" }));
 			});
 			// Pass the GitHub and cloud steps to reach the project step.
 			for (let index = 0; index < 2; index += 1) {
@@ -247,7 +247,7 @@ describe("onboarding route", () => {
 		expect(screen.getByRole("heading", { name: "Stop babysitting agents." })).toBeInTheDocument();
 		await user.click(screen.getByRole("button", { name: "Continue" }));
 		expect(await screen.findByRole("heading", { name: "Keep the loop moving." })).toBeInTheDocument();
-		await user.click(screen.getByRole("button", { name: "Create your project" }));
+		await user.click(screen.getByRole("button", { name: "Proceed to setup" }));
 		// GitHub, then cloud, then the project step. Agent sign-in lives in the
 		// orchestrator and worker steps instead of a page of its own.
 		expect(await screen.findByRole("heading", { name: "Connect GitHub" })).toBeInTheDocument();
@@ -289,7 +289,7 @@ describe("onboarding route", () => {
 		await renderOnboarding();
 
 		await user.click(screen.getByRole("button", { name: "Continue" }));
-		await user.click(await screen.findByRole("button", { name: "Create your project" }));
+		await user.click(await screen.findByRole("button", { name: "Proceed to setup" }));
 		await screen.findByRole("heading", { name: "Connect GitHub" });
 		await user.click(screen.getByRole("button", { name: "Continue" }));
 		await screen.findByRole("heading", { name: "Run sessions in the cloud" });
@@ -450,9 +450,9 @@ describe("onboarding route", () => {
 		await user.click(screen.getByRole("button", { name: "Continue" }));
 
 		expect(await screen.findByRole("heading", { name: "Run sessions in the cloud" })).toBeInTheDocument();
-		expect(screen.getByText(/remote sandboxes instead of on this machine/)).toBeInTheDocument();
+		expect(screen.getByText(/Nothing heavy runs on this machine/)).toBeInTheDocument();
 
-		await user.click(screen.getByRole("button", { name: "Enable cloud" }));
+		await user.click(screen.getByRole("switch", { name: "Cloud sessions" }));
 		await waitFor(() => {
 			expect(apiMocks.PATCH).toHaveBeenCalledWith("/api/v1/settings/cloud-offering", { body: { enabled: true } });
 		});
