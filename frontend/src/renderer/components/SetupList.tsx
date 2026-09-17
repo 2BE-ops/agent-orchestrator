@@ -39,7 +39,7 @@ export function SetupRow({ icon, label, description, trailing, disabled, selecte
 				!isCard && selected && "bg-foreground/[0.03]",
 				// The chosen row is marked by a bright edge rather than the accent
 				// colour, so selection reads the same as the text around it.
-				isCard && selected && "border-foreground/70 bg-accent-weak ring-1 ring-inset ring-foreground/25",
+				isCard && selected && "border-foreground/45 bg-accent-weak ring-1 ring-inset ring-foreground/20",
 			)}
 		>
 			<span className={cn("grid shrink-0 place-items-center text-muted-foreground", isCard ? "size-8 [&_svg]:size-4" : "size-6 [&_svg]:size-5")}>{icon}</span>
