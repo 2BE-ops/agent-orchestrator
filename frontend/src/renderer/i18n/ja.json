@@ -646,8 +646,6 @@
 	"onboarding.step.cloud.subtitle": "エージェントはリモートサンドボックスで動くため、長時間のセッションもマシンを閉じて続行でき、どこからでも確認できます。",
 	"onboarding.step.cloud.next": "続ける",
 	"onboarding.githubConnectedDetail": "エージェントがプルリクエストを作成し、Issue を読み取れます。",
-	"onboarding.cloudFeature.sandboxes": "エージェントの作業中も、このマシンに重い負荷はかかりません。",
-	"onboarding.cloudFeature.mobile": "同じセッションに AO モバイルからアクセスできます。",
 	"onboarding.cloudCaveat": "早期プレビュー: サンドボックスの起動が遅れたり、作業が失われることがあります。",
 	"onboarding.cloudToggleLabel": "クラウドセッション",
 	"onboarding.cloudToggleDetail": "プロジェクト作成時にクラウドプロジェクトの選択肢を追加します。",

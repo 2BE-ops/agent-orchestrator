@@ -648,8 +648,6 @@
 	"onboarding.step.cloud.subtitle": "Os agentes rodam em sandboxes remotos, então sessões longas continuam com esta máquina desligada e você pode acompanhá-las de qualquer lugar.",
 	"onboarding.step.cloud.next": "Continuar",
 	"onboarding.githubConnectedDetail": "Os agentes podem abrir pull requests e ler issues.",
-	"onboarding.cloudFeature.sandboxes": "Nada pesado roda nesta máquina enquanto um agente trabalha.",
-	"onboarding.cloudFeature.mobile": "As mesmas sessões ficam acessíveis pelo AO mobile.",
 	"onboarding.cloudCaveat": "Prévia inicial: sandboxes podem demorar a iniciar e perder trabalho.",
 	"onboarding.cloudToggleLabel": "Sessões na nuvem",
 	"onboarding.cloudToggleDetail": "Adiciona uma opção de projeto na nuvem ao criar um projeto.",

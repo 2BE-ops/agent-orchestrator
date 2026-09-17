@@ -642,8 +642,6 @@
 	"onboarding.step.cloud.subtitle": "Agents run in remote sandboxes, so long sessions keep going when this machine is shut and you can follow them from anywhere.",
 	"onboarding.step.cloud.next": "Continue",
 	"onboarding.githubConnectedDetail": "Agents can open pull requests and read issues.",
-	"onboarding.cloudFeature.sandboxes": "Nothing heavy runs on this machine while an agent works.",
-	"onboarding.cloudFeature.mobile": "The same sessions are reachable from AO mobile.",
 	"onboarding.cloudCaveat": "Early preview: sandboxes can be slow to start, and can lose work.",
 	"onboarding.cloudToggleLabel": "Cloud sessions",
 	"onboarding.cloudToggleDetail": "Adds a cloud project option when you set up a project.",

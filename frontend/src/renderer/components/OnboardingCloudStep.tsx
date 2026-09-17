@@ -14,14 +14,6 @@ export function OnboardingCloudStep({ cloudEnabled }: { cloudEnabled: boolean })
 
 	return (
 		<div className="flex w-full max-w-[440px] flex-col gap-4 text-left">
-			<ul className="flex flex-col gap-2 px-1">
-				{(["sandboxes", "mobile"] as const).map((feature) => (
-					<li key={feature} className="flex items-start gap-2.5 text-[13px] leading-5 text-muted-foreground">
-						<Cloud aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/70" />
-						{t(`onboarding.cloudFeature.${feature}` as const)}
-					</li>
-				))}
-			</ul>
 			<div className="flex items-center gap-3 rounded-lg bg-card px-4 py-3">
 				<span className="grid size-8 shrink-0 place-items-center text-muted-foreground [&_svg]:size-4">
 					<Cloud aria-hidden="true" />
@@ -40,7 +32,7 @@ export function OnboardingCloudStep({ cloudEnabled }: { cloudEnabled: boolean })
 					onCheckedChange={(next) => offering.update(next)}
 				/>
 			</div>
-			<p className="px-1 text-caption leading-snug text-muted-foreground/80">{t("onboarding.cloudCaveat")}</p>
+			<p className="px-1 text-center text-caption leading-snug text-muted-foreground/80">{t("onboarding.cloudCaveat")}</p>
 			{offering.error ? (
 				<p className="px-1 text-caption leading-snug text-destructive" role="alert">
 					{offering.error}
