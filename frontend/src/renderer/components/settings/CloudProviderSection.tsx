@@ -1,7 +1,6 @@
 import { Server } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useCloudGate } from "../../hooks/useCloudGate";
-import { useCloudSandboxProviders } from "../../hooks/useCloudSandboxProviders";
 import { useCloudSession } from "../../lib/cloud-session";
 import { useSandboxProviderStore } from "../../stores/sandbox-provider-store";
 import { SettingsOptionMenu, type SettingsOption } from "./SettingsOptionMenu";
@@ -39,7 +38,12 @@ export function CloudProviderSection({ titleHidden }: { titleHidden?: boolean })
 function CloudProviderSectionInner({ titleHidden }: { titleHidden?: boolean }) {
 	const { t } = useTranslation();
 	const { status } = useCloudSession();
-	const { available, default: defaultProvider } = useCloudSandboxProviders();
+	// eleven_x custom build: the sandbox provider is locked to Coder. The shared
+	// control plane also offers NodeOps, but this build must never surface NodeOps
+	// or a provider toggle, so we ignore what the control plane advertises and
+	// present Coder read-only. The menu branch below is unreachable in this build.
+	const available = ["coder"];
+	const defaultProvider = "coder";
 	const selectedProvider = useSandboxProviderStore((s) => s.selectedProvider);
 	const setSelectedProvider = useSandboxProviderStore((s) => s.setSelectedProvider);
 

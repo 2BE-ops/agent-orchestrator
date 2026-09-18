@@ -19,12 +19,12 @@ function getLocalStorage(): Storage | null {
  * unreadable, which the caller treats as "use the control plane default".
  */
 export function readSelectedSandboxProvider(): string | null {
-	try {
-		const value = getLocalStorage()?.getItem(storageKey);
-		return value && value !== "" ? value : null;
-	} catch {
-		return null;
-	}
+	// eleven_x custom build: the sandbox provider is locked to Coder. This build
+	// removes the provider toggle and must never use NodeOps, so every new cloud
+	// session carries provider=coder. Returning null here would omit the field
+	// from the create-session request and fall back to the control plane default
+	// (NodeOps on the shared deployment), so we pin it explicitly.
+	return "coder";
 }
 
 function persistSelectedSandboxProvider(provider: string | null): void {
