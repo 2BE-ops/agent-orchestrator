@@ -43,15 +43,20 @@ region and to AO-managed resources by tag where the API allows a condition.
       "Action": [
         "ec2:DescribeInstances",
         "ec2:DescribeInstanceStatus",
+        "ec2:DescribeInstanceAttribute",
         "ec2:DescribeInstanceTypes",
+        "ec2:DescribeInstanceCreditSpecifications",
         "ec2:DescribeImages",
         "ec2:DescribeSubnets",
         "ec2:DescribeSecurityGroups",
         "ec2:DescribeVpcs",
         "ec2:DescribeVolumes",
+        "ec2:DescribeVolumeAttribute",
+        "ec2:DescribeVolumesModifications",
         "ec2:DescribeTags",
         "ec2:DescribeNetworkInterfaces",
-        "ec2:DescribeAvailabilityZones"
+        "ec2:DescribeAvailabilityZones",
+        "ec2:DescribeSpotInstanceRequests"
       ],
       "Resource": "*",
       "Condition": { "StringEquals": { "aws:RequestedRegion": "eu-north-1" } }
