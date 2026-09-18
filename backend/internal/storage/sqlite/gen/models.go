@@ -196,6 +196,25 @@ type AdaptiveTaskLease struct {
 	ReleaseReason  string
 }
 
+type AdaptiveTaskResult struct {
+	ID                    string
+	AttemptID             string
+	TaskID                string
+	Number                int64
+	SessionID             string
+	NativeGeneration      string
+	SourceOwner           string
+	TaskRevision          int64
+	CriteriaVersion       int64
+	ConfigurationHash     string
+	ConfigurationSequence int64
+	ContextHash           string
+	IdempotencyKey        string
+	Definition            string
+	ContentHash           string
+	CreatedAt             time.Time
+}
+
 type AdaptiveTaskRevision struct {
 	TaskID          string
 	Number          int64

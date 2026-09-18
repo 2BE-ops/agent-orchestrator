@@ -365,6 +365,17 @@ follow-ups and knowledge candidates. Reject malformed/oversized submissions
 without losing partial worker output. Self-reported tests are claims, not
 independently verified evidence.
 
+Stage 12 result realization uses immutable schema-v1 worker claims, at most 16
+corrections per attempt and 256 KiB per definition. Each submission has a durable
+idempotency key and expected result version. The daemon supplies session/controller
+ownership and configuration activation fences; storage records the frozen task,
+criteria and context alongside the effective configuration at submission. A result
+cannot release a lease, rewrite acceptance or promote its knowledge candidates.
+Cancellation/expiry alone does not discard output from the still-owned controller;
+termination, replacement and unresolved native/configuration changes reject new
+claims. Exact retries acknowledge historical content without new effects. Existing
+closed interface recovery (`DAEMON_RESTARTED`) is distinct from uncertain recovery.
+
 Typed messages cover finding, question, answer, blocker, handoff,
 interface_contract, review_request and dependency_update. Validate sender/target
 project and attempt ownership; persist first, then deliver via existing

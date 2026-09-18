@@ -4,6 +4,35 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 12a — structured worker-result persistence (2026-09-19)
+
+Migration 0162 retains bounded schema-v1 worker claims: summary, implementation,
+decisions, assumptions, interface contracts/files, reported tests, findings,
+unresolved issues, follow-up recommendations and knowledge candidates. Commands
+and claimed commit/outcome remain inert claims. Definitions are limited to 256 KiB,
+16 immutable corrections per attempt, explicit collection/string bounds and portable
+file references. Submission keys are idempotent; expected versions fence competing
+corrections. Native generation/session ownership, sealed context, fixed criteria and
+effective configuration activation are checked in the same transaction as result
+and audit/trigger CDC. Pending native/configuration work and uncertain interface
+recovery reject new claims; confirmed closed daemon recovery remains compatible.
+
+Two domain tests and five store tests PASS, covering bounds, stale/unowned/unsealed
+submissions, concurrent retries/corrections, cancellation/output retention, restart,
+post-termination historical acknowledgement, immutable history, audit/CDC rollback,
+the 16-version cap and configuration attribution after interface change. Results
+neither release leases nor rewrite criteria, declare success or canonize knowledge.
+The populated migration test exercises result/context foreign keys and downgrade.
+Full domain/SQLite/store/CDC/context/task suites PASS (initial SQLite 32.232s, store
+15.128s; final affected store rerun 12.053s). Backend build, sqlc generation and full
+domain/ports/SQLite pinned lint PASS (0 issues). Logs: ignored `*stage12a*`.
+
+Review added explicit interface/native-control fences and preserved the existing
+reconciler's DAEMON_RESTARTED distinction. A test compile used the wrong recovery
+constant name; corrected to the existing domain constant before final suites.
+Result service/API/CLI, typed delivery and independent evaluation remain subsequent
+slices. No live provider or UI validation is claimed for this storage increment.
+
 ## Stage 11c3 — context inspection API and CLI (2026-09-19)
 
 `GET /tasks/{taskId}/attempts/{attemptId}/context` and `ao task context` expose

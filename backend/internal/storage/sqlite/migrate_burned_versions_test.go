@@ -166,6 +166,7 @@ var shippedMigrations = map[int64]string{
 	159: "0159_project_knowledge_cdc.sql",
 	160: "0160_project_knowledge.sql",
 	161: "0161_task_contexts.sql",
+	162: "0162_task_results.sql",
 }
 
 // burnedVersion reports version numbers that must never be (re)used: they
