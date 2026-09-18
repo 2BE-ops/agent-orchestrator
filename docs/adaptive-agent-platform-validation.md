@@ -4,6 +4,32 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 09c1 — execution history and interface changes (2026-09-18)
+
+Migration 0152 adds immutable execution configurations and append-only activation
+events. Preparation records its source action, trusted actor, reason, current
+controller owner and prior activation sequence. It does not change the active
+configuration. Applying an interface change and its activation event share the
+existing controller-epoch transaction; rollback restores the recorded predecessor
+and appends a rollback event. CDC remains trigger-owned. Restoration reads the
+last activated configuration, while the original launch record stays unchanged.
+
+Focused store/manager tests PASS for idempotency, conflicting retry payloads,
+stale owners, cross-session reads, bounded history, immutable SQL records,
+unprepared mode rejection, injected activation failure with mode/CDC rollback,
+reopened-database history, retained-session deletion protection, and a TUI-to-Chat
+manager preflight/launch retaining its original model, effort and instructions.
+The complete domain, SQLite (35.69s), SQLite store (11.74s), sqlitetest and registry
+suites PASS. Backend build PASS. Pinned changed-code lint against `036392a6c`
+PASS with 0 issues after adding exported-method documentation and removing an
+unnecessary conversion. sqlc regenerated from the new migration/queries; diff
+whitespace and the complete source/transaction changes were inspected.
+
+The new execution-history behavior has automated coverage only at this milestone.
+Harness switches, live conversation-setting changes and the history UI remain
+the next increment; stage 09 is not yet complete. The existing Electron lab still
+runs the verified 09b build. Logs are ignored `*stage09c*` files.
+
 ## Stage 09b — manual launch and retained configuration (2026-09-18)
 
 Agent Type selection now reaches the existing shared session manager from direct

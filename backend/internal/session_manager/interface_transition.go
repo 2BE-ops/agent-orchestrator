@@ -787,6 +787,10 @@ func (m *Manager) preflightInterfaceTarget(
 	rec domain.SessionRecord,
 	transition domain.SessionInterfaceTransition,
 ) error {
+	snapshot, err := m.prepareWorkerInterface(ctx, rec, transition)
+	if err != nil {
+		return err
+	}
 	if transition.TargetMode == domain.SessionModeChat {
 		if m.chat == nil {
 			return ports.ErrChatUnsupported
@@ -796,6 +800,9 @@ func (m *Manager) preflightInterfaceTarget(
 			return err
 		}
 		permissions := effectiveAgentConfig(rec.Harness, rec.Kind, project.Config).Permissions
+		if snapshot != nil {
+			permissions = snapshot.Effective.Config.Permissions
+		}
 		return m.chat.PreflightChat(ctx, rec.Harness, permissions)
 	}
 	agent, ok := m.agents.Agent(rec.Harness)
@@ -806,11 +813,19 @@ func (m *Manager) preflightInterfaceTarget(
 	if err != nil {
 		return err
 	}
-	systemPrompt, err := m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	var systemPrompt string
+	if snapshot != nil {
+		systemPrompt, err = m.workerSnapshotPrompt(ctx, rec.ID, *snapshot)
+	} else {
+		systemPrompt, err = m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	}
 	if err != nil {
 		return err
 	}
 	config := effectiveAgentConfig(rec.Harness, rec.Kind, project.Config)
+	if snapshot != nil {
+		config = snapshot.Effective.Config
+	}
 	var cmd []string
 	if transition.NativeConversationID == "" {
 		cmd, _, _, err = freshLaunchArgv(ctx, agent, rec.ID, rec.Metadata.WorkspacePath,

@@ -95,15 +95,20 @@ func (s *Store) GetWorkerConfiguration(ctx context.Context, id domain.SessionID)
 	if err != nil {
 		return domain.WorkerConfiguration{}, false, err
 	}
+	snapshot, err := workerConfigurationFromRow(row)
+	return snapshot, err == nil, err
+}
+
+func workerConfigurationFromRow(row gen.AdaptiveWorkerConfiguration) (domain.WorkerConfiguration, error) {
 	var snapshot domain.WorkerConfiguration
 	if err := json.Unmarshal([]byte(row.Configuration), &snapshot); err != nil {
-		return snapshot, false, err
+		return snapshot, err
 	}
 	if snapshot.ContentHash != row.ContentHash || snapshot.AgentType.ID != row.AgentTypeID || snapshot.AgentType.Version != row.AgentTypeVersion {
-		return snapshot, false, fmt.Errorf("stored worker configuration identity is inconsistent")
+		return snapshot, fmt.Errorf("stored worker configuration identity is inconsistent")
 	}
 	if err := snapshot.Validate(); err != nil {
-		return snapshot, false, err
+		return snapshot, err
 	}
-	return snapshot, true, nil
+	return snapshot, nil
 }

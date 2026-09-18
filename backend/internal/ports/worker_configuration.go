@@ -19,3 +19,12 @@ type WorkerConfigurationResolver interface {
 	ResolveWorker(context.Context, domain.WorkerSelection, domain.ProjectRecord, domain.SessionMode, domain.RegistryActor) (domain.WorkerConfiguration, error)
 	ValidateWorkerRestore(context.Context, domain.WorkerConfiguration, string) error
 }
+
+// WorkerExecutionStore separates immutable preparation from atomic ownership
+// activation. A zero sequence denotes the original launch configuration.
+type WorkerExecutionStore interface {
+	PrepareWorkerExecution(context.Context, domain.SessionControllerOwner, domain.WorkerExecution) (domain.WorkerExecution, error)
+	GetEffectiveWorkerConfiguration(context.Context, domain.SessionID) (domain.WorkerConfiguration, int64, bool, error)
+	ListWorkerExecutions(context.Context, domain.SessionID, int64, int) ([]domain.WorkerExecutionActivation, error)
+	GetWorkerExecution(context.Context, domain.SessionID, string) (domain.WorkerExecution, error)
+}

@@ -97,6 +97,29 @@ type AdaptiveWorkerConfiguration struct {
 	CreatedAt        time.Time
 }
 
+type AdaptiveWorkerExecution struct {
+	ID                 string
+	SessionID          string
+	SourceKind         string
+	SourceID           string
+	PreviousActivation int64
+	Configuration      string
+	ContentHash        string
+	Origin             string
+	ActorID            string
+	Reason             string
+	CreatedAt          time.Time
+}
+
+type AdaptiveWorkerExecutionActivation struct {
+	Seq         int64
+	SessionID   string
+	ExecutionID sql.NullString
+	OperationID string
+	Action      string
+	CreatedAt   time.Time
+}
+
 type AgentInstallJob struct {
 	Target              string
 	Status              string

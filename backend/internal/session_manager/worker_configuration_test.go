@@ -257,3 +257,59 @@ func TestWorkerResourceRejectsTraversalAndRetainsExistingContent(t *testing.T) {
 		t.Fatal("non-directory parent accepted")
 	}
 }
+
+func TestConfiguredWorkerInterfaceUsesPreparedSnapshotAcrossModeCommit(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+	store := sqlitetest.MustOpen(t)
+	native := &workerNative{}
+	registry := registrysvc.NewWithNative(store, native)
+	entry, err := registry.Create(ctx, domain.RegistryActor{Origin: domain.RegistryUser, ID: "human"}, domain.RegistryAgentType, registrysvc.CreateInput{Metadata: domain.RegistryMetadata{Name: "Interface reviewer", Enabled: true}, Definition: domain.RegistryDefinition{AgentType: &domain.AgentTypeDefinition{Harness: domain.HarnessClaudeCode, SessionMode: domain.SessionModeTUI, Config: domain.AgentConfig{Model: "provider/reviewer", Effort: "high"}, Instructions: "Retain these instructions across interface changes", MaxParallelWorkers: 1}}, Reason: "Author reviewer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := &recordingAgent{}
+	launcher := &recordingLauncher{}
+	runtime := &fakeRuntime{}
+	manager := New(Deps{Store: store, Runtime: runtime, Agents: singleAgent{agent: agent}, Chat: launcher, Workspace: &fakeWorkspace{path: t.TempDir()}, Messenger: &fakeMessenger{}, Lifecycle: lifecycle.New(store, &fakeMessenger{}), DataDir: dataDir, WorkerConfigurations: registry, LookPath: func(string) (string, error) { return "/bin/true", nil }})
+	rec, _, _, err := manager.Spawn(ctx, ports.SpawnConfig{Kind: domain.KindWorker, WorkerSelection: &domain.WorkerSelection{AgentTypeID: entry.Entry.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	transition := domain.SessionInterfaceTransition{ID: "configured-interface", SessionID: rec.ID, SourceMode: domain.SessionModeTUI, TargetMode: domain.SessionModeChat, Policy: domain.SessionInterfaceTransitionDrain, HistoryPolicy: domain.SessionInterfaceTransitionHistoryStrict, Phase: domain.SessionInterfaceTransitionRequested, NativeConversationID: "native-interface", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	if _, _, err := store.CreateSessionInterfaceTransition(ctx, transition); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.preflightInterfaceTarget(ctx, rec, transition); err != nil {
+		t.Fatal(err)
+	}
+	before, err := manager.workerSnapshot(ctx, rec.ID)
+	if err != nil || before.Effective.SessionMode != domain.SessionModeTUI {
+		t.Fatalf("preflight activated target: %+v %v", before, err)
+	}
+	if changed, err := store.CommitSessionControllerEpoch(ctx, rec.ID, domain.SessionModeTUI, domain.SessionModeChat, "native-interface", time.Now().UTC()); err != nil || !changed {
+		t.Fatalf("commit: %v %v", changed, err)
+	}
+	runtime.created = 0
+	if err := manager.startTransitionTarget(ctx, rec.ID, false, false, domain.SessionInterfaceTransitionHistoryStrict); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.created != 0 || len(launcher.started) != 1 {
+		t.Fatal("wrong interface controller launched")
+	}
+	start := launcher.started[0]
+	if start.Model != "provider/reviewer" || start.Effort != "high" || !strings.Contains(start.SystemPrompt, "Retain these instructions across interface changes") {
+		t.Fatalf("interface configuration drift: %+v", start)
+	}
+	original, _, err := store.GetWorkerConfiguration(ctx, rec.ID)
+	if err != nil || original.Effective.SessionMode != domain.SessionModeTUI {
+		t.Fatal("interface change rewrote original launch")
+	}
+	if changed, err := store.RestoreSessionControllerEpoch(ctx, rec.ID, domain.SessionModeChat, domain.SessionModeTUI, "native-interface", time.Now().UTC()); err != nil || !changed {
+		t.Fatalf("rollback: %v %v", changed, err)
+	}
+	current, err := manager.workerSnapshot(ctx, rec.ID)
+	if err != nil || current.ContentHash != original.ContentHash {
+		t.Fatalf("rollback did not restore original config: %v", err)
+	}
+}

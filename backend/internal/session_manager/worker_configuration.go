@@ -35,6 +35,16 @@ func (m *Manager) resolveConfiguredWorker(ctx context.Context, cfg ports.SpawnCo
 }
 
 func (m *Manager) workerSnapshot(ctx context.Context, id domain.SessionID) (*domain.WorkerConfiguration, error) {
+	if store, ok := m.store.(ports.WorkerExecutionStore); ok {
+		snapshot, _, found, err := store.GetEffectiveWorkerConfiguration(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("read worker execution: %w", err)
+		}
+		if !found {
+			return nil, nil
+		}
+		return &snapshot, nil
+	}
 	store, ok := m.store.(ports.WorkerConfigurationStore)
 	if !ok {
 		return nil, nil
@@ -47,6 +57,38 @@ func (m *Manager) workerSnapshot(ctx context.Context, id domain.SessionID) (*dom
 		return nil, nil
 	}
 	return &snapshot, nil
+}
+
+func (m *Manager) prepareWorkerInterface(ctx context.Context, rec domain.SessionRecord, transition domain.SessionInterfaceTransition) (*domain.WorkerConfiguration, error) {
+	snapshot, err := m.workerSnapshot(ctx, rec.ID)
+	if err != nil || snapshot == nil {
+		return snapshot, err
+	}
+	store, ok := m.store.(ports.WorkerExecutionStore)
+	if !ok || m.workerConfigurations == nil {
+		return nil, apierr.NotImplemented("WORKER_CONFIGURATION_UNAVAILABLE", "Worker execution history is unavailable")
+	}
+	current, sequence, found, err := store.GetEffectiveWorkerConfiguration(ctx, rec.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, fmt.Errorf("worker configuration disappeared")
+	}
+	if current.Effective.Harness != rec.Harness || current.Effective.SessionMode != domain.NormalizeSessionMode(rec.Mode) {
+		return nil, apierr.Conflict("WORKER_EXECUTION_SEGMENT_REQUIRED", "Resolve the current worker execution configuration before changing interface", nil)
+	}
+	current.Effective.SessionMode = transition.TargetMode
+	current.Selection.Overrides.SessionMode = &transition.TargetMode
+	current.ContentHash = current.Hash()
+	if err := m.workerConfigurations.ValidateWorkerRestore(ctx, current, string(rec.ProjectID)); err != nil {
+		return nil, err
+	}
+	execution, err := store.PrepareWorkerExecution(ctx, rec.ControllerOwner(), domain.WorkerExecution{ID: "interface-" + transition.ID, SessionID: rec.ID, SourceKind: "interface_transition", SourceID: transition.ID, PreviousActivation: sequence, Configuration: current, Actor: domain.RegistryActor{Origin: domain.RegistryUser, ID: "local-user"}, Reason: "Change worker interface to " + string(transition.TargetMode), CreatedAt: m.clock()})
+	if err != nil {
+		return nil, err
+	}
+	return &execution.Configuration, nil
 }
 
 func (m *Manager) validateWorkerFreshRestore(ctx context.Context, snapshot *domain.WorkerConfiguration, rec domain.SessionRecord) error {
