@@ -13,6 +13,23 @@ Statuses: **NOT STARTED**, **IN PROGRESS**, **IMPLEMENTED**, **TESTED**,
 TESTED requires recorded command results; running-app validation requires an
 observed real-app flow. Source audit does not count as adaptive feature testing.
 
+## Environment facts (verified 2026-09-18, machine `bill`)
+
+- Repo: `C:\Users\bill\Desktop\agent-orchestrator`, branch
+  `feature/adaptive-agent-platform`, rebased onto upstream `6d3ad8c7c`
+  (migrations verified to still end at `0147`; the new upstream commit was
+  frontend-only).
+- `origin` = `https://github.com/2BE-ops/agent-orchestrator` (fork, pushes work
+  as `2BE-ops` via `gh`); `upstream` = `Untrivial-ai/agent-orchestrator`.
+- Go: `C:\Users\bill\go-sdk\go\bin` on persistent user PATH; GOROOT set. First
+  build downloads go1.26.5 automatically per `go.mod` toolchain line.
+- Pinned tools need no installation: `npm run lint` (golangci-lint v2.12.2) and
+  `npm run sqlc` (sqlc v1.31.1) self-provision via `go run` from the repo root.
+- Frontend API contracts: `npm run api` (specgen + openapi-typescript) at repo
+  root; typed client is `frontend/src/renderer/lib/api-client.ts`.
+- The full original assignment is preserved verbatim in
+  [adaptive-agent-platform-mission.md](adaptive-agent-platform-mission.md).
+
 ## Current execution gate
 
 None. The earlier `.git` read-only restriction belonged to the previous
@@ -32,7 +49,7 @@ Stage 03 completes with this commit.
 | 01 | Fork, upstream/origin, feature branch | TESTED | Fork `2BE-ops/agent-orchestrator` created via `gh`; `origin`/`upstream` verified; branch cut from starting SHA |
 | 02 | Current-state source and upstream audit | IMPLEMENTED | Lifecycle, config, persistence, native skills, reviews, UI and overlap documented |
 | 03 | Gap analysis/design and live checklist commit | TESTED | Design/checklist/validation committed on feature branch and pushed to fork |
-| 04 | Reproducible baseline/toolchain | BLOCKED | 74 focused UI tests pass; typecheck dependency failure; install network denied; Go absent from PATH |
+| 04 | Reproducible baseline/toolchain | TESTED | Go 1.25.7 installed (`C:\Users\bill\go-sdk\go`, on user PATH, GOROOT set); `go build ./...` clean (toolchain auto-selects 1.26.5 per go.mod); workspace `node_modules` restored (`product-ui`, `cloud-client`, `mobile`, `ao`); `frontend:typecheck` PASS; `product-ui:check` (typecheck+test+build) PASS; pinned sqlc/golangci-lint self-provision via root scripts |
 | 05 | Registry domain, immutable versions, migration/store | NOT STARTED | New migrations; ownership/revision/CDC invariants |
 | 06 | Agent Type service/API/CLI and registry UI | NOT STARTED | Same validated path for human and manager; generated contracts |
 | 07 | Skill authoring/versioning/API/UI/import/export | NOT STARTED | Reuse native conventions and embedded AO skill |
