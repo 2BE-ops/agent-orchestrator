@@ -178,6 +178,41 @@ describe("TaskComposer", () => {
 		expect(screen.queryByRole("button", { name: "Aider" })).not.toBeInTheDocument();
 	});
 
+	it("blocks cloud submission until an agent with a valid credential is selected", async () => {
+		h.cloudProjects = [{ id: "cloud-project" }];
+		h.agentCatalog = {
+			agents: [agentReadiness("claude-code", "Claude Code"), agentReadiness("codex", "Codex")],
+		};
+		h.getAvailableAgents.mockResolvedValue({
+			agents: [
+				{ id: "claude-code", provider: "claude-code", hasValidCred: true, validationState: "valid" },
+				{ id: "codex", provider: "codex", hasValidCred: false, validationState: "not_configured" },
+			],
+		});
+
+		render(
+			<Wrap>
+				<TaskComposer projectId="cloud-project" onCreated={vi.fn()} />
+			</Wrap>,
+		);
+
+		// No agent selected yet for a cloud project: submission stays disabled.
+		const start = await screen.findByRole("button", { name: "Start task" });
+		await waitFor(() => expect(screen.getByRole("button", { name: "CodexNeeds auth" })).toBeDisabled());
+		expect(start).toBeDisabled();
+
+		// Selecting an agent without a valid credential keeps submission disabled.
+		fireEvent.click(screen.getByLabelText("Agent"));
+		await waitFor(() => expect(screen.getByTestId("agent-field")).toHaveAttribute("data-value", "codex"));
+		expect(start).toBeDisabled();
+		expect(h.createCloudSession).not.toHaveBeenCalled();
+
+		// Selecting an agent with a valid credential enables submission.
+		fireEvent.click(screen.getByLabelText("Agent"));
+		await waitFor(() => expect(screen.getByTestId("agent-field")).toHaveAttribute("data-value", "claude-code"));
+		expect(start).toBeEnabled();
+	});
+
 	it("starts a standalone worker without loading or sending a project", async () => {
 		const onCreated = vi.fn();
 		h.post.mockResolvedValueOnce({ data: { session: { id: "standalone-1" } } });

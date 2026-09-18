@@ -286,6 +286,12 @@ export function TaskComposer({
 				};
 			});
 	}, [isCloudProject, agentCatalog?.agents, cloudAgentsQuery.data]);
+	// Cloud tasks require a selected agent with a valid credential; block submission
+	// while availability is loading or when the selection is missing/needs auth.
+	const selectedAgentHasValidCred =
+		selectedAgent !== "" &&
+		cloudAgentsQuery.data?.some((agent) => agent.id === selectedAgent && agent.hasValidCred === true) === true;
+	const cloudSubmitBlocked = isCloudProject && (cloudAgentsQuery.isLoading || !selectedAgentHasValidCred);
 
 	// Shares the picker's query key, so this is the same fetch, not a second one.
 	const modelCatalogQuery = useQuery(agentModelsQueryOptions(selectedAgent, modelsProjectId));
@@ -426,7 +432,7 @@ export function TaskComposer({
 	return (
 		<TaskComposerView
 			autoFocusPrompt={autoFocusTitle}
-			canSubmit={Boolean(projectId) && (!isStandalone || selectedAgent !== "")}
+			canSubmit={Boolean(projectId) && (!isStandalone || selectedAgent !== "") && !cloudSubmitBlocked}
 			onPromptChange={handlePromptChange}
 			labels={{
 				addFile: t("newTask.addFile"),

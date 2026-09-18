@@ -96,8 +96,16 @@ func configModelParser(agentID string) configParser {
 // cachedModelConfigPaths returns config paths for an agent, using a cache to avoid
 // repeated filesystem scans for VOLTA_HOME, FNM_DIR, and similar environment lookups.
 func cachedModelConfigPaths(agentID, workingDir string, env map[string]string) []string {
-	// Key includes agent ID and working directory to handle different contexts.
-	cacheKey := agentID + "\x00" + workingDir
+	// Key includes the environment values that influence config paths
+	// (QWEN_HOME, GOOSE_PATH_ROOT, VIBE_HOME) so differing environments
+	// never receive stale paths.
+	cacheKey := strings.Join([]string{
+		agentID,
+		workingDir,
+		env["QWEN_HOME"],
+		env["GOOSE_PATH_ROOT"],
+		env["VIBE_HOME"],
+	}, "\x00")
 	configPathsMu.Lock()
 	if cached, ok := configPathsCache[cacheKey]; ok {
 		configPathsMu.Unlock()
