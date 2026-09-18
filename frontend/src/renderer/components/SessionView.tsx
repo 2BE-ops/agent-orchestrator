@@ -453,22 +453,10 @@ function CloudLifecycleStatus({ stage }: { stage: CloudLifecycleStage }) {
 		return () => clearInterval(id);
 	}, [connecting]);
 
-	// Connected is the resting state: a bare green dot, no pill or visible label.
-	// The accessible name still announces "Connected" via aria-label.
+	// Connected is the resting state: no status indicator at all. A connected
+	// terminal needs no persistent "Connected" badge or dot cluttering the pane.
 	if (settled) {
-		return (
-			<motion.div
-				animate={{ opacity: 1, y: 0 }}
-				aria-label={label}
-				aria-live="polite"
-				className="absolute right-3 top-3 z-20 flex items-center"
-				data-cloud-lifecycle-stage={stage}
-				initial={{ opacity: 0, y: -4 }}
-				role="status"
-			>
-				<span aria-hidden="true" className="size-1.5 rounded-full bg-success" />
-			</motion.div>
-		);
+		return null;
 	}
 
 	return (

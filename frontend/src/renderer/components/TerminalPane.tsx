@@ -1151,16 +1151,31 @@ function AttachedTerminal({
 	// a terminal they cannot type into, and it never flickers back once the new
 	// epoch attaches (the epoch only moves forward). Cloud only.
 	const isBoxComingUp = Boolean(session?.cloud) && isReconnecting;
-	// The single connecting state for a cloud terminal: from first connect (fresh
-	// spawn) OR a restore/resume box coming up, until the pane has attached once.
-	// It drives ONE opaque centered "Connecting" cover so the live xterm cursor
-	// never bleeds through and there is no second banner; the top-right timer
-	// lives in SessionView's CloudLifecycleStatus. Cloud only, so local panes keep
-	// their existing messageless replay cover and reattaching banner.
+	// The single connecting state for a cloud terminal: ONE opaque centered
+	// "Connecting" cover from first connect (or a restore box coming up) until the
+	// pane has been fully revealed once (attached AND its replay painted). It is
+	// LATCHED on that first reveal so a later transient reconnect (hasAttached
+	// briefly flips back to false) never flashes the cover back over an
+	// already-visible terminal. The latch resets when the terminal identity
+	// changes (a new session, or a restore under a new worker epoch) so a fresh
+	// box connects cleanly again. Cloud only; local panes keep their existing
+	// messageless replay cover and reattaching banner. The top-right timer lives
+	// in SessionView's CloudLifecycleStatus.
+	const cloudTerminalIdentity = `${handleId ?? ""}:${session?.terminalGeneration ?? ""}`;
+	const cloudRevealedIdentityRef = useRef(cloudTerminalIdentity);
+	const cloudRevealedRef = useRef(false);
+	if (cloudRevealedIdentityRef.current !== cloudTerminalIdentity) {
+		cloudRevealedIdentityRef.current = cloudTerminalIdentity;
+		cloudRevealedRef.current = false;
+	}
+	if (hasAttached && replaySettled && !replayPaintPending) cloudRevealedRef.current = true;
+	const showEndedStatePreview = state === "exited" || canRestoreSession;
 	const isCloudConnecting =
 		Boolean(attachSession?.cloud) &&
 		!isCloudConnectError &&
-		(isBoxComingUp || (!hasAttached && (state === "connecting" || state === "reattaching")));
+		!showEmptyState &&
+		!showEndedStatePreview &&
+		!cloudRevealedRef.current;
 	const showEndedState = (state === "exited" || canRestoreSession) && !isBoxComingUp;
 	const emptyStateTitle = session ? t("terminal.startingSession") : "Agent Orchestrator";
 	const emptyStateMessage = session
