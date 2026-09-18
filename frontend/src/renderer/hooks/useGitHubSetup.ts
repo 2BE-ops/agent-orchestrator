@@ -1,17 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { components } from "../../api/schema";
 import type { AuthWorkflow } from "../components/AuthTerminalPanel";
+import { useInstallRunner } from "../components/InstallDependencyDialog";
 import { useCloseShellTerminal } from "./useShellTerminals";
-import { isActiveInstallJob } from "./useHarnessSetup";
 import type { TerminalSessionState } from "./useTerminalSession";
 import { useGitHubAuthRequirement, useGitHubAuthTerminal, useStartGitHubAuthTerminal, useSystemRequirementsGate } from "./useSystemRequirementsGate";
-import { apiClient, apiErrorMessage } from "../lib/api-client";
-
-type InstallJob = components["schemas"]["InstallJob"];
 
 const GH_INSTALL_TARGET = "gh" as const;
-const POLL_INTERVAL_MS = 1_000;
 /** The GitHub page watches long-running external work (a package install, a
  *  device-code sign-in), so it polls slowly rather than every second. */
 const STEP_POLL_INTERVAL_MS = 2_500;
@@ -31,11 +26,6 @@ export function useGitHubSetup({ poll = false }: { poll?: boolean } = {}) {
 		handleId: null,
 		state: "idle",
 	});
-	const [job, setJob] = useState<InstallJob | undefined>(undefined);
-	const [installing, setInstalling] = useState(false);
-	const [installError, setInstallError] = useState<string | null>(null);
-	const pollRef = useRef<number | null>(null);
-
 	const terminal = terminalQuery.data;
 	const resolvedTerminalState = terminalState.handleId === terminal?.handleId ? terminalState.state : "idle";
 	const loginRunning = Boolean(terminal && (resolvedTerminalState === "connecting" || resolvedTerminalState === "attached" || resolvedTerminalState === "reattaching"));
@@ -46,13 +36,9 @@ export function useGitHubSetup({ poll = false }: { poll?: boolean } = {}) {
 	authRef.current = auth.refetch;
 	const requirementsRef = useRef(gate.query.refetch);
 	requirementsRef.current = gate.query.refetch;
-	const stopPolling = useCallback(() => {
-		if (pollRef.current !== null) {
-			window.clearInterval(pollRef.current);
-			pollRef.current = null;
-		}
-	}, []);
-	useEffect(() => stopPolling, [stopPolling]);
+	// The gh install is a system install, the same one the startup gate runs, so
+	// it uses that runner rather than a second POST-and-poll of its own.
+	const installRunner = useInstallRunner(() => void requirementsRef.current());
 
 	// No manual re-check on the GitHub page: it polls until both halves settle.
 	// The CLI half matters while gh is missing (an install can land at any time)
@@ -73,40 +59,6 @@ export function useGitHubSetup({ poll = false }: { poll?: boolean } = {}) {
 		}, STEP_POLL_INTERVAL_MS);
 		return () => window.clearInterval(timer);
 	}, [authSatisfied, cliReady, poll]);
-
-	const pollInstall = useCallback(() => {
-		stopPolling();
-		pollRef.current = window.setInterval(() => {
-			void (async () => {
-				const { data, error } = await apiClient.GET("/api/v1/system/install/{target}", {
-					params: { path: { target: GH_INSTALL_TARGET } },
-				});
-				if (error || !data) return;
-				setJob(data);
-				if (isActiveInstallJob(data)) return;
-				stopPolling();
-				if (data.status === "succeeded") void gate.query.refetch();
-			})();
-		}, POLL_INTERVAL_MS);
-	}, [gate.query, stopPolling]);
-
-	const install = useCallback(async () => {
-		setInstalling(true);
-		setInstallError(null);
-		try {
-			const { data, error } = await apiClient.POST("/api/v1/system/install/{target}", {
-				params: { path: { target: GH_INSTALL_TARGET } },
-			});
-			if (error || !data) throw new Error(apiErrorMessage(error, t("onboarding.installStartFailed")));
-			setJob(data);
-			if (isActiveInstallJob(data)) pollInstall();
-			else if (data.status === "succeeded") await gate.query.refetch();
-		} catch (error) {
-			setInstallError(error instanceof Error ? error.message : t("onboarding.installStartFailed"));
-		} finally {
-			setInstalling(false);
-		}
-	}, [gate.query, pollInstall, t]);
 
 	const handleTerminalState = useCallback((state: TerminalSessionState) => {
 		setTerminalState({ handleId: terminalQuery.data?.handleId ?? null, state });
@@ -162,10 +114,10 @@ export function useGitHubSetup({ poll = false }: { poll?: boolean } = {}) {
 		closeSignIn,
 		gh,
 		handleTerminalState,
-		install,
-		installError,
-		installing,
-		job,
+		install: () => installRunner.start(GH_INSTALL_TARGET),
+		installError: installRunner.startError ?? null,
+		installing: installRunner.running,
+		job: installRunner.jobFor(GH_INSTALL_TARGET),
 		loginEnded,
 		loginRunning,
 		requirementsQuery: gate.query,
