@@ -16,6 +16,9 @@ var ErrActivityProjectionContention = errors.New("activity projection contention
 // SpawnConfig is the request to start a new session: which project/issue, which
 // agent harness, and the branch/prompt the agent launches with.
 type SpawnConfig struct {
+	// TaskLease is trusted scheduler context. Public spawn JSON cannot acquire
+	// or impersonate task ownership through this field.
+	TaskLease *domain.TaskLeaseToken
 	// WorkerSelection opts into immutable registry launch configuration. Actor is
 	// trusted server context and is never decoded from a public request body.
 	WorkerSelection *domain.WorkerSelection

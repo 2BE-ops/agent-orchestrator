@@ -81,6 +81,7 @@ func interfaceTransitionProviderBoundaryID(transitionID string) string {
 // chatSpawn bundles the shared state the chat launch needs from Spawn, so the
 // signature does not grow to a dozen positional arguments.
 type chatSpawn struct {
+	taskExecution    *domain.TaskExecutionOperation
 	cfg              ports.SpawnConfig
 	project          domain.ProjectRecord
 	projectKind      domain.ProjectKind
@@ -126,7 +127,12 @@ func (m *Manager) launchChatController(ctx context.Context, in chatSpawn) (domai
 		controllerCommitted bool
 		completionErr       error
 	)
+	generation := ""
+	if in.taskExecution != nil {
+		generation = in.taskExecution.ID
+	}
 	_, err = m.chat.StartChat(ctx, ChatStart{
+		ControllerGeneration:    generation,
 		SessionID:               id,
 		ProjectID:               in.cfg.ProjectID,
 		Kind:                    in.cfg.Kind,
@@ -212,6 +218,9 @@ func (m *Manager) launchChatController(ctx context.Context, in chatSpawn) (domai
 		}
 	}
 
+	if err := m.finishTaskExecution(ctx, in.taskExecution); err != nil {
+		return domain.SessionRecord{}, err
+	}
 	return m.getRecord(ctx, id)
 }
 
@@ -320,6 +329,13 @@ func (m *Manager) resumeChatController(
 		return RestoreResult{}, fmt.Errorf("%s %s: %w", operation, rec.ID, err)
 	}
 	defer releaseCodexAdmission()
+	taskExecution, err := m.beginTaskExecution(ctx, rec.ID, "restore", controllerGeneration)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	if taskExecution != nil {
+		controllerGeneration = taskExecution.ID
+	}
 
 	// Recomputed rather than persisted, matching the terminal path: a restored
 	// session keeps its standing instructions across the relaunch.
@@ -451,6 +467,9 @@ func (m *Manager) resumeChatController(
 	}
 	// Native continuity: the provider still holds the conversation, so the agent
 	// resumes with its own history rather than a replayed prompt.
+	if err := m.finishTaskExecution(ctx, taskExecution); err != nil {
+		return RestoreResult{}, err
+	}
 	return RestoreResult{Session: restored, Mode: RestoreModeNative}, nil
 }
 

@@ -13,6 +13,7 @@ import (
 type agentOperationKind string
 
 const (
+	agentOperationTaskDispatch      agentOperationKind = "task_dispatch"
 	agentOperationSwitch            agentOperationKind = "switch"
 	agentOperationExit              agentOperationKind = "exit"
 	agentOperationResume            agentOperationKind = "resume"

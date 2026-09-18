@@ -836,6 +836,9 @@ func New(d Deps) *Manager {
 // materialization fails the still-seed row is deleted outright; a later failure
 // parks the row as terminated and rolls back what was built.
 func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.SessionRecord, int, int, error) {
+	if prior, found, err := m.taskDispatchReplay(ctx, cfg); err != nil || found {
+		return prior, 0, 0, err
+	}
 	project, err := m.loadProject(ctx, cfg.ProjectID)
 	if err != nil {
 		return domain.SessionRecord{}, 0, 0, fmt.Errorf("spawn: %w", err)
@@ -959,7 +962,19 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 		if !ok {
 			return domain.SessionRecord{}, 0, 0, fmt.Errorf("worker configuration storage is unavailable")
 		}
-		rec, err = configuredStore.CreateConfiguredSession(ctx, seed, *workerSnapshot)
+		if cfg.TaskLease != nil {
+			taskStore, ok := m.store.(ports.TaskLeaseStore)
+			if !ok {
+				return domain.SessionRecord{}, 0, 0, taskExecutionUnavailable()
+			}
+			var created bool
+			rec, created, err = taskStore.CreateTaskWorkerSession(ctx, *cfg.TaskLease, seed, *workerSnapshot, m.clock())
+			if err == nil && !created {
+				return rec, 0, 0, nil
+			}
+		} else {
+			rec, err = configuredStore.CreateConfiguredSession(ctx, seed, *workerSnapshot)
+		}
 	} else {
 		rec, err = m.store.CreateSession(ctx, seed)
 	}
@@ -968,6 +983,17 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 	}
 	m.markFreshSessionStatusReady(rec.ID)
 	id := rec.ID
+	var taskExecution *domain.TaskExecutionOperation
+	if cfg.TaskLease != nil {
+		if err := m.beginAgentOperation(ctx, id, agentOperationTaskDispatch); err != nil {
+			return domain.SessionRecord{}, 0, 0, err
+		}
+		defer m.endAgentOperation(id, agentOperationTaskDispatch)
+		taskExecution, err = m.beginTaskExecution(ctx, id, "dispatch", "")
+		if err != nil {
+			return domain.SessionRecord{}, 0, 0, err
+		}
+	}
 	if workerSnapshot != nil {
 		systemPrompt, err = m.workerSnapshotPrompt(ctx, id, *workerSnapshot)
 		if err != nil {
@@ -1035,6 +1061,7 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 			workspaceProject: workspaceProject,
 			prompt:           prompt,
 			systemPrompt:     systemPrompt,
+			taskExecution:    taskExecution,
 		})
 		if err != nil {
 			return domain.SessionRecord{}, 0, 0, err
@@ -1093,7 +1120,13 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 		return domain.SessionRecord{}, 0, 0, fmt.Errorf("spawn %s: %w", id, err)
 	}
 	m.augmentRuntimePATHForLaunchBinary(ctx, env, argv)
-	argv, launchID, err := m.superviseAgentProcess(agent, id, env, argv)
+	var launchID string
+	if taskExecution != nil {
+		launchID = taskExecution.ID
+		argv, err = m.wrapAgentProcessWithLaunchID(agent, id, env, argv, launchID, true)
+	} else {
+		argv, launchID, err = m.superviseAgentProcess(agent, id, env, argv)
+	}
 	if err != nil {
 		m.rollbackSeedSpawnWorkspace(ctx, rec, ws, workspaceProject, true)
 		return domain.SessionRecord{}, 0, 0, wrapSpawnStage(id, ErrSpawnSupervisor, err)
@@ -1157,6 +1190,9 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 	}
 	rec, err = m.getRecord(ctx, id)
 	if err != nil {
+		return domain.SessionRecord{}, 0, 0, err
+	}
+	if err := m.finishTaskExecution(ctx, taskExecution); err != nil {
 		return domain.SessionRecord{}, 0, 0, err
 	}
 	return rec, promptBytes, systemPromptBytes, nil
@@ -2232,6 +2268,13 @@ func (m *Manager) RestoreWithMode(ctx context.Context, id domain.SessionID) (Res
 	// (Claude Code). restoreArgv returns ErrNotResumable only for a promptless,
 	// unresumable non-orchestrator (a worker with no task and no native id to resume).
 	// Orchestrators always relaunch fresh with the system prompt only.
+	taskExecution, err := m.beginTaskExecution(ctx, id, "restore", "")
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	if taskExecution != nil {
+		ctx = context.WithValue(ctx, taskExecutionContextKey{}, taskExecution)
+	}
 
 	ws, err := m.restoreSessionWorkspace(ctx, project, rec)
 	if err != nil {
@@ -2481,6 +2524,13 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 			ctx, operation, rec, project, ws, requireNativeHistory, reservedGeneration, historyPolicy,
 		)
 	}
+	taskExecution, err := m.beginTaskExecution(ctx, rec.ID, "restore", reservedGeneration)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	if taskExecution != nil {
+		reservedGeneration = taskExecution.ID
+	}
 
 	agent, ok := m.agents.Agent(rec.Harness)
 	if !ok {
@@ -2644,6 +2694,9 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 	}
 	updated, err := m.getRecord(ctx, rec.ID)
 	if err != nil {
+		return RestoreResult{}, err
+	}
+	if err := m.finishTaskExecution(ctx, taskExecution); err != nil {
 		return RestoreResult{}, err
 	}
 	return RestoreResult{Session: updated, Mode: mode}, nil

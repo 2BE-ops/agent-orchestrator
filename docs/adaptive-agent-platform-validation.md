@@ -4,6 +4,28 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 10d2 — task worker native launch and restore (2026-09-18)
+
+The trusted manager dispatch path now creates the immutable worker snapshot and
+attempt/session association atomically, reserves the native target generation
+before workspace/process side effects, and passes it to the existing TUI
+supervisor or Chat controller. Successful connection resolves the guard. Replay
+returns the retained session without a new readiness check or process, including
+after a lost launch response. Uncertain failures retain the guard and exclusive
+lease. Restore uses the same lease/guard before workspace recovery; released
+historical task workers cannot restart. Legacy sessions retain their launch path.
+
+Four focused task-worker tests (including both TUI and Chat) PASS (0.57s), as do
+the configured-worker regression suite (0.68s), full Chat (36.78s), full session
+service (49.53s), backend build and changed-code pinned lint (0 issues). Full
+session manager (41.66s) reports exactly the eight previously isolated Windows
+baseline failures: three source-handoff path checks, handoff POSIX mode, interface
+transition lookup error, dev namespace and two executable/node PATH cases.
+Source/diff reviewed, including initial-prompt delivery under the manager's
+exclusive operation. Logs: ignored `*stage10d2*`. Shared scheduler admission,
+automatic uncertain-operation reconciliation and the broader native/restart
+matrix remain stages 16/23/25; this is not a claim that stage 10 is complete.
+
 ## Stage 10d1 — durable native execution reservations (2026-09-18)
 
 Migration 0157 adds immutable task execution operations and verified lifecycle
