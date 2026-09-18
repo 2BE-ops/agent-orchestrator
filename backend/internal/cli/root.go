@@ -205,6 +205,7 @@ func NewRootCommand(deps Deps) *cobra.Command {
 	root.AddCommand(newAgentCommand(ctx))
 	root.AddCommand(newRegistryCommand(ctx, "agent-type", "agent-types"))
 	root.AddCommand(newRegistryCommand(ctx, "skill", "skills"))
+	root.AddCommand(newTaskCommand(ctx))
 	root.AddCommand(newSpawnCommand(ctx))
 	root.AddCommand(newSendCommand(ctx))
 	root.AddCommand(newPreviewCommand(ctx))

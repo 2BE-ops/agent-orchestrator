@@ -15,6 +15,7 @@ import (
 	openapi "github.com/swaggest/openapi-go"
 	"github.com/swaggest/openapi-go/openapi31"
 
+	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/httpd/controllers"
 	"github.com/aoagents/agent-orchestrator/backend/internal/httpd/envelope"
 	importsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/importer"
@@ -145,6 +146,32 @@ func schemaName(_ reflect.Type, defaultName string) string {
 // by projectOperations(). Add an entry when a new contract type is introduced;
 // the drift test fails until the spec is regenerated, which flags the gap.
 var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names include reset-credit contracts; no credential value is stored here.
+	"ControllersAdaptiveTaskIDParam":                       "AdaptiveTaskIDParam",
+	"ControllersAdaptiveTaskVersionParam":                  "AdaptiveTaskVersionParam",
+	"ControllersAdaptiveTaskListQuery":                     "AdaptiveTaskListQuery",
+	"ControllersAdaptiveTaskCreateRequest":                 "AdaptiveTaskCreateRequest",
+	"ControllersAdaptiveTaskReviseRequest":                 "AdaptiveTaskReviseRequest",
+	"ControllersAdaptiveTaskCriteriaRequest":               "AdaptiveTaskCriteriaRequest",
+	"ControllersAdaptiveTaskResponse":                      "AdaptiveTaskResponse",
+	"ControllersAdaptiveTaskListResponse":                  "AdaptiveTaskListResponse",
+	"ControllersAdaptiveTaskRevisionsResponse":             "AdaptiveTaskRevisionsResponse",
+	"ControllersAdaptiveTaskAuditResponse":                 "AdaptiveTaskAuditResponse",
+	"ControllersAdaptiveTaskAttemptsResponse":              "AdaptiveTaskAttemptsResponse",
+	"DomainAdaptiveActor":                                  "AdaptiveActor",
+	"DomainAdaptiveTask":                                   "AdaptiveTask",
+	"DomainTaskDefinition":                                 "TaskDefinition",
+	"DomainTaskRevision":                                   "TaskRevision",
+	"DomainTaskRevisionRef":                                "TaskRevisionRef",
+	"DomainAcceptanceCriterion":                            "AcceptanceCriterion",
+	"DomainAcceptanceCriteria":                             "AcceptanceCriteria",
+	"DomainAcceptanceCriteriaVersion":                      "AcceptanceCriteriaVersion",
+	"DomainTaskAudit":                                      "TaskAudit",
+	"DomainTaskAttempt":                                    "TaskAttempt",
+	"DomainTaskLease":                                      "TaskLease",
+	"DomainTaskLeaseToken":                                 "TaskLeaseToken",
+	"DomainTaskWorkerDispatch":                             "TaskWorkerDispatch",
+	"TaskView":                                             "AdaptiveTaskView",
+	"TaskAttemptView":                                      "TaskAttemptView",
 	"ControllersRegistryIDParam":                           "RegistryIDParam",
 	"ControllersRegistryVersionParam":                      "RegistryVersionParam",
 	"ControllersRegistryListQuery":                         "RegistryListQuery",
@@ -559,6 +586,12 @@ func requiredFromJSONTag(p jsonschema.InterceptPropParams) error {
 	if !p.Processed || p.ParentSchema == nil {
 		return nil
 	}
+	// Immutable task definitions preserve historical nil versus empty arrays
+	// in their content hashes. Respect explicit wire nullability after the
+	// default nonNullableSlices normalization used by presentation DTOs.
+	if p.Field.Type.Kind() == reflect.Slice && p.Field.Tag.Get("nullable") == "true" {
+		p.PropertySchema.Type = &jsonschema.Type{SliceOfSimpleTypeValues: []jsonschema.SimpleType{jsonschema.Array, jsonschema.Null}}
+	}
 	jsonTag := p.Field.Tag.Get("json")
 	if jsonTag == "" || jsonTag == "-" {
 		return nil
@@ -610,6 +643,7 @@ func operations() []operation {
 	ops = append(ops, reviewOperations()...)
 	ops = append(ops, notificationOperations()...)
 	ops = append(ops, registryOperations()...)
+	ops = append(ops, adaptiveTaskOperations()...)
 	ops = append(ops, usageOperations()...)
 	ops = append(ops, pushOperations()...)
 	ops = append(ops, importOperations()...)
@@ -1551,6 +1585,30 @@ func devOperations() []operation {
 			},
 		},
 	}
+}
+
+func adaptiveTaskOperations() []operation {
+	ops := make([]operation, 0, 10)
+	for _, endpoint := range []struct {
+		method, path, id, summary string
+		request, response         any
+		status                    int
+		params                    []any
+	}{
+		{http.MethodGet, "/projects/{id}/tasks", "listAdaptiveTasks", "List project work intent", nil, controllers.AdaptiveTaskListResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodPost, "/projects/{id}/tasks", "createAdaptiveTask", "Create work intent and optional acceptance criteria", controllers.AdaptiveTaskCreateRequest{}, controllers.AdaptiveTaskResponse{}, http.StatusCreated, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/tasks/{taskId}", "getAdaptiveTask", "Inspect current planning and exclusive lease facts", nil, controllers.AdaptiveTaskResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}}},
+		{http.MethodGet, "/tasks/{taskId}/revisions", "listTaskRevisions", "List immutable task planning history", nil, controllers.AdaptiveTaskRevisionsResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodPost, "/tasks/{taskId}/revisions", "reviseAdaptiveTask", "Append a planning revision without changing historical attempts", controllers.AdaptiveTaskReviseRequest{}, domain.TaskRevision{}, http.StatusCreated, []any{controllers.AdaptiveTaskIDParam{}}},
+		{http.MethodGet, "/tasks/{taskId}/revisions/{version}", "getTaskRevision", "Inspect exact historical planning", nil, domain.TaskRevision{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskVersionParam{}}},
+		{http.MethodPost, "/tasks/{taskId}/criteria", "reviseTaskCriteria", "Version acceptance criteria for future work", controllers.AdaptiveTaskCriteriaRequest{}, domain.TaskRevision{}, http.StatusCreated, []any{controllers.AdaptiveTaskIDParam{}}},
+		{http.MethodGet, "/tasks/{taskId}/criteria/{version}", "getTaskCriteria", "Inspect exact historical acceptance criteria", nil, domain.AcceptanceCriteriaVersion{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskVersionParam{}}},
+		{http.MethodGet, "/tasks/{taskId}/audit", "listTaskAudit", "Inspect durable planning and ownership actions", nil, controllers.AdaptiveTaskAuditResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/tasks/{taskId}/attempts", "listTaskAttempts", "Inspect frozen attempts and worker associations", nil, controllers.AdaptiveTaskAttemptsResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+	} {
+		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "tasks", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
+	}
+	return ops
 }
 
 func registryOperations() []operation {

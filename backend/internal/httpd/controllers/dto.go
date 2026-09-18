@@ -17,9 +17,62 @@ import (
 	sessionsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/session"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systemcheck"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systeminstall"
+	tasksvc "github.com/aoagents/agent-orchestrator/backend/internal/service/task"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/mobilebridge"
 )
+
+// AdaptiveTaskIDParam identifies persistent work independently of a session.
+type AdaptiveTaskIDParam struct {
+	TaskID string `path:"taskId"`
+}
+
+// AdaptiveTaskVersionParam selects immutable task or criteria history.
+type AdaptiveTaskVersionParam struct {
+	Version int64 `path:"version" minimum:"1"`
+}
+
+// AdaptiveTaskListQuery bounds project pages and chronological history.
+type AdaptiveTaskListQuery struct {
+	Cursor string `query:"cursor"`
+	Limit  int    `query:"limit" minimum:"1" maximum:"100" default:"20"`
+}
+
+// AdaptiveTaskCreateRequest contains authorable fields, never actor identity.
+type AdaptiveTaskCreateRequest tasksvc.CreateInput
+
+// AdaptiveTaskReviseRequest requires an optimistic revision fence and reason.
+type AdaptiveTaskReviseRequest tasksvc.RevisionInput
+
+// AdaptiveTaskCriteriaRequest versions acceptance without rewriting attempts.
+type AdaptiveTaskCriteriaRequest tasksvc.CriteriaInput
+
+// AdaptiveTaskResponse exposes exact planning alongside current lease facts.
+type AdaptiveTaskResponse tasksvc.View
+
+// AdaptiveTaskListResponse is one stable project-scoped page.
+type AdaptiveTaskListResponse struct {
+	Items      []tasksvc.View `json:"items"`
+	NextCursor string         `json:"nextCursor,omitempty"`
+}
+
+// AdaptiveTaskRevisionsResponse is a chronological page of retained planning.
+type AdaptiveTaskRevisionsResponse struct {
+	Items      []domain.TaskRevision `json:"items"`
+	NextCursor string                `json:"nextCursor,omitempty"`
+}
+
+// AdaptiveTaskAuditResponse is durable semantic history, not the CDC replay log.
+type AdaptiveTaskAuditResponse struct {
+	Items      []domain.TaskAudit `json:"items"`
+	NextCursor string             `json:"nextCursor,omitempty"`
+}
+
+// AdaptiveTaskAttemptsResponse includes exact pins and immutable worker links.
+type AdaptiveTaskAttemptsResponse struct {
+	Items      []tasksvc.AttemptView `json:"items"`
+	NextCursor string                `json:"nextCursor,omitempty"`
+}
 
 // RegistryIDParam identifies an Agent Type or authored Skill.
 type RegistryIDParam struct {

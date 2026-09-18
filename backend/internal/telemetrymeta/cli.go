@@ -75,6 +75,17 @@ var legacyActorlessSystemCLICommands = map[string]struct{}{
 }
 
 var legacyActorlessUserCLICommands = map[string]struct{}{
+	"ao task":                   {},
+	"ao task list":              {},
+	"ao task show":              {},
+	"ao task create":            {},
+	"ao task revise":            {},
+	"ao task revisions":         {},
+	"ao task revision":          {},
+	"ao task criteria":          {},
+	"ao task set-criteria":      {},
+	"ao task audit":             {},
+	"ao task attempts":          {},
 	"ao agent":                  {},
 	"ao agent ls":               {},
 	"ao agent-type":             {},

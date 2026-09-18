@@ -24,6 +24,11 @@ vi.mock("./sentry", () => ({
 const captureMock = vi.mocked(captureRendererEvent);
 const sentryCaptureMock = vi.mocked(captureApiErrorToSentry);
 
+it("redacts task and project identities from task telemetry routes", () => {
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/tasks")).toBe("GET /api/v1/projects/:id/tasks");
+	expect(normalizeApiOperation("GET", "/api/v1/tasks/private-task/criteria/12")).toBe("GET /api/v1/tasks/:id/criteria/:id");
+});
+
 describe("apiClient runtime base URL", () => {
 	afterEach(() => {
 		vi.restoreAllMocks();

@@ -101,6 +101,10 @@ func newRegistryCommand(ctx *commandContext, name, resource string) *cobra.Comma
 }
 
 func readRegistryJSON(stdin io.Reader, file string) (json.RawMessage, error) {
+	return readAPIRequestJSON(stdin, file, 2<<20)
+}
+
+func readAPIRequestJSON(stdin io.Reader, file string, maxBytes int64) (json.RawMessage, error) {
 	if file == "" {
 		return nil, usageError{errors.New("--file is required; use - for stdin")}
 	}
@@ -108,18 +112,18 @@ func readRegistryJSON(stdin io.Reader, file string) (json.RawMessage, error) {
 	if file != "-" {
 		f, err := os.Open(file)
 		if err != nil {
-			return nil, fmt.Errorf("read registry request: %w", err)
+			return nil, fmt.Errorf("read API request: %w", err)
 		}
 		defer func() { _ = f.Close() }()
 		reader = f
 	}
-	content, err := io.ReadAll(io.LimitReader(reader, (2<<20)+1))
+	content, err := io.ReadAll(io.LimitReader(reader, maxBytes+1))
 	if err != nil {
 		return nil, err
 	}
 	trimmed := strings.TrimSpace(string(content))
-	if len(content) > 2<<20 || !json.Valid(content) || !strings.HasPrefix(trimmed, "{") {
-		return nil, usageError{errors.New("request must be one JSON object no larger than 2 MiB")}
+	if int64(len(content)) > maxBytes || !json.Valid(content) || !strings.HasPrefix(trimmed, "{") {
+		return nil, usageError{fmt.Errorf("request must be one JSON object no larger than %d bytes", maxBytes)}
 	}
 	return json.RawMessage(content), nil
 }

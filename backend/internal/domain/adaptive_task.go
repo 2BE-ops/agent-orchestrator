@@ -101,8 +101,8 @@ type TaskDefinition struct {
 	Category             string           `json:"category"`
 	Priority             int              `json:"priority"`
 	ParentID             string           `json:"parentId,omitempty"`
-	Dependencies         []string         `json:"dependencies"`
-	RequiredCapabilities []string         `json:"requiredCapabilities"`
+	Dependencies         []string         `json:"dependencies" nullable:"true"`
+	RequiredCapabilities []string         `json:"requiredCapabilities" nullable:"true"`
 	RequestedWorker      *WorkerSelection `json:"requestedWorker,omitempty"`
 	MaxAttempts          int              `json:"maxAttempts"`
 }

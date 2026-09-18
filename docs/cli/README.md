@@ -65,6 +65,48 @@ Every product command resolves to a daemon HTTP route. Run `ao <command>
 | `ao browser ...`                    | `GET /api/v1/browser/status`, `POST /api/v1/browser/commands` |
 | `ao hooks <agent> <event>`          | `POST /api/v1/sessions/{id}/activity` (hidden) |
 
+### Persistent task planning
+
+`ao task` (alias `ao tasks`) authors work independently of worker sessions and
+returns JSON. `create <project> --file <path>` accepts the task API body:
+
+```json
+{
+  "definition": {
+    "title": "Add regression coverage",
+    "brief": "Cover the reported failure and retain verification evidence.",
+    "category": "testing",
+    "priority": 0,
+    "dependencies": [],
+    "requiredCapabilities": [],
+    "maxAttempts": 3
+  },
+  "criteria": {
+    "criteria": [{
+      "id": "regression",
+      "requirement": "The regression test passes against the implementation.",
+      "evidenceKind": "test",
+      "command": ["go", "test", "./..."]
+    }]
+  },
+  "reason": "Plan the requested regression fix"
+}
+```
+
+Use `--file -` for stdin. Input is one JSON object, bounded to 256 KiB. Optional
+`definition.requestedWorker` uses the same `agentTypeId`, `version` and `overrides`
+as manual worker launch. Criteria may be omitted while planning but must be
+persisted before leasing. Commands in criteria describe expected verification;
+authoring a task does not execute them or launch a worker.
+
+Use `list <project>`, `show <id>`, `revisions <id>`, `revision <id> <version>`,
+`criteria <id> <version>`, `audit <id>` and `attempts <id>` to inspect work.
+List/history commands support `--cursor` and `--limit 1..100` (default 20).
+`revise <id> --file <path>` accepts `definition`, `expectedRevision` and `reason`;
+`set-criteria <id> --file <path>` accepts `criteria`, `expectedRevision` and
+`reason`. Both append history. Existing attempts retain their frozen task and
+criteria versions. Actor identity is assigned by the daemon.
+
 `ao agent ls` asks the daemon to ensure display readiness, then prints the
 existing table or legacy JSON projection. The daemon alone decides whether a
 native check is needed. `--refresh` is a deprecated compatibility flag that

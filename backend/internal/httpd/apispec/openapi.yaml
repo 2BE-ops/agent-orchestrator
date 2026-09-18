@@ -3030,6 +3030,136 @@ paths:
       summary: Remember project permissions for future sessions
       tags:
       - projects
+  /api/v1/projects/{id}/tasks:
+    get:
+      operationId: listAdaptiveTasks
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdaptiveTaskListResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: List project work intent
+      tags:
+      - tasks
+    post:
+      operationId: createAdaptiveTask
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdaptiveTaskCreateRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdaptiveTaskResponse'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Create work intent and optional acceptance criteria
+      tags:
+      - tasks
   /api/v1/projects/clone:
     post:
       operationId: cloneProject
@@ -9011,6 +9141,504 @@ paths:
       summary: Check local machine readiness (git, tmux, agent harness, gh)
       tags:
       - system
+  /api/v1/tasks/{taskId}:
+    get:
+      operationId: getAdaptiveTask
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdaptiveTaskResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect current planning and exclusive lease facts
+      tags:
+      - tasks
+  /api/v1/tasks/{taskId}/attempts:
+    get:
+      operationId: listTaskAttempts
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdaptiveTaskAttemptsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect frozen attempts and worker associations
+      tags:
+      - tasks
+  /api/v1/tasks/{taskId}/audit:
+    get:
+      operationId: listTaskAudit
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdaptiveTaskAuditResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect durable planning and ownership actions
+      tags:
+      - tasks
+  /api/v1/tasks/{taskId}/criteria:
+    post:
+      operationId: reviseTaskCriteria
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdaptiveTaskCriteriaRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskRevision'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Version acceptance criteria for future work
+      tags:
+      - tasks
+  /api/v1/tasks/{taskId}/criteria/{version}:
+    get:
+      operationId: getTaskCriteria
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: version
+        required: true
+        schema:
+          format: int64
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptanceCriteriaVersion'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect exact historical acceptance criteria
+      tags:
+      - tasks
+  /api/v1/tasks/{taskId}/revisions:
+    get:
+      operationId: listTaskRevisions
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdaptiveTaskRevisionsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: List immutable task planning history
+      tags:
+      - tasks
+    post:
+      operationId: reviseAdaptiveTask
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdaptiveTaskReviseRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskRevision'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Append a planning revision without changing historical attempts
+      tags:
+      - tasks
+  /api/v1/tasks/{taskId}/revisions/{version}:
+    get:
+      operationId: getTaskRevision
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: version
+        required: true
+        schema:
+          format: int64
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskRevision'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect exact historical planning
+      tags:
+      - tasks
   /api/v1/usage/sessions:
     get:
       operationId: listCompactSessionUsage
@@ -9107,6 +9735,72 @@ components:
       - code
       - message
       type: object
+    AcceptanceCriteria:
+      properties:
+        criteria:
+          items:
+            $ref: '#/components/schemas/AcceptanceCriterion'
+          type: array
+      required:
+      - criteria
+      type: object
+    AcceptanceCriteriaVersion:
+      properties:
+        actor:
+          $ref: '#/components/schemas/AdaptiveActor'
+        contentHash:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        definition:
+          $ref: '#/components/schemas/AcceptanceCriteria'
+        number:
+          format: int64
+          type: integer
+        previousVersion:
+          format: int64
+          type: integer
+        reason:
+          type: string
+        taskId:
+          type: string
+      required:
+      - taskId
+      - number
+      - previousVersion
+      - definition
+      - contentHash
+      - actor
+      - reason
+      - createdAt
+      type: object
+    AcceptanceCriterion:
+      properties:
+        artifactPath:
+          type: string
+        command:
+          items:
+            type: string
+          type: array
+        evidenceKind:
+          enum:
+          - test
+          - build
+          - lint
+          - review
+          - artifact
+          - manual
+          type: string
+        id:
+          type: string
+        requirement:
+          type: string
+      required:
+      - id
+      - requirement
+      - evidenceKind
+      type: object
     AcknowledgeSessionInterfaceTransitionNoticeResponse:
       properties:
         ok:
@@ -9126,6 +9820,161 @@ components:
           type: string
       required:
       - activeBranchId
+      type: object
+    AdaptiveActor:
+      properties:
+        id:
+          type: string
+        kind:
+          enum:
+          - USER
+          - ORCHESTRATOR
+          - AGENT_MANAGER
+          - WORKER
+          - SYSTEM
+          type: string
+        sessionId:
+          type: string
+      required:
+      - kind
+      - id
+      type: object
+    AdaptiveTask:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        createdBy:
+          $ref: '#/components/schemas/AdaptiveActor'
+        id:
+          type: string
+        projectId:
+          type: string
+        revision:
+          format: int64
+          type: integer
+        updatedAt:
+          format: date-time
+          type: string
+      required:
+      - id
+      - projectId
+      - revision
+      - createdBy
+      - createdAt
+      - updatedAt
+      type: object
+    AdaptiveTaskAttemptsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TaskAttemptView'
+          type: array
+        nextCursor:
+          type: string
+      required:
+      - items
+      type: object
+    AdaptiveTaskAuditResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TaskAudit'
+          type: array
+        nextCursor:
+          type: string
+      required:
+      - items
+      type: object
+    AdaptiveTaskCreateRequest:
+      properties:
+        criteria:
+          $ref: '#/components/schemas/AcceptanceCriteria'
+        definition:
+          $ref: '#/components/schemas/TaskDefinition'
+        reason:
+          type: string
+      required:
+      - definition
+      - reason
+      type: object
+    AdaptiveTaskCriteriaRequest:
+      properties:
+        criteria:
+          $ref: '#/components/schemas/AcceptanceCriteria'
+        expectedRevision:
+          format: int64
+          type: integer
+        reason:
+          type: string
+      required:
+      - criteria
+      - expectedRevision
+      - reason
+      type: object
+    AdaptiveTaskListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AdaptiveTaskView'
+          type: array
+        nextCursor:
+          type: string
+      required:
+      - items
+      type: object
+    AdaptiveTaskResponse:
+      properties:
+        criteria:
+          $ref: '#/components/schemas/AcceptanceCriteriaVersion'
+        lease:
+          $ref: '#/components/schemas/TaskLease'
+        revision:
+          $ref: '#/components/schemas/TaskRevision'
+        task:
+          $ref: '#/components/schemas/AdaptiveTask'
+      required:
+      - task
+      - revision
+      type: object
+    AdaptiveTaskReviseRequest:
+      properties:
+        definition:
+          $ref: '#/components/schemas/TaskDefinition'
+        expectedRevision:
+          format: int64
+          type: integer
+        reason:
+          type: string
+      required:
+      - definition
+      - expectedRevision
+      - reason
+      type: object
+    AdaptiveTaskRevisionsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TaskRevision'
+          type: array
+        nextCursor:
+          type: string
+      required:
+      - items
+      type: object
+    AdaptiveTaskView:
+      properties:
+        criteria:
+          $ref: '#/components/schemas/AcceptanceCriteriaVersion'
+        lease:
+          $ref: '#/components/schemas/TaskLease'
+        revision:
+          $ref: '#/components/schemas/TaskRevision'
+        task:
+          $ref: '#/components/schemas/AdaptiveTask'
+      required:
+      - task
+      - revision
       type: object
     AddProjectInput:
       properties:
@@ -14766,6 +15615,219 @@ components:
       required:
       - ready
       - requirements
+      type: object
+    TaskAttempt:
+      properties:
+        actor:
+          $ref: '#/components/schemas/AdaptiveActor'
+        createdAt:
+          format: date-time
+          type: string
+        criteriaVersion:
+          format: int64
+          type: integer
+        dependencies:
+          items:
+            $ref: '#/components/schemas/TaskRevisionRef'
+          type: array
+        id:
+          type: string
+        launchIntentId:
+          type: string
+        number:
+          format: int64
+          type: integer
+        reason:
+          type: string
+        taskId:
+          type: string
+        taskRevision:
+          format: int64
+          type: integer
+      required:
+      - id
+      - taskId
+      - taskRevision
+      - criteriaVersion
+      - number
+      - launchIntentId
+      - dependencies
+      - actor
+      - reason
+      - createdAt
+      type: object
+    TaskAttemptView:
+      properties:
+        attempt:
+          $ref: '#/components/schemas/TaskAttempt'
+        dispatch:
+          $ref: '#/components/schemas/TaskWorkerDispatch'
+        lease:
+          $ref: '#/components/schemas/TaskLease'
+      required:
+      - attempt
+      - lease
+      type: object
+    TaskAudit:
+      properties:
+        action:
+          type: string
+        actor:
+          $ref: '#/components/schemas/AdaptiveActor'
+        createdAt:
+          format: date-time
+          type: string
+        reason:
+          type: string
+        revision:
+          format: int64
+          type: integer
+        sequence:
+          format: int64
+          type: integer
+        taskId:
+          type: string
+      required:
+      - sequence
+      - taskId
+      - revision
+      - action
+      - actor
+      - reason
+      - createdAt
+      type: object
+    TaskDefinition:
+      properties:
+        brief:
+          type: string
+        category:
+          type: string
+        dependencies:
+          items:
+            type: string
+          type:
+          - array
+          - "null"
+        maxAttempts:
+          type: integer
+        parentId:
+          type: string
+        priority:
+          type: integer
+        requestedWorker:
+          $ref: '#/components/schemas/WorkerSelection'
+        requiredCapabilities:
+          items:
+            type: string
+          type:
+          - array
+          - "null"
+        title:
+          type: string
+      required:
+      - title
+      - brief
+      - category
+      - priority
+      - dependencies
+      - requiredCapabilities
+      - maxAttempts
+      type: object
+    TaskLease:
+      properties:
+        attemptId:
+          type: string
+        expiresAt:
+          format: date-time
+          type: string
+        generation:
+          format: int64
+          type: integer
+        heartbeatAt:
+          format: date-time
+          type: string
+        lastActivityAt:
+          format: date-time
+          type:
+          - "null"
+          - string
+        releaseReason:
+          type: string
+        releasedAt:
+          format: date-time
+          type:
+          - "null"
+          - string
+        taskId:
+          type: string
+      required:
+      - attemptId
+      - generation
+      - taskId
+      - heartbeatAt
+      - expiresAt
+      type: object
+    TaskRevision:
+      properties:
+        actor:
+          $ref: '#/components/schemas/AdaptiveActor'
+        contentHash:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        criteriaVersion:
+          format: int64
+          type: integer
+        definition:
+          $ref: '#/components/schemas/TaskDefinition'
+        number:
+          format: int64
+          type: integer
+        reason:
+          type: string
+        taskId:
+          type: string
+      required:
+      - taskId
+      - number
+      - criteriaVersion
+      - definition
+      - contentHash
+      - actor
+      - reason
+      - createdAt
+      type: object
+    TaskRevisionRef:
+      properties:
+        contentHash:
+          type: string
+        revision:
+          format: int64
+          type: integer
+        taskId:
+          type: string
+      required:
+      - taskId
+      - revision
+      - contentHash
+      type: object
+    TaskWorkerDispatch:
+      properties:
+        attemptId:
+          type: string
+        configurationHash:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        sessionId:
+          type: string
+      required:
+      - attemptId
+      - sessionId
+      - configurationHash
+      - createdAt
       type: object
     TrackerIntakeConfig:
       properties:

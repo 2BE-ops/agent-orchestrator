@@ -4,6 +4,35 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 10c — shared task service, HTTP and CLI (2026-09-18)
+
+The daemon now mounts ten task authoring/history routes through a shared service:
+project-scoped list/create, current planning, exact/paged revisions, criteria
+revisions/exact reads, audit and attempts. Inputs exclude actor/lease ownership;
+human identity is assigned server-side and trusted controller calls retain store
+authority checks. Manual Type references must name an existing Type/version.
+Historical work and exact frozen criteria are separate from current lease facts.
+API responses exclude scheduler holder tokens. OpenAPI and TypeScript contracts
+are regenerated together. Explicit nullable-array schema tags preserve historical
+definition hashes without lying about the JSON wire representation. A semantic
+comparison confirms every previously existing route/schema is unchanged.
+
+`ao task` uses HTTP exclusively for all ten operations. JSON file/stdin bodies are
+bounded to 256 KiB; page/version/missing argument misuse exits 2, while daemon
+errors retain their machine code/request ID and exit 1. CLI docs include a usable
+task/criteria example. Renderer telemetry templates redact task/project IDs.
+
+Seven task API integration tests, two service tests, task schema regression and
+three CLI tests PASS. Full domain, task service, HTTP router/envelope/API-spec,
+CLI (16.44s) and telemetry suites PASS. Full controllers reproduce only the two
+previous Windows baseline failures (mobile pairing rename and file-URL clone);
+new task routes also pass mounted alongside the full daemon API. Full CLI first
+caught missing command telemetry classification; corrected and rerun completely.
+Frontend typecheck, 38 client tests, backend build and changed-code pinned lint
+PASS (0 issues). Generated/source/whitespace diff reviewed. Logs: ignored
+`*stage10c*`. Native task launch/restore integration remains the next stage 10 slice;
+these authoring APIs do not bypass pending shared scheduler admission.
+
 ## Stage 10b — exclusive leases and atomic dispatch persistence (2026-09-18)
 
 Migration 0156 retains immutable attempts and launch intent IDs, exact task/
