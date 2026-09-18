@@ -35,6 +35,7 @@ type APIDeps struct {
 	Notifications      controllers.NotificationService
 	Registry           controllers.RegistryService
 	AdaptiveTasks      controllers.AdaptiveTaskService
+	ProjectKnowledge   controllers.ProjectKnowledgeService
 	NotificationStream controllers.NotificationStream
 	Push               controllers.PushRegistry
 	Import             controllers.ImportService
@@ -116,6 +117,7 @@ type API struct {
 	notifications *controllers.NotificationsController
 	registry      *controllers.RegistryController
 	adaptiveTasks *controllers.AdaptiveTasksController
+	knowledge     *controllers.ProjectKnowledgeController
 	push          *controllers.PushController
 	imports       *controllers.ImportController
 	shellTerms    *controllers.ShellTerminalsController
@@ -160,6 +162,7 @@ func NewAPI(cfg config.Config, deps APIDeps) *API {
 		notifications: &controllers.NotificationsController{Svc: deps.Notifications, Stream: deps.NotificationStream},
 		registry:      &controllers.RegistryController{Svc: deps.Registry},
 		adaptiveTasks: &controllers.AdaptiveTasksController{Svc: deps.AdaptiveTasks},
+		knowledge:     &controllers.ProjectKnowledgeController{Svc: deps.ProjectKnowledge},
 		push:          &controllers.PushController{Registry: deps.Push},
 		imports:       &controllers.ImportController{Svc: deps.Import},
 		shellTerms:    &controllers.ShellTerminalsController{Svc: deps.ShellTerminals},
@@ -201,6 +204,7 @@ func (a *API) Register(root chi.Router) {
 			a.notifications.Register(r)
 			a.registry.Register(r)
 			a.adaptiveTasks.Register(r)
+			a.knowledge.Register(r)
 			a.push.Register(r)
 			a.imports.Register(r)
 			a.shellTerms.Register(r)

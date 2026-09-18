@@ -12,6 +12,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	agentsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agent"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/agentauth"
+	knowledgesvc "github.com/aoagents/agent-orchestrator/backend/internal/service/knowledge"
 	projectsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/project"
 	registrysvc "github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
 	sessionsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/session"
@@ -21,6 +22,41 @@ import (
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/mobilebridge"
 )
+
+// KnowledgeIDParam identifies a retained project claim.
+type KnowledgeIDParam struct {
+	KnowledgeID string `path:"knowledgeId"`
+}
+
+// KnowledgeListQuery searches current content with a bounded page.
+type KnowledgeListQuery struct {
+	Cursor string `query:"cursor"`
+	Limit  int    `query:"limit" minimum:"1" maximum:"100" default:"20"`
+	Status string `query:"status" enum:"candidate,accepted,invalidated,superseded,deleted"`
+	Kind   string `query:"kind" enum:"architecture,convention,interface,constraint,pitfall,failed_approach,file_relationship,external_behavior,question"`
+	Search string `query:"search"`
+}
+
+// KnowledgeCreateRequest contains editable claims, never actor authority.
+type KnowledgeCreateRequest knowledgesvc.CreateInput
+
+// KnowledgeReviseRequest appends an audited revision using an optimistic fence.
+type KnowledgeReviseRequest knowledgesvc.RevisionInput
+
+// KnowledgeResponse pairs identity and the exact current version.
+type KnowledgeResponse knowledgesvc.View
+
+// KnowledgeListResponse is one project search page.
+type KnowledgeListResponse struct {
+	Items      []knowledgesvc.View `json:"items"`
+	NextCursor string              `json:"nextCursor,omitempty"`
+}
+
+// KnowledgeVersionsResponse pages immutable knowledge history.
+type KnowledgeVersionsResponse struct {
+	Items      []domain.KnowledgeVersion `json:"items"`
+	NextCursor string                    `json:"nextCursor,omitempty"`
+}
 
 // AdaptiveTaskIDParam identifies persistent work independently of a session.
 type AdaptiveTaskIDParam struct {

@@ -65,6 +65,22 @@ Every product command resolves to a daemon HTTP route. Run `ao <command>
 | `ao browser ...`                    | `GET /api/v1/browser/status`, `POST /api/v1/browser/commands` |
 | `ao hooks <agent> <event>`          | `POST /api/v1/sessions/{id}/activity` (hidden) |
 
+### Project knowledge
+
+`ao knowledge list <project> --status accepted --search "service boundary"`
+searches current knowledge; `show <id>`, `versions <id>` and
+`version <id> <number>` inspect provenance and immutable review history.
+`create <project> --file <path>` accepts `definition` and `reason`; `revise <id>
+--file <path>` also requires `expectedVersion`. Definitions include `title`,
+`kind`, `content`, `status`, `confidence`, `pinned` and `sources`. A source has
+`kind` and `reference`, plus task/attempt/session or content/commit hashes when
+applicable. File/stdin requests are bounded to 128 KiB.
+
+Review status is `candidate`, `accepted`, `invalidated`, `superseded` or `deleted`.
+Only accepted knowledge can be pinned. Set `deleted` in a revision to withdraw
+future selection while retaining exact historical versions for provenance.
+Superseded knowledge must reference an accepted exact `supersededBy` ID/version.
+
 ### Persistent task planning
 
 `ao task show <id>` includes derived planning/execution state, cancellation

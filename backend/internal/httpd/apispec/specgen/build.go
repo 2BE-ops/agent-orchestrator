@@ -177,6 +177,17 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"DomainTaskExecutionOperation":                         "TaskExecutionOperation",
 	"ControllersAdaptiveTaskIntentRequest":                 "AdaptiveTaskIntentRequest",
 	"ControllersAdaptiveTaskIntentsResponse":               "AdaptiveTaskIntentsResponse",
+	"ControllersKnowledgeCreateRequest":                    "KnowledgeCreateRequest",
+	"ControllersKnowledgeReviseRequest":                    "KnowledgeReviseRequest",
+	"ControllersKnowledgeResponse":                         "KnowledgeResponse",
+	"ControllersKnowledgeListResponse":                     "KnowledgeListResponse",
+	"ControllersKnowledgeVersionsResponse":                 "KnowledgeVersionsResponse",
+	"KnowledgeView":                                        "KnowledgeView",
+	"DomainProjectKnowledge":                               "ProjectKnowledge",
+	"DomainKnowledgeVersion":                               "KnowledgeVersion",
+	"DomainKnowledgeDefinition":                            "KnowledgeDefinition",
+	"DomainKnowledgeSource":                                "KnowledgeSource",
+	"DomainKnowledgeVersionRef":                            "KnowledgeVersionRef",
 	"ControllersRegistryIDParam":                           "RegistryIDParam",
 	"ControllersRegistryVersionParam":                      "RegistryVersionParam",
 	"ControllersRegistryListQuery":                         "RegistryListQuery",
@@ -649,6 +660,7 @@ func operations() []operation {
 	ops = append(ops, notificationOperations()...)
 	ops = append(ops, registryOperations()...)
 	ops = append(ops, adaptiveTaskOperations()...)
+	ops = append(ops, projectKnowledgeOperations()...)
 	ops = append(ops, usageOperations()...)
 	ops = append(ops, pushOperations()...)
 	ops = append(ops, importOperations()...)
@@ -1590,6 +1602,26 @@ func devOperations() []operation {
 			},
 		},
 	}
+}
+
+func projectKnowledgeOperations() []operation {
+	ops := make([]operation, 0, 6)
+	for _, endpoint := range []struct {
+		method, path, id, summary string
+		request, response         any
+		status                    int
+		params                    []any
+	}{
+		{http.MethodGet, "/projects/{id}/knowledge", "listProjectKnowledge", "Search current project knowledge", nil, controllers.KnowledgeListResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.KnowledgeListQuery{}}},
+		{http.MethodPost, "/projects/{id}/knowledge", "createProjectKnowledge", "Record a project claim and its provenance", controllers.KnowledgeCreateRequest{}, controllers.KnowledgeResponse{}, http.StatusCreated, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/knowledge/{knowledgeId}", "getProjectKnowledge", "Inspect a project claim including withdrawn history", nil, controllers.KnowledgeResponse{}, http.StatusOK, []any{controllers.KnowledgeIDParam{}}},
+		{http.MethodGet, "/knowledge/{knowledgeId}/versions", "listKnowledgeVersions", "Inspect immutable knowledge review history", nil, controllers.KnowledgeVersionsResponse{}, http.StatusOK, []any{controllers.KnowledgeIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodPost, "/knowledge/{knowledgeId}/versions", "reviseProjectKnowledge", "Edit, accept, invalidate, supersede or withdraw a claim", controllers.KnowledgeReviseRequest{}, domain.KnowledgeVersion{}, http.StatusCreated, []any{controllers.KnowledgeIDParam{}}},
+		{http.MethodGet, "/knowledge/{knowledgeId}/versions/{version}", "getKnowledgeVersion", "Inspect exact historical knowledge", nil, domain.KnowledgeVersion{}, http.StatusOK, []any{controllers.KnowledgeIDParam{}, controllers.AdaptiveTaskVersionParam{}}},
+	} {
+		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "knowledge", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
+	}
+	return ops
 }
 
 func adaptiveTaskOperations() []operation {

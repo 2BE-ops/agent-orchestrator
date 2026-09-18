@@ -53,6 +53,7 @@ import (
 	chatsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/chat"
 	devimportsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/devimport"
 	importsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/importer"
+	knowledgesvc "github.com/aoagents/agent-orchestrator/backend/internal/service/knowledge"
 	notificationsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/notification"
 	prsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/pr"
 	projectsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/project"
@@ -779,6 +780,7 @@ func Run() error {
 		Notifications:      notifier,
 		Registry:           registrySvc,
 		AdaptiveTasks:      tasksvc.New(store),
+		ProjectKnowledge:   knowledgesvc.New(store),
 		NotificationStream: notificationHub,
 		Push:               pushRegistry,
 		Presence:           presenceTracker,

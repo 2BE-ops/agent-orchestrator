@@ -2179,6 +2179,249 @@ paths:
       summary: Validate a selected folder for project import onboarding
       tags:
       - import
+  /api/v1/knowledge/{knowledgeId}:
+    get:
+      operationId: getProjectKnowledge
+      parameters:
+      - in: path
+        name: knowledgeId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect a project claim including withdrawn history
+      tags:
+      - knowledge
+  /api/v1/knowledge/{knowledgeId}/versions:
+    get:
+      operationId: listKnowledgeVersions
+      parameters:
+      - in: path
+        name: knowledgeId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVersionsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect immutable knowledge review history
+      tags:
+      - knowledge
+    post:
+      operationId: reviseProjectKnowledge
+      parameters:
+      - in: path
+        name: knowledgeId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeReviseRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVersion'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Edit, accept, invalidate, supersede or withdraw a claim
+      tags:
+      - knowledge
+  /api/v1/knowledge/{knowledgeId}/versions/{version}:
+    get:
+      operationId: getKnowledgeVersion
+      parameters:
+      - in: path
+        name: knowledgeId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: version
+        required: true
+        schema:
+          format: int64
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVersion'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect exact historical knowledge
+      tags:
+      - knowledge
   /api/v1/mobile/devices:
     get:
       operationId: listMobileDevices
@@ -2985,6 +3228,164 @@ paths:
       summary: Replace a project's per-project config
       tags:
       - projects
+  /api/v1/projects/{id}/knowledge:
+    get:
+      operationId: listProjectKnowledge
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
+      - in: query
+        name: status
+        schema:
+          enum:
+          - candidate
+          - accepted
+          - invalidated
+          - superseded
+          - deleted
+          type: string
+      - in: query
+        name: kind
+        schema:
+          enum:
+          - architecture
+          - convention
+          - interface
+          - constraint
+          - pitfall
+          - failed_approach
+          - file_relationship
+          - external_behavior
+          - question
+          type: string
+      - in: query
+        name: search
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeListResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Search current project knowledge
+      tags:
+      - knowledge
+    post:
+      operationId: createProjectKnowledge
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeCreateRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeResponse'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Record a project claim and its provenance
+      tags:
+      - knowledge
   /api/v1/projects/{id}/permissions:
     patch:
       operationId: setProjectPermissions
@@ -12959,6 +13360,193 @@ components:
       - ok
       - sessionId
       type: object
+    KnowledgeCreateRequest:
+      properties:
+        definition:
+          $ref: '#/components/schemas/KnowledgeDefinition'
+        reason:
+          type: string
+      required:
+      - definition
+      - reason
+      type: object
+    KnowledgeDefinition:
+      properties:
+        confidence:
+          enum:
+          - low
+          - medium
+          - high
+          type: string
+        content:
+          type: string
+        kind:
+          enum:
+          - architecture
+          - convention
+          - interface
+          - constraint
+          - pitfall
+          - failed_approach
+          - file_relationship
+          - external_behavior
+          - question
+          type: string
+        pinned:
+          type: boolean
+        sources:
+          items:
+            $ref: '#/components/schemas/KnowledgeSource'
+          type: array
+        status:
+          enum:
+          - candidate
+          - accepted
+          - invalidated
+          - superseded
+          - deleted
+          type: string
+        supersededBy:
+          $ref: '#/components/schemas/KnowledgeVersionRef'
+        tags:
+          items:
+            type: string
+          type: array
+        taskIds:
+          items:
+            type: string
+          type: array
+        title:
+          type: string
+      required:
+      - title
+      - kind
+      - content
+      - status
+      - confidence
+      - pinned
+      - sources
+      type: object
+    KnowledgeListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/KnowledgeView'
+          type: array
+        nextCursor:
+          type: string
+      required:
+      - items
+      type: object
+    KnowledgeResponse:
+      properties:
+        knowledge:
+          $ref: '#/components/schemas/ProjectKnowledge'
+        version:
+          $ref: '#/components/schemas/KnowledgeVersion'
+      required:
+      - knowledge
+      - version
+      type: object
+    KnowledgeReviseRequest:
+      properties:
+        definition:
+          $ref: '#/components/schemas/KnowledgeDefinition'
+        expectedVersion:
+          format: int64
+          type: integer
+        reason:
+          type: string
+      required:
+      - definition
+      - expectedVersion
+      - reason
+      type: object
+    KnowledgeSource:
+      properties:
+        attemptId:
+          type: string
+        commit:
+          type: string
+        contentHash:
+          type: string
+        kind:
+          enum:
+          - user
+          - worker
+          - file
+          - artifact
+          - external
+          type: string
+        reference:
+          type: string
+        sessionId:
+          type: string
+        taskId:
+          type: string
+      required:
+      - kind
+      - reference
+      type: object
+    KnowledgeVersion:
+      properties:
+        actor:
+          $ref: '#/components/schemas/AdaptiveActor'
+        contentHash:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        definition:
+          $ref: '#/components/schemas/KnowledgeDefinition'
+        knowledgeId:
+          type: string
+        number:
+          format: int64
+          type: integer
+        reason:
+          type: string
+      required:
+      - knowledgeId
+      - number
+      - definition
+      - contentHash
+      - actor
+      - reason
+      - createdAt
+      type: object
+    KnowledgeVersionRef:
+      properties:
+        id:
+          type: string
+        version:
+          format: int64
+          type: integer
+      required:
+      - id
+      - version
+      type: object
+    KnowledgeVersionsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/KnowledgeVersion'
+          type: array
+        nextCursor:
+          type: string
+      required:
+      - items
+      type: object
+    KnowledgeView:
+      properties:
+        knowledge:
+          $ref: '#/components/schemas/ProjectKnowledge'
+        version:
+          $ref: '#/components/schemas/KnowledgeVersion'
+      required:
+      - knowledge
+      - version
+      type: object
     ListAgentAuthPlansResponse:
       properties:
         plans:
@@ -13708,6 +14296,28 @@ components:
       required:
       - status
       - project
+      type: object
+    ProjectKnowledge:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        projectId:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        version:
+          format: int64
+          type: integer
+      required:
+      - id
+      - projectId
+      - version
+      - createdAt
+      - updatedAt
       type: object
     ProjectOrDegraded:
       oneOf:

@@ -4,6 +4,29 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 11b — knowledge service, API and CLI (2026-09-18)
+
+The daemon mounts six shared knowledge routes for project search/create, current
+inspection, revision and exact/paged history. Actor authority is assigned by the
+daemon, with strict bounded single-object JSON. API errors preserve operational
+failures, ownership denial and optimistic conflicts. `ao knowledge` exposes the
+same six operations through HTTP, with bounded file/stdin requests and literal
+search/status/kind filters. Generated contracts, route telemetry templates and
+CLI documentation are updated. Soft-deleted claims remain explicitly readable.
+
+Three HTTP integration tests, two CLI tests and a service error-boundary test
+PASS, including full API mounting alongside existing project routes. Full
+knowledge, CLI (23.79s), telemetry, router/envelope and API-spec suites PASS.
+Full controllers reproduce exactly the known Windows mobile rename-access and
+file-URL clone failures. Backend build, frontend typecheck, 39 API client tests,
+changed-code pinned lint (0 issues) and whitespace/source review PASS. Semantic
+OpenAPI comparison shows zero changes to any prior route/schema. A new frontend
+test initially passed a URL query to the pathname-only normalizer; corrected the
+test to its existing caller contract and reran the complete client suite. No
+unrelated normalizer behavior was changed. Logs: ignored `*stage11b*`.
+Knowledge context construction and native injection remain the next slice;
+the management UI and its live interaction checks remain stage 22/25.
+
 ## Stage 11a — versioned project knowledge persistence (2026-09-18)
 
 Migrations 0159–0160 add project-scoped knowledge identities, immutable hashed

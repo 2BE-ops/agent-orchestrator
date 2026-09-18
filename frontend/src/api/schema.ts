@@ -791,6 +791,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/{knowledgeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect a project claim including withdrawn history */
+        get: operations["getProjectKnowledge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/{knowledgeId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect immutable knowledge review history */
+        get: operations["listKnowledgeVersions"];
+        put?: never;
+        /** Edit, accept, invalidate, supersede or withdraw a claim */
+        post: operations["reviseProjectKnowledge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/{knowledgeId}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect exact historical knowledge */
+        get: operations["getKnowledgeVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mobile/devices": {
         parameters: {
             query?: never;
@@ -1096,6 +1148,24 @@ export interface paths {
         /** Replace a project's per-project config */
         put: operations["setProjectConfig"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/knowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search current project knowledge */
+        get: operations["listProjectKnowledge"];
+        put?: never;
+        /** Record a project claim and its provenance */
+        post: operations["createProjectKnowledge"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4192,6 +4262,73 @@ export interface components {
             ok: boolean;
             sessionId: string;
         };
+        KnowledgeCreateRequest: {
+            definition: components["schemas"]["KnowledgeDefinition"];
+            reason: string;
+        };
+        KnowledgeDefinition: {
+            /** @enum {string} */
+            confidence: "low" | "medium" | "high";
+            content: string;
+            /** @enum {string} */
+            kind: "architecture" | "convention" | "interface" | "constraint" | "pitfall" | "failed_approach" | "file_relationship" | "external_behavior" | "question";
+            pinned: boolean;
+            sources: components["schemas"]["KnowledgeSource"][];
+            /** @enum {string} */
+            status: "candidate" | "accepted" | "invalidated" | "superseded" | "deleted";
+            supersededBy?: components["schemas"]["KnowledgeVersionRef"];
+            tags?: string[];
+            taskIds?: string[];
+            title: string;
+        };
+        KnowledgeListResponse: {
+            items: components["schemas"]["KnowledgeView"][];
+            nextCursor?: string;
+        };
+        KnowledgeResponse: {
+            knowledge: components["schemas"]["ProjectKnowledge"];
+            version: components["schemas"]["KnowledgeVersion"];
+        };
+        KnowledgeReviseRequest: {
+            definition: components["schemas"]["KnowledgeDefinition"];
+            /** Format: int64 */
+            expectedVersion: number;
+            reason: string;
+        };
+        KnowledgeSource: {
+            attemptId?: string;
+            commit?: string;
+            contentHash?: string;
+            /** @enum {string} */
+            kind: "user" | "worker" | "file" | "artifact" | "external";
+            reference: string;
+            sessionId?: string;
+            taskId?: string;
+        };
+        KnowledgeVersion: {
+            actor: components["schemas"]["AdaptiveActor"];
+            contentHash: string;
+            /** Format: date-time */
+            createdAt: string;
+            definition: components["schemas"]["KnowledgeDefinition"];
+            knowledgeId: string;
+            /** Format: int64 */
+            number: number;
+            reason: string;
+        };
+        KnowledgeVersionRef: {
+            id: string;
+            /** Format: int64 */
+            version: number;
+        };
+        KnowledgeVersionsResponse: {
+            items: components["schemas"]["KnowledgeVersion"][];
+            nextCursor?: string;
+        };
+        KnowledgeView: {
+            knowledge: components["schemas"]["ProjectKnowledge"];
+            version: components["schemas"]["KnowledgeVersion"];
+        };
         ListAgentAuthPlansResponse: {
             plans: components["schemas"]["AgentAuthPlan"][];
         };
@@ -4478,6 +4615,16 @@ export interface components {
             project: components["schemas"]["ProjectOrDegraded"];
             /** @enum {string} */
             status: "ok" | "degraded";
+        };
+        ProjectKnowledge: {
+            /** Format: date-time */
+            createdAt: string;
+            id: string;
+            projectId: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: int64 */
+            version: number;
         };
         ProjectOrDegraded: components["schemas"]["Project"] | components["schemas"]["DegradedProject"];
         ProjectResponse: {
@@ -8641,6 +8788,318 @@ export interface operations {
             };
         };
     };
+    getProjectKnowledge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                knowledgeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listKnowledgeVersions: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                knowledgeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeVersionsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    reviseProjectKnowledge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                knowledgeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnowledgeReviseRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeVersion"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getKnowledgeVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                knowledgeId: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeVersion"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
     listMobileDevices: {
         parameters: {
             query?: never;
@@ -9702,6 +10161,170 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listProjectKnowledge: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                status?: "candidate" | "accepted" | "invalidated" | "superseded" | "deleted";
+                kind?: "architecture" | "convention" | "interface" | "constraint" | "pitfall" | "failed_approach" | "file_relationship" | "external_behavior" | "question";
+                search?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeListResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    createProjectKnowledge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnowledgeCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -24,6 +24,12 @@ vi.mock("./sentry", () => ({
 const captureMock = vi.mocked(captureRendererEvent);
 const sentryCaptureMock = vi.mocked(captureApiErrorToSentry);
 
+it("redacts knowledge identities from telemetry routes", () => {
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private/knowledge")).toBe("GET /api/v1/projects/:id/knowledge");
+	expect(normalizeApiOperation("POST", "/api/v1/knowledge/private-fact/versions")).toBe("POST /api/v1/knowledge/:id/versions");
+	expect(normalizeApiOperation("GET", "/api/v1/knowledge/private-fact/versions/2")).toBe("GET /api/v1/knowledge/:id/versions/:id");
+});
+
 it("redacts task and project identities from task telemetry routes", () => {
 	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/tasks")).toBe("GET /api/v1/projects/:id/tasks");
 	expect(normalizeApiOperation("GET", "/api/v1/tasks/private-task/criteria/12")).toBe("GET /api/v1/tasks/:id/criteria/:id");
