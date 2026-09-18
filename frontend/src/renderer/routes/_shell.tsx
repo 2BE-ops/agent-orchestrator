@@ -121,10 +121,12 @@ const shellTopbarHiddenByPlatform = hidesShellTopbar();
 const ShellCenter = memo(function ShellCenter({
 	hideShellTopbar,
 	isSessionRoute,
+	pageTitle,
 	selfFramedCenterPanel,
 }: {
 	hideShellTopbar: boolean;
 	isSessionRoute: boolean;
+	pageTitle?: string;
 	selfFramedCenterPanel: boolean;
 }) {
 	const panelClassName = isSessionRoute ? "center-panel-shell--session" : undefined;
@@ -148,7 +150,7 @@ const ShellCenter = memo(function ShellCenter({
 	if (framedAppTopbar) {
 		return (
 			<CenterPanelShell className={panelClassName} draggableSessionFrame={draggableSessionFrame}>
-				{isSessionRoute ? null : <ShellTopbar />}
+				{isSessionRoute ? null : <ShellTopbar pageTitle={pageTitle} />}
 				<div className="flex min-h-0 flex-1 flex-col">
 					<Outlet />
 				</div>
@@ -334,6 +336,7 @@ function ShellLayout() {
 	// The root route is the intentionally minimal home surface, regardless of
 	// whether projects have already been registered.
 	const isHomeRoute = Boolean(matchRoute({ to: "/" }));
+	const pageTitle = matchRoute({ to: "/registry" }) ? t("registry.title", "Agent registry") : undefined;
 	useEffect(() => {
 		if (routeParams.projectId) recordProjectOpened(routeParams.projectId);
 	}, [routeParams.projectId]);
@@ -1050,7 +1053,7 @@ function ShellLayout() {
             macOS/Linux. */}
 				<WindowTitlebar />
 				{/* App routes render their topbar inside the framed panel, matching the board chrome across platforms while leaving OS titlebars native. */}
-				{!framedAppTopbar && !hideShellTopbar && !routeParams.sessionId ? <ShellTopbar /> : null}
+				{!framedAppTopbar && !hideShellTopbar && !routeParams.sessionId ? <ShellTopbar pageTitle={pageTitle} /> : null}
 				{/* Controlled by the ui-store so TitlebarNav / Topbar toggles (which
 			    call the store directly) stay in sync. Direct dragging scopes its
 			    width override to the sidebar's layout consumers. */}
@@ -1093,6 +1096,7 @@ function ShellLayout() {
 							<ShellCenter
 								hideShellTopbar={hideShellTopbar}
 								isSessionRoute={Boolean(routeParams.sessionId)}
+								pageTitle={pageTitle}
 								selfFramedCenterPanel={selfFramedCenterPanel}
 							/>
 						</div>

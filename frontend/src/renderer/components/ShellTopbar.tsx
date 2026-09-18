@@ -73,10 +73,12 @@ export function ShellTopbar({
 	embedded = false,
 	sessionAction,
 	compactActions = false,
+	pageTitle,
 }: {
 	embedded?: boolean;
 	sessionAction?: ReactNode;
 	compactActions?: boolean;
+	pageTitle?: string;
 } = {}) {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
@@ -179,7 +181,7 @@ export function ShellTopbar({
 							transition={{ type: "spring", stiffness: 400, damping: 40 }}
 						>
 							<LayoutDashboard aria-hidden="true" className="size-icon-md" />
-							{t("shell.board")}
+							{pageTitle ?? t("shell.board")}
 						</motion.span>
 					</div>
 				)}

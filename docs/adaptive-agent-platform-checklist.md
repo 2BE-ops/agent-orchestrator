@@ -51,7 +51,7 @@ Stage 03 completes with this commit.
 | 03 | Gap analysis/design and live checklist commit | TESTED | Design/checklist/validation committed on feature branch and pushed to fork |
 | 04 | Reproducible baseline/toolchain | TESTED | Go 1.25.7 installed (`C:\Users\bill\go-sdk\go`, on user PATH, GOROOT set); `go build ./...` clean (toolchain auto-selects 1.26.5 per go.mod); workspace `node_modules` restored (`product-ui`, `cloud-client`, `mobile`, `ao`); `frontend:typecheck` PASS; `product-ui:check` (typecheck+test+build) PASS; pinned sqlc/golangci-lint self-provision via root scripts |
 | 05 | Registry domain, immutable versions, migration/store | TESTED | Migrations 0148–0149, typed definitions and sqlc store. Full domain/SQLite/CDC suites, relevant pinned lint (0 issues), vet and backend build PASS. Eleven new top-level tests cover validation, ownership, concurrent revisions, pins, atomic audit/CDC rollback, upgrade and restart. Race run unavailable: GCC missing. Exact evidence in validation. |
-| 06 | Agent Type service/API/CLI and registry UI | NOT STARTED | Same validated path for human and manager; generated contracts |
+| 06 | Agent Type service/API/CLI and registry UI | VALIDATED IN RUNNING APP | Shared service, 20 routes, generated contracts, HTTP-only CLI, desktop editor and CDC refresh. Registry API/CLI, relevant lint, frontend typecheck and 174 focused tests PASS; 40 topbar tests PASS. Real Electron create/pin/version/compare/activate/rollback/audit/clone/disable/reload verified. Full-suite Windows/dependency failures recorded in validation, not labeled passed. Stage 05 commit `1be075cf6` pushed. |
 | 07 | Skill authoring/versioning/API/UI/import/export | NOT STARTED | Reuse native conventions and embedded AO skill |
 | 08 | Provider/capability integration and binding UI | NOT STARTED | Native auth, no credential duplication, mode-aware controls |
 | 09 | Worker snapshots and manual Agent Type launch | NOT STARTED | Shared launch/restore paths, one-off overrides, inspector provenance |
@@ -93,7 +93,7 @@ Numbers refer to the assignment's 48 Definition of Done items.
 
 | DoD | Required behavior | Stage | Status |
 | --- | --- | --- | --- |
-| 1 | Manually create Agent Types in desktop | 06 | NOT STARTED |
+| 1 | Manually create Agent Types in desktop | 06 | VALIDATED IN RUNNING APP |
 | 2 | Different harness/provider/model per type | 08-09 | NOT STARTED |
 | 3 | Supported custom provider options | 08 | NOT STARTED |
 | 4 | Manually create Skills | 07 | NOT STARTED |

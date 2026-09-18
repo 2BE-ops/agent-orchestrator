@@ -238,12 +238,32 @@ func (d RegistryDefinition) MarshalContent(kind RegistryKind) ([]byte, string, e
 	if err := d.Validate(kind); err != nil {
 		return nil, "", err
 	}
-	content, err := json.Marshal(d)
+	content, err := json.Marshal(d.NormalizeLists())
 	if err != nil {
 		return nil, "", err
 	}
 	hash := sha256.Sum256(content)
 	return content, hex.EncodeToString(hash[:]), nil
+}
+
+// NormalizeLists gives stored and wire definitions explicit empty arrays without
+// mutating the caller's configuration. Nil and empty lists have equal hashes.
+func (d RegistryDefinition) NormalizeLists() RegistryDefinition {
+	if d.AgentType != nil {
+		a := *d.AgentType
+		a.Capabilities = append([]string{}, a.Capabilities...)
+		a.Skills = append([]SkillVersionRef{}, a.Skills...)
+		d.AgentType = &a
+	}
+	if d.Skill != nil {
+		s := *d.Skill
+		s.Capabilities = append([]string{}, s.Capabilities...)
+		s.RequiredTools = append([]string{}, s.RequiredTools...)
+		s.RequiredMCPServers = append([]string{}, s.RequiredMCPServers...)
+		s.Resources = append([]SkillResource{}, s.Resources...)
+		d.Skill = &s
+	}
+	return d
 }
 
 func registryText(value string, limit int, required bool) bool {

@@ -98,6 +98,13 @@ afterEach(() => {
 });
 
 describe("createEventTransport", () => {
+	it("refreshes the shared registry when a manager authors a definition", async () => {
+		const client = fakeQueryClient();
+		const disconnect = createEventTransport(client).connect();
+		cdcSources()[0].emit("registry_changed", JSON.stringify({ type: "registry_changed", payload: { id: "manager-type", kind: "agent_type", revision: 1 } }));
+		expect(client.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["adaptive-registry"] }, { cancelRefetch: false });
+		disconnect();
+	});
 	it("ignores every stream callback after disposal", async () => {
 		vi.useFakeTimers();
 		try {

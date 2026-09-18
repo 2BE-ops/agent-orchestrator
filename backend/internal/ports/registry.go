@@ -12,6 +12,7 @@ var (
 	ErrRegistryNotFound  = errors.New("registry entry or version not found")
 	ErrRegistryConflict  = errors.New("registry revision conflict")
 	ErrRegistryForbidden = errors.New("registry ownership policy forbids action")
+	ErrRegistryInvalid   = errors.New("invalid registry composition")
 )
 
 // RegistryStore atomically persists typed definitions, immutable versions,

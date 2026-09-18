@@ -19,6 +19,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/httpd/envelope"
 	importsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/importer"
 	projectsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/project"
+	registrysvc "github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
 )
 
 // Build reflects the Go contract types and the operation registry below into
@@ -58,6 +59,7 @@ func Build() ([]byte, error) {
 		*(&openapi31.Server{URL: "http://127.0.0.1:3001"}).WithDescription("Local daemon (loopback only)"),
 	}
 	r.Spec.Tags = []openapi31.Tag{
+		*(&openapi31.Tag{Name: "registry"}).WithDescription("Versioned Agent Types and authored Skills"),
 		*(&openapi31.Tag{Name: "agents"}).WithDescription(
 			"Supported and locally runnable agent adapters"),
 		*(&openapi31.Tag{Name: "projects"}).WithDescription(
@@ -143,6 +145,28 @@ func schemaName(_ reflect.Type, defaultName string) string {
 // by projectOperations(). Add an entry when a new contract type is introduced;
 // the drift test fails until the spec is regenerated, which flags the gap.
 var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names include reset-credit contracts; no credential value is stored here.
+	"ControllersRegistryIDParam":                           "RegistryIDParam",
+	"ControllersRegistryVersionParam":                      "RegistryVersionParam",
+	"ControllersRegistryListQuery":                         "RegistryListQuery",
+	"ControllersRegistryEntryResponse":                     "RegistryEntryResponse",
+	"ControllersRegistryVersionResponse":                   "RegistryVersionResponse",
+	"ControllersRegistryViewResponse":                      "RegistryViewResponse",
+	"ControllersRegistryListResponse":                      "RegistryListResponse",
+	"ControllersRegistryVersionsResponse":                  "RegistryVersionsResponse",
+	"ControllersRegistryAuditResponse":                     "RegistryAuditResponse",
+	"ControllersRegistryAuditListResponse":                 "RegistryAuditListResponse",
+	"DomainRegistryMetadata":                               "RegistryMetadata",
+	"DomainRegistryPolicy":                                 "RegistryPolicy",
+	"DomainRegistryDefinition":                             "RegistryDefinition",
+	"DomainAgentTypeDefinition":                            "AgentTypeDefinition",
+	"DomainSkillDefinition":                                "SkillDefinition",
+	"DomainSkillVersionRef":                                "SkillVersionRef",
+	"DomainSkillResource":                                  "SkillResource",
+	"RegistryCreateInput":                                  "RegistryCreateInput",
+	"RegistryVersionInput":                                 "RegistryVersionInput",
+	"RegistryMetadataInput":                                "RegistryMetadataInput",
+	"RegistryActivateInput":                                "RegistryActivateInput",
+	"RegistryCloneInput":                                   "RegistryCloneInput",
 	"ControllersSettingsResponse":                          "SettingsResponse",
 	"ControllersDesktopWorkspaceLocationResponse":          "DesktopWorkspaceLocationResponse",
 	"ControllersUpdateSessionInterfaceRequest":             "UpdateSessionInterfaceRequest",
@@ -553,6 +577,7 @@ func operations() []operation {
 	ops = append(ops, prOperations()...)
 	ops = append(ops, reviewOperations()...)
 	ops = append(ops, notificationOperations()...)
+	ops = append(ops, registryOperations()...)
 	ops = append(ops, usageOperations()...)
 	ops = append(ops, pushOperations()...)
 	ops = append(ops, importOperations()...)
@@ -1488,6 +1513,39 @@ func devOperations() []operation {
 			},
 		},
 	}
+}
+
+func registryOperations() []operation {
+	ops := make([]operation, 0, 20)
+	for _, resource := range []struct{ path, name string }{{"/api/v1/agent-types", "AgentType"}, {"/api/v1/skills", "Skill"}} {
+		for _, endpoint := range []struct {
+			method, suffix, verb, summary string
+			request, response             any
+			status                        int
+			params                        []any
+		}{
+			{http.MethodGet, "", "list", "List definitions", nil, controllers.RegistryListResponse{}, http.StatusOK, []any{controllers.RegistryListQuery{}}},
+			{http.MethodPost, "", "create", "Create a definition and first version", registrysvc.CreateInput{}, controllers.RegistryViewResponse{}, http.StatusCreated, nil},
+			{http.MethodGet, "/{id}", "get", "Inspect the active definition", nil, controllers.RegistryViewResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}}},
+			{http.MethodPatch, "/{id}", "update", "Update metadata and ownership policy", registrysvc.MetadataInput{}, controllers.RegistryEntryResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}}},
+			{http.MethodPost, "/{id}/clone", "clone", "Clone a pinned definition", registrysvc.CloneInput{}, controllers.RegistryViewResponse{}, http.StatusCreated, []any{controllers.RegistryIDParam{}}},
+			{http.MethodGet, "/{id}/versions", "listVersions", "List immutable versions", nil, controllers.RegistryVersionsResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}, controllers.RegistryListQuery{}}},
+			{http.MethodPost, "/{id}/versions", "appendVersion", "Append an inactive version", registrysvc.VersionInput{}, controllers.RegistryVersionResponse{}, http.StatusCreated, []any{controllers.RegistryIDParam{}}},
+			{http.MethodGet, "/{id}/versions/{version}", "getVersion", "Inspect an exact version", nil, controllers.RegistryVersionResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}, controllers.RegistryVersionParam{}}},
+			{http.MethodPost, "/{id}/activate", "activateVersion", "Activate or roll back to an immutable version", registrysvc.ActivateInput{}, controllers.RegistryEntryResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}}},
+			{http.MethodGet, "/{id}/audit", "listAudit", "Inspect durable authoring history", nil, controllers.RegistryAuditListResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}, controllers.RegistryListQuery{}}},
+		} {
+			ops = append(ops, operation{method: endpoint.method, path: resource.path + endpoint.suffix,
+				id: endpoint.verb + resource.name, tag: "registry", summary: endpoint.summary,
+				pathParams: endpoint.params, reqBody: endpoint.request,
+				resps: []respUnit{{endpoint.status, endpoint.response},
+					{http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}},
+					{http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}},
+					{http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}},
+			})
+		}
+	}
+	return ops
 }
 
 func notificationOperations() []operation {

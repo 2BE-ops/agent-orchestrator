@@ -158,7 +158,7 @@ func (s *Store) AppendRegistryVersion(ctx context.Context, id string, definition
 		}
 		now := time.Now().UTC()
 		result = domain.RegistryVersion{EntryID: id, Number: number, ParentVersion: entry.ActiveVersion,
-			Definition: definition, ContentHash: hash, Actor: mutation.Actor, Reason: mutation.Reason, CreatedAt: now}
+			Definition: definition.NormalizeLists(), ContentHash: hash, Actor: mutation.Actor, Reason: mutation.Reason, CreatedAt: now}
 		if err := insertRegistryVersion(ctx, q, result, entry.Kind, content); err != nil {
 			return err
 		}
@@ -268,7 +268,7 @@ func insertRegistryVersion(ctx context.Context, q *gen.Queries, version domain.R
 				return registryReadError(err)
 			}
 			if skill.Kind != string(domain.RegistrySkill) || skill.Enabled == 0 {
-				return fmt.Errorf("pinned skill must be an enabled skill")
+				return fmt.Errorf("%w: pinned skill must be an enabled skill", ports.ErrRegistryInvalid)
 			}
 			if version.Actor.Origin == domain.RegistryManager && skill.ManagerCanSelect == 0 {
 				return ports.ErrRegistryForbidden

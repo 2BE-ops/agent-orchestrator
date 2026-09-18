@@ -61,6 +61,20 @@ export function setApiDaemonStatus(nextStatus: DaemonStatus): void {
 // would miss (orchestrators/{id}). Keep in sync with schema.ts.
 const ROUTE_TEMPLATES = [
 	"/api/v1/agents",
+	"/api/v1/agent-types",
+	"/api/v1/agent-types/{id}",
+	"/api/v1/agent-types/{id}/versions",
+	"/api/v1/agent-types/{id}/versions/{version}",
+	"/api/v1/agent-types/{id}/activate",
+	"/api/v1/agent-types/{id}/clone",
+	"/api/v1/agent-types/{id}/audit",
+	"/api/v1/skills",
+	"/api/v1/skills/{id}",
+	"/api/v1/skills/{id}/versions",
+	"/api/v1/skills/{id}/versions/{version}",
+	"/api/v1/skills/{id}/activate",
+	"/api/v1/skills/{id}/clone",
+	"/api/v1/skills/{id}/audit",
 	"/api/v1/agents/install-jobs",
 	"/api/v1/agents/auth-plans",
 	"/api/v1/agents/installers",
@@ -140,6 +154,8 @@ const ROUTE_TEMPLATES = [
 // telemetry for known collections even if a route is ever missed above.
 const RESOURCE_SEGMENTS = new Set([
 	"agents",
+	"agent-types",
+	"skills",
 	"projects",
 	"sessions",
 	"notifications",

@@ -15,6 +15,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import {
 	AlertTriangle,
+	Bot,
 	ChevronRight,
 	Download,
 	Folder,
@@ -344,6 +345,7 @@ function useSelection() {
 		select: (state) => state.location.pathname,
 	});
 	const goHome = useCallback(() => void navigate({ to: "/" }), [navigate]);
+	const goRegistry = useCallback(() => void navigate({ to: "/registry" }), [navigate]);
 	const goGlobalSettings = useCallback(() => openGlobalSettings(), [openGlobalSettings]);
 	const goConnectMobile = useCallback(() => openGlobalSettings("mobile"), [openGlobalSettings]);
 	const goSettings = useCallback((projectId: string) => openProjectSettings(projectId), [openProjectSettings]);
@@ -369,6 +371,7 @@ function useSelection() {
 		activeProjectId: params.projectId,
 		activeSessionId: params.sessionId,
 		goHome,
+		goRegistry,
 		// Settings is a modal — open it in place so the current page (session
 		// terminal, board, etc.) stays underneath.
 		goGlobalSettings,
@@ -376,7 +379,7 @@ function useSelection() {
 		goSettings,
 		goProject,
 		goSession,
-	}), [goConnectMobile, goGlobalSettings, goHome, goProject, goSession, goSettings, params.projectId, params.sessionId, pathname]);
+	}), [goConnectMobile, goGlobalSettings, goHome, goRegistry, goProject, goSession, goSettings, params.projectId, params.sessionId, pathname]);
 }
 
 // Colour tracks the session's board section, preserving SCM state while the
@@ -756,6 +759,12 @@ export function Sidebar({
 				) : null}
 
 				{/* Pinned — collapsible; hidden when empty. */}
+				<SidebarMenu className="mb-3">
+					<SidebarMenuItem><SidebarMenuButton tooltip={t("registry.title", "Agent registry")} onClick={selection.goRegistry} className={NAV_ROW_CLASS}>
+						<Bot aria-hidden="true" /><span>{t("registry.title", "Agent registry")}</span>
+					</SidebarMenuButton></SidebarMenuItem>
+				</SidebarMenu>
+
 				{pinnedSessions.length > 0 && (
 					<div className="sidebar-expanded-chrome flex shrink-0 flex-col group-data-[collapsible=icon]:hidden">
 						<SectionDisclosure

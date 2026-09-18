@@ -13,12 +13,106 @@ import (
 	agentsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agent"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/agentauth"
 	projectsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/project"
+	registrysvc "github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
 	sessionsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/session"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systemcheck"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systeminstall"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/mobilebridge"
 )
+
+// RegistryIDParam identifies an Agent Type or authored Skill.
+type RegistryIDParam struct {
+	ID string `path:"id"`
+}
+
+// RegistryVersionParam selects immutable configuration history.
+type RegistryVersionParam struct {
+	Version int64 `path:"version" minimum:"1"`
+}
+
+// RegistryListQuery bounds all registry pages. Version/audit cursors are numeric.
+type RegistryListQuery struct {
+	Cursor string `query:"cursor,omitempty"`
+	Limit  int    `query:"limit,omitempty" minimum:"1" maximum:"200"`
+}
+
+// RegistryEntryResponse is mutable metadata plus stable ownership provenance.
+type RegistryEntryResponse struct {
+	ID            string                  `json:"id"`
+	Kind          string                  `json:"kind" enum:"agent_type,skill"`
+	Origin        string                  `json:"origin" enum:"USER,AGENT_MANAGER,SYSTEM"`
+	CreatedBy     string                  `json:"createdBy"`
+	Metadata      domain.RegistryMetadata `json:"metadata"`
+	Revision      int64                   `json:"revision"`
+	ActiveVersion int64                   `json:"activeVersion"`
+	CreatedAt     time.Time               `json:"createdAt"`
+	UpdatedAt     time.Time               `json:"updatedAt"`
+}
+
+// RegistryVersionResponse is an immutable definition and its provenance.
+type RegistryVersionResponse struct {
+	EntryID       string                    `json:"entryId"`
+	Number        int64                     `json:"number"`
+	ParentVersion int64                     `json:"parentVersion"`
+	Definition    domain.RegistryDefinition `json:"definition"`
+	ContentHash   string                    `json:"contentHash"`
+	Origin        string                    `json:"origin" enum:"USER,AGENT_MANAGER,SYSTEM"`
+	CreatedBy     string                    `json:"createdBy"`
+	Reason        string                    `json:"reason"`
+	CreatedAt     time.Time                 `json:"createdAt"`
+}
+
+// RegistryViewResponse combines metadata and the pinned active version.
+type RegistryViewResponse struct {
+	Entry   RegistryEntryResponse   `json:"entry"`
+	Version RegistryVersionResponse `json:"version"`
+}
+
+// RegistryListResponse contains one stable ID-ordered page.
+type RegistryListResponse struct {
+	Items      []RegistryViewResponse `json:"items"`
+	NextCursor string                 `json:"nextCursor,omitempty"`
+}
+
+// RegistryVersionsResponse contains a bounded version history page.
+type RegistryVersionsResponse struct {
+	Versions   []RegistryVersionResponse `json:"versions"`
+	NextCursor string                    `json:"nextCursor,omitempty"`
+}
+
+// RegistryAuditResponse records a semantic action independent of CDC retention.
+type RegistryAuditResponse struct {
+	Sequence      int64     `json:"sequence"`
+	EntryID       string    `json:"entryId"`
+	Revision      int64     `json:"revision"`
+	VersionNumber int64     `json:"versionNumber"`
+	Action        string    `json:"action"`
+	Origin        string    `json:"origin" enum:"USER,AGENT_MANAGER,SYSTEM"`
+	ActorID       string    `json:"actorId"`
+	Reason        string    `json:"reason"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
+// RegistryAuditListResponse contains a bounded chronological audit page.
+type RegistryAuditListResponse struct {
+	Events     []RegistryAuditResponse `json:"events"`
+	NextCursor string                  `json:"nextCursor,omitempty"`
+}
+
+func registryEntryResponse(entry domain.RegistryEntry) RegistryEntryResponse {
+	return RegistryEntryResponse{ID: entry.ID, Kind: string(entry.Kind), Origin: string(entry.Origin), CreatedBy: entry.CreatedBy,
+		Metadata: entry.Metadata, Revision: entry.Revision, ActiveVersion: entry.ActiveVersion, CreatedAt: entry.CreatedAt, UpdatedAt: entry.UpdatedAt}
+}
+
+func registryVersionResponse(version domain.RegistryVersion) RegistryVersionResponse {
+	return RegistryVersionResponse{EntryID: version.EntryID, Number: version.Number, ParentVersion: version.ParentVersion,
+		Definition: version.Definition, ContentHash: version.ContentHash, Origin: string(version.Actor.Origin), CreatedBy: version.Actor.ID, Reason: version.Reason, CreatedAt: version.CreatedAt}
+}
+
+func registryViewResponse(view registrysvc.View) RegistryViewResponse {
+	return RegistryViewResponse{Entry: registryEntryResponse(view.Entry), Version: registryVersionResponse(view.Version)}
+}
 
 // HTTP response envelopes for the projects surface — the SINGLE definition of
 // each wire shape. The handlers encode these (envelope.WriteJSON), and

@@ -53,6 +53,48 @@ Full-repository Windows lint remains a stage 24 gap; it is not labeled passed.
 No registry API/UI, worker integration, real Electron flow, live provider call,
 or complete adaptive Definition of Done has been validated at stage 05.
 
+## Stage 06 — registry API, CLI and desktop authoring (2026-09-18)
+
+The daemon now exposes the shared registry service through 20 human authoring
+routes and HTTP-only `ao agent-type` / `ao skill` commands. Actor provenance is
+established by the controller; JSON role/origin spoofing is rejected. Versions
+are appended inactive and activation/rollback requires the current revision.
+Manager-created records use the same service and appear in the same API/UI.
+
+| Command / check | Result |
+| --- | --- |
+| Registry controller tests | PASS, 4 top-level tests including full authoring lifecycle, strict input, manager policy and unavailable service |
+| `go test ./internal/cli ./internal/telemetrymeta` | PASS, 13.165s / 0.015s; includes new commands, usage errors and preserved daemon error envelopes |
+| Full domain, ports, SQLite, CDC, API/spec/specgen/envelope and skillassets suites | PASS |
+| Full HTTP controllers suite | FAIL on two unrelated Windows tests: concurrent mobile.json rename access denied, and project clone file-URL validation; registry tests pass |
+| Pinned golangci-lint v2.12.2 on domain/ports/storage/CDC/registry service/HTTP/CLI/telemetry packages | PASS, 0 issues |
+| API generation | PASS; specgen then pinned openapi-typescript 7.4.4. Root dependencies restored for the normal `npm run api` command |
+| Canonical generated OpenAPI comparison | 14 new path groups, 19 new schemas, zero semantic changes to existing paths/schemas; generated ordering accounts for the larger textual diff |
+| `npm.cmd run frontend:typecheck` | PASS |
+| Focused registry/event transport/API client/sidebar tests | PASS, 174 tests; registry rerun after accessible label fixes: 4 PASS |
+| ShellTopbar tests after registry title fix | PASS, 40 tests |
+| `npx vite build --config vite.renderer.config.ts` | PASS, 2.76s; route tree generated |
+| Full `npm test -- --maxWorkers=2` in frontend | FAIL: 302 files passed, 22 failed; 4,718 tests passed, 169 failed, 8 skipped. Failures include macOS path/signing/update assumptions, Windows file/socket behavior, missing native SQLite binding and landing dependencies. Exact diagnostic log retained locally; stage 24 must resolve or verify in the supported CI environment |
+| `git diff --cached --check` | PASS |
+
+Actual Electron validation used the `ao-desktop-dev` skill, detached isolated
+worktree `.cache/ao-adaptive-lab`, real npm installs in each workspace, and
+scratch data/profile/runfile under `C:\Users\bill\.ao\dev\adaptive-platform-20260918`.
+The real Go daemon listened on loopback port 3036; the actual Electron renderer
+was inspected through its local CDP port 9336. No mock API, real user data or paid
+worker was used. Verified through desktop controls: create Skill, create Codex
+Agent Type, attach exact Skill v1, append inactive v2, compare, activate v2,
+roll back to v1, inspect audit, clone, disable and retain state on renderer reload.
+No renderer errors were observed in the completed interaction pass.
+
+Screenshots inspected: `.cache/adaptive-tests/electron-registry-editor.png`,
+`electron-registry-history.png`, `electron-registry-persisted.png`. UI checks
+found and fixed the incorrect Board topbar title and unstable accessible names
+on populated form fields. These are ignored local evidence, not committed app
+state. Full daemon/desktop restart with active workers remains stage 23/25 work.
+Native provider/model capability controls, portable bundles, Skill resource
+materialization and worker launch are intentionally the next stages.
+
 ## Historical initial audit (superseded environment facts)
 
 ## Repository and access
