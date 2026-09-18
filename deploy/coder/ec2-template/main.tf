@@ -95,8 +95,13 @@ data "coder_parameter" "subnet_id" {
   display_name = "Subnet ID"
   description  = "Subnet with outbound internet (public IP or NAT) for the session instance."
   type         = "string"
-  default      = ""
-  mutable      = false
+  # The durable volume (not gated on start_count, so it exists even while the
+  # workspace is stopped) reads this subnet's AZ, so the value must resolve to a
+  # single subnet even during a bare template import. Default to the Coder
+  # server's own subnet (AWS-WIRING.md's recommendation); AO always overrides it
+  # per session via AO_CLOUD_CODER_PARAMETERS_JSON.
+  default  = "subnet-00b8c1f935f0629e0"
+  mutable  = false
 }
 
 data "coder_parameter" "security_group_id" {
