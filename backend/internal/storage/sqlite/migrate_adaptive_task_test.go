@@ -40,13 +40,12 @@ INSERT INTO sessions(id,project_id,num,activity_last_at,created_at,updated_at) V
 	if _, err := s.ReviseAcceptanceCriteria(ctx, "migration-task", criteria, mutation); err != nil {
 		t.Fatal(err)
 	}
-	upTo(t, db, 156)
+	upTo(t, db, 158)
 	mutation.ExpectedRevision = 2
 	_, lease, err := s.ReserveTask(ctx, domain.TaskReservation{ID: "upgrade-attempt", TaskID: "migration-task", LaunchIntentID: "upgrade-launch", HolderID: "scheduler", Mutation: mutation, Now: time.Now().UTC(), TTL: time.Minute})
 	if err != nil {
 		t.Fatal(err)
 	}
-	upTo(t, db, 157)
 	if _, err := db.Exec(`INSERT INTO adaptive_task_dispatches(attempt_id,session_id,configuration_hash,created_at) VALUES('upgrade-attempt','task-upgrade-1',printf('%064d',0),CURRENT_TIMESTAMP)`); err != nil {
 		t.Fatal(err)
 	}
@@ -55,6 +54,9 @@ INSERT INTO sessions(id,project_id,num,activity_last_at,created_at,updated_at) V
 		t.Fatalf("retained session: %v %v", ok, err)
 	}
 	if _, err := s.BeginTaskExecution(ctx, domain.TaskExecutionOperation{ID: "upgrade-native", SessionID: session.ID, Lease: lease.TaskLeaseToken, SourceOwner: session.ControllerOwner(), Kind: "dispatch", CreatedAt: lease.HeartbeatAt}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ChangeTaskIntent(ctx, "migration-task", domain.TaskIntentChange{Intent: "cancel", Mutation: mutation}); err != nil {
 		t.Fatal(err)
 	}
 	var integrity string
@@ -73,7 +75,7 @@ INSERT INTO sessions(id,project_id,num,activity_last_at,created_at,updated_at) V
 	if _, err := db.Exec(`UPDATE sessions SET activity_state='active' WHERE id='task-upgrade-1'`); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.QueryRow(`SELECT count(*) FROM change_log`).Scan(&after); err != nil || after != before+5 {
+	if err := db.QueryRow(`SELECT count(*) FROM change_log`).Scan(&after); err != nil || after != before+6 {
 		t.Fatalf("retained events: %d %v", after, err)
 	}
 	upTo(t, db, 155)

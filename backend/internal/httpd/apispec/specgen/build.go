@@ -172,6 +172,11 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"DomainTaskWorkerDispatch":                             "TaskWorkerDispatch",
 	"TaskView":                                             "AdaptiveTaskView",
 	"TaskAttemptView":                                      "TaskAttemptView",
+	"TaskState":                                            "AdaptiveTaskState",
+	"DomainTaskIntent":                                     "TaskIntent",
+	"DomainTaskExecutionOperation":                         "TaskExecutionOperation",
+	"ControllersAdaptiveTaskIntentRequest":                 "AdaptiveTaskIntentRequest",
+	"ControllersAdaptiveTaskIntentsResponse":               "AdaptiveTaskIntentsResponse",
 	"ControllersRegistryIDParam":                           "RegistryIDParam",
 	"ControllersRegistryVersionParam":                      "RegistryVersionParam",
 	"ControllersRegistryListQuery":                         "RegistryListQuery",
@@ -1605,6 +1610,8 @@ func adaptiveTaskOperations() []operation {
 		{http.MethodGet, "/tasks/{taskId}/criteria/{version}", "getTaskCriteria", "Inspect exact historical acceptance criteria", nil, domain.AcceptanceCriteriaVersion{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskVersionParam{}}},
 		{http.MethodGet, "/tasks/{taskId}/audit", "listTaskAudit", "Inspect durable planning and ownership actions", nil, controllers.AdaptiveTaskAuditResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskListQuery{}}},
 		{http.MethodGet, "/tasks/{taskId}/attempts", "listTaskAttempts", "Inspect frozen attempts and worker associations", nil, controllers.AdaptiveTaskAttemptsResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/tasks/{taskId}/intents", "listTaskIntents", "Inspect audited admission and cancellation instructions", nil, controllers.AdaptiveTaskIntentsResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodPost, "/tasks/{taskId}/intents", "changeTaskIntent", "Request run or cancellation intent without releasing worker ownership", controllers.AdaptiveTaskIntentRequest{}, domain.TaskIntent{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}}},
 	} {
 		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "tasks", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
 	}

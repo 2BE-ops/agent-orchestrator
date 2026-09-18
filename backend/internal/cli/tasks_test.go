@@ -18,6 +18,8 @@ func TestTaskCLIHTTPBoundary(t *testing.T) {
 		{[]string{"task", "criteria", "task-1", "1"}, http.MethodGet, "/api/v1/tasks/task-1/criteria/1"},
 		{[]string{"task", "audit", "task-1"}, http.MethodGet, "/api/v1/tasks/task-1/audit"},
 		{[]string{"task", "attempts", "task-1"}, http.MethodGet, "/api/v1/tasks/task-1/attempts"},
+		{[]string{"task", "intents", "task-1"}, http.MethodGet, "/api/v1/tasks/task-1/intents"},
+		{[]string{"task", "set-intent", "task-1", "--file", "-"}, http.MethodPost, "/api/v1/tasks/task-1/intents"},
 		{[]string{"task", "create", "project", "--file", "-"}, http.MethodPost, "/api/v1/projects/project/tasks"},
 		{[]string{"task", "revise", "task-1", "--file", "-"}, http.MethodPost, "/api/v1/tasks/task-1/revisions"},
 		{[]string{"task", "set-criteria", "task-1", "--file", "-"}, http.MethodPost, "/api/v1/tasks/task-1/criteria"},

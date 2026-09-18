@@ -28,6 +28,8 @@ type AdaptiveTaskService interface {
 	Revisions(context.Context, string, int64, int) ([]domain.TaskRevision, error)
 	Audit(context.Context, string, int64, int) ([]domain.TaskAudit, error)
 	Attempts(context.Context, string, int64, int) ([]tasksvc.AttemptView, error)
+	ChangeIntent(context.Context, domain.AdaptiveActor, string, tasksvc.IntentInput) (domain.TaskIntent, error)
+	Intents(context.Context, string, int64, int) ([]domain.TaskIntent, error)
 }
 
 // AdaptiveTasksController is the human task API; it grants no worker lease controls.
@@ -47,6 +49,8 @@ func (c *AdaptiveTasksController) Register(r chi.Router) {
 		r.Get("/tasks/{taskId}/criteria/{version}", c.criteria)
 		r.Get("/tasks/{taskId}/audit", c.audit)
 		r.Get("/tasks/{taskId}/attempts", c.attempts)
+		r.Post("/tasks/{taskId}/intents", c.changeIntent)
+		r.Get("/tasks/{taskId}/intents", c.intents)
 	})
 }
 
@@ -208,6 +212,37 @@ func (c *AdaptiveTasksController) attempts(w http.ResponseWriter, r *http.Reques
 	response := AdaptiveTaskAttemptsResponse{Items: items}
 	if len(items) == limit {
 		response.NextCursor = strconv.FormatInt(items[len(items)-1].Attempt.Number, 10)
+	}
+	envelope.WriteJSON(w, http.StatusOK, response)
+}
+
+func (c *AdaptiveTasksController) changeIntent(w http.ResponseWriter, r *http.Request) {
+	var input AdaptiveTaskIntentRequest
+	if !decodeTaskBody(w, r, &input) {
+		return
+	}
+	intent, err := c.Svc.ChangeIntent(r.Context(), taskHumanActor(), chi.URLParam(r, "taskId"), tasksvc.IntentInput(input))
+	if err != nil {
+		envelope.WriteError(w, r, err)
+		return
+	}
+	envelope.WriteJSON(w, http.StatusOK, intent)
+}
+
+func (c *AdaptiveTasksController) intents(w http.ResponseWriter, r *http.Request) {
+	after, limit, err := taskPage(r, true)
+	if err != nil {
+		envelope.WriteError(w, r, err)
+		return
+	}
+	items, err := c.Svc.Intents(r.Context(), chi.URLParam(r, "taskId"), after, limit)
+	if err != nil {
+		envelope.WriteError(w, r, err)
+		return
+	}
+	response := AdaptiveTaskIntentsResponse{Items: items}
+	if len(items) == limit {
+		response.NextCursor = strconv.FormatInt(items[len(items)-1].Version, 10)
 	}
 	envelope.WriteJSON(w, http.StatusOK, response)
 }

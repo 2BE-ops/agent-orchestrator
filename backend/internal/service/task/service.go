@@ -17,6 +17,9 @@ import (
 type Store interface {
 	ports.AdaptiveTaskStore
 	ports.TaskLeaseStore
+	ports.TaskIntentStore
+	ports.TaskExecutionStore
+	GetSession(context.Context, domain.SessionID) (domain.SessionRecord, bool, error)
 	GetProject(context.Context, string) (domain.ProjectRecord, bool, error)
 	GetRegistryEntry(context.Context, string) (domain.RegistryEntry, error)
 	GetRegistryVersion(context.Context, string, int64) (domain.RegistryVersion, error)
@@ -55,13 +58,16 @@ type View struct {
 	Revision domain.TaskRevision               `json:"revision"`
 	Criteria *domain.AcceptanceCriteriaVersion `json:"criteria,omitempty"`
 	Lease    *domain.TaskLease                 `json:"lease,omitempty"`
+	Intent   domain.TaskIntent                 `json:"intent"`
+	State    State                             `json:"state"`
 }
 
 // AttemptView includes retained worker association and current ownership facts.
 type AttemptView struct {
-	Attempt  domain.TaskAttempt         `json:"attempt"`
-	Lease    domain.TaskLease           `json:"lease"`
-	Dispatch *domain.TaskWorkerDispatch `json:"dispatch,omitempty"`
+	Attempt          domain.TaskAttempt             `json:"attempt"`
+	Lease            domain.TaskLease               `json:"lease"`
+	Dispatch         *domain.TaskWorkerDispatch     `json:"dispatch,omitempty"`
+	PendingExecution *domain.TaskExecutionOperation `json:"pendingExecution,omitempty"`
 }
 
 func mapError(err error) error {
@@ -155,6 +161,14 @@ func (m *Manager) view(ctx context.Context, task domain.AdaptiveTask) (View, err
 	}
 	if ok {
 		view.Lease = &lease
+	}
+	view.Intent, err = m.store.GetTaskIntent(ctx, task.ID)
+	if err != nil {
+		return View{}, mapError(err)
+	}
+	view.State, err = m.state(ctx, view)
+	if err != nil {
+		return View{}, mapError(err)
 	}
 	return view, nil
 }
@@ -264,6 +278,13 @@ func (m *Manager) Attempts(ctx context.Context, id string, after int64, limit in
 		}
 		if ok {
 			view.Dispatch = &dispatch
+			operation, pending, err := m.store.PendingTaskExecution(ctx, dispatch.SessionID)
+			if err != nil {
+				return nil, mapError(err)
+			}
+			if pending {
+				view.PendingExecution = &operation
+			}
 		}
 		result = append(result, view)
 	}

@@ -100,6 +100,34 @@ func TestAdaptiveTasksAuthoringCriteriaAndHistory(t *testing.T) {
 	registryRequest(t, r, http.MethodGet, path+"/audit?cursor="+audit.NextCursor, nil, http.StatusOK)
 }
 
+func TestAdaptiveTaskIntentsAreFencedAuditedAndServerAttributed(t *testing.T) {
+	r, _, _ := adaptiveTaskRouter(t)
+	task := createAdaptiveTaskHTTP(t, r)
+	path := "/tasks/" + task.Task.ID
+	change := controllers.AdaptiveTaskIntentRequest{Intent: "cancel", ExpectedRevision: 1, Reason: "Cancel future work"}
+	w := registryRequest(t, r, http.MethodPost, path+"/intents", change, http.StatusOK)
+	var intent domain.TaskIntent
+	if err := json.Unmarshal(w.Body.Bytes(), &intent); err != nil || intent.Version != 1 || intent.Actor.ID != "local-user" {
+		t.Fatalf("intent attribution: %+v %v", intent, err)
+	}
+	registryRequest(t, r, http.MethodPost, path+"/intents", change, http.StatusConflict)
+	w = registryRequest(t, r, http.MethodGet, path, nil, http.StatusOK)
+	var view controllers.AdaptiveTaskResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &view); err != nil || view.State.Phase != "cancelled" {
+		t.Fatalf("derived cancellation: %+v %v", view.State, err)
+	}
+	w = registryRequest(t, r, http.MethodGet, path+"/intents?limit=1", nil, http.StatusOK)
+	var history controllers.AdaptiveTaskIntentsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &history); err != nil || len(history.Items) != 1 || history.NextCursor != "1" {
+		t.Fatalf("intent history: %+v %v", history, err)
+	}
+	registryRequest(t, r, http.MethodPost, path+"/intents", map[string]any{"intent": "run", "actor": map[string]string{"kind": "USER"}}, http.StatusBadRequest)
+	change.Intent, change.ExpectedVersion = "completed", 1
+	registryRequest(t, r, http.MethodPost, path+"/intents", change, http.StatusBadRequest)
+	registryRequest(t, r, http.MethodGet, "/tasks/missing/intents", nil, http.StatusNotFound)
+	registryRequest(t, r, http.MethodGet, path+"/intents?cursor=-1", nil, http.StatusBadRequest)
+}
+
 func TestAdaptiveTasksProjectPagesAndMissingResources(t *testing.T) {
 	r, _, _ := adaptiveTaskRouter(t)
 	createAdaptiveTaskHTTP(t, r)

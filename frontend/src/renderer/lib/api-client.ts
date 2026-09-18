@@ -71,6 +71,7 @@ const ROUTE_TEMPLATES = [
 	"/api/v1/tasks/{taskId}/criteria/{version}",
 	"/api/v1/tasks/{taskId}/audit",
 	"/api/v1/tasks/{taskId}/attempts",
+	"/api/v1/tasks/{taskId}/intents",
 	"/api/v1/agents",
 	"/api/v1/agent-types",
 	"/api/v1/agent-types/{id}/validate",

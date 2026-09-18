@@ -88,6 +88,9 @@ func (s *Store) ReserveTask(ctx context.Context, request domain.TaskReservation)
 		if err := validateTaskActor(ctx, q, task.ProjectID, request.Mutation.Actor); err != nil {
 			return err
 		}
+		if err := requireTaskRunIntent(ctx, q, task.ID); err != nil {
+			return err
+		}
 		if _, err := q.GetActiveTaskLease(ctx, request.TaskID); err == nil {
 			return ports.ErrTaskLeaseFenced
 		} else if !errors.Is(err, sql.ErrNoRows) {

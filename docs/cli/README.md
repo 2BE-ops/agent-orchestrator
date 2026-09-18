@@ -67,6 +67,13 @@ Every product command resolves to a daemon HTTP route. Run `ao <command>
 
 ### Persistent task planning
 
+`ao task show <id>` includes derived planning/execution state, cancellation
+intent and retained lease facts. `ao task intents <id>` pages control history.
+`ao task set-intent <id> --file <path>` accepts `intent` (`run` or `cancel`),
+`expectedRevision`, `expectedVersion` (zero initially), and `reason`. Cancellation
+blocks new admissions for the task and its descendants; active ownership remains
+reserved for lifecycle cleanup. A `cancelling` state is not proof a worker stopped.
+
 `ao task` (alias `ao tasks`) authors work independently of worker sessions and
 returns JSON. `create <project> --file <path>` accepts the task API body:
 

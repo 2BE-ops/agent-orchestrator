@@ -4,6 +4,37 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 10e — audited intent and derived task state (2026-09-18)
+
+Migration 0158 retains immutable run/cancel instructions with actor/reason,
+planning revision and a separate control-version fence. Store transactions block
+new reservations, worker seeds and native operations for cancelled tasks or
+ancestors. Cancellation never releases ownership or resolves unknown native
+side effects. Existing guards can still be reconciled and leases released after
+verified termination. Current task views derive planned/blocked/ready/leased/
+working/retry-exhausted/cancelling/cancelled state from facts; pending execution
+operations are inspectable without exposing holder tokens or internal owners.
+Two new HTTP routes and `ao task intents`/`set-intent` share the task service.
+Generated OpenAPI/TypeScript and CLI documentation updated together.
+
+Five intent-store tests PASS for restart/history, descendants/unrelated work,
+seed/restore fences, authority/concurrent CAS, retained uncertain execution and
+atomic audit failure. Two service tests, new HTTP intent test, expanded CLI
+tests and native task-worker regression PASS. Full domain, SQLite (50.00s), store
+(26.04s), CDC, task service, CLI (29.61s), telemetry, API-spec and route/envelope
+suites PASS. The full SQLite suite first found the missing migration-ledger
+entry; fixed and the full suite rerun. Full HTTP controllers reproduce only the
+recorded mobile rename-access and Windows file-URL clone baseline failures.
+Backend build, frontend typecheck, 38 API client tests, generated SQL/API drift,
+changed-code pinned lint (0 issues) and whitespace/source review PASS.
+Logs: ignored `*stage10e*`.
+
+Stage 10 foundation is TESTED, not a claim of autonomous dispatch or platform
+completion. Verified result/review/completion state follows in stages 12/13;
+all-entry-point admission, automatic recovery, process cancellation cleanup and
+real graph workflows remain stages 16/20/21/23/25. No user-facing stop action is
+reported successful from the cancellation instruction alone.
+
 ## Stage 10d2 — task worker native launch and restore (2026-09-18)
 
 The trusted manager dispatch path now creates the immutable worker snapshot and

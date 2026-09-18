@@ -27,6 +27,7 @@ func newTaskCommand(ctx *commandContext) *cobra.Command {
 		{"criteria <id> <version>", "/criteria", "Inspect exact acceptance criteria", false, false, true},
 		{"audit <id>", "/audit", "Inspect durable task actions", false, true, false},
 		{"attempts <id>", "/attempts", "Inspect frozen attempts and worker associations", false, true, false},
+		{"intents <id>", "/intents", "Inspect audited admission and cancellation instructions", false, true, false},
 	} {
 		var cursor string
 		var limit int
@@ -81,6 +82,7 @@ func newTaskCommand(ctx *commandContext) *cobra.Command {
 		{"create <project>", "", "Create task intent and optional acceptance criteria", true},
 		{"revise <id>", "/revisions", "Append task planning with expectedRevision and reason", false},
 		{"set-criteria <id>", "/criteria", "Version future acceptance criteria with expectedRevision and reason", false},
+		{"set-intent <id>", "/intents", "Request run or cancellation intent; retains active worker ownership", false},
 	} {
 		var file string
 		cmd := &cobra.Command{Use: spec.use, Short: spec.short, Args: usageArgs(cobra.ExactArgs(1)), RunE: func(cmd *cobra.Command, args []string) error {

@@ -164,6 +164,16 @@ type AdaptiveTaskExecutionResolution struct {
 	CreatedAt     time.Time
 }
 
+type AdaptiveTaskIntent struct {
+	TaskID       string
+	Version      int64
+	TaskRevision int64
+	Intent       string
+	Actor        string
+	Reason       string
+	CreatedAt    time.Time
+}
+
 type AdaptiveTaskLease struct {
 	AttemptID      string
 	TaskID         string

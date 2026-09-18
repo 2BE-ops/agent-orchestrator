@@ -2974,6 +2974,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tasks/{taskId}/intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect audited admission and cancellation instructions */
+        get: operations["listTaskIntents"];
+        put?: never;
+        /** Request run or cancellation intent without releasing worker ownership */
+        post: operations["changeTaskIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tasks/{taskId}/revisions": {
         parameters: {
             query?: never;
@@ -3126,14 +3144,29 @@ export interface components {
             expectedRevision: number;
             reason: string;
         };
+        AdaptiveTaskIntentRequest: {
+            /** Format: int64 */
+            expectedRevision: number;
+            /** Format: int64 */
+            expectedVersion: number;
+            /** @enum {string} */
+            intent: "run" | "cancel";
+            reason: string;
+        };
+        AdaptiveTaskIntentsResponse: {
+            items: components["schemas"]["TaskIntent"][];
+            nextCursor?: string;
+        };
         AdaptiveTaskListResponse: {
             items: components["schemas"]["AdaptiveTaskView"][];
             nextCursor?: string;
         };
         AdaptiveTaskResponse: {
             criteria?: components["schemas"]["AcceptanceCriteriaVersion"];
+            intent: components["schemas"]["TaskIntent"];
             lease?: components["schemas"]["TaskLease"];
             revision: components["schemas"]["TaskRevision"];
+            state: components["schemas"]["AdaptiveTaskState"];
             task: components["schemas"]["AdaptiveTask"];
         };
         AdaptiveTaskReviseRequest: {
@@ -3146,10 +3179,19 @@ export interface components {
             items: components["schemas"]["TaskRevision"][];
             nextCursor?: string;
         };
+        AdaptiveTaskState: {
+            cancelledBy?: string;
+            /** @enum {string} */
+            phase: "planned" | "blocked" | "ready" | "leased" | "working" | "failed" | "cancelling" | "cancelled";
+            reason: string;
+            requiresReconciliation: boolean;
+        };
         AdaptiveTaskView: {
             criteria?: components["schemas"]["AcceptanceCriteriaVersion"];
+            intent: components["schemas"]["TaskIntent"];
             lease?: components["schemas"]["TaskLease"];
             revision: components["schemas"]["TaskRevision"];
+            state: components["schemas"]["AdaptiveTaskState"];
             task: components["schemas"]["AdaptiveTask"];
         };
         AddProjectInput: {
@@ -5287,6 +5329,7 @@ export interface components {
             attempt: components["schemas"]["TaskAttempt"];
             dispatch?: components["schemas"]["TaskWorkerDispatch"];
             lease: components["schemas"]["TaskLease"];
+            pendingExecution?: components["schemas"]["TaskExecutionOperation"];
         };
         TaskAudit: {
             action: string;
@@ -5310,6 +5353,27 @@ export interface components {
             requestedWorker?: components["schemas"]["WorkerSelection"];
             requiredCapabilities: string[] | null;
             title: string;
+        };
+        TaskExecutionOperation: {
+            /** Format: date-time */
+            createdAt: string;
+            id: string;
+            /** @enum {string} */
+            kind: "dispatch" | "restore";
+            sessionId: string;
+        };
+        TaskIntent: {
+            actor: components["schemas"]["AdaptiveActor"];
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            intent: "run" | "cancel";
+            reason: string;
+            taskId: string;
+            /** Format: int64 */
+            taskRevision: number;
+            /** Format: int64 */
+            version: number;
         };
         TaskLease: {
             attemptId: string;
@@ -17630,6 +17694,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AcceptanceCriteriaVersion"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listTaskIntents: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdaptiveTaskIntentsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    changeTaskIntent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdaptiveTaskIntentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskIntent"];
                 };
             };
             /** @description Bad Request */

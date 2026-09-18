@@ -53,6 +53,9 @@ func (s *Store) BeginTaskExecution(ctx context.Context, op domain.TaskExecutionO
 		if taskLeaseFenced(lease, op.Lease) || op.CreatedAt.Before(lease.HeartbeatAt) || (op.Kind == "dispatch" && !op.CreatedAt.Before(lease.ExpiresAt)) {
 			return ports.ErrTaskLeaseFenced
 		}
+		if err := requireTaskRunIntent(ctx, q, lease.TaskID); err != nil {
+			return err
+		}
 		dispatch, err := q.GetTaskWorkerDispatch(ctx, op.Lease.AttemptID)
 		if err != nil {
 			return taskReadError(err)

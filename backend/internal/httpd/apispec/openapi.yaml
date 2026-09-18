@@ -9451,6 +9451,132 @@ paths:
       summary: Inspect exact historical acceptance criteria
       tags:
       - tasks
+  /api/v1/tasks/{taskId}/intents:
+    get:
+      operationId: listTaskIntents
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdaptiveTaskIntentsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect audited admission and cancellation instructions
+      tags:
+      - tasks
+    post:
+      operationId: changeTaskIntent
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdaptiveTaskIntentRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskIntent'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Request run or cancellation intent without releasing worker ownership
+      tags:
+      - tasks
   /api/v1/tasks/{taskId}/revisions:
     get:
       operationId: listTaskRevisions
@@ -9912,6 +10038,38 @@ components:
       - expectedRevision
       - reason
       type: object
+    AdaptiveTaskIntentRequest:
+      properties:
+        expectedRevision:
+          format: int64
+          type: integer
+        expectedVersion:
+          format: int64
+          type: integer
+        intent:
+          enum:
+          - run
+          - cancel
+          type: string
+        reason:
+          type: string
+      required:
+      - intent
+      - expectedVersion
+      - expectedRevision
+      - reason
+      type: object
+    AdaptiveTaskIntentsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TaskIntent'
+          type: array
+        nextCursor:
+          type: string
+      required:
+      - items
+      type: object
     AdaptiveTaskListResponse:
       properties:
         items:
@@ -9927,15 +10085,21 @@ components:
       properties:
         criteria:
           $ref: '#/components/schemas/AcceptanceCriteriaVersion'
+        intent:
+          $ref: '#/components/schemas/TaskIntent'
         lease:
           $ref: '#/components/schemas/TaskLease'
         revision:
           $ref: '#/components/schemas/TaskRevision'
+        state:
+          $ref: '#/components/schemas/AdaptiveTaskState'
         task:
           $ref: '#/components/schemas/AdaptiveTask'
       required:
       - task
       - revision
+      - intent
+      - state
       type: object
     AdaptiveTaskReviseRequest:
       properties:
@@ -9962,19 +10126,49 @@ components:
       required:
       - items
       type: object
+    AdaptiveTaskState:
+      properties:
+        cancelledBy:
+          type: string
+        phase:
+          enum:
+          - planned
+          - blocked
+          - ready
+          - leased
+          - working
+          - failed
+          - cancelling
+          - cancelled
+          type: string
+        reason:
+          type: string
+        requiresReconciliation:
+          type: boolean
+      required:
+      - phase
+      - reason
+      - requiresReconciliation
+      type: object
     AdaptiveTaskView:
       properties:
         criteria:
           $ref: '#/components/schemas/AcceptanceCriteriaVersion'
+        intent:
+          $ref: '#/components/schemas/TaskIntent'
         lease:
           $ref: '#/components/schemas/TaskLease'
         revision:
           $ref: '#/components/schemas/TaskRevision'
+        state:
+          $ref: '#/components/schemas/AdaptiveTaskState'
         task:
           $ref: '#/components/schemas/AdaptiveTask'
       required:
       - task
       - revision
+      - intent
+      - state
       type: object
     AddProjectInput:
       properties:
@@ -15664,6 +15858,8 @@ components:
           $ref: '#/components/schemas/TaskWorkerDispatch'
         lease:
           $ref: '#/components/schemas/TaskLease'
+        pendingExecution:
+          $ref: '#/components/schemas/TaskExecutionOperation'
       required:
       - attempt
       - lease
@@ -15732,6 +15928,57 @@ components:
       - dependencies
       - requiredCapabilities
       - maxAttempts
+      type: object
+    TaskExecutionOperation:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        kind:
+          enum:
+          - dispatch
+          - restore
+          type: string
+        sessionId:
+          type: string
+      required:
+      - id
+      - sessionId
+      - kind
+      - createdAt
+      type: object
+    TaskIntent:
+      properties:
+        actor:
+          $ref: '#/components/schemas/AdaptiveActor'
+        createdAt:
+          format: date-time
+          type: string
+        intent:
+          enum:
+          - run
+          - cancel
+          type: string
+        reason:
+          type: string
+        taskId:
+          type: string
+        taskRevision:
+          format: int64
+          type: integer
+        version:
+          format: int64
+          type: integer
+      required:
+      - taskId
+      - version
+      - taskRevision
+      - intent
+      - actor
+      - reason
+      - createdAt
       type: object
     TaskLease:
       properties:

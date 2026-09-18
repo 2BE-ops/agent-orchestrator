@@ -298,6 +298,13 @@ Only verified connection or termination resolves it. An unknown result survives
 restart for reconciliation. A SQLite resurrection fence rejects restoring a
 released historical task worker, closing the restore-versus-reassignment race.
 
+Task run/cancel instructions use a separate immutable history and optimistic
+version fence (0158), retaining the planning revision that the actor saw.
+Cancellation closes reservation/seed/native-operation admission for the current
+parent chain. Active leases and unresolved native operations remain retained;
+the read projection shows cancelling until lifecycle cleanup confirms release.
+Explicitly resuming an ancestor does not erase a child's own cancellation.
+
 | Control | Deterministic behavior |
 | --- | --- |
 | Pause | Fence new admissions immediately; current tasks continue; retain pending work |

@@ -151,6 +151,9 @@ func (s *Store) CreateTaskWorkerSession(ctx context.Context, token domain.TaskLe
 		if !now.Before(lease.ExpiresAt) || now.Before(lease.HeartbeatAt) {
 			return ports.ErrTaskLeaseFenced
 		}
+		if err := requireTaskRunIntent(ctx, q, task.ID); err != nil {
+			return err
+		}
 		if err := validateTaskActor(ctx, q, task.ProjectID, domain.AdaptiveActor{Kind: "SYSTEM", ID: token.HolderID}); err != nil {
 			return err
 		}

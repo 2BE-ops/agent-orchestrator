@@ -47,6 +47,15 @@ type AdaptiveTaskReviseRequest tasksvc.RevisionInput
 // AdaptiveTaskCriteriaRequest versions acceptance without rewriting attempts.
 type AdaptiveTaskCriteriaRequest tasksvc.CriteriaInput
 
+// AdaptiveTaskIntentRequest changes admission intent, retaining active ownership.
+type AdaptiveTaskIntentRequest tasksvc.IntentInput
+
+// AdaptiveTaskIntentsResponse is explicit control history in version order.
+type AdaptiveTaskIntentsResponse struct {
+	Items      []domain.TaskIntent `json:"items"`
+	NextCursor string              `json:"nextCursor,omitempty"`
+}
+
 // AdaptiveTaskResponse exposes exact planning alongside current lease facts.
 type AdaptiveTaskResponse tasksvc.View
 
