@@ -24,8 +24,8 @@ const (
 // RegistryActor is supplied by the application action context, never by a
 // definition's import payload. It records provenance, not OS-level isolation.
 type RegistryActor struct {
-	Origin RegistryOrigin
-	ID     string
+	Origin RegistryOrigin `json:"origin"`
+	ID     string         `json:"id"`
 }
 
 // RegistryOrigin identifies who created a definition or performed an action.

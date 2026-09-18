@@ -2371,6 +2371,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/worker-executions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read active configuration and bounded execution history */
+        get: operations["listWorkerExecutions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{sessionId}/worker-executions/{executionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read exact retained execution change content */
+        get: operations["getWorkerExecution"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/workspace/diffs": {
         parameters: {
             query?: never;
@@ -4281,6 +4315,10 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        RegistryActor: {
+            id: string;
+            origin: string;
+        };
         RegistryAuditListResponse: {
             events: components["schemas"]["RegistryAuditResponse"][];
             nextCursor?: string;
@@ -5104,6 +5142,56 @@ export interface components {
             name: string;
             /** Format: int64 */
             version: number;
+        };
+        WorkerExecution: {
+            actor: components["schemas"]["RegistryActor"];
+            configuration: components["schemas"]["WorkerConfiguration"];
+            /** Format: date-time */
+            createdAt: string;
+            id: string;
+            /** Format: int64 */
+            previousActivation: number;
+            reason: string;
+            sessionId: string;
+            sourceId: string;
+            /** @enum {string} */
+            sourceKind: "interface_transition" | "agent_switch" | "conversation_settings";
+        };
+        WorkerExecutionActivation: {
+            /** @enum {string} */
+            action: "applied" | "rolled_back";
+            /** Format: date-time */
+            createdAt: string;
+            executionId?: string;
+            operationId: string;
+            /** Format: int64 */
+            sequence: number;
+            sessionId: string;
+        };
+        WorkerExecutionHistoryResponse: {
+            current: null | components["schemas"]["WorkerConfiguration"];
+            /** Format: int64 */
+            currentSequence: number;
+            events: components["schemas"]["WorkerExecutionSummary"][];
+            /** Format: int64 */
+            nextCursor?: number;
+        };
+        WorkerExecutionResponse: {
+            execution: components["schemas"]["WorkerExecution"];
+        };
+        WorkerExecutionSummary: {
+            activation: components["schemas"]["WorkerExecutionActivation"];
+            actor: components["schemas"]["RegistryActor"];
+            config: components["schemas"]["AgentConfig"];
+            contentHash: string;
+            harness: null | string;
+            /** Format: date-time */
+            preparedAt: string;
+            providerBindingId?: string;
+            reason: string;
+            sessionMode: null | string;
+            sourceId: string;
+            sourceKind: string;
         };
         WorkerNativeSettings: {
             approvalMode?: null | string;
@@ -14420,6 +14508,128 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerConfigurationResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listWorkerExecutions: {
+        parameters: {
+            query?: {
+                cursor?: null | number;
+                limit?: null | number;
+            };
+            header?: never;
+            path: {
+                /** @description Session identifier, e.g. project-1. */
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerExecutionHistoryResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getWorkerExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session identifier, e.g. project-1. */
+                sessionId: string;
+                executionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerExecutionResponse"];
                 };
             };
             /** @description Not Found */

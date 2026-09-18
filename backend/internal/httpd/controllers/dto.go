@@ -482,6 +482,25 @@ type WorkerConfigurationResponse struct {
 	Configuration *domain.WorkerConfiguration `json:"configuration"`
 }
 
+// WorkerExecutionResponse exposes exact immutable configuration change facts.
+type WorkerExecutionResponse struct {
+	Execution domain.WorkerExecution `json:"execution"`
+}
+
+// WorkerExecutionHistoryResponse includes a bounded page and current configuration.
+type WorkerExecutionHistoryResponse sessionsvc.WorkerExecutionPage
+
+// WorkerExecutionQuery bounds chronological configuration history.
+type WorkerExecutionQuery struct {
+	Cursor *int64 `query:"cursor,omitempty" minimum:"0"`
+	Limit  *int   `query:"limit,omitempty" minimum:"1" maximum:"100"`
+}
+
+// WorkerExecutionIDParam identifies a configuration change within its session.
+type WorkerExecutionIDParam struct {
+	ExecutionID string `path:"executionId"`
+}
+
 // SpawnSessionResponse includes ephemeral measurements of the final assembled
 // prompt texts. The fields are required so a measured zero remains distinct
 // from a response that never measured prompt sizes.

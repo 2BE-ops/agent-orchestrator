@@ -9,6 +9,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/httpd/apierr"
 	"github.com/aoagents/agent-orchestrator/backend/internal/httpd/controllers"
+	sessionsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/session"
 )
 
 func (f *fakeSessionService) WorkerConfiguration(_ context.Context, id domain.SessionID) (*domain.WorkerConfiguration, error) {
@@ -19,6 +20,38 @@ func (f *fakeSessionService) WorkerConfiguration(_ context.Context, id domain.Se
 		return &domain.WorkerConfiguration{AgentType: domain.WorkerDefinitionRef{ID: "disabled-type", Version: 3}, SystemPrompt: "Retained instructions"}, nil
 	}
 	return nil, apierr.NotFound("SESSION_NOT_FOUND", "Unknown session")
+}
+
+func (f *fakeSessionService) WorkerExecutions(ctx context.Context, id domain.SessionID, after int64, limit int) (sessionsvc.WorkerExecutionPage, error) {
+	configuration, err := f.WorkerConfiguration(ctx, id)
+	return sessionsvc.WorkerExecutionPage{Current: configuration, CurrentSequence: after, Events: []sessionsvc.WorkerExecutionSummary{}}, err
+}
+
+func (f *fakeSessionService) WorkerExecution(_ context.Context, id domain.SessionID, executionID string) (domain.WorkerExecution, error) {
+	if id != "retained" || executionID != "change" {
+		return domain.WorkerExecution{}, apierr.NotFound("WORKER_EXECUTION_NOT_FOUND", "Unknown worker execution")
+	}
+	return domain.WorkerExecution{ID: executionID, SessionID: id, Actor: domain.RegistryActor{Origin: domain.RegistryUser, ID: "human"}}, nil
+}
+
+func TestSessionsAPIWorkerExecutionPaginationAndIsolation(t *testing.T) {
+	srv := newSessionTestServer(t, newFakeSessionService())
+	for _, query := range []string{"?limit=0", "?limit=101", "?limit=no", "?cursor=-1", "?cursor=wrong", "?cursor=999999999999999999999999"} {
+		body, status, _ := doRequest(t, srv, http.MethodGet, "/api/v1/sessions/retained/worker-executions"+query, "")
+		assertErrorCode(t, body, status, http.StatusBadRequest, "INVALID_WORKER_HISTORY_PAGE")
+	}
+	body, status, _ := doRequest(t, srv, http.MethodGet, "/api/v1/sessions/retained/worker-executions?cursor=2&limit=1", "")
+	var page controllers.WorkerExecutionHistoryResponse
+	if err := json.Unmarshal(body, &page); err != nil || status != http.StatusOK || page.CurrentSequence != 2 || page.Current == nil {
+		t.Fatalf("page: %s %v", body, err)
+	}
+	body, status, _ = doRequest(t, srv, http.MethodGet, "/api/v1/sessions/retained/worker-executions/change", "")
+	var detail controllers.WorkerExecutionResponse
+	if err := json.Unmarshal(body, &detail); err != nil || status != http.StatusOK || detail.Execution.Actor.ID != "human" {
+		t.Fatalf("detail: %s %v", body, err)
+	}
+	body, status, _ = doRequest(t, srv, http.MethodGet, "/api/v1/sessions/legacy/worker-executions/change", "")
+	assertErrorCode(t, body, status, http.StatusNotFound, "WORKER_EXECUTION_NOT_FOUND")
 }
 
 func TestSessionsAPIWorkerConfigurationHistory(t *testing.T) {

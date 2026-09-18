@@ -262,6 +262,12 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"ControllersWorkerConfigurationResponse":              "WorkerConfigurationResponse",
 	"DomainWorkerConfiguration":                           "WorkerConfiguration",
 	"DomainConversationSettings":                          "WorkerNativeSettings",
+	"ControllersWorkerExecutionHistoryResponse":           "WorkerExecutionHistoryResponse",
+	"ControllersWorkerExecutionResponse":                  "WorkerExecutionResponse",
+	"SessionWorkerExecutionSummary":                       "WorkerExecutionSummary",
+	"DomainWorkerExecution":                               "WorkerExecution",
+	"DomainWorkerExecutionActivation":                     "WorkerExecutionActivation",
+	"DomainRegistryActor":                                 "RegistryActor",
 	"DomainWorkerSelection":                               "WorkerSelection",
 	"DomainWorkerOverrides":                               "WorkerOverrides",
 	"DomainWorkerDefinitionRef":                           "WorkerDefinitionRef",
@@ -1952,6 +1958,8 @@ func projectOperations() []operation {
 func sessionOperations() []operation {
 	return []operation{
 		{method: http.MethodGet, path: "/api/v1/sessions/{sessionId}/worker-configuration", id: "getWorkerConfiguration", tag: "sessions", summary: "Read the immutable worker launch configuration", pathParams: []any{controllers.SessionIDParam{}}, resps: []respUnit{{http.StatusOK, controllers.WorkerConfigurationResponse{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}},
+		{method: http.MethodGet, path: "/api/v1/sessions/{sessionId}/worker-executions", id: "listWorkerExecutions", tag: "sessions", summary: "Read active configuration and bounded execution history", pathParams: []any{controllers.SessionIDParam{}, controllers.WorkerExecutionQuery{}}, resps: []respUnit{{http.StatusOK, controllers.WorkerExecutionHistoryResponse{}}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}},
+		{method: http.MethodGet, path: "/api/v1/sessions/{sessionId}/worker-executions/{executionId}", id: "getWorkerExecution", tag: "sessions", summary: "Read exact retained execution change content", pathParams: []any{controllers.SessionIDParam{}, controllers.WorkerExecutionIDParam{}}, resps: []respUnit{{http.StatusOK, controllers.WorkerExecutionResponse{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}},
 		{
 			method: http.MethodGet, path: "/api/v1/sessions", id: "listSessions", tag: "sessions",
 			summary:    "List sessions",

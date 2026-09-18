@@ -12,7 +12,7 @@ import { agentSwitchVisibility } from "./agent-switch-visibility";
 import { codexAccountsQueryKey, writeCodexAccounts } from "../hooks/codex-accounts-state";
 import type { components } from "../../api/schema";
 import { editorHandoffQueryKey, editorHandoffQueryRoot } from "../hooks/useEditorHandoff";
-import { registryQueryRoot } from "./registry-api";
+import { registryQueryRoot, workerExecutionsQueryRoot } from "./registry-api";
 
 export type EventTransport = {
 	connect: () => () => void;
@@ -59,6 +59,8 @@ export function createEventTransport(queryClient: QueryClient): EventTransport {
 			const pendingConversationSessions = new Set<string>();
 			const pendingInterfaceTransitionSessions = new Set<string>();
 			const pendingEditorHandoffSessions = new Set<string>();
+			const pendingWorkerExecutionSessions = new Set<string>();
+			let allWorkerExecutionsInvalidationPending = false;
 			let workspaceInvalidationPending = false;
 			let registryInvalidationPending = false;
 			let allConversationsInvalidationPending = false;
@@ -103,6 +105,13 @@ export function createEventTransport(queryClient: QueryClient): EventTransport {
 			// it immediately without waiting out a full window.
 			let lastFlushAt = Number.NEGATIVE_INFINITY;
 			const flushPending = () => {
+				if (allWorkerExecutionsInvalidationPending) {
+					invalidate(workerExecutionsQueryRoot);
+					allWorkerExecutionsInvalidationPending = false;
+				} else {
+					for (const sessionId of pendingWorkerExecutionSessions) invalidate([...workerExecutionsQueryRoot, sessionId]);
+				}
+				pendingWorkerExecutionSessions.clear();
 				if (registryInvalidationPending) {
 					invalidate(registryQueryRoot);
 					registryInvalidationPending = false;
@@ -150,6 +159,7 @@ export function createEventTransport(queryClient: QueryClient): EventTransport {
 					// leaving an open chat frozen on its pre-gap snapshot.
 					allConversationsInvalidationPending = true;
 					registryInvalidationPending = true;
+					allWorkerExecutionsInvalidationPending = true;
 					allEditorHandoffsInvalidationPending = true;
 				}
 				if (event && "data" in event) {
@@ -169,6 +179,7 @@ export function createEventTransport(queryClient: QueryClient): EventTransport {
 								? (decoded.payload as {
 										conversationId?: unknown;
 										interfaceTransitionId?: unknown;
+										workerExecutionSequence?: unknown;
 								  })
 								: undefined;
 						if (decoded.type === "registry_changed") {
@@ -192,6 +203,11 @@ export function createEventTransport(queryClient: QueryClient): EventTransport {
 							pendingConversationSessions.add(decoded.sessionId);
 							conversationOnly = true;
 						}
+						if (
+							decoded.type === "session_updated" &&
+							typeof decoded.sessionId === "string" &&
+							typeof payload?.workerExecutionSequence === "number"
+						) pendingWorkerExecutionSessions.add(decoded.sessionId);
 						if (
 							decoded.type === "session_updated" &&
 							typeof decoded.sessionId === "string" &&

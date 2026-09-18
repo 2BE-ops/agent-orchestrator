@@ -10,6 +10,19 @@ export const registryQueryRoot = ["adaptive-registry"] as const;
 export type PortableRegistryBundle = components["schemas"]["PortableRegistryBundle"];
 export type ProviderBinding = components["schemas"]["ProviderBindingResponse"];
 export type WorkerSelection = components["schemas"]["WorkerSelection"];
+export const workerExecutionsQueryRoot = ["worker-executions"] as const;
+
+export async function listWorkerExecutions(sessionId: string, cursor = 0) {
+	const result = await apiClient.GET("/api/v1/sessions/{sessionId}/worker-executions", { params: { path: { sessionId }, query: { cursor, limit: 20 } } });
+	if (result.error) throw new Error(apiErrorMessage(result.error));
+	return result.data!;
+}
+
+export async function getWorkerExecution(sessionId: string, executionId: string) {
+	const result = await apiClient.GET("/api/v1/sessions/{sessionId}/worker-executions/{executionId}", { params: { path: { sessionId, executionId } } });
+	if (result.error) throw new Error(apiErrorMessage(result.error));
+	return result.data!.execution;
+}
 
 export async function getRegistryVersion(kind: RegistryKind, id: string, version: number) {
 	const path = kind === "agent_type" ? "/api/v1/agent-types/{id}/versions/{version}" : "/api/v1/skills/{id}/versions/{version}";

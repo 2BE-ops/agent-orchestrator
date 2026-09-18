@@ -6,6 +6,9 @@ import { WorkerConfigurationInspector } from "./WorkerConfigurationInspector";
 
 const read = vi.hoisted(() => vi.fn());
 vi.mock("../lib/registry-api", () => ({ getWorkerConfiguration: read }));
+vi.mock("./WorkerExecutionHistory", () => ({
+	WorkerExecutionHistory: () => null,
+}));
 function mount() {
 	return render(
 		<QueryClientProvider

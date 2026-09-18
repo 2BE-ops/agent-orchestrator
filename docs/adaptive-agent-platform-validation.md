@@ -4,6 +4,44 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 09c4 — execution history API/UI and native turn (2026-09-18)
+
+Two session-scoped read routes expose the active configuration, bounded
+chronological activation summaries, and lazily requested exact change content.
+Rollback summaries show the restored destination while preserving the original
+operation's actor/reason. Pages exclude activations newer than the configuration
+read; cursor/limit bounds and cross-session reads are checked. The inspector
+separates immutable launch facts from current configuration and later changes,
+with loading, empty, error/retry, pagination and retained-content disclosure.
+Trigger CDC and reconnect invalidate its history cache.
+
+Service/API tests PASS for rollback destinations, pagination, concurrent reads,
+invalid cursors/limits, absent/legacy sessions and cross-session isolation. All
+75 focused frontend tests (four files) PASS. Complete domain, session service
+(55.97s), HTTP router/envelope and API-spec suites PASS. The full controller suite
+reproduces only the two previously documented Windows baseline failures (mobile
+pairing rename and file-URL clone). Backend/lab-daemon builds, affected vet,
+frontend typecheck and pinned changed-code lint PASS (0 issues). Generated
+contracts and complete source/whitespace diff reviewed.
+
+The existing isolated Electron lab was refreshed without reinstalling or using
+real AO data. The original never-prompted Codex thread (`standalone-1`) reported
+`no rollout found` on resume after its host stopped; preserve this empty-native-
+thread recovery case for stage 23 rather than claiming a successful resume.
+A second Type-v3/Skill-v1 Codex Chat worker (`standalone-2`) launched with 201.
+Using the real effort picker to select Low returned 200, created execution
+`c1d817db-5517-402d-8b35-dc5cf2589974`, and refreshed the inspector through CDC.
+The provider answered the bounded, no-tools prompt with `adaptive-worker-ready`.
+Lazy details and renderer reload passed. Killing only the isolated Electron main
+and daemon (leaving its native chat host alive), then restarting both, retained
+the reply, original configuration, execution event and Low setting; the worker
+reconnected with no disconnected-controller banner. Screenshots were inspected:
+`electron-execution-changed.png`, `electron-execution-restarted.png` (ignored).
+
+Provider-owned live controls outside the per-turn settings endpoint and broader
+heterogeneous validation still remain; stage 09 is not marked complete.
+Evidence logs/scripts: ignored `*stage09c4*` and `*execution*` files.
+
 ## Stage 09c3 — durable per-turn settings attribution (2026-09-18)
 
 Configured Chat workers validate model, effort, permissions and native binding

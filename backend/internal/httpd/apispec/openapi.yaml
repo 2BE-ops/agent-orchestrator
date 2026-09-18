@@ -7158,6 +7158,116 @@ paths:
       summary: Read the immutable worker launch configuration
       tags:
       - sessions
+  /api/v1/sessions/{sessionId}/worker-executions:
+    get:
+      operationId: listWorkerExecutions
+      parameters:
+      - description: Session identifier, e.g. project-1.
+        in: path
+        name: sessionId
+        required: true
+        schema:
+          description: Session identifier, e.g. project-1.
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          minimum: 0
+          type:
+          - "null"
+          - integer
+      - in: query
+        name: limit
+        schema:
+          maximum: 100
+          minimum: 1
+          type:
+          - "null"
+          - integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerExecutionHistoryResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Read active configuration and bounded execution history
+      tags:
+      - sessions
+  /api/v1/sessions/{sessionId}/worker-executions/{executionId}:
+    get:
+      operationId: getWorkerExecution
+      parameters:
+      - description: Session identifier, e.g. project-1.
+        in: path
+        name: sessionId
+        required: true
+        schema:
+          description: Session identifier, e.g. project-1.
+          type: string
+      - in: path
+        name: executionId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerExecutionResponse'
+          description: OK
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Read exact retained execution change content
+      tags:
+      - sessions
   /api/v1/sessions/{sessionId}/workspace/diffs:
     post:
       operationId: getSessionWorkspaceDiffs
@@ -12797,6 +12907,16 @@ components:
       - expectedRevision
       - reason
       type: object
+    RegistryActor:
+      properties:
+        id:
+          type: string
+        origin:
+          type: string
+      required:
+      - origin
+      - id
+      type: object
     RegistryAuditListResponse:
       properties:
         events:
@@ -14937,6 +15057,139 @@ components:
       - version
       - name
       - contentHash
+      type: object
+    WorkerExecution:
+      properties:
+        actor:
+          $ref: '#/components/schemas/RegistryActor'
+        configuration:
+          $ref: '#/components/schemas/WorkerConfiguration'
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        previousActivation:
+          format: int64
+          type: integer
+        reason:
+          type: string
+        sessionId:
+          type: string
+        sourceId:
+          type: string
+        sourceKind:
+          enum:
+          - interface_transition
+          - agent_switch
+          - conversation_settings
+          type: string
+      required:
+      - id
+      - sessionId
+      - sourceKind
+      - sourceId
+      - previousActivation
+      - configuration
+      - actor
+      - reason
+      - createdAt
+      type: object
+    WorkerExecutionActivation:
+      properties:
+        action:
+          enum:
+          - applied
+          - rolled_back
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        executionId:
+          type: string
+        operationId:
+          type: string
+        sequence:
+          format: int64
+          type: integer
+        sessionId:
+          type: string
+      required:
+      - sequence
+      - sessionId
+      - operationId
+      - action
+      - createdAt
+      type: object
+    WorkerExecutionHistoryResponse:
+      properties:
+        current:
+          anyOf:
+          - type: "null"
+          - $ref: '#/components/schemas/WorkerConfiguration'
+            type: object
+        currentSequence:
+          format: int64
+          type: integer
+        events:
+          items:
+            $ref: '#/components/schemas/WorkerExecutionSummary'
+          type: array
+        nextCursor:
+          format: int64
+          type: integer
+      required:
+      - current
+      - currentSequence
+      - events
+      type: object
+    WorkerExecutionResponse:
+      properties:
+        execution:
+          $ref: '#/components/schemas/WorkerExecution'
+      required:
+      - execution
+      type: object
+    WorkerExecutionSummary:
+      properties:
+        activation:
+          $ref: '#/components/schemas/WorkerExecutionActivation'
+        actor:
+          $ref: '#/components/schemas/RegistryActor'
+        config:
+          $ref: '#/components/schemas/AgentConfig'
+        contentHash:
+          type: string
+        harness:
+          type:
+          - "null"
+          - string
+        preparedAt:
+          format: date-time
+          type: string
+        providerBindingId:
+          type: string
+        reason:
+          type: string
+        sessionMode:
+          type:
+          - "null"
+          - string
+        sourceId:
+          type: string
+        sourceKind:
+          type: string
+      required:
+      - activation
+      - actor
+      - reason
+      - sourceKind
+      - sourceId
+      - harness
+      - sessionMode
+      - config
+      - contentHash
+      - preparedAt
       type: object
     WorkerNativeSettings:
       properties:

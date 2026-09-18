@@ -169,6 +169,8 @@ func (c *SessionsController) Register(r chi.Router) {
 	r.Post("/sessions/cleanup", c.cleanup)
 	r.Get("/sessions/{sessionId}", c.get)
 	r.Get("/sessions/{sessionId}/worker-configuration", c.workerConfiguration)
+	r.Get("/sessions/{sessionId}/worker-executions", c.workerExecutions)
+	r.Get("/sessions/{sessionId}/worker-executions/{executionId}", c.workerExecution)
 	r.Get("/sessions/{sessionId}/preview", c.preview)
 	r.Post("/sessions/{sessionId}/preview", c.setPreview)
 	r.Delete("/sessions/{sessionId}/preview", c.clearPreview)
