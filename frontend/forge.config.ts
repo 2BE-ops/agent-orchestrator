@@ -219,12 +219,12 @@ const config: ForgeConfig = {
 				const socket = path.join(tmpdir(), `ao-tmux-smoke-${process.pid}.sock`);
 				const smoke = spawnSync(binary, ["-S", socket, "-f", "/dev/null", "new-session", "-d", "true"], {
 					encoding: "utf8",
+					timeout: 5_000,
 				});
 				try {
-					if (smoke.status !== 0) {
-						throw new Error(
-							`packaged tmux could not create a session at ${binary}: ${smoke.stderr || smoke.stdout}`,
-						);
+					if (smoke.error || smoke.status !== 0) {
+						const detail = smoke.error?.message || smoke.stderr || smoke.stdout;
+						throw new Error(`packaged tmux could not create a session at ${binary}: ${detail}`);
 					}
 				} finally {
 					spawnSync(binary, ["-S", socket, "kill-server"], { stdio: "ignore" });
