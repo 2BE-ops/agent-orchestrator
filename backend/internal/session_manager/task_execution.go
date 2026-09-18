@@ -48,6 +48,9 @@ func (m *Manager) taskDispatchReplay(ctx context.Context, cfg ports.SpawnConfig)
 		return domain.SessionRecord{}, false, err
 	}
 	if !found {
+		if m.taskContexts == nil {
+			return domain.SessionRecord{}, false, taskExecutionUnavailable()
+		}
 		if lease.NeedsReconciliation(m.clock()) {
 			return domain.SessionRecord{}, false, taskExecutionFenced(ports.ErrTaskLeaseFenced)
 		}

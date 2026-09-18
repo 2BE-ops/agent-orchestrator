@@ -4,6 +4,42 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 11c2 — bounded builder and native consumption (2026-09-19)
+
+The shared builder seals input after actual workspace provisioning and before
+native launch. It includes frozen task/criteria/dependency planning, versioned
+parent planning, explicitly selected files, accepted relevant knowledge and exact
+Type/Skill references. Knowledge is ranked by pin, task links, category and general
+project relevance, capped at 32 candidates plus a truncation marker. Prompt bytes,
+estimated tokens, per-source bytes and source counts are bounded; optional omissions
+retain reasons. Required inputs that cannot fit prevent launch. Files use os.Root,
+component symlink rejection, regular-file identity checks and bounded UTF-8 reads;
+known credential paths are excluded. This path screen is not a secret scanner.
+
+TUI and Chat launch consume the sealed prompt. Fresh TUI restoration reads the
+original prompt despite changed files/knowledge/fallback metadata; native Chat
+resume retains provider history without duplicating the initial turn. Missing
+context requires reconciliation. Seal failure retains attempt/native reservations.
+
+Five native context tests cover both interfaces, replay, budgets, frozen planning,
+parent provenance and seal failure. A ranked/bounded knowledge-query test and file
+screening tests PASS; symlink creation is SKIPPED (Windows privilege unavailable).
+All focused context/task-native/store tests PASS (manager 0.984s, store 1.171s).
+Full domain, SQLite (45.497s), store (20.382s), CDC, context/task services, Chat
+(44.981s), session (56.648s), backend build and affected-package/changed-native
+pinned lint PASS (0 issues). Full manager retains exactly the eight previously
+recorded Windows baseline failures. Full daemon exposes a cwd/TempDir cleanup
+failure, reproduced alone on current code and the pre-09 archive; it is not a
+context regression. The test registers cwd restoration before TempDir cleanup,
+which runs first and cannot delete Windows' current directory. Stage 24 must fix
+that ordering. Logs: ignored `*stage11c2*`.
+
+Budget fixtures were corrected to allow AO's real standing instructions before
+testing optional-source headroom. A test-only import grouping lint issue was
+corrected and lint rerun. These are recording native adapters, not live provider
+validation. Previous findings/interface contracts integrate after typed results
+in stage 12; context API/CLI inspection follows in 11c3, desktop inspection in 21/22.
+
 ## Stage 11c1 — sealed context persistence (2026-09-18)
 
 Migration 0161 adds an immutable context manifest per attempt/session, linked to

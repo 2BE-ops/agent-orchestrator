@@ -1,6 +1,6 @@
 # Adaptive agent platform implementation checklist
 
-Last updated: 2026-09-18. Starting upstream commit:
+Last updated: 2026-09-19. Starting upstream commit:
 `684d6d67db004e180f7ac9c649ce92840491ea4d`.
 
 This is the persistent execution plan for the assignment. Registry persistence
@@ -56,7 +56,7 @@ Stage 03 completes with this commit.
 | 08 | Provider/capability integration and binding UI | VALIDATED IN RUNNING APP | Native ConfigSpec/model/readiness integration, mode-aware Chat inspection, immutable-target provider references, migration 0150, strict API and desktop binding editor/checks. Domain/registry/SQLite/Codex/spec suites, focused API tests, 46 frontend tests, typecheck, builds, vet and changed-code lint PASS. Real Electron create/bind v3/disable rejection/re-enable/readiness/reload verified. Custom-provider fixtures pass; live custom-provider and worker launch evidence remains stages 09/25. Baseline Windows suite/lint gaps recorded. Stage 07 pushed as `ac7e7cc26`. |
 | 09 | Worker snapshots and manual Agent Type launch | TESTED | Pushed through 09c4 `dd348ec1e`; 09c5 completes recoverable provider-owned controls (0153), retained native settings, dispatch/ownership fences and queue recovery. Shared launch/restore/resources, CLI/API/composer, interface/harness/per-turn execution history and live inspector complete. Full domain/registry/SQLite/store/Chat/session, focused manager, API-spec, build/vet/typecheck/changed-code lint and 40 latest frontend tests PASS. Native Codex reply-only turn, effort/history, renderer and full desktop/daemon restart validated in 09c4. Broader live combinations and empty never-prompted native thread recovery remain stage 23/25; Windows baseline suite gaps recorded. |
 | 10 | Task DAG, revisions, criteria and leases | TESTED | Pushed through 10d2 `ec7d2a9b1`; 10e adds audited run/cancel intent (0158), descendant admission fences, derived planning/lease/cancellation state, pending native operation inspection, API/CLI. Five intent-store tests, two state tests, HTTP/CLI, full domain/SQLite/task/CLI/spec suites, native task regression, 38 frontend tests, typecheck/build/lint PASS. Known Windows HTTP/manager gaps retained. Review/completion facts depend on 12/13; shared scheduling/reconciliation/control cleanup and live graph remain 16/20/21/23/25. |
-| 11 | Knowledge, bounded context and manifests | IN PROGRESS | 11a `3c2abd08b` and 11b `7c16c277a` pushed. 11c1 adds immutable context manifests (0161), exact prompt/source hashes, bounded explicit file selections and transactional launch/knowledge/criteria validation. Full domain/SQLite/store/CDC/task/spec, backend build and affected-package lint PASS; frontend contracts regenerated. Next: bounded context builder, native launch/replay and inspection; management UI follows stage 22. |
+| 11 | Knowledge, bounded context and manifests | IN PROGRESS | Pushed through 11c1 `94e6a1270`. 11c2 implements bounded context selection, accepted knowledge ranking, confined file reads, native TUI/Chat input and historical restoration. Five native context tests, knowledge selection, file checks, full domain/SQLite/store/CDC/context/task/Chat/session, build and lint PASS. Symlink test skipped for Windows privilege; manager eight baseline failures and daemon cleanup baseline reproduced. Next: API/CLI inspection; findings/contracts extend context in 12, management UI in 22. |
 | 12 | Worker result schema and typed communication | NOT STARTED | Ownership, bounded payloads, persistent idempotent delivery |
 | 13 | Evaluator and attributable performance history | NOT STARTED | Objective evidence, target commits, sample sizes |
 | 14 | Persistent Agent Manager service/controller/tools | NOT STARTED | Native harness execution; validated proposals and durable inbox |
@@ -82,6 +82,10 @@ Stage 03 completes with this commit.
 - The full pinned linter finds existing Windows-specific failures outside stage
   05: `persistenthost/host_race_test.go` references `syscall.Kill`, and process
   helpers have errcheck/errorlint/gosec findings. Relevant stage 05 packages pass.
+- Stage 11c2's symlink-read test cannot create symlinks on this Windows account;
+  run on Linux/CI. Daemon `TestStabilizeWorkingDirectoryChdirsToDataDir` also fails
+  on the pre-09 archive: its TempDir cleanup precedes restoration of the working
+  directory, so Windows refuses deletion. Correct cleanup ordering in stage 24.
 - Latest fetched upstream is `795286c4e1a58a53269f687974c820cc10561b08`.
   Its two new commits change Claude auth readiness and tab UI, with no migration
   collision. They are assessed but not yet incorporated; current base remains

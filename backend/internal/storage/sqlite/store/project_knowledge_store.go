@@ -15,6 +15,38 @@ import (
 )
 
 var _ ports.ProjectKnowledgeStore = (*Store)(nil)
+var _ ports.ContextKnowledgeStore = (*Store)(nil)
+
+// SelectContextKnowledge excludes unreviewed, invalidated and unrelated claims
+// before returning any content. The extra 33rd row permits a bounded truncation
+// signal without loading an entire project's history into memory.
+func (s *Store) SelectContextKnowledge(ctx context.Context, projectID domain.ProjectID, taskIDs []string, category string, limit int) ([]domain.KnowledgeVersion, error) {
+	if projectID == "" || len(taskIDs) == 0 || len(taskIDs) > 34 || len(category) > 100 || limit < 1 || limit > 33 {
+		return nil, ports.ErrKnowledgeInvalid
+	}
+	for _, id := range taskIDs {
+		if strings.TrimSpace(id) == "" || len(id) > 200 {
+			return nil, ports.ErrKnowledgeInvalid
+		}
+	}
+	ids, err := json.Marshal(taskIDs)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.qr.SelectContextKnowledge(ctx, gen.SelectContextKnowledgeParams{ProjectID: string(projectID), TaskIds: string(ids), Category: category, PageLimit: int64(limit)})
+	if err != nil {
+		return nil, err
+	}
+	versions := make([]domain.KnowledgeVersion, 0, len(rows))
+	for _, row := range rows {
+		version, err := knowledgeVersionFromRow(gen.ProjectKnowledgeVersion(row))
+		if err != nil {
+			return nil, err
+		}
+		versions = append(versions, version)
+	}
+	return versions, nil
+}
 
 func knowledgeReadError(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {

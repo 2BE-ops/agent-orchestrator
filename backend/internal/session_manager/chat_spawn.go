@@ -336,6 +336,10 @@ func (m *Manager) resumeChatController(
 	if taskExecution != nil {
 		controllerGeneration = taskExecution.ID
 	}
+	rec, err = m.restoreTaskContext(ctx, rec)
+	if err != nil {
+		return RestoreResult{}, err
+	}
 
 	// Recomputed rather than persisted, matching the terminal path: a restored
 	// session keeps its standing instructions across the relaunch.

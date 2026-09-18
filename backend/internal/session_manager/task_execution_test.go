@@ -10,6 +10,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/lifecycle"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	registrysvc "github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
+	"github.com/aoagents/agent-orchestrator/backend/internal/service/taskcontext"
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite"
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite/sqlitetest"
 )
@@ -24,7 +25,7 @@ type taskWorkerFixture struct {
 	native   *workerNative
 }
 
-func newTaskWorkerFixture(t *testing.T, mode domain.SessionMode) taskWorkerFixture {
+func newTaskWorkerFixture(t *testing.T, mode domain.SessionMode, contextFiles ...string) taskWorkerFixture {
 	t.Helper()
 	ctx := context.Background()
 	s := sqlitetest.MustOpen(t)
@@ -41,7 +42,7 @@ func newTaskWorkerFixture(t *testing.T, mode domain.SessionMode) taskWorkerFixtu
 	selection := &domain.WorkerSelection{AgentTypeID: entry.Entry.ID, Version: 1}
 	criteria := domain.AcceptanceCriteria{Criteria: []domain.AcceptanceCriterion{{ID: "review", Requirement: "Provide verified evidence", EvidenceKind: "review"}}}
 	actor := domain.AdaptiveActor{Kind: "USER", ID: "human"}
-	if _, err := s.CreateAdaptiveTask(ctx, "task", "task-project", domain.TaskDefinition{Title: "Bounded task", Brief: "Follow fixed criteria", MaxAttempts: 3, RequestedWorker: selection}, &criteria, domain.TaskMutation{Actor: actor, Reason: "Plan task"}); err != nil {
+	if _, err := s.CreateAdaptiveTask(ctx, "task", "task-project", domain.TaskDefinition{Title: "Bounded task", Brief: "Follow fixed criteria", MaxAttempts: 3, RequestedWorker: selection, ContextFiles: contextFiles}, &criteria, domain.TaskMutation{Actor: actor, Reason: "Plan task"}); err != nil {
 		t.Fatal(err)
 	}
 	_, lease, err := s.ReserveTask(ctx, domain.TaskReservation{ID: "attempt", TaskID: "task", LaunchIntentID: "launch-intent", HolderID: "scheduler", Mutation: domain.TaskMutation{Actor: actor, ExpectedRevision: 1, Reason: "Dispatch task"}, Now: time.Now().UTC(), TTL: 5 * time.Minute})
@@ -51,7 +52,7 @@ func newTaskWorkerFixture(t *testing.T, mode domain.SessionMode) taskWorkerFixtu
 	runtime := &fakeRuntime{}
 	launcher := &recordingLauncher{}
 	messenger := &fakeMessenger{}
-	manager := New(Deps{Store: s, Runtime: runtime, Agents: singleAgent{agent: &recordingAgent{}}, Workspace: &fakeWorkspace{path: t.TempDir()}, Messenger: messenger, Lifecycle: lifecycle.New(s, messenger), Chat: launcher, DataDir: t.TempDir(), WorkerConfigurations: registry, LookPath: func(string) (string, error) { return "test-agent", nil }})
+	manager := New(Deps{Store: s, Runtime: runtime, Agents: singleAgent{agent: &recordingAgent{}}, Workspace: &fakeWorkspace{path: t.TempDir()}, Messenger: messenger, Lifecycle: lifecycle.New(s, messenger), Chat: launcher, DataDir: t.TempDir(), WorkerConfigurations: registry, TaskContexts: taskcontext.New(s), LookPath: func(string) (string, error) { return "test-agent", nil }})
 	return taskWorkerFixture{manager: manager, store: s, lease: lease, cfg: ports.SpawnConfig{ProjectID: "task-project", Kind: domain.KindWorker, WorkerSelection: selection, TaskLease: &lease.TaskLeaseToken, Prompt: "Do the task"}, runtime: runtime, launcher: launcher, native: native}
 }
 

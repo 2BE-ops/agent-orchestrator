@@ -62,6 +62,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systemcheck"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systeminstall"
 	tasksvc "github.com/aoagents/agent-orchestrator/backend/internal/service/task"
+	"github.com/aoagents/agent-orchestrator/backend/internal/service/taskcontext"
 	usagesvc "github.com/aoagents/agent-orchestrator/backend/internal/service/usage"
 	"github.com/aoagents/agent-orchestrator/backend/internal/skillassets"
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite"
@@ -516,6 +517,11 @@ func Run() error {
 		SetWorkerConfigurationResolver(ports.WorkerConfigurationResolver)
 	}); ok {
 		configured.SetWorkerConfigurationResolver(registrySvc)
+	}
+	if configured, ok := sessMgr.(interface {
+		SetTaskContextBuilder(ports.TaskContextBuilder)
+	}); ok {
+		configured.SetTaskContextBuilder(taskcontext.New(store))
 	}
 	if tunable, ok := sessMgr.(interface {
 		SetModelCatalog(interface {

@@ -28,3 +28,9 @@ type TaskContextRequest struct {
 type TaskContextBuilder interface {
 	Build(context.Context, TaskContextRequest) (domain.TaskContextSnapshot, error)
 }
+
+// ContextKnowledgeStore selects a bounded accepted cohort, ordered by explicit
+// pin, task relevance, category relevance, then general project knowledge.
+type ContextKnowledgeStore interface {
+	SelectContextKnowledge(context.Context, domain.ProjectID, []string, string, int) ([]domain.KnowledgeVersion, error)
+}

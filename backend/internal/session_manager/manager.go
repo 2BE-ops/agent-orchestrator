@@ -374,6 +374,7 @@ type Manager struct {
 	workspace            ports.Workspace
 	store                Store
 	workerConfigurations ports.WorkerConfigurationResolver
+	taskContexts         ports.TaskContextBuilder
 	// agentSwitchReporting supplies the exact authorization snapshot immediately
 	// before each failure-aware store transaction. Nil is fail-closed.
 	agentSwitchReporting ports.AgentSwitchReportingPolicy
@@ -525,6 +526,11 @@ func (m *Manager) SetModelCatalog(catalog interface {
 // SetWorkerConfigurationResolver binds registry resolution before reconciliation.
 func (m *Manager) SetWorkerConfigurationResolver(resolver ports.WorkerConfigurationResolver) {
 	m.workerConfigurations = resolver
+}
+
+// SetTaskContextBuilder binds context sealing before task dispatch is admitted.
+func (m *Manager) SetTaskContextBuilder(builder ports.TaskContextBuilder) {
+	m.taskContexts = builder
 }
 
 // latestUserPromptRecorder narrows the post-delivery write to the pane prompt's
@@ -689,6 +695,7 @@ const (
 // Deps are the collaborators a Session Manager needs; New wires them together.
 type Deps struct {
 	WorkerConfigurations ports.WorkerConfigurationResolver
+	TaskContexts         ports.TaskContextBuilder
 	Runtime              runtimeController
 	Agents               ports.AgentResolver
 	Workspace            ports.Workspace
@@ -748,6 +755,7 @@ func New(d Deps) *Manager {
 		workspace:                      d.Workspace,
 		store:                          d.Store,
 		workerConfigurations:           d.WorkerConfigurations,
+		taskContexts:                   d.TaskContexts,
 		agentSwitchReporting:           d.ReportingPolicy,
 		daemonRunID:                    strings.TrimSpace(d.DaemonRunID),
 		defaults:                       d.Defaults,
@@ -1046,6 +1054,19 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 			m.logger.Warn("spawn: exclude attachments dir", "sessionID", id, "error", err)
 		}
 		prompt = appendAttachmentReferences(prompt, refs)
+	}
+
+	if taskExecution != nil {
+		contextSnapshot, contextErr := m.taskContexts.Build(ctx, ports.TaskContextRequest{
+			Lease: *cfg.TaskLease, SessionID: id, ExecutionOperationID: taskExecution.ID,
+			WorkspacePath: ws.Path, Prompt: prompt, SystemPrompt: systemPrompt,
+		})
+		if contextErr != nil {
+			m.rollbackSeedSpawnWorkspace(ctx, rec, ws, workspaceProject, false)
+			return domain.SessionRecord{}, 0, 0, wrapSpawnStage(id, ErrSpawnPrompt, contextErr)
+		}
+		prompt = contextSnapshot.Prompt
+		promptBytes = len(prompt)
 	}
 
 	// Everything above is shared: project, harness, prompts, seed row, worktree,
@@ -2530,6 +2551,10 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 	}
 	if taskExecution != nil {
 		reservedGeneration = taskExecution.ID
+	}
+	rec, err = m.restoreTaskContext(ctx, rec)
+	if err != nil {
+		return RestoreResult{}, err
 	}
 
 	agent, ok := m.agents.Agent(rec.Harness)

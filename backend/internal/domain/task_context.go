@@ -36,7 +36,7 @@ func (b ContextBudget) Validate() error {
 // ContextSource records both immutable provenance and what actually reached the
 // prompt. Referenced Skills remain sealed resources rather than eager file dumps.
 type ContextSource struct {
-	Kind        string `json:"kind" enum:"task,criteria,parent,dependency,knowledge,file,agent_type,skill,result,interface_contract"`
+	Kind        string `json:"kind" enum:"task,criteria,parent,dependency,knowledge,file,agent_type,skill,result,interface_contract,selection"`
 	ID          string `json:"id"`
 	Version     int64  `json:"version,omitempty"`
 	SourceHash  string `json:"sourceHash,omitempty"`
@@ -155,7 +155,7 @@ func (s TaskContextSnapshot) Validate() error {
 	task, criteria := false, false
 	for _, source := range s.Sources {
 		switch source.Kind {
-		case "task", "criteria", "parent", "dependency", "knowledge", "file", "agent_type", "skill", "result", "interface_contract":
+		case "task", "criteria", "parent", "dependency", "knowledge", "file", "agent_type", "skill", "result", "interface_contract", "selection":
 		default:
 			return fmt.Errorf("unknown task context source kind")
 		}
@@ -164,6 +164,9 @@ func (s TaskContextSnapshot) Validate() error {
 			return fmt.Errorf("invalid or duplicate context source")
 		}
 		seen[key] = true
+		if source.Kind == "selection" && source.Disposition != "omitted" {
+			return fmt.Errorf("selection summaries may only record omissions")
+		}
 		if source.Kind == "file" && !ValidContextFilePath(source.ID) {
 			return fmt.Errorf("context file escapes the workspace")
 		}

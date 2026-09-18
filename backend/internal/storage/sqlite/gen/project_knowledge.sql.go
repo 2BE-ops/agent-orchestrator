@@ -228,3 +228,73 @@ func (q *Queries) ListProjectKnowledge(ctx context.Context, arg ListProjectKnowl
 	}
 	return items, nil
 }
+
+const selectContextKnowledge = `-- name: SelectContextKnowledge :many
+WITH relevant AS (
+  SELECT v.knowledge_id, v.number, v.definition, v.content_hash, v.actor, v.reason, v.created_at,
+    CASE
+      WHEN json_extract(v.definition,'$.pinned')=1 THEN 0
+      WHEN EXISTS (SELECT 1 FROM json_each(v.definition,'$.taskIds') t JOIN json_each(?2) requested ON t.value=requested.value) THEN 1
+      WHEN ?3<>'' AND EXISTS (SELECT 1 FROM json_each(v.definition,'$.tags') tag WHERE tag.value=?3) THEN 2
+      WHEN COALESCE(json_array_length(v.definition,'$.taskIds'),0)=0 AND COALESCE(json_array_length(v.definition,'$.tags'),0)=0 THEN 3
+      ELSE 4
+    END AS relevance
+  FROM project_knowledge k JOIN project_knowledge_versions v ON v.knowledge_id=k.id AND v.number=k.version
+  WHERE k.project_id=?4 AND json_extract(v.definition,'$.status')='accepted'
+)
+SELECT knowledge_id,number,definition,content_hash,actor,reason,created_at FROM relevant
+WHERE relevance<4 ORDER BY relevance,knowledge_id LIMIT ?1
+`
+
+type SelectContextKnowledgeParams struct {
+	PageLimit int64
+	TaskIds   interface{}
+	Category  interface{}
+	ProjectID string
+}
+
+type SelectContextKnowledgeRow struct {
+	KnowledgeID string
+	Number      int64
+	Definition  string
+	ContentHash string
+	Actor       string
+	Reason      string
+	CreatedAt   time.Time
+}
+
+func (q *Queries) SelectContextKnowledge(ctx context.Context, arg SelectContextKnowledgeParams) ([]SelectContextKnowledgeRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectContextKnowledge,
+		arg.PageLimit,
+		arg.TaskIds,
+		arg.Category,
+		arg.ProjectID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SelectContextKnowledgeRow{}
+	for rows.Next() {
+		var i SelectContextKnowledgeRow
+		if err := rows.Scan(
+			&i.KnowledgeID,
+			&i.Number,
+			&i.Definition,
+			&i.ContentHash,
+			&i.Actor,
+			&i.Reason,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
