@@ -88,6 +88,54 @@ type AdaptiveRegistryVersion struct {
 	CreatedAt     time.Time
 }
 
+type AdaptiveTask struct {
+	ID        string
+	ProjectID string
+	Revision  int64
+	ParentID  sql.NullString
+	CreatedBy string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type AdaptiveTaskAudit struct {
+	Seq       int64
+	TaskID    string
+	Revision  int64
+	Action    string
+	Actor     string
+	Reason    string
+	CreatedAt time.Time
+}
+
+type AdaptiveTaskCriterium struct {
+	TaskID          string
+	Number          int64
+	PreviousVersion sql.NullInt64
+	Definition      string
+	ContentHash     string
+	Actor           string
+	Reason          string
+	CreatedAt       time.Time
+}
+
+type AdaptiveTaskDependency struct {
+	ProjectID    string
+	TaskID       string
+	DependencyID string
+}
+
+type AdaptiveTaskRevision struct {
+	TaskID          string
+	Number          int64
+	CriteriaVersion sql.NullInt64
+	Definition      string
+	ContentHash     string
+	Actor           string
+	Reason          string
+	CreatedAt       time.Time
+}
+
 type AdaptiveWorkerConfiguration struct {
 	SessionID        string
 	AgentTypeID      string

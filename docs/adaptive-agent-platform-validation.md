@@ -4,6 +4,30 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 10a — durable task planning and criteria (2026-09-18)
+
+Migrations 0154–0155 add task CDC and project-scoped task identities, immutable
+planning/criteria revisions, bounded parent/dependency graphs and append-only
+audit. One transaction validates the entire affected graph, advances its revision
+with optimistic concurrency, replaces active edges and emits trigger CDC. Workers
+and Agent Manager cannot change planning or criteria; orchestrator mutations
+require a live orchestrator session in the same project. Historical criteria and
+requested worker selections remain attached to their exact planning revisions.
+
+Ten focused top-level tests PASS for input bounds, revision and criteria history,
+scope/authority, cycles/cross-project references, descendant depth, concurrent
+opposite edges, fault-injected rollback, retained-history SQL protections,
+pagination, reopen and migration upgrade/downgrade. The first run found that
+`project_updated` was not a permitted CDC event; the corrected additive vocabulary
+uses `adaptive_task_changed`, preserving existing events and triggers. Project
+deletion tests honor the existing CDC retention foreign key before cascading.
+
+Complete domain (0.95s), SQLite (32.57s), store (13.29s), sqlitetest and CDC suites
+PASS. Pinned golangci-lint over domain/ports/SQLite/CDC PASS (0 issues), including
+vet; backend build and sqlc generation PASS. Diff/whitespace reviewed. Logs are
+ignored `*stage10a*` files. This milestone implements task persistence only: leases,
+attempt-to-session dispatch association and task service/API remain stage 10.
+
 ## Stage 09c5 — recoverable native controls; stage 09 tested (2026-09-18)
 
 Migration 0153 records immutable native-control intent before provider I/O and

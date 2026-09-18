@@ -31,6 +31,7 @@ const (
 	EventReviewRunCreated       EventType = "review_run_created"
 	EventReviewRunUpdated       EventType = "review_run_updated"
 	EventRegistryChanged        EventType = "registry_changed"
+	EventAdaptiveTaskChanged    EventType = "adaptive_task_changed"
 )
 
 // Event is one CDC change read from change_log. Seq is the monotonic ordering +
