@@ -1627,7 +1627,6 @@
 	"files.editFileLabel": "Edit {{file}}",
 	"files.saveError": "Unable to save workspace file",
 	"files.preview": "Pré-visualização",
-	"files.addFileFeedback": "Adicionar feedback para o arquivo {{file}}",
 	"files.addLineFeedback": "Adicionar feedback na linha {{side}} {{line}} em {{file}}",
 	"files.oldSide": "antiga",
 	"files.newSide": "nova",

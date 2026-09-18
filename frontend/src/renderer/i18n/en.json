@@ -1775,7 +1775,6 @@
 	"files.editFileLabel": "Edit {{file}}",
 	"files.saveError": "Unable to save workspace file",
 	"files.preview": "Preview",
-	"files.addFileFeedback": "Add feedback for file {{file}}",
 	"files.addLineFeedback": "Add feedback on {{side}} line {{line}} in {{file}}",
 	"files.oldSide": "old",
 	"files.newSide": "new",
