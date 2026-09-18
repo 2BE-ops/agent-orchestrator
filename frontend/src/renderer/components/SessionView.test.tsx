@@ -39,8 +39,6 @@ const chatSurfaceWorkState = vi.hoisted(() => ({
 	hasRunningTurn: false,
 	queuedTurnCount: 0,
 }));
-const codexAccountsQueryState = vi.hoisted(() => ({ data: undefined as unknown }));
-const recoverCodexAccountSwitchMock = vi.hoisted(() => vi.fn());
 
 async function chooseSessionAction(name: string) {
 	const user = userEvent.setup();
@@ -99,18 +97,6 @@ vi.mock("../hooks/useSessionInterfaceTransition", async (importOriginal) => ({
 		acknowledgeNotice: interfaceTransitionMock.acknowledgeNotice,
 		acknowledgingNotice: false,
 		acknowledgeNoticeError: undefined,
-	}),
-}));
-
-vi.mock("../hooks/useCodexAccountsQuery", () => ({
-	useCodexAccountsQuery: () => ({ data: codexAccountsQueryState.data, isLoading: false }),
-}));
-
-vi.mock("../hooks/useCodexAccountActions", () => ({
-	useCodexAccountActions: () => ({
-		error: null,
-		recoverPending: false,
-		recoverSwitch: recoverCodexAccountSwitchMock,
 	}),
 }));
 
@@ -481,7 +467,25 @@ vi.mock("./SessionFileExplorer", () => ({
 	},
 }));
 vi.mock("./SessionFileWorkspace", () => ({
-	SessionFileWorkspace: ({ initialEditing, initialMode, path, split }: { initialEditing?: boolean; initialMode?: string; path: string; split: boolean }) => <div data-editing={String(Boolean(initialEditing))} data-mode={initialMode} data-split={String(split)} data-testid="session-file-workspace">{path}</div>,
+	SessionFileWorkspace: ({ annotation, initialEditing, initialMode, path, scope, split }: {
+		annotation: {
+			begin: (target: { path: string; scope: string; side: string; surface: string }) => void;
+			draft: string;
+			setDraft: (draft: string) => void;
+			target: { path: string } | null;
+		};
+		initialEditing?: boolean;
+		initialMode?: string;
+		path: string;
+		scope?: string;
+		split: boolean;
+	}) => (
+		<div data-editing={String(Boolean(initialEditing))} data-mode={initialMode} data-split={String(split)} data-testid="session-file-workspace">
+			{path}
+			<button onClick={() => annotation.begin({ path, scope: scope ?? "combined", side: "file", surface: "focused" })} type="button">header feedback</button>
+			{annotation.target ? <input aria-label="feedback draft" onChange={(event) => annotation.setDraft(event.target.value)} value={annotation.draft} /> : null}
+		</div>
+	),
 }));
 const { browserDestroy, browserViewOptions, browserViewState } = vi.hoisted(() => ({
 	browserDestroy: vi.fn(),
@@ -737,8 +741,6 @@ describe("SessionView", () => {
 		chatSurfaceWorkState.controllerBusy = false;
 		chatSurfaceWorkState.hasRunningTurn = false;
 		chatSurfaceWorkState.queuedTurnCount = 0;
-		codexAccountsQueryState.data = undefined;
-		recoverCodexAccountSwitchMock.mockReset();
 		reviewGetMock.mockReset();
 		reviewGetMock.mockImplementation(async (path: string) => {
 			if (path === "/api/v1/sessions/{sessionId}/workspace/files") {
@@ -756,37 +758,6 @@ describe("SessionView", () => {
 			}
 			return { data: { reviewerHandleId: "", reviews: [], runs: [] }, error: undefined };
 		});
-	});
-
-	it("offers recovery directly from a Codex session blocked by a failed account switch", async () => {
-		const session = workerSession("sess-1");
-		session.provider = "codex";
-		codexAccountsQueryState.data = {
-			currentSwitch: {
-				id: "switch-1",
-				sourceAccountId: "account-a",
-				targetAccountId: "account-b",
-				phase: "recovery_required",
-				canRecover: true,
-				sessions: [{
-					sessionId: "sess-1",
-					interfaceMode: "tui",
-					wasRunning: true,
-					stopState: "stopped",
-					restartState: "failed",
-				}],
-				createdAt: "2026-09-02T00:00:00Z",
-				updatedAt: "2026-09-02T00:01:00Z",
-			},
-		};
-		recoverCodexAccountSwitchMock.mockResolvedValue(undefined);
-
-		render(<SessionView sessionId="sess-1" />);
-
-		const retry = screen.getByRole("button", { name: "Retry recovery" });
-		expect(retry).toBeEnabled();
-		await userEvent.click(retry);
-		expect(recoverCodexAccountSwitchMock).toHaveBeenCalledWith("switch-1");
 	});
 
 	// Regression: shell terminals are an app-wide list, so without a per-session
@@ -933,6 +904,22 @@ describe("SessionView", () => {
 		expect(screen.getByRole("status")).toHaveTextContent("Paused by Coder");
 		await waitFor(() => expect(cloudResumeMock).toHaveBeenCalledWith("cloud-org", "sess-2"));
 		expect(cloudResumeMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("uses generic copy while a cloud workspace is connecting", () => {
+		const session = workerSession("sess-2");
+		session.runtimeConnected = false;
+		session.cloud = {
+			orgId: "cloud-org",
+			sandboxProvider: "coder",
+			desiredState: "running",
+			observedState: "provisioning",
+		};
+
+		render(<SessionView sessionId="sess-2" />);
+
+		expect(screen.getByRole("status")).toHaveTextContent("Connecting");
+		expect(screen.getByRole("status")).not.toHaveTextContent("Coder");
 	});
 
 	it("activates a new terminal opened while a file tab is selected", async () => {
@@ -2877,33 +2864,20 @@ describe("SessionView", () => {
 		expect(inspectorWidthVariable()).toBe("340px");
 	});
 
-	it("resizes the inspector panel and terminal gap together on each animation frame", () => {
-		const frames: FrameRequestCallback[] = [];
-		const requestAnimationFrameSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-			frames.push(callback);
-			return frames.length;
-		});
-		try {
-			render(<SessionView sessionId="sess-1" />);
-			frames.length = 0;
-			const handle = screen.getByTestId("inspector-resize-handle");
-			expect(document.documentElement.style.getPropertyValue("--ao-inspector-w")).toBe("");
+	it("resizes the inspector panel and terminal gap together synchronously while dragging", () => {
+		render(<SessionView sessionId="sess-1" />);
+		const handle = screen.getByTestId("inspector-resize-handle");
+		expect(document.documentElement.style.getPropertyValue("--ao-inspector-w")).toBe("");
 
-			fireEvent.pointerDown(handle, { clientX: 100 });
-			fireEvent.pointerMove(window, { clientX: 200 });
-			expect(inspectorWidthVariable()).toBe("500px");
-			expect(frames).toHaveLength(1);
+		fireEvent.pointerDown(handle, { clientX: 100 });
+		fireEvent.pointerMove(window, { clientX: 200 });
+		// Sync apply during drag (no rAF) so the grip can follow the painted border 1:1.
+		expect(inspectorWidthVariable()).toBe("400px");
+		expect(inspectorPanelWidthVariable()).toBe("400px");
 
-			act(() => frames.shift()?.(performance.now()));
-			expect(inspectorWidthVariable()).toBe("400px");
-			expect(inspectorPanelWidthVariable()).toBe("400px");
-
-			fireEvent.pointerUp(window);
-			expect(inspectorWidthVariable()).toBe("400px");
-			expect(inspectorPanelWidthVariable()).toBe("400px");
-		} finally {
-			requestAnimationFrameSpy.mockRestore();
-		}
+		fireEvent.pointerUp(window);
+		expect(inspectorWidthVariable()).toBe("400px");
+		expect(inspectorPanelWidthVariable()).toBe("400px");
 	});
 
 	it("grows Browser into a co-work canvas while utility surfaces stay consistent", async () => {
@@ -2988,7 +2962,7 @@ describe("SessionView", () => {
 
 	it("mounts the inspector in sync when navigating from an orchestrator session", () => {
 		const { rerender } = render(<SessionView sessionId="sess-orch" />);
-		expect(screen.queryByTestId("panel-inspector")).not.toBeInTheDocument();
+		expect(inspectorOpen("sess-orch")).toBe(false);
 
 		act(() => useUiStore.getState().setInspectorOpen("sess-1", true));
 		rerender(<SessionView sessionId="sess-1" />);
@@ -3003,7 +2977,7 @@ describe("SessionView", () => {
 
 		act(() => useUiStore.getState().setInspectorOpen("sess-2", false));
 		rerender(<SessionView sessionId="sess-orch" />);
-		expect(screen.queryByTestId("panel-inspector")).not.toBeInTheDocument();
+		expect(inspectorOpen("sess-orch")).toBe(false);
 
 		act(() => useUiStore.getState().setInspectorOpen("sess-2", false));
 		rerender(<SessionView sessionId="sess-2" />);
@@ -3015,16 +2989,57 @@ describe("SessionView", () => {
 		expect(screen.getByTestId("panel-inspector")).toHaveAttribute("data-state", "expanded");
 	});
 
-	it("renders no inspector panel or handle for orchestrator sessions", () => {
+	it("starts the orchestrator Browser closed and opens it with the inspector shortcut", () => {
 		render(<SessionView sessionId="sess-orch" />);
-
-		expect(screen.queryByTestId("panel-inspector")).not.toBeInTheDocument();
-		expect(screen.queryByTestId("inspector-resize-handle")).not.toBeInTheDocument();
+		expect(inspectorOpen("sess-orch")).toBe(false);
 		expect(screen.queryByTestId("inspector-collapsed-rail")).not.toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Open Browser" })).toHaveAttribute("aria-pressed", "false");
+		fireEvent.keyDown(window, { key: "B", ctrlKey: true, shiftKey: true });
+		expect(inspectorOpen("sess-orch")).toBe(true);
+		expect(screen.getByRole("button", { name: "Close Browser" })).toHaveAttribute("aria-pressed", "true");
+		expect(useUiStore.getState().inspectorSessions["sess-orch"]?.view).toBe("browser");
+	});
 
-		// The shortcut is inactive without an inspector.
-		fireEvent.keyDown(window, { key: "B", metaKey: true, shiftKey: true });
-		expect(useUiStore.getState().inspectorSessions["sess-orch"]).toBeUndefined();
+	it("opens orchestrator chat files in the center without revealing Browser", async () => {
+		workerSession("sess-orch").mode = "chat";
+		render(<SessionView sessionId="sess-orch" />);
+		fireEvent.click(screen.getByRole("button", { name: "open chat basename" }));
+		await waitFor(() => expect(screen.getByTestId("session-file-workspace")).toBeInTheDocument());
+		expect(inspectorOpen("sess-orch")).toBe(false);
+		expect(useUiStore.getState().inspectorSessions["sess-orch"]?.view).toBe("browser");
+	});
+
+	it("reveals the orchestrator Browser on new preview work and respects closing it", () => {
+		const orchestrator = workerSession("sess-orch");
+		const { rerender } = render(<SessionView sessionId="sess-orch" />);
+		orchestrator.previewUrl = "https://example.com";
+		orchestrator.previewRevision = 1;
+		rerender(<SessionView sessionId="sess-orch" />);
+		expect(inspectorOpen("sess-orch")).toBe(true);
+		fireEvent.click(screen.getByRole("button", { name: "Close Browser" }));
+		orchestrator.previewRevision = 2;
+		browserViewState.agentBrowserActive = true;
+		rerender(<SessionView sessionId="sess-orch" />);
+		expect(inspectorOpen("sess-orch")).toBe(false);
+		const indicator = screen.getByTestId("orchestrator-browser-unseen-indicator");
+		expect(indicator).not.toHaveClass("animate-ping");
+		browserViewState.agentBrowserActive = false;
+		rerender(<SessionView sessionId="sess-orch" />);
+		expect(screen.getByTestId("orchestrator-browser-unseen-indicator")).toBe(indicator);
+		rerender(<SessionView sessionId="sess-1" />);
+		rerender(<SessionView sessionId="sess-orch" />);
+		expect(inspectorOpen("sess-orch")).toBe(false);
+		expect(screen.getByTestId("orchestrator-browser-unseen-indicator")).toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: "Open Browser" }));
+		expect(screen.queryByTestId("orchestrator-browser-unseen-indicator")).not.toBeInTheDocument();
+		expect(browserUnseen("sess-orch")).toBe(false);
+	});
+
+	it("reveals the orchestrator Browser when the agent first uses it", () => {
+		const { rerender } = render(<SessionView sessionId="sess-orch" />);
+		browserViewState.agentBrowserActive = true;
+		rerender(<SessionView sessionId="sess-orch" />);
+		expect(inspectorOpen("sess-orch")).toBe(true);
 	});
 
 	it("switches the browser between its dock and the whole app window immediately", () => {
@@ -3118,6 +3133,20 @@ describe("SessionView", () => {
 		fireEvent.click(screen.getByRole("button", { name: "select agent tab" }));
 		expect(screen.queryByTestId("session-file-workspace")).not.toBeInTheDocument();
 		expect(screen.getByRole("tab", { name: "App.tsx" })).toHaveAttribute("aria-selected", "false");
+	});
+
+	it("treats tab and header whole-file feedback as the same focused composer", async () => {
+		act(() => useUiStore.getState().setInspectorOpen("sess-1", true));
+		render(<SessionView sessionId="sess-1" />);
+
+		fireEvent.click(screen.getByRole("button", { name: "open files" }));
+		fireEvent.click(screen.getByRole("button", { name: "select src/App.tsx" }));
+		fireEvent.click(screen.getByRole("button", { name: "Add feedback for file src/App.tsx" }));
+		await userEvent.type(screen.getByRole("textbox", { name: "feedback draft" }), "keep this draft");
+
+		fireEvent.click(screen.getByRole("button", { name: "header feedback" }));
+
+		expect(screen.queryByRole("textbox", { name: "feedback draft" })).not.toBeInTheDocument();
 	});
 
 	it("applies the Files split preference to a diff opened in the center", () => {
