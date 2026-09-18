@@ -16508,6 +16508,10 @@ components:
           type: string
         category:
           type: string
+        contextFiles:
+          items:
+            type: string
+          type: array
         dependencies:
           items:
             type: string

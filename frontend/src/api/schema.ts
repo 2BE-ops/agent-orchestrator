@@ -5493,6 +5493,7 @@ export interface components {
         TaskDefinition: {
             brief: string;
             category: string;
+            contextFiles?: string[];
             dependencies: string[] | null;
             maxAttempts: number;
             parentId?: string;

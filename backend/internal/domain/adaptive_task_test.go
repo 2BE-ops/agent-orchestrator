@@ -19,6 +19,9 @@ func TestAdaptiveTaskInputBounds(t *testing.T) {
 		{"large brief", func(d *domain.TaskDefinition) { d.Brief = strings.Repeat("x", 32001) }},
 		{"duplicate dependency", func(d *domain.TaskDefinition) { d.Dependencies = []string{"a", "a"} }},
 		{"invalid capability", func(d *domain.TaskDefinition) { d.RequiredCapabilities = []string{""} }},
+		{"escaping context file", func(d *domain.TaskDefinition) { d.ContextFiles = []string{"../private"} }},
+		{"duplicate context file", func(d *domain.TaskDefinition) { d.ContextFiles = []string{"src/main.go", "src/main.go"} }},
+		{"too many context files", func(d *domain.TaskDefinition) { d.ContextFiles = make([]string, 17) }},
 		{"unbounded retries", func(d *domain.TaskDefinition) { d.MaxAttempts = 11 }},
 		{"missing worker identity", func(d *domain.TaskDefinition) { d.RequestedWorker = &domain.WorkerSelection{} }},
 		{"negative version", func(d *domain.TaskDefinition) {

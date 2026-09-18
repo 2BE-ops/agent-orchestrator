@@ -105,6 +105,7 @@ type TaskDefinition struct {
 	RequiredCapabilities []string         `json:"requiredCapabilities" nullable:"true"`
 	RequestedWorker      *WorkerSelection `json:"requestedWorker,omitempty"`
 	MaxAttempts          int              `json:"maxAttempts"`
+	ContextFiles         []string         `json:"contextFiles,omitempty"`
 }
 
 // Validate bounds one revision; graph validity belongs to the store transaction.
@@ -114,6 +115,16 @@ func (d TaskDefinition) Validate() error {
 	}
 	if len(d.Dependencies) > 32 || len(d.RequiredCapabilities) > 32 {
 		return fmt.Errorf("task exceeds dependency or capability bounds")
+	}
+	if len(d.ContextFiles) > 16 {
+		return fmt.Errorf("task context is limited to 16 explicit files")
+	}
+	files := map[string]bool{}
+	for _, file := range d.ContextFiles {
+		if !ValidContextFilePath(file) || files[file] {
+			return fmt.Errorf("invalid or duplicate context file path")
+		}
+		files[file] = true
 	}
 	for _, values := range [][]string{d.Dependencies, d.RequiredCapabilities} {
 		seen := map[string]bool{}

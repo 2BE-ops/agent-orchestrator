@@ -121,6 +121,16 @@ type AdaptiveTaskAudit struct {
 	CreatedAt time.Time
 }
 
+type AdaptiveTaskContext struct {
+	AttemptID            string
+	SessionID            string
+	ExecutionOperationID string
+	ConfigurationHash    string
+	Snapshot             string
+	ContentHash          string
+	CreatedAt            time.Time
+}
+
 type AdaptiveTaskCriterium struct {
 	TaskID          string
 	Number          int64

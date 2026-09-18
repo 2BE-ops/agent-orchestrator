@@ -4,6 +4,27 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 11c1 — sealed context persistence (2026-09-18)
+
+Migration 0161 adds an immutable context manifest per attempt/session, linked to
+the original configuration and pending native dispatch. Sealing validates exact
+task/criteria content, pinned dependency revisions, all configured Type/Skill
+references and current accepted same-project knowledge. Lease fencing,
+cancellation and audit insertion share the transaction. Historical reads retain
+exact content after source invalidation; sealing does not release native guards.
+Optional explicit task file selections preserve historical definition hashes.
+
+Four store tests cover replay/reopen, forged evidence and ownership, late
+invalidation/cancellation, atomic audit failure and SQL immutability. Four domain
+tests cover prompt integrity, portable confined paths, source-data rendering and
+historical hashes, with additional task-bound cases. Full domain, SQLite,
+store, CDC, task-service and API-spec suites PASS (SQLite 38.846s, store 17.229s,
+specgen 11.387s). Final domain rerun PASS (0.485s). Backend build and full lint of
+domain/ports/SQLite PASS (0 issues). sqlc, API generation and frontend typecheck
+PASS. Logs are ignored
+`*stage11c1*`. Native context construction and consumption remain the next slice;
+these persistence tests are not live worker evidence.
+
 ## Stage 11b — knowledge service, API and CLI (2026-09-18)
 
 The daemon mounts six shared knowledge routes for project search/create, current

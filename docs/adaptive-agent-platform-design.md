@@ -348,6 +348,17 @@ workers must attribute an unreleased owned attempt and cannot rewrite history.
 Human/system revisions use an expected-version fence. Context reads accepted
 versions explicitly, never merely the latest candidate or a confidence label.
 
+The task context manifest is a separate immutable attempt/session record, sealed
+after workspace provisioning and before native launch. It references the original
+worker-configuration hash instead of rewriting that already-committed snapshot.
+This lets file provenance describe the actual worker workspace. It retains the
+rendered task prompt, exact task/criteria/dependency/knowledge versions, Type/Skill
+references, source selection/omission reasons and the rendered system-prompt hash.
+The native execution reservation remains held across construction and launch.
+Restore reads retained prompt content; it does not reconstruct historical context
+from current knowledge. Inline prompt bytes and estimated tokens are bounded;
+materialized Skill resources remain exact references, not eagerly inlined files.
+
 Worker results use a versioned schema containing summary, implementation,
 decisions, assumptions, interfaces, tests, findings, unresolved issues,
 follow-ups and knowledge candidates. Reject malformed/oversized submissions
