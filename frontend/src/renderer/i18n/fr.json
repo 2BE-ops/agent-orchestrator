@@ -1601,6 +1601,7 @@
 	"files.loadDiff": "Load diff",
 	"files.wrapLines": "Wrap lines",
 	"files.diffUnavailableReason": "Diff unavailable: {{reason}}.",
+	"files.diffUnavailable": "Impossible de charger ce diff.",
 	"files.tabCount_one": "{{count}} fichier",
 	"files.tabCount_many": "{{count}} fichiers",
 	"files.tabCount_other": "{{count}} fichiers",

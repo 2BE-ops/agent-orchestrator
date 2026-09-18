@@ -1751,6 +1751,7 @@
 	"files.loadDiff": "Load diff",
 	"files.wrapLines": "Wrap lines",
 	"files.diffUnavailableReason": "Diff unavailable: {{reason}}.",
+	"files.diffUnavailable": "Unable to load this diff.",
 	"files.tabCount_one": "{{count}} File",
 	"files.tabCount_other": "{{count}} Files",
 	"files.searchCountPlaceholder_one": "Search {{count}} file",

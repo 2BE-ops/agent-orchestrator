@@ -1590,6 +1590,7 @@
 	"files.loadDiff": "Load diff",
 	"files.wrapLines": "Wrap lines",
 	"files.diffUnavailableReason": "Diff unavailable: {{reason}}.",
+	"files.diffUnavailable": "无法加载此差异。",
 	"files.tabCount_one": "{{count}} 个文件",
 	"files.tabCount_other": "{{count}} 个文件",
 	"files.searchCountPlaceholder_one": "搜索 {{count}} 个文件",

@@ -1578,6 +1578,7 @@
 	"files.loadDiff": "Load diff",
 	"files.wrapLines": "Wrap lines",
 	"files.diffUnavailableReason": "Diff unavailable: {{reason}}.",
+	"files.diffUnavailable": "この diff を読み込めません。",
 	"files.tabCount_one": "{{count}} ファイル",
 	"files.tabCount_other": "{{count}} ファイル",
 	"files.searchCountPlaceholder_one": "{{count}} ファイルを検索",
