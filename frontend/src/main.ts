@@ -31,6 +31,7 @@ import {
 	setUpdateRestartFailureHandler,
 	getUpdateStatus,
 	setUpdateSettings,
+	setMacDifferentialUpdates,
 	returnToHome,
 	type UpdateCheckOptions,
 } from "./main/auto-updater";
@@ -182,7 +183,9 @@ process.stdout.on("error", ignoreStdStreamError);
 process.stderr.on("error", ignoreStdStreamError);
 
 // Must run before app ready so the About panel and default-menu role labels use it.
-app.setName("Agent Orchestrator");
+// Unpackaged runs get a distinct name so the dev window, dock menu, and About
+// panel never impersonate the installed app (#3642).
+app.setName(app.isPackaged ? "Agent Orchestrator" : "Agent Orchestrator (dev)");
 
 // Windows shows native toasts only when the app declares an AppUserModelID that
 // matches its installer shortcut (the NSIS maker's appId). Without it,
@@ -442,21 +445,23 @@ function annotatePreloadPath(): string {
 
 // Runtime window/taskbar icon for Linux and Windows. macOS ignores this and
 // uses the .app bundle's .icns instead. Packaged: shipped via extraResource to
-// resources/icon.png; dev: the source asset under frontend/assets.
+// resources/icon.png.
+// Unpackaged runs return undefined so the dev window keeps Electron's default
+// icon and never impersonates the installed app's taskbar/dock icon (#3642).
 function windowIconPath(): string | undefined {
+	if (!app.isPackaged) return undefined;
 	const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
-	const candidate = app.isPackaged
-		? path.join(process.resourcesPath, iconFile)
-		: path.join(__dirname, `../../assets/${iconFile}`);
+	const candidate = path.join(process.resourcesPath, iconFile);
 	if (existsSync(candidate)) return candidate;
-	const fallback = app.isPackaged
-		? path.join(process.resourcesPath, "icon.png")
-		: path.join(__dirname, "../../assets/icon.png");
+	const fallback = path.join(process.resourcesPath, "icon.png");
 	return existsSync(fallback) ? fallback : undefined;
 }
 
 function applyRuntimeAppIcon(): void {
 	if (process.platform !== "darwin") return;
+	// Unpackaged runs keep Electron's default dock icon so the dev window is
+	// visually distinct from the installed app (#3642).
+	if (!app.isPackaged) return;
 	const iconPath = windowIconPath();
 	if (!iconPath) return;
 	const icon = nativeImage.createFromPath(iconPath);
@@ -591,7 +596,7 @@ async function createWindowInternal(): Promise<void> {
 		height: 860,
 		minWidth: 960,
 		minHeight: 640,
-		title: "Agent Orchestrator",
+		title: app.isPackaged ? "Agent Orchestrator" : "Agent Orchestrator (dev)",
 		icon: windowIconPath(),
 		backgroundColor: NATIVE_WINDOW_BACKGROUND_DARK,
 		// Windows goes frameless and the renderer paints the whole titlebar,
@@ -2291,13 +2296,19 @@ ipcMain.handle("appState:setMigration", async (_event, migration: MigrationState
 
 ipcMain.handle("updateSettings:get", async (): Promise<UpdateSettings> => {
 	const runFile = runFilePath();
-	if (!runFile) return { enabled: false, channel: "latest", nightlyAck: false, feature: null };
+	if (!runFile) return { enabled: false, channel: "latest", nightlyAck: false, feature: null, macDifferentialUpdates: false };
 	return readUpdateSettings(path.dirname(runFile));
 });
 ipcMain.handle("updateSettings:set", async (_event, settings: UpdateSettings) => {
 	const runFile = runFilePath();
 	if (!runFile) return;
 	await setUpdateSettings(path.dirname(runFile), settings);
+});
+ipcMain.handle("updateSettings:setMacDifferentialUpdates", async (_event, enabled: unknown) => {
+	if (typeof enabled !== "boolean") return;
+	const runFile = runFilePath();
+	if (!runFile) return;
+	await setMacDifferentialUpdates(path.dirname(runFile), enabled);
 });
 
 ipcMain.handle("uiSettings:get", async (): Promise<UiSettings> => {
@@ -2346,6 +2357,13 @@ ipcMain.handle("updates:download", async (_event, requestId?: string) => {
 	await downloadUpdateNow(requestId);
 });
 ipcMain.handle("updates:install", (_event, confirmedVersion?: string) => quitAndInstallUpdate(confirmedVersion));
+// Retry after a failed macOS preparation: Squirrel can't reset a stalled staging
+// in-process, so restart AO like a manual quit-and-reopen. install-on-quit is
+// already off on the failed path, so quitting can't apply a half-prepared build.
+ipcMain.handle("updates:relaunch", () => {
+	app.relaunch();
+	app.quit();
+});
 
 // Whether THIS boot is a post-update relaunch, so the startup loader can show
 // "Updating / Restarting" copy instead of the normal "Connecting" phrases. The
