@@ -289,6 +289,15 @@ idempotently. Test crashes before/after reservation, seed insertion, process
 creation, result write and evaluation delivery. Reconcile reservations against
 session ownership before opening admission on daemon startup.
 
+The task launch/restore boundary also reserves native side effects durably
+(0157). A pending execution prevents releasing or transferring the task lease,
+including when the session row was marked terminated during incomplete cleanup.
+Its ID is the reserved native target generation passed to the existing
+controller/supervisor; retain the source owner for reconnect/compensation checks.
+Only verified connection or termination resolves it. An unknown result survives
+restart for reconciliation. A SQLite resurrection fence rejects restoring a
+released historical task worker, closing the restore-versus-reassignment race.
+
 | Control | Deterministic behavior |
 | --- | --- |
 | Pause | Fence new admissions immediately; current tasks continue; retain pending work |

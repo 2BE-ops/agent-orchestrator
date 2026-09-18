@@ -4,6 +4,26 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 10d1 — durable native execution reservations (2026-09-18)
+
+Migration 0157 adds immutable task execution operations and verified lifecycle
+resolutions. Unresolved native side effects block lease release and holder
+transfer in both store transactions and SQLite triggers. A released task worker
+cannot be resurrected by a legacy session update; restoration requires its
+unreleased lease and pending execution reservation. Idempotent operation replay
+returns `created=false`, never permission to launch twice. The operation ID is
+reserved for the native target generation so later recovery can identify a host
+created before its final session metadata was committed.
+
+Four new tests PASS for retained unresolved execution across restart, stale
+proof rejection, idempotent resolution, restore/release races (one winner), SQL
+resurrection/release fences and fault-injected resolution/audit/CDC rollback.
+Populated migration upgrade/downgrade now includes an unresolved native operation.
+Full domain, SQLite (34.41s), store (16.54s), sqlitetest and CDC suites PASS; backend
+build, sqlc generation and full affected-package pinned lint PASS (0 issues).
+Source/diff reviewed. Logs: ignored `*stage10d*`. This verified persistence slice
+prepares the native integration; the manager does not yet consume these guards.
+
 ## Stage 10c — shared task service, HTTP and CLI (2026-09-18)
 
 The daemon now mounts ten task authoring/history routes through a shared service:

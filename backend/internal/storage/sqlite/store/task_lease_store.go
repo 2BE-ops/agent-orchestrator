@@ -219,6 +219,11 @@ func (s *Store) changeTaskLease(ctx context.Context, recovery domain.TaskLeaseRe
 		if taskLeaseFenced(row, recovery.Token) || recovery.Now.Before(row.HeartbeatAt) {
 			return ports.ErrTaskLeaseFenced
 		}
+		if _, err := q.PendingTaskAttemptExecution(ctx, row.AttemptID); err == nil {
+			return ports.ErrTaskLeaseFenced
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
 		dispatch, err := q.GetTaskWorkerDispatch(ctx, row.AttemptID)
 		if err == nil {
 			session, err := q.GetSession(ctx, domain.SessionID(dispatch.SessionID))

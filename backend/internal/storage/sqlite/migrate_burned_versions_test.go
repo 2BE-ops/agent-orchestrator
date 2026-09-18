@@ -161,6 +161,7 @@ var shippedMigrations = map[int64]string{
 	154: "0154_adaptive_task_cdc.sql",
 	155: "0155_adaptive_tasks.sql",
 	156: "0156_adaptive_task_leases.sql",
+	157: "0157_task_execution_guards.sql",
 }
 
 // burnedVersion reports version numbers that must never be (re)used: they

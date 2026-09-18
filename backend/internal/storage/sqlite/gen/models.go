@@ -145,6 +145,25 @@ type AdaptiveTaskDispatch struct {
 	CreatedAt         time.Time
 }
 
+type AdaptiveTaskExecutionOperation struct {
+	ID          string
+	AttemptID   string
+	SessionID   string
+	Generation  int64
+	HolderID    string
+	SourceOwner string
+	Kind        string
+	CreatedAt   time.Time
+}
+
+type AdaptiveTaskExecutionResolution struct {
+	OperationID   string
+	ObservedOwner string
+	Outcome       string
+	Reason        string
+	CreatedAt     time.Time
+}
+
 type AdaptiveTaskLease struct {
 	AttemptID      string
 	TaskID         string
