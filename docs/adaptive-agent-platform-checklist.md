@@ -3,8 +3,8 @@
 Last updated: 2026-09-18. Starting upstream commit:
 `684d6d67db004e180f7ac9c649ce92840491ea4d`.
 
-This is the persistent execution plan for the assignment. The feature is not
-implemented. The [design](adaptive-agent-platform-design.md) records source
+This is the persistent execution plan for the assignment. Registry persistence
+is implemented and tested; the complete feature is not yet implemented. The [design](adaptive-agent-platform-design.md) records source
 findings and proposed boundaries; [validation](adaptive-agent-platform-validation.md)
 records exact environment/test evidence.
 
@@ -50,7 +50,7 @@ Stage 03 completes with this commit.
 | 02 | Current-state source and upstream audit | IMPLEMENTED | Lifecycle, config, persistence, native skills, reviews, UI and overlap documented |
 | 03 | Gap analysis/design and live checklist commit | TESTED | Design/checklist/validation committed on feature branch and pushed to fork |
 | 04 | Reproducible baseline/toolchain | TESTED | Go 1.25.7 installed (`C:\Users\bill\go-sdk\go`, on user PATH, GOROOT set); `go build ./...` clean (toolchain auto-selects 1.26.5 per go.mod); workspace `node_modules` restored (`product-ui`, `cloud-client`, `mobile`, `ao`); `frontend:typecheck` PASS; `product-ui:check` (typecheck+test+build) PASS; pinned sqlc/golangci-lint self-provision via root scripts |
-| 05 | Registry domain, immutable versions, migration/store | NOT STARTED | New migrations; ownership/revision/CDC invariants |
+| 05 | Registry domain, immutable versions, migration/store | TESTED | Migrations 0148–0149, typed definitions and sqlc store. Full domain/SQLite/CDC suites, relevant pinned lint (0 issues), vet and backend build PASS. Eleven new top-level tests cover validation, ownership, concurrent revisions, pins, atomic audit/CDC rollback, upgrade and restart. Race run unavailable: GCC missing. Exact evidence in validation. |
 | 06 | Agent Type service/API/CLI and registry UI | NOT STARTED | Same validated path for human and manager; generated contracts |
 | 07 | Skill authoring/versioning/API/UI/import/export | NOT STARTED | Reuse native conventions and embedded AO skill |
 | 08 | Provider/capability integration and binding UI | NOT STARTED | Native auth, no credential duplication, mode-aware controls |
@@ -73,6 +73,19 @@ Stage 03 completes with this commit.
 | 25 | Real Electron validation and harness evidence | NOT STARTED | Isolated checkout/data, fake harness first, authenticated combinations separately |
 | 26 | Upstream update, whole-diff review and documentation | NOT STARTED | Fetch/assess upstream; no speculative overwrite |
 | 27 | Final commits, fork push and Definition of Done report | NOT STARTED | Only after all acceptance evidence exists |
+
+### Follow-up validation gaps (do not block independent implementation)
+
+- Windows `go test -race` requires a C compiler. Explicit `CGO_ENABLED=1`
+  reports `gcc` missing; record as NOT RUN, not passed. Resolve before stage 24
+  or run the complete race suites on a supported CI/Linux environment.
+- The full pinned linter finds existing Windows-specific failures outside stage
+  05: `persistenthost/host_race_test.go` references `syscall.Kill`, and process
+  helpers have errcheck/errorlint/gosec findings. Relevant stage 05 packages pass.
+- Latest fetched upstream is `795286c4e1a58a53269f687974c820cc10561b08`.
+  Its two new commits change Claude auth readiness and tab UI, with no migration
+  collision. They are assessed but not yet incorporated; current base remains
+  `6d3ad8c7c`. Reconcile during the upstream integration pass.
 
 ## Definition of Done traceability
 

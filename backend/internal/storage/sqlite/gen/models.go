@@ -12,6 +12,58 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 )
 
+type AdaptiveRegistry struct {
+	ID                string
+	Kind              string
+	Name              string
+	Description       string
+	Origin            string
+	CreatedBy         string
+	Enabled           int64
+	ManagerCanSelect  int64
+	ManagerCanModify  int64
+	ManagerCanVersion int64
+	Revision          int64
+	ActiveVersion     int64
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+type AdaptiveRegistryAudit struct {
+	Seq           int64
+	EntryID       string
+	Revision      int64
+	Action        string
+	VersionNumber int64
+	ActorOrigin   string
+	ActorID       string
+	Reason        string
+	CreatedAt     time.Time
+}
+
+type AdaptiveRegistrySkillPin struct {
+	EntryID      string
+	Version      int64
+	OwnerKind    string
+	Position     int64
+	SkillID      string
+	SkillVersion int64
+	SkillKind    string
+}
+
+type AdaptiveRegistryVersion struct {
+	EntryID       string
+	Number        int64
+	Kind          string
+	ParentVersion sql.NullInt64
+	Definition    string
+	ContentHash   string
+	ActorOrigin   string
+	ActorID       string
+	Reason        string
+	CreatedAt     time.Time
+}
+
 type AgentInstallJob struct {
 	Target              string
 	Status              string

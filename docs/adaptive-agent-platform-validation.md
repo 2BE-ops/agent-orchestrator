@@ -1,7 +1,59 @@
 # Adaptive agent platform: environment and validation evidence
 
-Recorded 2026-09-18. This is an initial audit record, not the final validation
-report. No adaptive application code, migrations, APIs or UI have been added.
+Recorded 2026-09-18. The latest milestone evidence below supersedes the historical
+initial audit/environment failures retained later in this file. This is not the
+final platform validation report.
+
+## Stage 05 — registry persistence (2026-09-18)
+
+- Resumed in the user-provided full-access session. `git fetch upstream` passed;
+  upstream main is `795286c4e1a58a53269f687974c820cc10561b08`. Its migrations still
+  end at 0147. No upstream merge/rebase performed in this milestone.
+- Added migrations 0148 (additive CDC event vocabulary) and 0149 (registry,
+  immutable versions, ordered kind-safe Skill pins and durable audit), plus the
+  migration ledger entries. No previously merged migration was edited.
+- Agent Type/Skill content has structural limits and typed AO harness/config
+  fields. Skill resources reject traversal, Windows device names, control
+  characters, case-fold collisions and attempts to replace the root SKILL.md.
+- Store writes validate trusted actor provenance, enforce manager modification
+  and versioning policies inside the transaction, use optimistic revisions,
+  retain old versions on activation/rollback, and commit audit plus trigger-owned
+  CDC atomically. Activation audit retains the exact target version.
+
+| Command (backend directory unless noted) | Final result |
+| --- | --- |
+| Root `npm.cmd run sqlc` | PASS, pinned sqlc v1.31.1; generated artifacts committed with sources |
+| `gofmt -w` on changed Go files | PASS |
+| `go test ./internal/domain ./internal/storage/sqlite/... ./internal/cdc` | PASS; final SQLite 27.671s, store 4.711s, sqlitetest 0.460s, CDC 0.489s; domain 0.533s |
+| `go vet ./internal/domain ./internal/storage/sqlite/... ./internal/cdc` | PASS |
+| `go build ./...` | PASS |
+| `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run --path-mode=abs ./internal/domain/... ./internal/ports/... ./internal/storage/sqlite/... ./internal/cdc/...` | PASS, 0 issues |
+| `go test -race ./internal/domain ./internal/storage/sqlite/... ./internal/cdc` | NOT RUN: cgo disabled; retry with `CGO_ENABLED=1` failed to compile because `gcc` is unavailable |
+| `git diff --cached --check` | PASS |
+
+Eleven new top-level tests cover invalid definitions/actors/resources, immutable
+version content/hashes, exact Skill pins after Skill version activation, manager
+ownership, forbidden policy escalation/promotion, twelve concurrent writers at
+one revision, missing-pin rollback, injected audit failure rollback, clean DB,
+populated 0147 DB upgrade with existing session/CDC preservation, database-level
+history constraints, and close/reopen persistence.
+
+Initial validation failures were fixed: new migrations needed ledger entries;
+the upgrade test initially changed `latest_user_prompt`, which intentionally does
+not emit session CDC, and now changes `activity_state`. Diff review added exact
+activation target provenance to audit. All affected full suites were rerun.
+
+The first full pinned lint run failed on existing Windows-only code: the
+persistenthost race test uses unavailable `syscall.Kill`; process helpers report
+unchecked CloseHandle, wrapped-error comparison, narrowing PID conversions and
+unsafe-pointer findings. Checkout CRLF also caused goimports diagnostics; Go
+working-copy line endings were normalized to LF without changing Git content.
+Full-repository Windows lint remains a stage 24 gap; it is not labeled passed.
+
+No registry API/UI, worker integration, real Electron flow, live provider call,
+or complete adaptive Definition of Done has been validated at stage 05.
+
+## Historical initial audit (superseded environment facts)
 
 ## Repository and access
 

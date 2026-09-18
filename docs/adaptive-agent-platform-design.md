@@ -1,6 +1,7 @@
 # Adaptive agent platform: audit and proposed architecture
 
-Status: design only; no adaptive runtime functionality is implemented by this document.
+Status: stage 05 registry persistence is implemented; runtime integration and
+desktop functionality remain in later stages. See the live checklist for evidence.
 
 Audited on 2026-09-18 against `684d6d67db004e180f7ac9c649ce92840491ea4d`
 (`fix(session): bound spawn readiness and rollback (#5557)`). The local branch
@@ -115,6 +116,17 @@ Names below are design vocabulary, not claims that migrations have been written.
 Use new goose migrations after the current last migration, `0147`, with numbers
 rechecked after fetching upstream. Use sqlc sources and generated stores; do not
 edit existing migrations or generated code manually.
+
+Stage 05 storage realization: Agent Types and authored Skills share
+`adaptive_registry` identity/policy rows and `adaptive_registry_versions`, with
+a closed typed definition union. Kind-qualified foreign keys prevent cross-kind
+active versions and Skill pins. `adaptive_registry_skill_pins` preserves exact
+ordered composition, and `adaptive_registry_audit` retains semantic history
+independently of CDC retention. This shares the identical ownership/versioning
+mechanics while retaining distinct Agent Type and Skill domain content; native
+provider skill discovery remains unchanged. Appending a version does not activate
+it. Manager promotion remains denied until the explicit stage 19 approval gate.
+Migrations 0148 (additive CDC vocabulary) and 0149 (registry) implement this slice.
 
 | Record | Durable content and invariants |
 | --- | --- |
