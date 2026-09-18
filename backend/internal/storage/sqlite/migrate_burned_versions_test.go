@@ -155,6 +155,7 @@ var shippedMigrations = map[int64]string{
 	148: "0148_registry_cdc.sql",
 	149: "0149_adaptive_registry.sql",
 	150: "0150_provider_bindings.sql",
+	151: "0151_worker_configurations.sql",
 }
 
 // burnedVersion reports version numbers that must never be (re)used: they

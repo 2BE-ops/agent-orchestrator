@@ -88,6 +88,15 @@ type AdaptiveRegistryVersion struct {
 	CreatedAt     time.Time
 }
 
+type AdaptiveWorkerConfiguration struct {
+	SessionID        string
+	AgentTypeID      string
+	AgentTypeVersion int64
+	Configuration    string
+	ContentHash      string
+	CreatedAt        time.Time
+}
+
 type AgentInstallJob struct {
 	Target              string
 	Status              string

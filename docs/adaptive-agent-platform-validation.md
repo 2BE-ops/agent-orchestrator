@@ -4,6 +4,27 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 09a — atomic worker snapshot persistence (2026-09-18)
+
+The first stage-09 milestone adds sealed schema-v1 configuration records,
+explicit pointer-valued one-off overrides, exact Type/Skill references and
+content, and migration 0151. `CreateConfiguredSession` reuses the existing
+session identity allocator and commits the seed plus snapshot in one transaction.
+It rechecks Type/Skill enabled state, manager selection policy, immutable version
+hashes and provider binding revision/scope while holding the write transaction.
+The existing unconfigured session path retains its behavior.
+
+Full `go test ./internal/domain ./internal/storage/sqlite/...` passed (SQLite
+30.74s, store 6.78s). Pinned golangci-lint on domain/ports/SQLite passed with
+0 issues after fixing one import grouping. Fault injection proves failed
+snapshot insertion rolls back the session and CDC. Tests also prove database
+immutability, original content/name retention after disable and store reopen,
+manager permission revocation, human selection, hash tampering rejection and
+safe cascade during existing seed rollback. An initial reopen test incorrectly
+used the empty-database clone helper; it was corrected to `sqlite.Open` and the
+full suites rerun. Logs: ignored `backend-stage09a.log`, `lint-stage09a.log`.
+Stage 09 remains IN PROGRESS until launch/restore and UI are connected and tested.
+
 ## Stage 08 — native capabilities and provider references (2026-09-18)
 
 Added adapter-declared configuration fields, bounded Chat capability inspection,
