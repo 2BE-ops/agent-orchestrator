@@ -33,7 +33,7 @@ function upsertJob(current: InstallJob[] | undefined, next: InstallJob): Install
 }
 
 export function isActiveInstallJob(job: InstallJob | undefined): boolean {
-	return job?.status === "installing" || job?.status === "verifying";
+	return job?.status === "running" || job?.status === "installing" || job?.status === "verifying";
 }
 
 /**

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { components } from "../../api/schema";
 import type { AuthWorkflow } from "../components/AuthTerminalPanel";
 import { useCloseShellTerminal } from "./useShellTerminals";
+import { isActiveInstallJob } from "./useHarnessSetup";
 import type { TerminalSessionState } from "./useTerminalSession";
 import { useGitHubAuthRequirement, useGitHubAuthTerminal, useStartGitHubAuthTerminal, useSystemRequirementsGate } from "./useSystemRequirementsGate";
 import { apiClient, apiErrorMessage } from "../lib/api-client";
@@ -14,10 +15,6 @@ const POLL_INTERVAL_MS = 1_000;
 /** The GitHub page watches long-running external work (a package install, a
  *  device-code sign-in), so it polls slowly rather than every second. */
 const STEP_POLL_INTERVAL_MS = 2_500;
-
-function isActiveJob(job: InstallJob | undefined): boolean {
-	return job?.status === "installing" || job?.status === "verifying" || job?.status === "running";
-}
 
 /**
  * GitHub readiness for onboarding: install the CLI in place when it is missing,
@@ -86,7 +83,7 @@ export function useGitHubSetup({ poll = false }: { poll?: boolean } = {}) {
 				});
 				if (error || !data) return;
 				setJob(data);
-				if (isActiveJob(data)) return;
+				if (isActiveInstallJob(data)) return;
 				stopPolling();
 				if (data.status === "succeeded") void gate.query.refetch();
 			})();
@@ -102,7 +99,7 @@ export function useGitHubSetup({ poll = false }: { poll?: boolean } = {}) {
 			});
 			if (error || !data) throw new Error(apiErrorMessage(error, t("onboarding.installStartFailed")));
 			setJob(data);
-			if (isActiveJob(data)) pollInstall();
+			if (isActiveInstallJob(data)) pollInstall();
 			else if (data.status === "succeeded") await gate.query.refetch();
 		} catch (error) {
 			setInstallError(error instanceof Error ? error.message : t("onboarding.installStartFailed"));
