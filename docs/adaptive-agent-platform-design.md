@@ -339,6 +339,15 @@ source worker/artifact/commit, timestamps and supersession. Contradictory facts
 are visible, not silently merged into an opaque summary. Invalidation affects
 future contexts; already-launched workers retain their recorded snapshot.
 
+Knowledge revisions retain content and review disposition together (0159–0160).
+Pins require accepted status; supersession names an exact accepted replacement
+in the same project. Soft deletion removes current default selection while
+retaining historical versions for manifests and audit. Worker and orchestrator
+proposals are candidate-only until a permitted review/promotion policy applies;
+workers must attribute an unreleased owned attempt and cannot rewrite history.
+Human/system revisions use an expected-version fence. Context reads accepted
+versions explicitly, never merely the latest candidate or a confidence label.
+
 Worker results use a versioned schema containing summary, implementation,
 decisions, assumptions, interfaces, tests, findings, unresolved issues,
 follow-ups and knowledge candidates. Reject malformed/oversized submissions

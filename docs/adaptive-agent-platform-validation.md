@@ -4,6 +4,31 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 11a — versioned project knowledge persistence (2026-09-18)
+
+Migrations 0159–0160 add project-scoped knowledge identities, immutable hashed
+versions and trigger-driven CDC. Versions retain title/kind/content, confidence,
+review disposition, pins, task/tag relevance and exact source identities/hashes.
+Only accepted knowledge may be pinned. Supersession references an accepted exact
+version in the same project. Deletion withdraws default selection while retaining
+historical content. Bounded literal search filters current status/kind/content.
+Worker/orchestrator creation is candidate-only; workers must establish their own
+active attempt/session provenance, and cannot accept or rewrite knowledge.
+Trusted human/system review is explicit and fenced by expected version. Native
+Agent Manager proposal authority is not invented before its stage 14 identity.
+
+Domain bounds plus five store tests and populated migration upgrade/downgrade
+PASS. They cover retained history/restart, filtered deletion, source/authority
+and project fences, concurrent review CAS, CDC rollback and immutable history.
+The first focused run exposed mixed numbered/unnumbered SQL parameters in the
+search query; changed the query source, regenerated sqlc and reran successfully.
+Full domain, SQLite (37.74s), store (18.71s), sqlitetest and CDC suites PASS, as
+does the backend build. Full affected-package pinned lint PASS (0 issues) after
+adding the required exported-error documentation. Source/generated/whitespace
+diffs reviewed. Logs: ignored
+`*stage11a*`. Service/API, context manifests and UI are subsequent stage 11/22
+slices; no claim is made that knowledge is already injected into workers.
+
 ## Stage 10e — audited intent and derived task state (2026-09-18)
 
 Migration 0158 retains immutable run/cancel instructions with actor/reason,

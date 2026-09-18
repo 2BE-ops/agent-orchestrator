@@ -722,6 +722,24 @@ type Project struct {
 	Kind          string
 }
 
+type ProjectKnowledge struct {
+	ID        string
+	ProjectID string
+	Version   int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type ProjectKnowledgeVersion struct {
+	KnowledgeID string
+	Number      int64
+	Definition  string
+	ContentHash string
+	Actor       string
+	Reason      string
+	CreatedAt   time.Time
+}
+
 type Review struct {
 	ID                    string
 	SessionID             domain.SessionID
