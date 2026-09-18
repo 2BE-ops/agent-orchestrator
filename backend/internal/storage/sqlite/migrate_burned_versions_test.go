@@ -160,6 +160,7 @@ var shippedMigrations = map[int64]string{
 	153: "0153_worker_native_configuration_changes.sql",
 	154: "0154_adaptive_task_cdc.sql",
 	155: "0155_adaptive_tasks.sql",
+	156: "0156_adaptive_task_leases.sql",
 }
 
 // burnedVersion reports version numbers that must never be (re)used: they

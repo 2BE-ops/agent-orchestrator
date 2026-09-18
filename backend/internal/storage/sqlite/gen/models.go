@@ -98,6 +98,19 @@ type AdaptiveTask struct {
 	UpdatedAt time.Time
 }
 
+type AdaptiveTaskAttempt struct {
+	ID              string
+	TaskID          string
+	TaskRevision    int64
+	CriteriaVersion int64
+	Number          int64
+	LaunchIntentID  string
+	Dependencies    string
+	Actor           string
+	Reason          string
+	CreatedAt       time.Time
+}
+
 type AdaptiveTaskAudit struct {
 	Seq       int64
 	TaskID    string
@@ -123,6 +136,25 @@ type AdaptiveTaskDependency struct {
 	ProjectID    string
 	TaskID       string
 	DependencyID string
+}
+
+type AdaptiveTaskDispatch struct {
+	AttemptID         string
+	SessionID         string
+	ConfigurationHash string
+	CreatedAt         time.Time
+}
+
+type AdaptiveTaskLease struct {
+	AttemptID      string
+	TaskID         string
+	Generation     int64
+	HolderID       string
+	HeartbeatAt    time.Time
+	LastActivityAt sql.NullTime
+	ExpiresAt      time.Time
+	ReleasedAt     sql.NullTime
+	ReleaseReason  string
 }
 
 type AdaptiveTaskRevision struct {

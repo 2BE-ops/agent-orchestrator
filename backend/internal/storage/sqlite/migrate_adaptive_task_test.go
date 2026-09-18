@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	sqlitestore "github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite/store"
@@ -39,6 +40,11 @@ INSERT INTO sessions(id,project_id,num,activity_last_at,created_at,updated_at) V
 	if _, err := s.ReviseAcceptanceCriteria(ctx, "migration-task", criteria, mutation); err != nil {
 		t.Fatal(err)
 	}
+	upTo(t, db, 156)
+	mutation.ExpectedRevision = 2
+	if _, _, err := s.ReserveTask(ctx, domain.TaskReservation{ID: "upgrade-attempt", TaskID: "migration-task", LaunchIntentID: "upgrade-launch", HolderID: "scheduler", Mutation: mutation, Now: time.Now().UTC(), TTL: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
 	var integrity string
 	if err := db.QueryRow(`PRAGMA integrity_check`).Scan(&integrity); err != nil || integrity != "ok" {
 		t.Fatalf("integrity: %q %v", integrity, err)
@@ -55,7 +61,7 @@ INSERT INTO sessions(id,project_id,num,activity_last_at,created_at,updated_at) V
 	if _, err := db.Exec(`UPDATE sessions SET activity_state='active' WHERE id='task-upgrade-1'`); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.QueryRow(`SELECT count(*) FROM change_log`).Scan(&after); err != nil || after != before+3 {
+	if err := db.QueryRow(`SELECT count(*) FROM change_log`).Scan(&after); err != nil || after != before+4 {
 		t.Fatalf("retained events: %d %v", after, err)
 	}
 	upTo(t, db, 155)

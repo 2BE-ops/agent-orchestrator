@@ -4,6 +4,34 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 10b — exclusive leases and atomic dispatch persistence (2026-09-18)
+
+Migration 0156 retains immutable attempts and launch intent IDs, exact task/
+criteria/dependency revision pins, one unreleased lease per task, independent
+heartbeat/activity timestamps, and immutable attempt-to-session associations.
+Expiry preserves the reservation. Explicit recovery requires the exact session
+identity and controller owner observed by the trusted lifecycle caller; release
+requires termination, while adoption changes the holder and fences old callbacks.
+Unseeded cancellation is safe because process launch requires a committed seed.
+Releasing ownership does not mark the task successful. Attempt limits are enforced.
+
+The shared configured-session transaction now also supports atomic task dispatch:
+session seed, validated immutable worker configuration, association and audit/CDC
+commit together. Replayed or concurrent dispatch returns the same seed with
+`created=false`, never fresh-launch authorization. A retained dispatch prevents
+deleting its worker identity. Requested manual Type/override selection is enforced.
+
+Nine new lease/dispatch tests PASS for frozen history/reopen, unfrozen rejection,
+retry bounds, independent activity, stale/expired owners, six concurrent
+reservations, idempotent launch intent, five concurrent seeds, association/audit
+fault rollback, exact recovery/termination proofs, retained SQL history and
+manual selection. The populated upgrade/downgrade test now includes leases.
+Full domain/SQLite (36.96s)/store (18.42s)/sqlitetest/CDC suites PASS; backend build,
+sqlc and pinned domain/ports/SQLite/CDC lint PASS (0 issues). Diff reviewed.
+Logs: ignored `*stage10b*`. These are internal persistence contracts; scheduler
+admission, native launch/restore integration and task service/API remain pending,
+so stage 10 remains IN PROGRESS and no autonomous execution claim is made.
+
 ## Stage 10a — durable task planning and criteria (2026-09-18)
 
 Migrations 0154–0155 add task CDC and project-scoped task identities, immutable
