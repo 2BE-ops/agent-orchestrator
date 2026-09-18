@@ -4,6 +4,31 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 12b — worker-result service, API and CLI (2026-09-19)
+
+The shared service derives author, attempt and activation from the current native
+session. Strict 512 KiB submission requests supply a native generation, retry key,
+expected version and bounded claims; scoped history reads retain exact corrections.
+Three daemon routes and HTTP-only CLI commands share this boundary. Generated
+OpenAPI/TypeScript contracts, route redaction and CLI documentation accompany it.
+
+Real SQLite HTTP tests cover first submission, replay, correction, conflicting keys,
+paging, immutable history, unrelated task scope, malformed/forged/oversized input
+and stale native generations. A completed claim leaves the task working with its
+lease intact for independent evaluation. Service tests cover TUI/Chat attribution
+and storage errors; CLI tests cover usage, bounds and daemon request-ID envelopes.
+Focused tests PASS; full CLI (23.721s), task, telemetry, router/spec/envelope PASS.
+Full controllers retain exactly the two recorded Windows pairing/clone failures.
+Frontend client tests PASS (39), frontend typecheck, backend build, API generation
+and changed-code pinned lint PASS (0 issues). Semantic API comparison finds zero
+changes to pre-existing paths/schemas. Logs: ignored `*stage12b*`.
+
+The HTTP fixture initially used an obsolete field and omitted its expected native
+permissions; corrected before the focused and full checks. The final typecheck was
+rerun after the earlier process result was lost at compaction, and exited zero.
+This is protocol/API validation; native worker instructions, durable typed message
+delivery, desktop inspection and independent evaluation remain subsequent slices.
+
 ## Stage 12a — structured worker-result persistence (2026-09-19)
 
 Migration 0162 retains bounded schema-v1 worker claims: summary, implementation,

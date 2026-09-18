@@ -68,6 +68,23 @@ type AdaptiveTaskAttemptParam struct {
 	AttemptID string `path:"attemptId"`
 }
 
+// TaskResultIDParam identifies one immutable worker submission.
+type TaskResultIDParam struct {
+	ResultID string `path:"resultId"`
+}
+
+// TaskResultSubmitRequest contains generation-fenced worker claims.
+type TaskResultSubmitRequest tasksvc.ResultInput
+
+// TaskResultSubmitResponse acknowledges persistence, not successful evaluation.
+type TaskResultSubmitResponse tasksvc.ResultReceipt
+
+// TaskResultsResponse pages immutable claim corrections within one attempt.
+type TaskResultsResponse struct {
+	Items      []domain.TaskResult `json:"items"`
+	NextCursor string              `json:"nextCursor,omitempty"`
+}
+
 // AdaptiveTaskVersionParam selects immutable task or criteria history.
 type AdaptiveTaskVersionParam struct {
 	Version int64 `path:"version" minimum:"1"`

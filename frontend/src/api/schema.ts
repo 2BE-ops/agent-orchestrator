@@ -2442,6 +2442,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/task-results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit bounded generation-fenced worker claims */
+        post: operations["submitTaskResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/worker-configuration": {
         parameters: {
             query?: never;
@@ -3002,6 +3019,40 @@ export interface paths {
         };
         /** Inspect exact sealed worker input and provenance */
         get: operations["getTaskContext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{taskId}/attempts/{attemptId}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect immutable worker claims and corrections */
+        get: operations["listTaskResults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{taskId}/attempts/{attemptId}/results/{resultId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect exact historical worker claims */
+        get: operations["getTaskResult"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5580,6 +5631,20 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        TaskInterfaceClaim: {
+            contract: string;
+            files: string[] | null;
+            name: string;
+        };
+        TaskKnowledgeCandidate: {
+            /** @enum {string} */
+            confidence: "low" | "medium" | "high";
+            content: string;
+            /** @enum {string} */
+            kind: "architecture" | "convention" | "interface" | "constraint" | "pitfall" | "failed_approach" | "file_relationship" | "external_behavior" | "question";
+            tags: string[] | null;
+            title: string;
+        };
         TaskLease: {
             attemptId: string;
             /** Format: date-time */
@@ -5594,6 +5659,58 @@ export interface components {
             /** Format: date-time */
             releasedAt?: null | string;
             taskId: string;
+        };
+        TaskResult: {
+            attemptId: string;
+            configurationHash: string;
+            /** Format: int64 */
+            configurationSequence: number;
+            contentHash: string;
+            contextHash: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            criteriaVersion: number;
+            definition: components["schemas"]["TaskResultDefinition"];
+            id: string;
+            nativeGeneration: string;
+            /** Format: int64 */
+            number: number;
+            sessionId: string;
+            taskId: string;
+            /** Format: int64 */
+            taskRevision: number;
+        };
+        TaskResultDefinition: {
+            assumptions: string[] | null;
+            claimedCommit?: string;
+            /** @enum {string} */
+            claimedOutcome: "completed" | "partial" | "blocked";
+            decisions: string[] | null;
+            findings: string[] | null;
+            implementation: string;
+            interfaces: components["schemas"]["TaskInterfaceClaim"][] | null;
+            knowledgeCandidates: components["schemas"]["TaskKnowledgeCandidate"][] | null;
+            recommendedFollowUp: string[] | null;
+            schemaVersion: number;
+            summary: string;
+            tests: components["schemas"]["TaskTestClaim"][] | null;
+            unresolvedIssues: string[] | null;
+        };
+        TaskResultSubmitRequest: {
+            definition: components["schemas"]["TaskResultDefinition"];
+            /** Format: int64 */
+            expectedVersion: number;
+            idempotencyKey: string;
+            sourceGeneration: string;
+        };
+        TaskResultSubmitResponse: {
+            created: boolean;
+            result: components["schemas"]["TaskResult"];
+        };
+        TaskResultsResponse: {
+            items: components["schemas"]["TaskResult"][];
+            nextCursor?: string;
         };
         TaskRevision: {
             actor: components["schemas"]["AdaptiveActor"];
@@ -5613,6 +5730,12 @@ export interface components {
             /** Format: int64 */
             revision: number;
             taskId: string;
+        };
+        TaskTestClaim: {
+            command: string[] | null;
+            details: string;
+            /** @enum {string} */
+            outcome: "passed" | "failed" | "not_run" | "unknown";
         };
         TaskWorkerDispatch: {
             attemptId: string;
@@ -15722,6 +15845,87 @@ export interface operations {
             };
         };
     };
+    submitTaskResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session identifier, e.g. project-1. */
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskResultSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResultSubmitResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
     getWorkerConfiguration: {
         parameters: {
             query?: never;
@@ -18216,6 +18420,164 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskContextSnapshot"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listTaskResults: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                taskId: string;
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResultsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getTaskResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+                attemptId: string;
+                resultId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResult"];
                 };
             };
             /** @description Bad Request */

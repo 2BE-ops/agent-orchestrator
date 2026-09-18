@@ -7650,6 +7650,69 @@ paths:
       summary: Switch a logical AO session to another agent harness
       tags:
       - sessions
+  /api/v1/sessions/{sessionId}/task-results:
+    post:
+      operationId: submitTaskResult
+      parameters:
+      - description: Session identifier, e.g. project-1.
+        in: path
+        name: sessionId
+        required: true
+        schema:
+          description: Session identifier, e.g. project-1.
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskResultSubmitRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResultSubmitResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Submit bounded generation-fenced worker claims
+      tags:
+      - tasks
   /api/v1/sessions/{sessionId}/worker-configuration:
     get:
       operationId: getWorkerConfiguration
@@ -9721,6 +9784,142 @@ paths:
                 $ref: '#/components/schemas/APIError'
           description: Not Implemented
       summary: Inspect exact sealed worker input and provenance
+      tags:
+      - tasks
+  /api/v1/tasks/{taskId}/attempts/{attemptId}/results:
+    get:
+      operationId: listTaskResults
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: attemptId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResultsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect immutable worker claims and corrections
+      tags:
+      - tasks
+  /api/v1/tasks/{taskId}/attempts/{attemptId}/results/{resultId}:
+    get:
+      operationId: getTaskResult
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: attemptId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: resultId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResult'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect exact historical worker claims
       tags:
       - tasks
   /api/v1/tasks/{taskId}/audit:
@@ -16770,6 +16969,60 @@ components:
       - reason
       - createdAt
       type: object
+    TaskInterfaceClaim:
+      properties:
+        contract:
+          type: string
+        files:
+          items:
+            type: string
+          type:
+          - array
+          - "null"
+        name:
+          type: string
+      required:
+      - name
+      - contract
+      - files
+      type: object
+    TaskKnowledgeCandidate:
+      properties:
+        confidence:
+          enum:
+          - low
+          - medium
+          - high
+          type: string
+        content:
+          type: string
+        kind:
+          enum:
+          - architecture
+          - convention
+          - interface
+          - constraint
+          - pitfall
+          - failed_approach
+          - file_relationship
+          - external_behavior
+          - question
+          type: string
+        tags:
+          items:
+            type: string
+          type:
+          - array
+          - "null"
+        title:
+          type: string
+      required:
+      - title
+      - kind
+      - content
+      - confidence
+      - tags
+      type: object
     TaskLease:
       properties:
         attemptId:
@@ -16803,6 +17056,173 @@ components:
       - taskId
       - heartbeatAt
       - expiresAt
+      type: object
+    TaskResult:
+      properties:
+        attemptId:
+          type: string
+        configurationHash:
+          type: string
+        configurationSequence:
+          format: int64
+          type: integer
+        contentHash:
+          type: string
+        contextHash:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        criteriaVersion:
+          format: int64
+          type: integer
+        definition:
+          $ref: '#/components/schemas/TaskResultDefinition'
+        id:
+          type: string
+        nativeGeneration:
+          type: string
+        number:
+          format: int64
+          type: integer
+        sessionId:
+          type: string
+        taskId:
+          type: string
+        taskRevision:
+          format: int64
+          type: integer
+      required:
+      - id
+      - taskId
+      - attemptId
+      - number
+      - sessionId
+      - nativeGeneration
+      - taskRevision
+      - criteriaVersion
+      - configurationHash
+      - configurationSequence
+      - contextHash
+      - definition
+      - contentHash
+      - createdAt
+      type: object
+    TaskResultDefinition:
+      properties:
+        assumptions:
+          items:
+            type: string
+          type:
+          - array
+          - "null"
+        claimedCommit:
+          type: string
+        claimedOutcome:
+          enum:
+          - completed
+          - partial
+          - blocked
+          type: string
+        decisions:
+          items:
+            type: string
+          type:
+          - array
+          - "null"
+        findings:
+          items:
+            type: string
+          type:
+          - array
+          - "null"
+        implementation:
+          type: string
+        interfaces:
+          items:
+            $ref: '#/components/schemas/TaskInterfaceClaim'
+          type:
+          - array
+          - "null"
+        knowledgeCandidates:
+          items:
+            $ref: '#/components/schemas/TaskKnowledgeCandidate'
+          type:
+          - array
+          - "null"
+        recommendedFollowUp:
+          items:
+            type: string
+          type:
+          - array
+          - "null"
+        schemaVersion:
+          type: integer
+        summary:
+          type: string
+        tests:
+          items:
+            $ref: '#/components/schemas/TaskTestClaim'
+          type:
+          - array
+          - "null"
+        unresolvedIssues:
+          items:
+            type: string
+          type:
+          - array
+          - "null"
+      required:
+      - schemaVersion
+      - claimedOutcome
+      - summary
+      - implementation
+      - decisions
+      - assumptions
+      - interfaces
+      - tests
+      - findings
+      - unresolvedIssues
+      - recommendedFollowUp
+      - knowledgeCandidates
+      type: object
+    TaskResultSubmitRequest:
+      properties:
+        definition:
+          $ref: '#/components/schemas/TaskResultDefinition'
+        expectedVersion:
+          format: int64
+          type: integer
+        idempotencyKey:
+          type: string
+        sourceGeneration:
+          type: string
+      required:
+      - sourceGeneration
+      - idempotencyKey
+      - expectedVersion
+      - definition
+      type: object
+    TaskResultSubmitResponse:
+      properties:
+        created:
+          type: boolean
+        result:
+          $ref: '#/components/schemas/TaskResult'
+      required:
+      - result
+      - created
+      type: object
+    TaskResultsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TaskResult'
+          type: array
+        nextCursor:
+          type: string
+      required:
+      - items
       type: object
     TaskRevision:
       properties:
@@ -16848,6 +17268,28 @@ components:
       - taskId
       - revision
       - contentHash
+      type: object
+    TaskTestClaim:
+      properties:
+        command:
+          items:
+            type: string
+          type:
+          - array
+          - "null"
+        details:
+          type: string
+        outcome:
+          enum:
+          - passed
+          - failed
+          - not_run
+          - unknown
+          type: string
+      required:
+      - command
+      - outcome
+      - details
       type: object
     TaskWorkerDispatch:
       properties:

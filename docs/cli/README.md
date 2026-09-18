@@ -104,6 +104,27 @@ Default inline input is limited to 192 KiB and 48 Ki estimated tokens including
 system instructions; token estimates use four UTF-8 bytes per token. Restoration
 retains the original context after knowledge or file changes.
 
+`ao task submit-result <session-id> --file <path>` submits a JSON request with
+`sourceGeneration`, a stable `idempotencyKey`, `expectedVersion` (zero initially)
+and `definition`. The source generation must match the submitting worker's native
+execution. The daemon derives its attempt, actor, configuration and context; these
+cannot be supplied as author tags. Request JSON is limited to 512 KiB; the result
+definition is limited to 256 KiB and 16 corrections per attempt. Reuse a key only
+for an exact retry; corrections use a new key and the last result version.
+
+A definition has `schemaVersion: 1`, `claimedOutcome` (`completed`, `partial` or
+`blocked`), `summary` and `implementation`, plus optional `claimedCommit` (full Git
+object ID) and the collections `decisions`, `assumptions`, `interfaces`, `tests`,
+`findings`, `unresolvedIssues`, `recommendedFollowUp` and `knowledgeCandidates`.
+Tests contain `command`, `outcome` (`passed`, `failed`, `not_run`, `unknown`) and
+`details`; interfaces contain `name`, `contract` and workspace-relative `files`.
+Knowledge candidates contain `title`, `kind`, `content`, `confidence` and `tags`.
+These are worker claims awaiting independent evaluation; commands are not executed
+and knowledge is not automatically accepted. `ao task results <task-id>
+<attempt-id>` pages claim history; `ao task result <task-id> <attempt-id>
+<result-id>` reads an exact submission. Malformed submissions leave native output
+and previous results intact.
+
 `ao task` (alias `ao tasks`) authors work independently of worker sessions and
 returns JSON. `create <project> --file <path>` accepts the task API body:
 
