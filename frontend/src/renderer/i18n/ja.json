@@ -656,7 +656,6 @@
 	"onboarding.createCloudProject": "クラウドプロジェクトを作成",
 	"onboarding.createCloudProjectDetail": "セッションをこのマシンではなくリモートサンドボックスで実行します。",
 	"onboarding.cloudDialogDescription": "セッションがクラウドサンドボックスで動くプロジェクトを作成します。",
-	"onboarding.mobileSetup": "AO モバイルを設定",
 	"onboarding.step.feedback.title": "ループを回し続ける。",
 	"onboarding.step.feedback.subtitle": "CI とレビューのフィードバックが適切なエージェントに戻ります。",
 	"onboarding.step.feedback.next": "セットアップへ進む",

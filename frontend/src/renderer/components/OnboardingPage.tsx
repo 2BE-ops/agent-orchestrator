@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { CircleDashed, Loader2 } from "lucide-react";
+import { ArrowUp, CircleDashed, Loader2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -40,6 +40,19 @@ type StepDetails = {
 };
 
 const STEPS: Step[] = ["welcome", "feedback", "github", "cloud", "project", "orchestrator", "workers", "guide"];
+
+/** Project setup is one stage of the flow but three screens: you pick a
+ *  project, then its orchestrator, then its workers. The counter counts
+ *  stages, so those three read as a single position and the flow shows six
+ *  dots rather than eight. */
+const STAGES: Step[][] = [
+	["welcome"],
+	["feedback"],
+	["github"],
+	["cloud"],
+	["project", "orchestrator", "workers"],
+	["guide"],
+];
 
 const STEP_DETAILS: Record<Step, StepDetails> = {
 	welcome: {
@@ -112,7 +125,6 @@ export function OnboardingPage() {
 	const onboardingFinishRequest = useUiStore((state) => state.onboardingFinishRequest);
 	const onboardingFinishError = useUiStore((state) => state.onboardingFinishError);
 	const clearOnboardingFinishError = useUiStore((state) => state.clearOnboardingFinishError);
-	const openGlobalSettings = useUiStore((state) => state.openGlobalSettings);
 	const agentsQuery = useAgentsQuery();
 	// The shell normally publishes the daemon port that API calls need. Loading
 	// straight onto onboarding (a reload mid-setup, or a deep link) skips that,
@@ -133,6 +145,10 @@ export function OnboardingPage() {
 	const [preparedProject, setPreparedProject] = useState<PreparedProjectInput | null>(null);
 	const [agentCheckIndicatorTimedOut, setAgentCheckIndicatorTimedOut] = useState(false);
 	const stepIndex = STEPS.indexOf(step);
+	const stageIndex = Math.max(
+		0,
+		STAGES.findIndex((stage) => stage.includes(step)),
+	);
 	const details = STEP_DETAILS[step];
 	const agentCatalog = freshAgentCatalog ?? agentsQuery.data;
 	const agents = useMemo(() => {
@@ -253,15 +269,6 @@ export function OnboardingPage() {
 		void harnessSetup.startAuth(agentId);
 	}, [harnessSetup]);
 
-	// Optional exit from the last step: keep the setup the user already did,
-	// finish onboarding, and land in the app with mobile pairing open.
-	const handleMobileSetup = useCallback(() => {
-		markOnboardingComplete();
-		clearOnboardingFinishError();
-		void navigate({ to: "/" });
-		openGlobalSettings("mobile");
-	}, [clearOnboardingFinishError, navigate, openGlobalSettings]);
-
 	// A cloud project is created by the flow that owns it, so onboarding just
 	// records completion and hands off to the app.
 	const handleCloudProjectCreated = useCallback(() => {
@@ -305,16 +312,16 @@ export function OnboardingPage() {
 					) : (
 						<img src={aoLogo} alt={t("onboarding.logoAlt")} className="h-6 w-7 object-contain" />
 					)}
-					<div className="flex gap-1.5" aria-label={t("onboarding.stepOf", { current: stepIndex + 1, total: STEPS.length })}>
-						{STEPS.map((item, index) => (
+					<div className="flex gap-1.5" aria-label={t("onboarding.stepOf", { current: stageIndex + 1, total: STAGES.length })}>
+						{STAGES.map((stage, index) => (
 							<span
-								key={item}
+								key={stage[0]}
 								className={cn(
 									"h-1 rounded-full transition-[width,background-color] duration-normal ease-out motion-reduce:transition-none",
 									// The step you are on keeps full width; the rest shrink, and the
 									// width animates so moving through the flow reads as movement.
-									index === stepIndex ? "w-4" : "w-2",
-									index <= stepIndex ? "bg-foreground/70" : "bg-foreground/15",
+									index === stageIndex ? "w-4" : "w-2",
+									index <= stageIndex ? "bg-foreground/70" : "bg-foreground/15",
 								)}
 							/>
 						))}
@@ -413,15 +420,8 @@ export function OnboardingPage() {
 										</div>
 									</div>
 								) : (
-									<div className="flex w-full max-w-[500px] flex-col items-start gap-4">
+									<div className="w-full max-w-[500px]">
 										<OnboardingGuide />
-										<button
-											type="button"
-											onClick={handleMobileSetup}
-											className="px-1 text-caption text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-										>
-											{t("onboarding.mobileSetup")}
-										</button>
 									</div>
 								))}
 						</div>
@@ -495,8 +495,17 @@ function OnboardingGuide() {
 	return (
 		<div className="w-full max-w-[500px] text-left">
 			<p className="mb-2 text-xs font-medium text-muted-foreground">{t("onboarding.guidePromptLabel")}</p>
-			<div className="rounded-lg bg-card px-3.5 py-3 font-mono text-[12px] leading-5 text-foreground/85">
-				{t("onboarding.guidePrompt")}
+			{/* A still of the chat composer rather than a quoted block: the prompt
+			    sits where the user will type it, on the composer's own surface and
+			    radius, so it is recognisable when they reach the real one. Inert
+			    on purpose — it is a picture of the control, not the control. */}
+			<div aria-hidden="true" className="cursor-chat-composer flex flex-col gap-2.5 border px-3 pb-2.5 pt-3">
+				<p className="text-[13px] leading-5 text-foreground">{t("onboarding.guidePrompt")}</p>
+				<div className="flex items-center justify-end">
+					<span className="grid size-7 shrink-0 place-items-center rounded-full bg-foreground text-background">
+						<ArrowUp className="size-3.5" aria-hidden="true" />
+					</span>
+				</div>
 			</div>
 			<p className="mt-4 text-xs leading-5 text-muted-foreground">
 				{t("onboarding.guideExplainer")}

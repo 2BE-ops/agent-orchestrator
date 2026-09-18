@@ -658,7 +658,6 @@
 	"onboarding.createCloudProject": "Crear un proyecto en la nube",
 	"onboarding.createCloudProjectDetail": "Ejecuta las sesiones en un sandbox remoto en vez de en este equipo.",
 	"onboarding.cloudDialogDescription": "Crea un proyecto cuyas sesiones se ejecutan en un sandbox en la nube.",
-	"onboarding.mobileSetup": "Configurar AO móvil",
 	"onboarding.step.feedback.title": "Mantén el ciclo en marcha.",
 	"onboarding.step.feedback.subtitle": "Los comentarios de CI y revisión vuelven al agente correcto.",
 	"onboarding.step.feedback.next": "Continuar a la configuración",

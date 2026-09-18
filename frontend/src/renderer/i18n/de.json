@@ -656,7 +656,6 @@
 	"onboarding.createCloudProject": "Cloud-Projekt erstellen",
 	"onboarding.createCloudProjectDetail": "Führt Sitzungen in einer entfernten Sandbox statt auf diesem Rechner aus.",
 	"onboarding.cloudDialogDescription": "Erstellt ein Projekt, dessen Sitzungen in einer Cloud-Sandbox laufen.",
-	"onboarding.mobileSetup": "AO Mobile einrichten",
 	"onboarding.step.feedback.title": "Halte den Kreislauf in Bewegung.",
 	"onboarding.step.feedback.subtitle": "CI- und Review-Feedback landen beim richtigen Agenten.",
 	"onboarding.step.feedback.next": "Weiter zur Einrichtung",

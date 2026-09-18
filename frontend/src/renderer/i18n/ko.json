@@ -656,7 +656,6 @@
 	"onboarding.createCloudProject": "클라우드 프로젝트 만들기",
 	"onboarding.createCloudProjectDetail": "세션을 이 컴퓨터가 아니라 원격 샌드박스에서 실행합니다.",
 	"onboarding.cloudDialogDescription": "세션이 클라우드 샌드박스에서 실행되는 프로젝트를 만듭니다.",
-	"onboarding.mobileSetup": "AO 모바일 설정",
 	"onboarding.step.feedback.title": "루프를 계속 돌리세요.",
 	"onboarding.step.feedback.subtitle": "CI와 리뷰 피드백이 올바른 에이전트에게 돌아갑니다.",
 	"onboarding.step.feedback.next": "설정으로 진행",
