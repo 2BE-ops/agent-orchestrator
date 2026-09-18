@@ -23,7 +23,7 @@ type configParser func([]byte) ([]ports.AgentModelInfo, error)
 
 func hasConfigDiscoverySource(agentID string) bool {
 	switch agentID {
-	case "qwen", "continue", "goose", "vibe", "cline", "autohand":
+	case "qwen", "continue", "goose", "vibe", "cline", "autohand", "opencode", "kilocode":
 		return true
 	default:
 		return false
@@ -80,6 +80,8 @@ func configModelParser(agentID string) configParser {
 		return parseClineModels
 	case "autohand":
 		return parseAutoHandModels
+	case "opencode", "kilocode":
+		return parseOpenCodeModels
 	default:
 		return nil
 	}
@@ -122,6 +124,44 @@ func modelConfigPaths(agentID, workingDir string, env map[string]string) []strin
 	case "autohand":
 		if home != "" {
 			paths = append(paths, filepath.Join(home, ".autohand", "config.json"))
+		}
+	case "opencode":
+		if p := strings.TrimSpace(env["OPENCODE_CONFIG"]); p != "" {
+			paths = append(paths, p)
+		}
+		if workingDir != "" {
+			paths = append(paths,
+				filepath.Join(workingDir, "opencode.json"),
+				filepath.Join(workingDir, "opencode.jsonc"))
+		}
+		if home != "" {
+			paths = append(paths,
+				filepath.Join(home, ".config", "opencode", "opencode.json"),
+				filepath.Join(home, ".config", "opencode", "opencode.jsonc"))
+		}
+	case "kilocode":
+		// Kilo Code CLI 1.0 is an opencode fork. Its documented config surface
+		// (kilocode.ai/docs/cli): KILO_CONFIG env override; project-level
+		// kilo.json[c] (legacy opencode.json[c]) or config inside ./.kilo/;
+		// global ~/.config/kilo/kilo.json[c] (legacy opencode.json[c]).
+		if p := strings.TrimSpace(env["KILO_CONFIG"]); p != "" {
+			paths = append(paths, p)
+		}
+		if workingDir != "" {
+			paths = append(paths,
+				filepath.Join(workingDir, "kilo.json"),
+				filepath.Join(workingDir, "kilo.jsonc"),
+				filepath.Join(workingDir, "opencode.json"),
+				filepath.Join(workingDir, "opencode.jsonc"),
+				filepath.Join(workingDir, ".kilo", "kilo.json"),
+				filepath.Join(workingDir, ".kilo", "kilo.jsonc"))
+		}
+		if home != "" {
+			paths = append(paths,
+				filepath.Join(home, ".config", "kilo", "kilo.json"),
+				filepath.Join(home, ".config", "kilo", "kilo.jsonc"),
+				filepath.Join(home, ".config", "kilo", "opencode.json"),
+				filepath.Join(home, ".config", "kilo", "opencode.jsonc"))
 		}
 	}
 	return paths
@@ -353,8 +393,7 @@ func parseVibeModels(raw []byte) ([]ports.AgentModelInfo, error) {
 	return normalize(models), nil
 }
 
-func parseClineModels(raw []byte) ([]ports.AgentModelInfo, error) {
-	var config struct {
+func parseClineModels(raw []byte) ([]ports.AgentModelInfo, error) {	var config struct {
 		LastUsedProvider string                     `json:"lastUsedProvider"`
 		Providers        map[string]json.RawMessage `json:"providers"`
 	}
@@ -403,4 +442,105 @@ func configuredModelIDs(value any) []string {
 	walk(value)
 	sort.Strings(ids)
 	return ids
+}
+
+// parseOpenCodeModels reads the opencode/kilocode configuration format
+// (opencode.json / kilo.json, JSONC allowed): providers are configured under
+// "provider", and each provider may pin a "models" map whose keys are the
+// selectable model IDs. A provider with no "models" map resolves registry
+// defaults itself, so it contributes nothing here. The top-level "model"
+// ("provider/model") marks the default; when it names a model not declared
+// under any provider it is appended so the effective selection stays visible.
+func parseOpenCodeModels(raw []byte) ([]ports.AgentModelInfo, error) {
+	var config struct {
+		Model    string                     `json:"model"`
+		Provider map[string]json.RawMessage `json:"provider"`
+	}
+	if err := json.Unmarshal(stripJSONComments(raw), &config); err != nil {
+		return nil, err
+	}
+	var models []ports.AgentModelInfo
+	for provider, rawProvider := range config.Provider {
+		var entry struct {
+			Models map[string]json.RawMessage `json:"models"`
+		}
+		if err := json.Unmarshal(rawProvider, &entry); err != nil {
+			// A non-object provider entry carries no selectable models.
+			continue
+		}
+		for id := range entry.Models {
+			id = strings.TrimSpace(id)
+			if id == "" {
+				continue
+			}
+			models = append(models, ports.AgentModelInfo{
+				ID: provider + "/" + id, Label: id, Provider: provider,
+			})
+		}
+	}
+	models = normalize(models)
+	defaultModel := strings.TrimSpace(config.Model)
+	if defaultModel == "" {
+		return models, nil
+	}
+	for i := range models {
+		if strings.EqualFold(models[i].ID, defaultModel) {
+			models[i].IsDefault = true
+			return normalize(models), nil
+		}
+	}
+	provider, _, _ := strings.Cut(defaultModel, "/")
+	models = append(models, ports.AgentModelInfo{
+		ID: defaultModel, Label: defaultModel, Provider: provider, IsDefault: true,
+	})
+	return normalize(models), nil
+}
+
+// stripJSONComments removes // and /* */ comments from JSONC content while
+// preserving comment-like sequences inside string literals (URLs, base URLs).
+func stripJSONComments(raw []byte) []byte {
+	out := make([]byte, 0, len(raw))
+	inString := false
+	escaped := false
+	for i := 0; i < len(raw); i++ {
+		c := raw[i]
+		if inString {
+			out = append(out, c)
+			switch {
+			case escaped:
+				escaped = false
+			case c == '\\':
+				escaped = true
+			case c == '"':
+				inString = false
+			}
+			continue
+		}
+		if c == '"' {
+			inString = true
+			out = append(out, c)
+			continue
+		}
+		if c == '/' && i+1 < len(raw) {
+			switch raw[i+1] {
+			case '/':
+				for i < len(raw) && raw[i] != '\n' {
+					i++
+				}
+				if i < len(raw) {
+					out = append(out, raw[i])
+				}
+				continue
+			case '*':
+				i += 2
+				for i+1 < len(raw) && (raw[i] != '*' || raw[i+1] != '/') {
+					i++
+				}
+				i++ // skip the closing '/'
+				continue
+			}
+		}
+		out = append(out, c)
+	}
+	return out
 }
