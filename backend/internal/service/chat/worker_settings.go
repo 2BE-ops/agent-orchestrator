@@ -31,6 +31,9 @@ func (s *Service) setWorkerTurnSettings(ctx context.Context, record domain.Sessi
 	if record.Metadata.ControllerGeneration != controller.Generation() || record.Harness != controller.harness {
 		return ports.ErrRegistryConflict
 	}
+	if len(current.NativeOptions) > 0 {
+		return apierr.Invalid("WORKER_NATIVE_CONTROLS_REQUIRED", "Use this worker's native controls to change its provider settings", nil)
+	}
 	writer, ok := s.store.(ports.WorkerConversationSettingsStore)
 	if !ok || s.workerConfigurations == nil {
 		return apierr.NotImplemented("WORKER_CONFIGURATION_UNAVAILABLE", "Worker configuration changes are unavailable")

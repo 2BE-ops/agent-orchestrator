@@ -5125,6 +5125,7 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             effective: components["schemas"]["AgentTypeDefinition"];
+            nativeOptions?: components["schemas"]["WorkerNativeOption"][];
             nativeSettings?: components["schemas"]["WorkerNativeSettings"];
             origin: string;
             provider?: components["schemas"]["WorkerProviderReference"];
@@ -5175,6 +5176,7 @@ export interface components {
             events: components["schemas"]["WorkerExecutionSummary"][];
             /** Format: int64 */
             nextCursor?: number;
+            pendingChange?: components["schemas"]["WorkerNativeChange"];
         };
         WorkerExecutionResponse: {
             execution: components["schemas"]["WorkerExecution"];
@@ -5192,6 +5194,22 @@ export interface components {
             sessionMode: null | string;
             sourceId: string;
             sourceKind: string;
+        };
+        WorkerNativeChange: {
+            conversationId: string;
+            /** Format: date-time */
+            createdAt: string;
+            id: string;
+            previous: components["schemas"]["WorkerNativeOption"][];
+            /** Format: int64 */
+            previousActivation: number;
+            requested: components["schemas"]["WorkerNativeOption"];
+            sessionId: string;
+        };
+        WorkerNativeOption: {
+            boolean?: null | boolean;
+            id: string;
+            select?: string;
         };
         WorkerNativeSettings: {
             approvalMode?: null | string;

@@ -15003,6 +15003,10 @@ components:
           type: string
         effective:
           $ref: '#/components/schemas/AgentTypeDefinition'
+        nativeOptions:
+          items:
+            $ref: '#/components/schemas/WorkerNativeOption'
+          type: array
         nativeSettings:
           $ref: '#/components/schemas/WorkerNativeSettings'
         origin:
@@ -15138,6 +15142,8 @@ components:
         nextCursor:
           format: int64
           type: integer
+        pendingChange:
+          $ref: '#/components/schemas/WorkerNativeChange'
       required:
       - current
       - currentSequence
@@ -15190,6 +15196,48 @@ components:
       - config
       - contentHash
       - preparedAt
+      type: object
+    WorkerNativeChange:
+      properties:
+        conversationId:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        previous:
+          items:
+            $ref: '#/components/schemas/WorkerNativeOption'
+          type: array
+        previousActivation:
+          format: int64
+          type: integer
+        requested:
+          $ref: '#/components/schemas/WorkerNativeOption'
+        sessionId:
+          type: string
+      required:
+      - id
+      - sessionId
+      - conversationId
+      - previousActivation
+      - previous
+      - requested
+      - createdAt
+      type: object
+    WorkerNativeOption:
+      properties:
+        boolean:
+          type:
+          - "null"
+          - boolean
+        id:
+          type: string
+        select:
+          type: string
+      required:
+      - id
       type: object
     WorkerNativeSettings:
       properties:

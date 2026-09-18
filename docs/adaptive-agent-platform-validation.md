@@ -4,6 +4,46 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 09c5 — recoverable native controls; stage 09 tested (2026-09-18)
+
+Migration 0153 records immutable native-control intent before provider I/O and
+immutable applied/reverted resolutions. Applied resolution, native preferences,
+execution snapshot and activation share one transaction. Requests validate the
+live advertised choices and shared native catalog/binding before mutation. The
+returned coupled controls are retained as bounded values, without copying native
+credentials/config files. A model change can legitimately change its effort
+catalog; AO validates and records the provider's confirmed result.
+
+Cancellation or persistence failure attempts bounded readback-verified
+compensation. Unknown compensation remains durable, blocks dispatch/retry and
+configuration ownership transfer, preserves queued work, and appears in the
+inspector. Retrying the native control or restarting reconciles it before further
+work. Successful recovery resumes accepted queued messages. Fresh controllers
+restore retained native controls; pending harness targets receive their prepared
+controls so the source cannot overwrite them before activation. Explicit portable
+configuration changes and TUI transitions reset interface-specific controls in a
+new execution record. Ordinary live-host adoption does not reapply controls.
+
+Real-SQL/fake-native tests PASS for validation before side effects, coupled model/
+effort and boolean controls, exact restore, prepared-target defaults, immutable
+intent/resolution, overlapping intent rejection, foreign recovery, fault-injected
+resolution rollback, confirmed compensation, unknown outcome dispatch fencing,
+retry/restart recovery, cancellation and resuming the accepted queue. Complete
+domain, registry, store, SQLite upgrade/migration (37.37s), Chat (final 32.47s),
+and session service (57.47s) suites PASS. The full manager suite (44.83s) reproduces
+only the same eight documented Windows baseline failures; its focused worker
+tests PASS. Migration-ledger omission caught by the first full run was fixed and
+the complete affected SQLite suite rerun successfully. Complete API-spec suites,
+sqlc/API generation, build, affected vet, frontend typecheck, 40 frontend tests
+and pinned changed-code lint PASS (0 issues). Diff and whitespace reviewed.
+
+Stage 09 implementation is tested. The prior increment's native Codex launch,
+turn, settings history and full desktop/daemon restart remain the live evidence.
+This native-controls recovery increment uses injected protocol/SQLite evidence;
+live Claude/OpenCode/custom-provider combinations and the empty-native-thread
+recovery gap remain explicitly in the stage 23/25 matrix, not claimed passed.
+Logs: ignored `*stage09c5*` files. The live lab remains on the 09c4 build.
+
 ## Stage 09c4 — execution history API/UI and native turn (2026-09-18)
 
 Two session-scoped read routes expose the active configuration, bounded

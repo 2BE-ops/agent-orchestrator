@@ -27,6 +27,11 @@ func (s *Store) PrepareWorkerExecution(ctx context.Context, owner domain.Session
 	defer s.writeMu.Unlock()
 	var prepared domain.WorkerExecution
 	err := s.inTx(ctx, "prepare worker execution", func(q *gen.Queries) error {
+		if _, pending, err := pendingWorkerNativeChange(ctx, q, execution.SessionID); err != nil {
+			return err
+		} else if pending {
+			return ports.ErrRegistryConflict
+		}
 		row, err := q.GetSession(ctx, execution.SessionID)
 		if err != nil {
 			return err
@@ -163,6 +168,11 @@ func (s *Store) ListWorkerExecutions(ctx context.Context, id domain.SessionID, a
 // activateWorkerExecution is called inside the ownership/settings transaction.
 // A failure therefore rolls back both the configuration and controller change.
 func activateWorkerExecution(ctx context.Context, q *gen.Queries, e domain.WorkerExecution, rollback bool, now time.Time) error {
+	if pending, found, err := pendingWorkerNativeChange(ctx, q, e.SessionID); err != nil {
+		return err
+	} else if found && (e.SourceKind != "conversation_settings" || pending.ID != e.SourceID || rollback) {
+		return ports.ErrRegistryConflict
+	}
 	current, err := currentWorkerActivation(ctx, q, e.SessionID)
 	if err != nil {
 		return err

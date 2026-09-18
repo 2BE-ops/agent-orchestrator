@@ -397,6 +397,10 @@ func (m *Manager) executeChatAgentSwitch(
 	if resumable {
 		historyMode = ports.ChatHistoryDeferred
 	}
+	var nativeOptions *[]domain.WorkerNativeOption
+	if snapshot != nil {
+		nativeOptions = &snapshot.NativeOptions
+	}
 	_, err = m.chat.StartChat(ctx, ChatStart{
 		SessionID:               id,
 		ProjectID:               rec.ProjectID,
@@ -409,6 +413,7 @@ func (m *Manager) executeChatAgentSwitch(
 		Effort:                  agentConfig.Effort,
 		Permissions:             agentConfig.Permissions,
 		SystemPrompt:            finalSystemPrompt,
+		WorkerNativeOptions:     nativeOptions,
 		AdditionalDirectories:   additionalDirectories,
 		ExpectedControllerOwner: credentialRecord.ControllerOwner(),
 		PrepareControllerEnv: func(launchCtx context.Context, expected domain.SessionControllerOwner) (map[string]string, error) {

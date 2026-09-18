@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"slices"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
@@ -50,12 +52,28 @@ func (s *Store) CommitWorkerConversationSettings(ctx context.Context, owner doma
 		if !found || sequence != e.PreviousActivation || current.AgentType != e.Configuration.AgentType {
 			return ports.ErrRegistryConflict
 		}
+		pending, hasPending, err := pendingWorkerNativeChange(ctx, q, e.SessionID)
+		if err != nil {
+			return err
+		}
+		if hasPending && (pending.ID != e.SourceID || pending.Owner != owner || pending.ConversationID != conversationID) {
+			return ports.ErrRegistryConflict
+		}
+		if hasPending && !slices.ContainsFunc(e.Configuration.NativeOptions, pending.Requested.Equal) {
+			return ports.ErrRegistryConflict
+		}
 		if err := insertWorkerExecution(ctx, q, e); err != nil {
 			return err
 		}
 		if err := updateConversationSettings(ctx, q, conversationID, settings, e.CreatedAt); err != nil {
 			return err
 		}
-		return activateWorkerExecution(ctx, q, e, false, e.CreatedAt)
+		if err := activateWorkerExecution(ctx, q, e, false, e.CreatedAt); err != nil {
+			return err
+		}
+		if hasPending {
+			return q.ResolveWorkerNativeChange(ctx, gen.ResolveWorkerNativeChangeParams{ChangeID: pending.ID, Outcome: "applied", ExecutionID: sql.NullString{String: e.ID, Valid: true}, Reason: "Provider confirmed native configuration", CreatedAt: e.CreatedAt})
+		}
+		return nil
 	})
 }

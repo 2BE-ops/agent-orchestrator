@@ -60,6 +60,7 @@ type WorkerExecutionPage struct {
 	CurrentSequence int64                       `json:"currentSequence"`
 	Events          []WorkerExecutionSummary    `json:"events"`
 	NextCursor      int64                       `json:"nextCursor,omitempty"`
+	PendingChange   *domain.WorkerNativeChange  `json:"pendingChange,omitempty"`
 }
 
 // WorkerExecutions returns bounded history, including rollback destinations.
@@ -84,6 +85,15 @@ func (s *Service) WorkerExecutions(ctx context.Context, id domain.SessionID, aft
 		return page, apierr.Conflict("WORKER_CONFIGURATION_CHANGED", "Worker configuration disappeared during the read", nil)
 	}
 	page.Current, page.CurrentSequence = &current, sequence
+	if changes, ok := s.store.(ports.WorkerNativeChangeStore); ok {
+		pending, found, err := changes.PendingWorkerNativeChange(ctx, id)
+		if err != nil {
+			return page, err
+		}
+		if found {
+			page.PendingChange = &pending
+		}
+	}
 	events, err := store.ListWorkerExecutions(ctx, id, after, limit)
 	if err != nil {
 		return page, err

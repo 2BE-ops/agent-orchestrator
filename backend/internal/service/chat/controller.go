@@ -1291,6 +1291,9 @@ func (c *Controller) sendLocked(
 	msg ports.ChatUserMessage,
 	queueWhenBusy bool,
 ) (domain.ConversationTurn, error) {
+	if err := c.checkWorkerNativeRecovery(ctx); err != nil {
+		return domain.ConversationTurn{}, err
+	}
 	c.mu.Lock()
 	handoff := c.handoff != controllerHandoffNone
 	c.mu.Unlock()
@@ -1410,6 +1413,9 @@ func (c *Controller) RetryTurn(ctx context.Context, turnID string) (domain.Conve
 		return domain.ConversationTurn{}, ErrTurnRunning
 	}
 
+	if err := c.checkWorkerNativeRecovery(ctx); err != nil {
+		return domain.ConversationTurn{}, err
+	}
 	content, err := retryPromptContent(prompt.DeliveryContentJSON, c.Capabilities())
 	if err != nil {
 		return domain.ConversationTurn{}, err
@@ -1579,7 +1585,11 @@ func (c *Controller) dispatch(
 	c.mu.Lock()
 	c.dispatchingTurnID = turnID
 	c.mu.Unlock()
-	ref, err := c.conv.SendTurn(ctx, msg)
+	var ref ports.ChatTurnRef
+	err := c.checkWorkerNativeRecovery(ctx)
+	if err == nil {
+		ref, err = c.conv.SendTurn(ctx, msg)
+	}
 	if err != nil {
 		c.mu.Lock()
 		if c.dispatchingTurnID == turnID {
@@ -1674,6 +1684,10 @@ func (c *Controller) drain(ctx context.Context) {
 // allowDispatch gates sending the next queued turn. A pending Stop cutoff forces
 // it true so messages typed after Stop still send.
 func (c *Controller) drainLocked(ctx context.Context, allowDispatch bool) {
+	if err := c.checkWorkerNativeRecovery(ctx); err != nil {
+		c.log.Debug("queued dispatch waits for native configuration recovery", "session", c.sessionID, "error", err)
+		return
+	}
 	c.mu.Lock()
 	cutoff := c.cancelQueuedAt
 	c.cancelQueuedAt = time.Time{}

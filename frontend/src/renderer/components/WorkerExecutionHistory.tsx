@@ -125,6 +125,14 @@ export function WorkerExecutionHistory({ sessionId }: { sessionId: string }) {
 					{current.provider && <p>{current.provider.name}</p>}
 				</div>
 			)}
+			{latest?.pendingChange && (
+				<p role="alert">
+					{t(
+						"registry.nativeRecoveryPending",
+						"A native configuration change needs recovery. Retry its native control or resume the worker before sending another turn.",
+					)}
+				</p>
+			)}
 			{query.data &&
 				query.data.pages.every((page) => page.events.length === 0) && (
 					<p>

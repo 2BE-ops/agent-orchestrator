@@ -120,6 +120,25 @@ type AdaptiveWorkerExecutionActivation struct {
 	CreatedAt   time.Time
 }
 
+type AdaptiveWorkerNativeChange struct {
+	ID                 string
+	SessionID          string
+	ConversationID     string
+	Owner              string
+	PreviousActivation int64
+	PreviousOptions    string
+	Requested          string
+	CreatedAt          time.Time
+}
+
+type AdaptiveWorkerNativeResolution struct {
+	ChangeID    string
+	Outcome     string
+	ExecutionID sql.NullString
+	Reason      string
+	CreatedAt   time.Time
+}
+
 type AgentInstallJob struct {
 	Target              string
 	Status              string

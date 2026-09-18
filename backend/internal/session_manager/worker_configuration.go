@@ -79,6 +79,9 @@ func (m *Manager) prepareWorkerInterface(ctx context.Context, rec domain.Session
 		return nil, apierr.Conflict("WORKER_EXECUTION_SEGMENT_REQUIRED", "Resolve the current worker execution configuration before changing interface", nil)
 	}
 	current.Effective.SessionMode = transition.TargetMode
+	if transition.TargetMode != domain.SessionModeChat {
+		current.NativeOptions = nil
+	}
 	current.Selection.Overrides.SessionMode = &transition.TargetMode
 	current.ContentHash = current.Hash()
 	if err := m.workerConfigurations.ValidateWorkerRestore(ctx, current, string(rec.ProjectID)); err != nil {

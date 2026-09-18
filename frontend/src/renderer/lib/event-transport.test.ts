@@ -98,6 +98,13 @@ afterEach(() => {
 });
 
 describe("createEventTransport", () => {
+	it("refreshes unresolved native configuration state", () => {
+		const client = fakeQueryClient();
+		const disconnect = createEventTransport(client).connect();
+		cdcSources()[0].emit("session_updated", JSON.stringify({ type: "session_updated", sessionId: "worker-1", payload: { workerNativeChangeId: "pending-1" } }));
+		expect(client.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["worker-executions", "worker-1"] }, { cancelRefetch: false });
+		disconnect();
+	});
 	it("refreshes only the changed worker execution history", () => {
 		const client = fakeQueryClient();
 		const disconnect = createEventTransport(client).connect();

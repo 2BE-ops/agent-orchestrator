@@ -14,6 +14,7 @@ import (
 	agentsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agent"
 	chatsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/chat"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
+	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite"
 )
 
 type workerSettingsNative struct{}
@@ -28,7 +29,8 @@ func (workerSettingsNative) EnsureAgentReadiness(context.Context, string, domain
 	return domain.AgentReadinessSnapshot{EffectiveReadiness: domain.AgentReadinessReady}, nil
 }
 
-func TestWorkerTurnSettingsValidateAndRetainExecutionHistory(t *testing.T) {
+func configuredSettingsWorker(t *testing.T, conv ports.ChatConversation) (*sqlite.Store, *chatsvc.Service, domain.SessionRecord, domain.WorkerConfiguration) {
+	t.Helper()
 	ctx := context.Background()
 	st := openStore(t)
 	reg := registry.NewWithNative(st, workerSettingsNative{})
@@ -46,12 +48,18 @@ func TestWorkerTurnSettingsValidateAndRetainExecutionHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := chatsvc.New(chatsvc.Options{Store: st, Sessions: st, Drivers: fakeRegistry{driver: fakeDriver{conv: newFakeConversation()}}, Log: slog.New(slog.DiscardHandler), NewID: uuid.NewString})
+	svc := chatsvc.New(chatsvc.Options{Store: st, Sessions: st, Drivers: fakeRegistry{driver: fakeDriver{conv: conv}}, Log: slog.New(slog.DiscardHandler), NewID: uuid.NewString})
 	svc.SetWorkerConfigurationResolver(reg)
 	t.Cleanup(func() { _ = svc.Stop(ctx, rec.ID) })
 	if _, err := svc.Start(ctx, chatsvc.StartConfig{SessionID: rec.ID, ProjectID: rec.ProjectID, Harness: rec.Harness, WorkspacePath: t.TempDir(), Model: "first", Effort: "high", Permissions: domain.PermissionModeAuto}); err != nil {
 		t.Fatal(err)
 	}
+	return st, svc, rec, snapshot
+}
+
+func TestWorkerTurnSettingsValidateAndRetainExecutionHistory(t *testing.T) {
+	ctx := context.Background()
+	st, svc, rec, snapshot := configuredSettingsWorker(t, newFakeConversation())
 	controller, err := svc.Controller(rec.ID)
 	if err != nil {
 		t.Fatal(err)

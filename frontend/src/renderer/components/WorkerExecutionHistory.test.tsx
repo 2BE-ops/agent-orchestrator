@@ -51,6 +51,21 @@ beforeEach(() => {
 	list.mockReset();
 	read.mockReset();
 });
+it("keeps unresolved native changes visible alongside the last committed configuration", async () => {
+	list.mockResolvedValue({
+		current,
+		currentSequence: 0,
+		events: [],
+		pendingChange: { id: "pending-native" },
+	});
+	mount();
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		"A native configuration change needs recovery",
+	);
+	expect(screen.getByLabelText("Active configuration")).toHaveTextContent(
+		"retained-model",
+	);
+});
 it("paginates immutable changes and distinguishes a rollback from its source operation", async () => {
 	list
 		.mockResolvedValueOnce({

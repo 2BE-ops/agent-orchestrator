@@ -180,6 +180,7 @@ export function createEventTransport(queryClient: QueryClient): EventTransport {
 										conversationId?: unknown;
 										interfaceTransitionId?: unknown;
 										workerExecutionSequence?: unknown;
+										workerNativeChangeId?: unknown;
 								  })
 								: undefined;
 						if (decoded.type === "registry_changed") {
@@ -206,7 +207,7 @@ export function createEventTransport(queryClient: QueryClient): EventTransport {
 						if (
 							decoded.type === "session_updated" &&
 							typeof decoded.sessionId === "string" &&
-							typeof payload?.workerExecutionSequence === "number"
+							(typeof payload?.workerExecutionSequence === "number" || typeof payload?.workerNativeChangeId === "string")
 						) pendingWorkerExecutionSessions.add(decoded.sessionId);
 						if (
 							decoded.type === "session_updated" &&

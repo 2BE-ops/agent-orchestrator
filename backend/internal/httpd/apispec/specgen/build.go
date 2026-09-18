@@ -268,6 +268,8 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"DomainWorkerExecution":                               "WorkerExecution",
 	"DomainWorkerExecutionActivation":                     "WorkerExecutionActivation",
 	"DomainRegistryActor":                                 "RegistryActor",
+	"DomainWorkerNativeOption":                            "WorkerNativeOption",
+	"DomainWorkerNativeChange":                            "WorkerNativeChange",
 	"DomainWorkerSelection":                               "WorkerSelection",
 	"DomainWorkerOverrides":                               "WorkerOverrides",
 	"DomainWorkerDefinitionRef":                           "WorkerDefinitionRef",

@@ -35,3 +35,11 @@ type WorkerExecutionStore interface {
 type WorkerConversationSettingsStore interface {
 	CommitWorkerConversationSettings(context.Context, domain.SessionControllerOwner, string, domain.ConversationSettings, domain.WorkerExecution) error
 }
+
+// WorkerNativeChangeStore fences provider side effects with durable intent and
+// immutable resolutions. Applied resolution shares the settings transaction.
+type WorkerNativeChangeStore interface {
+	BeginWorkerNativeChange(context.Context, domain.WorkerNativeChange) error
+	PendingWorkerNativeChange(context.Context, domain.SessionID) (domain.WorkerNativeChange, bool, error)
+	RevertWorkerNativeChange(context.Context, domain.SessionControllerOwner, string, string) error
+}

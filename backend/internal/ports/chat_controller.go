@@ -32,6 +32,10 @@ type ChatControllerStart struct {
 	SystemPrompt          string
 	AdditionalDirectories []string
 	MCPServers            []ChatMCPServerConfig
+	// WorkerNativeOptions supplies a prepared execution's exact native controls.
+	// Nil reads the active configuration; an explicit empty slice resets controls
+	// for a target whose ownership has not yet been activated.
+	WorkerNativeOptions *[]domain.WorkerNativeOption
 	// ExpectedControllerOwner is the durable controller identity observed before
 	// this launch. PrepareControllerEnv uses it as a compare-and-swap fence.
 	ExpectedControllerOwner domain.SessionControllerOwner

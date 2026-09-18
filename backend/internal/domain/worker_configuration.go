@@ -51,6 +51,7 @@ type WorkerConfiguration struct {
 	Selection          WorkerSelection       `json:"selection"`
 	Effective          AgentTypeDefinition   `json:"effective"`
 	NativeSettings     *ConversationSettings `json:"nativeSettings,omitempty"`
+	NativeOptions      []WorkerNativeOption  `json:"nativeOptions,omitempty"`
 	Skills             []WorkerSkillSnapshot `json:"skills"`
 	Provider           *ProviderBinding      `json:"provider,omitempty"`
 	Origin             RegistryOrigin        `json:"origin"`
@@ -85,6 +86,9 @@ func (c WorkerConfiguration) Validate() error {
 	}
 	if !c.Effective.SessionMode.Valid() {
 		return fmt.Errorf("worker session mode must be resolved")
+	}
+	if err := ValidateWorkerNativeOptions(c.NativeOptions); err != nil {
+		return err
 	}
 	if c.Effective.ProviderBindingRequired && c.Effective.ProviderBindingID == "" {
 		return fmt.Errorf("worker provider rebinding is unresolved")

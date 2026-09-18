@@ -618,6 +618,10 @@ func (s *Service) Start(ctx context.Context, cfg StartConfig) (*Controller, erro
 			return nil, err
 		}
 	}
+	if err := s.restoreWorkerNativeConfiguration(ctx, cfg, conv, liveReconnect); err != nil {
+		_ = cleanupUnpublishedConversation(conv, false)
+		return nil, err
+	}
 	var liveRows ConversationRows
 	if liveReconnect {
 		if s.reader == nil {
@@ -1547,6 +1551,9 @@ func (s *Service) SetConfigOption(
 	}
 	controller.configMu.Lock()
 	defer controller.configMu.Unlock()
+	if options, handled, err := s.setConfiguredNativeOption(ctx, record, controller, configurer, configID, value); handled {
+		return options, err
+	}
 	options, err := configurer.SetConfigOption(ctx, configID, value)
 	if err != nil {
 		return nil, err
