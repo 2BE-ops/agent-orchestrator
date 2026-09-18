@@ -64,3 +64,15 @@ func TestRegistryActorAndMetadataValidation(t *testing.T) {
 		t.Fatal("blank name accepted")
 	}
 }
+
+func TestSkillResourceFileDirectoryConflicts(t *testing.T) {
+	for _, paths := range [][]string{{"references", "references/guide.md"}, {"REFERENCES/guide.md", "references"}, {"SKILL.md/guide.md"}} {
+		d := RegistryDefinition{Skill: &SkillDefinition{Instructions: "Reference"}}
+		for _, path := range paths {
+			d.Skill.Resources = append(d.Skill.Resources, SkillResource{Path: path})
+		}
+		if err := d.Validate(RegistrySkill); err == nil {
+			t.Fatalf("accepted file/directory conflict: %v", paths)
+		}
+	}
+}

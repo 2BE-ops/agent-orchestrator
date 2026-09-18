@@ -20,54 +20,85 @@ var _ ports.RegistryStore = (*Store)(nil)
 
 // CreateRegistryEntry atomically creates identity, first version, pins and audit.
 func (s *Store) CreateRegistryEntry(ctx context.Context, id string, kind domain.RegistryKind, metadata domain.RegistryMetadata, definition domain.RegistryDefinition, mutation domain.RegistryMutation) (domain.RegistryEntry, error) {
-	if strings.TrimSpace(id) == "" || len(id) > 200 || strings.ContainsRune(id, 0) {
-		return domain.RegistryEntry{}, fmt.Errorf("invalid registry id")
-	}
-	if err := metadata.Validate(); err != nil {
-		return domain.RegistryEntry{}, err
-	}
-	if err := mutation.Validate(); err != nil {
-		return domain.RegistryEntry{}, err
-	}
-	if mutation.ExpectedRevision != 0 {
-		return domain.RegistryEntry{}, ports.ErrRegistryConflict
-	}
-	content, hash, err := definition.MarshalContent(kind)
+	entries, err := s.CreateRegistryEntries(ctx, []domain.RegistryCreate{{ID: id, Kind: kind, Metadata: metadata, Definition: definition}}, mutation)
 	if err != nil {
 		return domain.RegistryEntry{}, err
 	}
+	return entries[0], nil
+}
+
+// CreateRegistryEntries commits a bounded bundle, pins and all audit/CDC rows
+// atomically. Disabled dependencies created in this same batch may be pinned;
+// an import therefore never needs to enable definitions even transiently.
+func (s *Store) CreateRegistryEntries(ctx context.Context, inputs []domain.RegistryCreate, mutation domain.RegistryMutation) ([]domain.RegistryEntry, error) {
+	if len(inputs) < 1 || len(inputs) > 33 {
+		return nil, fmt.Errorf("registry batch must contain 1 to 33 definitions")
+	}
+	if err := mutation.Validate(); err != nil {
+		return nil, err
+	}
+	if mutation.ExpectedRevision != 0 {
+		return nil, ports.ErrRegistryConflict
+	}
+	seen := make(map[string]bool, len(inputs))
+	contents := make([][]byte, len(inputs))
+	hashes := make([]string, len(inputs))
+	for i, input := range inputs {
+		if strings.TrimSpace(input.ID) == "" || len(input.ID) > 200 || strings.ContainsRune(input.ID, 0) || seen[input.ID] {
+			return nil, fmt.Errorf("invalid or duplicate registry id")
+		}
+		seen[input.ID] = true
+		if err := input.Metadata.Validate(); err != nil {
+			return nil, err
+		}
+		content, hash, err := input.Definition.MarshalContent(input.Kind)
+		if err != nil {
+			return nil, err
+		}
+		contents[i], hashes[i] = content, hash
+	}
 	if err := s.writeMu.LockContext(ctx); err != nil {
-		return domain.RegistryEntry{}, err
+		return nil, err
 	}
 	defer s.writeMu.Unlock()
 	now := time.Now().UTC()
-	var result domain.RegistryEntry
-	err = s.inTx(ctx, "create registry entry", func(q *gen.Queries) error {
-		if err := q.CreateRegistryEntry(ctx, gen.CreateRegistryEntryParams{
-			ID: id, Kind: string(kind), Name: metadata.Name, Description: metadata.Description,
-			Origin: string(mutation.Actor.Origin), CreatedBy: mutation.Actor.ID, Enabled: boolInt(metadata.Enabled),
-			ManagerCanSelect: boolInt(metadata.Policy.ManagerCanSelect), ManagerCanModify: boolInt(metadata.Policy.ManagerCanModify),
-			ManagerCanVersion: boolInt(metadata.Policy.ManagerCanVersion), CreatedAt: now, UpdatedAt: now,
-		}); err != nil {
-			if isSQLiteUnique(err) {
-				return ports.ErrRegistryConflict
+	result := make([]domain.RegistryEntry, 0, len(inputs))
+	err := s.inTx(ctx, "create registry entries", func(q *gen.Queries) error {
+		createdSkills := make(map[string]bool)
+		for i, input := range inputs {
+			metadata := input.Metadata
+			if err := q.CreateRegistryEntry(ctx, gen.CreateRegistryEntryParams{
+				ID: input.ID, Kind: string(input.Kind), Name: metadata.Name, Description: metadata.Description,
+				Origin: string(mutation.Actor.Origin), CreatedBy: mutation.Actor.ID, Enabled: boolInt(metadata.Enabled),
+				ManagerCanSelect: boolInt(metadata.Policy.ManagerCanSelect), ManagerCanModify: boolInt(metadata.Policy.ManagerCanModify),
+				ManagerCanVersion: boolInt(metadata.Policy.ManagerCanVersion), CreatedAt: now, UpdatedAt: now,
+			}); err != nil {
+				if isSQLiteUnique(err) {
+					return ports.ErrRegistryConflict
+				}
+				return err
 			}
-			return err
+			if err := insertRegistryVersion(ctx, q, domain.RegistryVersion{
+				EntryID: input.ID, Number: 1, Definition: input.Definition, ContentHash: hashes[i], Actor: mutation.Actor, Reason: mutation.Reason, CreatedAt: now,
+			}, input.Kind, contents[i], createdSkills); err != nil {
+				return err
+			}
+			if err := insertRegistryAudit(ctx, q, input.ID, 1, 1, "created", mutation, now); err != nil {
+				return err
+			}
+			row, err := q.GetRegistryEntry(ctx, input.ID)
+			if err != nil {
+				return err
+			}
+			result = append(result, registryEntryFromGen(row))
+			if input.Kind == domain.RegistrySkill {
+				createdSkills[input.ID] = true
+			}
 		}
-		if err := insertRegistryVersion(ctx, q, domain.RegistryVersion{
-			EntryID: id, Number: 1, Definition: definition, ContentHash: hash, Actor: mutation.Actor, Reason: mutation.Reason, CreatedAt: now,
-		}, kind, content); err != nil {
-			return err
-		}
-		if err := insertRegistryAudit(ctx, q, id, 1, 1, "created", mutation, now); err != nil {
-			return err
-		}
-		row, err := q.GetRegistryEntry(ctx, id)
-		result = registryEntryFromGen(row)
-		return err
+		return nil
 	})
 	if err != nil {
-		return domain.RegistryEntry{}, err
+		return nil, err
 	}
 	return result, nil
 }
@@ -159,7 +190,7 @@ func (s *Store) AppendRegistryVersion(ctx context.Context, id string, definition
 		now := time.Now().UTC()
 		result = domain.RegistryVersion{EntryID: id, Number: number, ParentVersion: entry.ActiveVersion,
 			Definition: definition.NormalizeLists(), ContentHash: hash, Actor: mutation.Actor, Reason: mutation.Reason, CreatedAt: now}
-		if err := insertRegistryVersion(ctx, q, result, entry.Kind, content); err != nil {
+		if err := insertRegistryVersion(ctx, q, result, entry.Kind, content, nil); err != nil {
 			return err
 		}
 		count, err := q.AdvanceRegistryRevision(ctx, gen.AdvanceRegistryRevisionParams{ID: id, Revision: entry.Revision, UpdatedAt: now})
@@ -260,14 +291,14 @@ func (s *Store) ListRegistryAudit(ctx context.Context, id string, afterSeq int64
 	return result, nil
 }
 
-func insertRegistryVersion(ctx context.Context, q *gen.Queries, version domain.RegistryVersion, kind domain.RegistryKind, content []byte) error {
+func insertRegistryVersion(ctx context.Context, q *gen.Queries, version domain.RegistryVersion, kind domain.RegistryKind, content []byte, createdSkills map[string]bool) error {
 	if version.Definition.AgentType != nil {
 		for index, pin := range version.Definition.AgentType.Skills {
 			skill, err := q.GetRegistryEntry(ctx, pin.ID)
 			if err != nil {
 				return registryReadError(err)
 			}
-			if skill.Kind != string(domain.RegistrySkill) || skill.Enabled == 0 {
+			if skill.Kind != string(domain.RegistrySkill) || (skill.Enabled == 0 && !createdSkills[pin.ID]) {
 				return fmt.Errorf("%w: pinned skill must be an enabled skill", ports.ErrRegistryInvalid)
 			}
 			if version.Actor.Origin == domain.RegistryManager && skill.ManagerCanSelect == 0 {

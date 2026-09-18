@@ -7,6 +7,21 @@ export type RegistryVersion = components["schemas"]["RegistryVersionResponse"];
 export type RegistryDefinition = components["schemas"]["RegistryDefinition"];
 export type RegistryMetadata = components["schemas"]["RegistryMetadata"];
 export const registryQueryRoot = ["adaptive-registry"] as const;
+export type PortableRegistryBundle = components["schemas"]["PortableRegistryBundle"];
+
+export async function exportRegistry(kind: RegistryKind, id: string, version: number) {
+	const path = kind === "agent_type" ? "/api/v1/agent-types/{id}/versions/{version}/export" : "/api/v1/skills/{id}/versions/{version}/export";
+	const result = await apiClient.GET(path, { params: { path: { id, version } } });
+	if (result.error) throw new Error(apiErrorMessage(result.error));
+	return result.data!;
+}
+
+export async function importRegistry(kind: RegistryKind, body: components["schemas"]["RegistryImportInput"]) {
+	const path = kind === "agent_type" ? "/api/v1/agent-types/import" : "/api/v1/skills/import";
+	const result = await apiClient.POST(path, { body });
+	if (result.error) throw new Error(apiErrorMessage(result.error));
+	return result.data!;
+}
 
 const resource = (kind: RegistryKind) => kind === "agent_type" ? "/api/v1/agent-types" as const : "/api/v1/skills" as const;
 const detail = (kind: RegistryKind) => kind === "agent_type" ? "/api/v1/agent-types/{id}" as const : "/api/v1/skills/{id}" as const;

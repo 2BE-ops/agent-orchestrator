@@ -55,6 +55,78 @@ func registryCreateInput() registrysvc.CreateInput {
 		Definition: domain.RegistryDefinition{AgentType: &domain.AgentTypeDefinition{Harness: domain.HarnessCodex, MaxParallelWorkers: 2}}, Reason: "User creates coder"}
 }
 
+func TestRegistryPortableRoundTrip(t *testing.T) {
+	r, svc := registryRouter(t)
+	ctx := context.Background()
+	actor := domain.RegistryActor{Origin: domain.RegistryUser, ID: "author"}
+	skill, err := svc.Create(ctx, actor, domain.RegistrySkill, registrysvc.CreateInput{Metadata: domain.RegistryMetadata{Name: "Review", Enabled: true}, Definition: domain.RegistryDefinition{Skill: &domain.SkillDefinition{Instructions: "Review exact commit", RequiredTools: []string{"git"}, Resources: []domain.SkillResource{{Path: "references/checklist.md", Content: "Retain test evidence"}}}}, Reason: "Author review"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := registryCreateInput()
+	input.Definition.AgentType.ProviderBindingID = "private-account-reference-never-export"
+	input.Definition.AgentType.Skills = []domain.SkillVersionRef{{ID: skill.Entry.ID, Version: 1}}
+	agent, err := svc.Create(ctx, actor, domain.RegistryAgentType, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := skill.Version.Definition
+	changed.Skill.Instructions = "Newer content must not replace the pin"
+	if _, err := svc.Append(ctx, actor, domain.RegistrySkill, skill.Entry.ID, registrysvc.VersionInput{Definition: changed, ExpectedRevision: 1, Reason: "Evolve skill"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Activate(ctx, actor, domain.RegistrySkill, skill.Entry.ID, registrysvc.ActivateInput{Version: 2, ExpectedRevision: 2, Reason: "Activate skill"}); err != nil {
+		t.Fatal(err)
+	}
+	w := registryRequest(t, r, http.MethodGet, "/agent-types/"+agent.Entry.ID+"/versions/1/export", nil, http.StatusOK)
+	if strings.Contains(w.Body.String(), input.Definition.AgentType.ProviderBindingID) || strings.Contains(w.Body.String(), skill.Entry.ID) || strings.Contains(w.Body.String(), "Newer content") {
+		t.Fatalf("export leaked local references or drifted: %s", w.Body.String())
+	}
+	var bundle registrysvc.PortableBundle
+	if err := json.Unmarshal(w.Body.Bytes(), &bundle); err != nil {
+		t.Fatal(err)
+	}
+	if !bundle.AgentType.RequiresProviderBinding || bundle.AgentType.Skills[0].Definition.Instructions != "Review exact commit" {
+		t.Fatal("lost export requirements or exact pin")
+	}
+	w = registryRequest(t, r, http.MethodPost, "/agent-types/import", registrysvc.ImportInput{Bundle: bundle, Reason: "Import reviewed bundle"}, http.StatusCreated)
+	var imported controllers.RegistryImportResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &imported); err != nil {
+		t.Fatal(err)
+	}
+	if imported.Root.Entry.Metadata.Enabled || imported.Root.Entry.Metadata.Policy != (domain.RegistryPolicy{}) || imported.Root.Entry.ID == agent.Entry.ID || len(imported.ImportedSkills) != 1 || imported.ImportedSkills[0].Metadata.Enabled || imported.ImportedSkills[0].ID == skill.Entry.ID {
+		t.Fatalf("unsafe import: %+v", imported)
+	}
+	definition := imported.Root.Version.Definition.AgentType
+	if definition.ProviderBindingID != "" || !definition.ProviderBindingRequired || definition.Skills[0].ID != imported.ImportedSkills[0].ID {
+		t.Fatal("import retained binding or wrong pins")
+	}
+	w = registryRequest(t, r, http.MethodGet, "/agent-types/"+imported.Root.Entry.ID+"/versions/1/export", nil, http.StatusOK)
+	expected, _ := json.Marshal(bundle)
+	if strings.TrimSpace(w.Body.String()) != string(expected) {
+		t.Fatalf("round trip changed content: %s", w.Body.String())
+	}
+	registryRequest(t, r, http.MethodGet, "/skills/"+skill.Entry.ID+"/versions/1/export", nil, http.StatusOK)
+}
+
+func TestRegistryPortableRejectsUntrustedBundlesWithoutPartialWrites(t *testing.T) {
+	r, svc := registryRouter(t)
+	valid := `{"bundle":{"schemaVersion":1,"kind":"skill","name":"Review","description":"","skill":{"instructions":"Check","capabilities":[],"requiredTools":[],"requiredMcpServers":[],"resources":[]}},"reason":"Import"}`
+	for _, body := range []string{
+		strings.Replace(valid, `"schemaVersion":1`, `"schemaVersion":99`, 1),
+		strings.Replace(valid, `"name":"Review"`, `"name":"Review","origin":"USER"`, 1),
+		strings.Replace(valid, `"resources":[]`, `"resources":[{"path":"../escape","content":"bad"}]`, 1),
+		strings.Replace(valid, `"instructions":"Check"`, `"instructions":"Check","apiKey":"secret"`, 1),
+	} {
+		registryRequest(t, r, http.MethodPost, "/skills/import", body, http.StatusBadRequest)
+	}
+	entries, err := svc.List(context.Background(), domain.RegistrySkill, "", 100)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("invalid bundle wrote records: %v %v", entries, err)
+	}
+	registryRequest(t, r, http.MethodPost, "/skills/import", valid, http.StatusCreated)
+}
+
 func TestRegistryHTTPAuthoringLifecycle(t *testing.T) {
 	r, _ := registryRouter(t)
 	response := registryRequest(t, r, http.MethodPost, "/agent-types", registryCreateInput(), http.StatusCreated)

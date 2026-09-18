@@ -611,6 +611,123 @@ paths:
       summary: Inspect an exact version
       tags:
       - registry
+  /api/v1/agent-types/{id}/versions/{version}/export:
+    get:
+      operationId: exportAgentType
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: version
+        required: true
+        schema:
+          format: int64
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortableRegistryBundle'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Export a pinned portable bundle without local bindings
+      tags:
+      - registry
+  /api/v1/agent-types/import:
+    post:
+      operationId: importAgentType
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistryImportInput'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistryImportResponse'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Import a portable bundle as new disabled definitions
+      tags:
+      - registry
   /api/v1/agents:
     get:
       operationId: listAgents
@@ -8048,6 +8165,123 @@ paths:
       summary: Inspect an exact version
       tags:
       - registry
+  /api/v1/skills/{id}/versions/{version}/export:
+    get:
+      operationId: exportSkill
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: version
+        required: true
+        schema:
+          format: int64
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortableRegistryBundle'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Export a pinned portable bundle without local bindings
+      tags:
+      - registry
+  /api/v1/skills/import:
+    post:
+      operationId: importSkill
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistryImportInput'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistryImportResponse'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Import a portable bundle as new disabled definitions
+      tags:
+      - registry
   /api/v1/system/github-auth:
     get:
       operationId: getGitHubAuthRequirement
@@ -8794,6 +9028,8 @@ components:
           type: integer
         providerBindingId:
           type: string
+        providerBindingRequired:
+          type: boolean
         sessionMode:
           type: string
         skills:
@@ -11597,6 +11833,77 @@ components:
       - targetSha
       - status
       type: object
+    PortableAgentType:
+      properties:
+        capabilities:
+          items:
+            type: string
+          type: array
+        effort:
+          type: string
+        harness:
+          type: string
+        instructions:
+          type: string
+        maxParallelWorkers:
+          type: integer
+        mode:
+          type: string
+        model:
+          type: string
+        permissions:
+          type: string
+        requiresProviderBinding:
+          type: boolean
+        sessionMode:
+          type: string
+        skills:
+          items:
+            $ref: '#/components/schemas/PortableSkill'
+          type: array
+      required:
+      - harness
+      - instructions
+      - capabilities
+      - maxParallelWorkers
+      - skills
+      type: object
+    PortableRegistryBundle:
+      properties:
+        agentType:
+          $ref: '#/components/schemas/PortableAgentType'
+        description:
+          type: string
+        kind:
+          enum:
+          - agent_type
+          - skill
+          type: string
+        name:
+          type: string
+        schemaVersion:
+          type: integer
+        skill:
+          $ref: '#/components/schemas/SkillDefinition'
+      required:
+      - schemaVersion
+      - kind
+      - name
+      - description
+      type: object
+    PortableSkill:
+      properties:
+        definition:
+          $ref: '#/components/schemas/SkillDefinition'
+        description:
+          type: string
+        name:
+          type: string
+      required:
+      - name
+      - description
+      - definition
+      type: object
     PreviewServerStatusResponse:
       properties:
         configuration:
@@ -11993,6 +12300,33 @@ components:
       - activeVersion
       - createdAt
       - updatedAt
+      type: object
+    RegistryImportInput:
+      properties:
+        bundle:
+          $ref: '#/components/schemas/PortableRegistryBundle'
+        reason:
+          type: string
+      required:
+      - bundle
+      - reason
+      type: object
+    RegistryImportResponse:
+      properties:
+        importedSkills:
+          items:
+            $ref: '#/components/schemas/RegistryEntryResponse'
+          type: array
+        requirements:
+          items:
+            type: string
+          type: array
+        root:
+          $ref: '#/components/schemas/RegistryViewResponse'
+      required:
+      - root
+      - importedSkills
+      - requirements
       type: object
     RegistryListResponse:
       properties:

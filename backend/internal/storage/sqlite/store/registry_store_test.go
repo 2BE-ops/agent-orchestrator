@@ -23,6 +23,37 @@ func registryAgentDefinition(skills ...domain.SkillVersionRef) domain.RegistryDe
 	return domain.RegistryDefinition{AgentType: &domain.AgentTypeDefinition{Harness: domain.HarnessCodex, MaxParallelWorkers: 3, Instructions: "Check work", Skills: skills}}
 }
 
+func TestRegistryBatchFailureRollsBackDependenciesAndAudit(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	inputs := []domain.RegistryCreate{
+		{ID: "imported-skill", Kind: domain.RegistrySkill, Metadata: domain.RegistryMetadata{Name: "Imported"}, Definition: domain.RegistryDefinition{Skill: &domain.SkillDefinition{Instructions: "Review"}}},
+		{ID: "imported-type", Kind: domain.RegistryAgentType, Metadata: domain.RegistryMetadata{Name: "Type"}, Definition: registryAgentDefinition(domain.SkillVersionRef{ID: "imported-skill", Version: 1}, domain.SkillVersionRef{ID: "missing", Version: 1})},
+	}
+	if _, err := s.CreateRegistryEntries(ctx, inputs, registryMutation(domain.RegistryUser, 0)); !errors.Is(err, ports.ErrRegistryNotFound) {
+		t.Fatalf("expected missing pin: %v", err)
+	}
+	for _, id := range []string{"imported-skill", "imported-type"} {
+		if _, err := s.GetRegistryEntry(ctx, id); !errors.Is(err, ports.ErrRegistryNotFound) {
+			t.Fatalf("partial entry %s: %v", id, err)
+		}
+		if events, err := s.ListRegistryAudit(ctx, id, 0, 100); err != nil || len(events) != 0 {
+			t.Fatalf("partial audit: %v %v", events, err)
+		}
+	}
+	if events, err := s.EventsAfter(ctx, 0, 100); err != nil || len(events) != 0 {
+		t.Fatalf("partial batch emitted CDC: %v %v", events, err)
+	}
+	inputs[1].Definition.AgentType.Skills = inputs[1].Definition.AgentType.Skills[:1]
+	entries, err := s.CreateRegistryEntries(ctx, inputs, registryMutation(domain.RegistryUser, 0))
+	if err != nil || len(entries) != 2 || entries[0].Metadata.Enabled || entries[1].Metadata.Enabled {
+		t.Fatalf("disabled atomic import failed: %v %v", entries, err)
+	}
+	if _, err := s.CreateRegistryEntry(ctx, "unrelated", domain.RegistryAgentType, registryMetadata("Unrelated"), inputs[1].Definition, registryMutation(domain.RegistryUser, 0)); !errors.Is(err, ports.ErrRegistryInvalid) {
+		t.Fatalf("normal creation accepted previously disabled skill: %v", err)
+	}
+}
+
 func TestRegistryVersionHistoryPinsAndRollback(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

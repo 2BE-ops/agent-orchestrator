@@ -20,6 +20,8 @@ func TestRegistryCLIHTTPPaths(t *testing.T) {
 		{[]string{"agent-type", "update", "a1", "--file", "-"}, http.MethodPatch, "/api/v1/agent-types/a1"},
 		{[]string{"agent-type", "activate", "a1", "--file", "-"}, http.MethodPost, "/api/v1/agent-types/a1/activate"},
 		{[]string{"skill", "clone", "s1", "--file", "-"}, http.MethodPost, "/api/v1/skills/s1/clone"},
+		{[]string{"skill", "import", "--file", "-"}, http.MethodPost, "/api/v1/skills/import"},
+		{[]string{"agent-type", "export", "a1", "2"}, http.MethodGet, "/api/v1/agent-types/a1/versions/2/export"},
 	} {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
 			cfg := setConfigEnv(t)

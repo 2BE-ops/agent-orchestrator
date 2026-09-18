@@ -67,6 +67,15 @@ type RegistryEntry struct {
 	UpdatedAt     time.Time
 }
 
+// RegistryCreate is one definition in an atomic creation batch. Dependencies
+// precede their owners; IDs are assigned by the service, never imported.
+type RegistryCreate struct {
+	ID         string
+	Kind       RegistryKind
+	Metadata   RegistryMetadata
+	Definition RegistryDefinition
+}
+
 // SkillVersionRef pins an exact authored Skill version, in composition order.
 type SkillVersionRef struct {
 	ID      string `json:"id"`
@@ -76,14 +85,15 @@ type SkillVersionRef struct {
 // AgentTypeDefinition packages AO's existing harness/config vocabulary. Adapter
 // capability and readiness checks still run in services before launch.
 type AgentTypeDefinition struct {
-	Harness            AgentHarness      `json:"harness"`
-	SessionMode        SessionMode       `json:"sessionMode,omitempty"`
-	Config             AgentConfig       `json:"config"`
-	ProviderBindingID  string            `json:"providerBindingId,omitempty"`
-	Instructions       string            `json:"instructions"`
-	Capabilities       []string          `json:"capabilities"`
-	Skills             []SkillVersionRef `json:"skills"`
-	MaxParallelWorkers int               `json:"maxParallelWorkers"`
+	Harness                 AgentHarness      `json:"harness"`
+	SessionMode             SessionMode       `json:"sessionMode,omitempty"`
+	Config                  AgentConfig       `json:"config"`
+	ProviderBindingID       string            `json:"providerBindingId,omitempty"`
+	ProviderBindingRequired bool              `json:"providerBindingRequired,omitempty"`
+	Instructions            string            `json:"instructions"`
+	Capabilities            []string          `json:"capabilities"`
+	Skills                  []SkillVersionRef `json:"skills"`
+	MaxParallelWorkers      int               `json:"maxParallelWorkers"`
 }
 
 // SkillResource is inert UTF-8 content materialized only under an AO-owned
@@ -221,6 +231,11 @@ func (d RegistryDefinition) Validate(kind RegistryKind) error {
 			if !safeSkillResourcePath(r.Path) || seen[key] || !registryText(r.Content, 65536, false) {
 				return fmt.Errorf("invalid, duplicate or oversized skill resource")
 			}
+			for existing := range seen {
+				if strings.HasPrefix(key, existing+"/") || strings.HasPrefix(existing, key+"/") {
+					return fmt.Errorf("skill resource file conflicts with a directory")
+				}
+			}
 			seen[key] = true
 			total += len(r.Content)
 		}
@@ -287,7 +302,7 @@ func registryTags(tags []string) error {
 func safeSkillResourcePath(value string) bool {
 	if !registryText(value, 240, true) || value == "." || path.IsAbs(value) || path.Clean(value) != value ||
 		strings.ContainsAny(value, "\\:< >\"|?*") || strings.IndexFunc(value, unicode.IsControl) >= 0 ||
-		strings.EqualFold(value, "SKILL.md") || value == ".." || strings.HasPrefix(value, "../") {
+		strings.EqualFold(strings.SplitN(value, "/", 2)[0], "SKILL.md") || value == ".." || strings.HasPrefix(value, "../") {
 		return false
 	}
 	for _, part := range strings.Split(value, "/") {

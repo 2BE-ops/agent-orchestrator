@@ -10,6 +10,8 @@ ao agent-type show <id>
 ao agent-type versions <id>
 ao agent-type audit <id>
 ao skill list
+ao agent-type export <id> <version>
+ao skill export <id> <version>
 ```
 
 List/history responses include `nextCursor` when another page may exist. Pass
@@ -25,6 +27,7 @@ stdin. Required fields and types are available at `/api/v1/openapi.yaml`.
 | `update <id>` | `metadata`, `expectedRevision`, `reason` |
 | `activate <id>` | `version`, `expectedRevision`, `reason` |
 | `clone <id>` | `version`, `name`, `reason` |
+| `import` | `bundle`, `reason` |
 
 Metadata contains `name`, `description`, `enabled` and `policy` with three
 independent booleans: `managerCanSelect`, `managerCanModify`, `managerCanVersion`.
@@ -46,3 +49,16 @@ Actor and origin cannot be supplied in request JSON. These authoring CLI routes
 are human actions under AO's trusted local-host model. A managed agent uses its
 scoped manager tools for policy-checked actions; it must not relabel a manager
 proposal as a human registry action. Never put credentials in definitions.
+
+Export returns a schema-versioned portable bundle (maximum 1 MiB), including
+the exact content of pinned Skills and their inert resources. Local identities,
+actors, account references and provider binding IDs are excluded. A required
+custom binding becomes `requiresProviderBinding: true`, which must be resolved
+locally before launch. Authored instructions/resources are included verbatim.
+
+To import, wrap the exported JSON as `{"bundle": <exported object>, "reason":
+"why this is useful"}` and pass it through `--file`. Unknown fields and schema
+versions are rejected. A successful import creates all new Skill/type identities
+in one transaction, disabled and with all manager permissions off. Review and
+enable the imported Skills and root explicitly; importing never installs tools,
+executes resources, changes authentication, or grants a requested capability.

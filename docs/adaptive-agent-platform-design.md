@@ -249,6 +249,16 @@ provider and secret references require rebinding after import. Import must not
 install plugins, execute resources, alter authentication, or enable automatic
 management as a side effect. Display unresolved requirements before launch.
 
+Stage 07 realization: portable schema v1 embeds the content of each pinned Skill
+in composition order, rather than exporting local IDs. Import creates fresh
+identities and v1 snapshots atomically, disabled with all manager permissions
+off. Bundles are bounded to 1 MiB and 32 dependencies. Local binding IDs become a
+`providerBindingRequired` fact, never a credential or account reference; the
+capability/launch stages enforce rebinding. The desktop previews requirements
+before importing and supports resource authoring, JSON export and file import.
+Native resource materialization belongs to the immutable launch snapshot path
+in stage 09 so authoring/import cannot change native user skill directories.
+
 ## Tasks, scheduling, leases and controls
 
 Tasks record work intent independently of a session's derived display status.

@@ -10,6 +10,8 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
+import { RegistryExport, RegistryImport } from "./RegistryTransfer";
+import { SkillContentEditor } from "./SkillContentEditor";
 
 const fieldClass = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-primary";
 const labelClass = "grid gap-1.5 text-sm";
@@ -24,6 +26,7 @@ export function AgentRegistry() {
 	const [selected, setSelected] = useState("");
 	const [editor, setEditor] = useState<Editor>();
 	const [notice, setNotice] = useState("");
+	const [importing, setImporting] = useState(false);
 	const entries = useInfiniteQuery({ queryKey: [...registryQueryRoot, kind, "list"],
 		queryFn: ({ pageParam }) => listRegistry(kind, pageParam), initialPageParam: "",
 		getNextPageParam: (page) => page.nextCursor || undefined });
@@ -36,13 +39,13 @@ export function AgentRegistry() {
 	return <main className="flex h-full min-h-0 flex-col overflow-auto p-6" aria-label={t("registry.title", "Agent registry")}>
 		<header className="mb-5 flex flex-wrap items-center justify-between gap-3">
 			<div><h1 className="text-xl font-semibold">{t("registry.title", "Agent registry")}</h1><p className="mt-1 text-sm text-muted-foreground">{t("registry.description", "Reusable worker configurations and composable skills. Versions preserve the configuration used for past work.")}</p></div>
-			<Button onClick={() => { setEditor({ mode: "create" }); setNotice(""); }}>{kind === "agent_type" ? t("registry.createType", "Create Agent Type") : t("registry.createSkill", "Create Skill")}</Button>
+			<div className="flex gap-2"><Button variant="outline" onClick={() => { setImporting(true); setEditor(undefined); }}>{t("registry.import", "Import definitions")}</Button><Button onClick={() => { setEditor({ mode: "create" }); setImporting(false); setNotice(""); }}>{kind === "agent_type" ? t("registry.createType", "Create Agent Type") : t("registry.createSkill", "Create Skill")}</Button></div>
 		</header>
 		<div className="mb-4 flex gap-2" role="group" aria-label={t("registry.category", "Registry category")}>
 			{(["agent_type", "skill"] as const).map((value) => <Button key={value} variant={kind === value ? "primary" : "outline"} aria-pressed={kind === value} onClick={() => { setKind(value); setSelected(""); setEditor(undefined); setNotice(""); }}>{value === "agent_type" ? t("registry.agentTypes", "Agent Types") : t("registry.skills", "Skills")}</Button>)}
 		</div>
 		{notice && <p role="status" className="mb-3 text-sm">{notice}</p>}
-		{editor ? <RegistryEditor key={`${kind}:${editor.mode}:${editor.view?.entry.id ?? "new"}`} kind={kind} editor={editor}
+		{importing ? <RegistryImport key={kind} kind={kind} onCancel={() => setImporting(false)} onImported={(id, requirements) => { setImporting(false); setSelected(id); setNotice(requirements.join(" ")); refresh(); }} /> : editor ? <RegistryEditor key={`${kind}:${editor.mode}:${editor.view?.entry.id ?? "new"}`} kind={kind} editor={editor}
 			onCancel={() => setEditor(undefined)} onSaved={(id, message) => { setEditor(undefined); setSelected(id); setNotice(message); refresh(); }} /> :
 		<div className="grid min-h-0 gap-5 lg:grid-cols-[minmax(240px,1fr)_minmax(0,2fr)]">
 			<section aria-label={label} className="space-y-3">
@@ -84,6 +87,7 @@ function RegistryDetail({ kind, view, onEdit, onChanged, onClone }: { kind: Regi
 		<div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => onEdit("configuration")}>{t("registry.newVersion", "New version")}</Button><Button variant="outline" onClick={() => onEdit("metadata")}>{t("registry.editPolicy", "Edit details and policy")}</Button><Button variant="outline" disabled={action.isPending} onClick={() => action.mutate({ action: "disable" })}>{view.entry.metadata.enabled ? t("registry.disable", "Disable") : t("registry.enable", "Enable")}</Button></div>
 		{action.isError && <p role="alert" className="text-destructive">{apiErrorMessage(action.error)}</p>}
 		<DefinitionSummary definition={view.version.definition} />
+		<RegistryExport key={view.entry.activeVersion} kind={kind} id={view.entry.id} version={view.entry.activeVersion} />
 		<section><h3 className="mb-2 font-medium">{t("registry.versions", "Version history")}</h3>
 			{history.isPending && <p role="status">{t("registry.loading", "Loading registry…")}</p>}{history.isError && <p role="alert">{apiErrorMessage(history.error)}</p>}
 			<ul className="space-y-2">{history.data?.pages.flatMap((page) => page.versions).map((version) => <li key={version.number} className="flex flex-wrap items-center gap-2 border-b border-border py-2 text-sm"><strong>v{version.number}</strong><span className="min-w-0 flex-1 break-words text-muted-foreground">{version.reason}</span><Button variant="ghost" onClick={() => setCompare(version)}>{t("registry.compare", "Compare")}</Button><Button variant="outline" disabled={action.isPending || version.number === view.entry.activeVersion} onClick={() => action.mutate({ action: "activate", version: version.number })}>{version.number === view.entry.activeVersion ? t("registry.active", "Active") : t("registry.useVersion", "Use version")}</Button></li>)}</ul>
@@ -103,6 +107,8 @@ function DefinitionSummary({ definition }: { definition: RegistryDefinition }) {
 		{config && <dl className="grid grid-cols-2 gap-2"><dt className="text-muted-foreground">{t("registry.harness", "Harness")}</dt><dd>{config.harness}</dd><dt className="text-muted-foreground">{t("registry.model", "Model")}</dt><dd>{config.config.model || t("registry.default", "Configured default")}</dd><dt className="text-muted-foreground">{t("registry.maxParallel", "Maximum parallel workers")}</dt><dd>{config.maxParallelWorkers}</dd></dl>}
 		<div className="flex flex-wrap gap-1">{content?.capabilities.map((tag) => <Badge key={tag}>{tag}</Badge>)}</div>
 		<h3 className="font-medium">{t("registry.instructions", "Instructions")}</h3><p className="max-h-72 overflow-auto whitespace-pre-wrap rounded bg-muted p-3">{content?.instructions || t("registry.noInstructions", "No additional instructions")}</p>
+		{config?.providerBindingRequired && !config.providerBindingId && <p>{t("registry.needsBinding", "A local provider binding is required before launch.")}</p>}
+		{definition.skill && <><h3 className="font-medium">{t("registry.requirements", "Requirements")}</h3><ul>{[...definition.skill.requiredTools, ...definition.skill.requiredMcpServers].map((requirement, index) => <li key={index}>{requirement}</li>)}</ul><h3 className="font-medium">{t("registry.resources", "Resources")}</h3>{definition.skill.resources.map((resource) => <details key={resource.path}><summary className="cursor-pointer">{resource.path}</summary><pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded bg-muted p-3 text-xs">{resource.content}</pre></details>)}</>}
 		{config && config.skills.length > 0 && <div><h3 className="font-medium">{t("registry.pinnedSkills", "Pinned Skills")}</h3><ul className="mt-1 space-y-1">{config.skills.map((skill) => <li key={skill.id} className="break-all">{skill.id} · v{skill.version}</li>)}</ul></div>}
 	</section>;
 }
@@ -121,7 +127,7 @@ function RegistryEditor({ kind, editor, onCancel, onSaved }: { kind: RegistryKin
 	const setInstructions = (instructions: string) => setDefinition((old) => old.agentType ? { agentType: { ...old.agentType, instructions } } : { skill: { ...old.skill!, instructions } });
 	const save = useMutation({ mutationFn: async () => {
 		const tags = capabilities.split(",").map((tag) => tag.trim()).filter(Boolean);
-		const next: RegistryDefinition = definition.agentType ? { agentType: { ...definition.agentType, capabilities: tags } } : { skill: { ...definition.skill!, capabilities: tags } };
+		const next: RegistryDefinition = definition.agentType ? { agentType: { ...definition.agentType, capabilities: tags } } : { skill: { ...definition.skill!, capabilities: tags, requiredTools: definition.skill!.requiredTools.map((value) => value.trim()).filter(Boolean), requiredMcpServers: definition.skill!.requiredMcpServers.map((value) => value.trim()).filter(Boolean) } };
 		if (editor.mode === "create") return (await createRegistry(kind, { metadata, definition: next, reason })).entry.id;
 		const id = editor.view!.entry.id;
 		const expectedRevision = editor.view!.entry.revision;
@@ -148,6 +154,7 @@ function RegistryEditor({ kind, editor, onCancel, onSaved }: { kind: RegistryKin
 			</>}
 			<label className={labelClass}>{t("registry.instructions", "Instructions")}<textarea aria-label={t("registry.instructions", "Instructions")} className={fieldClass} rows={8} maxLength={65536} required={kind === "skill"} value={definition.agentType?.instructions ?? definition.skill?.instructions ?? ""} onChange={(e) => setInstructions(e.target.value)} /></label>
 			<label className={labelClass}>{t("registry.capabilities", "Capabilities (comma separated)")}<Input value={capabilities} onChange={(e) => setCapabilities(e.target.value)} /></label>
+			{definition.skill && <SkillContentEditor skill={definition.skill} onChange={(skill) => setDefinition({ skill })} />}
 			{definition.agentType && <fieldset className="space-y-2 rounded border border-border p-3"><legend className="px-1 text-sm font-medium">{t("registry.pinnedSkills", "Pinned Skills")}</legend>
 				{skills.isError && <p role="alert">{apiErrorMessage(skills.error)}</p>}
 				{skills.data?.pages.flatMap((page) => page.items).map((skill) => {

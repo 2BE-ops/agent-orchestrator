@@ -52,7 +52,7 @@ Stage 03 completes with this commit.
 | 04 | Reproducible baseline/toolchain | TESTED | Go 1.25.7 installed (`C:\Users\bill\go-sdk\go`, on user PATH, GOROOT set); `go build ./...` clean (toolchain auto-selects 1.26.5 per go.mod); workspace `node_modules` restored (`product-ui`, `cloud-client`, `mobile`, `ao`); `frontend:typecheck` PASS; `product-ui:check` (typecheck+test+build) PASS; pinned sqlc/golangci-lint self-provision via root scripts |
 | 05 | Registry domain, immutable versions, migration/store | TESTED | Migrations 0148–0149, typed definitions and sqlc store. Full domain/SQLite/CDC suites, relevant pinned lint (0 issues), vet and backend build PASS. Eleven new top-level tests cover validation, ownership, concurrent revisions, pins, atomic audit/CDC rollback, upgrade and restart. Race run unavailable: GCC missing. Exact evidence in validation. |
 | 06 | Agent Type service/API/CLI and registry UI | VALIDATED IN RUNNING APP | Shared service, 20 routes, generated contracts, HTTP-only CLI, desktop editor and CDC refresh. Registry API/CLI, relevant lint, frontend typecheck and 174 focused tests PASS; 40 topbar tests PASS. Real Electron create/pin/version/compare/activate/rollback/audit/clone/disable/reload verified. Full-suite Windows/dependency failures recorded in validation, not labeled passed. Stage 05 commit `1be075cf6` pushed. |
-| 07 | Skill authoring/versioning/API/UI/import/export | NOT STARTED | Reuse native conventions and embedded AO skill |
+| 07 | Skill authoring/versioning/API/UI/import/export | VALIDATED IN RUNNING APP | Bounded resources/tool/MCP requirements, exact-version portable bundles, atomic disabled imports and CLI/API/UI implemented. Round-trip/strict-input/rollback tests, 44 frontend tests, typecheck, touched lint, backend and renderer builds PASS. Real Electron resource/version/export download/file import/policy flow and full daemon restart persistence verified. Native materialization/temporary attachments remain stage 09 integration. Stage 06 pushed as `c4c03aa5b`. |
 | 08 | Provider/capability integration and binding UI | NOT STARTED | Native auth, no credential duplication, mode-aware controls |
 | 09 | Worker snapshots and manual Agent Type launch | NOT STARTED | Shared launch/restore paths, one-off overrides, inspector provenance |
 | 10 | Task DAG, revisions, criteria and leases | NOT STARTED | Transactional cycles/exclusivity; attempt-to-session seed association |
@@ -96,7 +96,7 @@ Numbers refer to the assignment's 48 Definition of Done items.
 | 1 | Manually create Agent Types in desktop | 06 | VALIDATED IN RUNNING APP |
 | 2 | Different harness/provider/model per type | 08-09 | NOT STARTED |
 | 3 | Supported custom provider options | 08 | NOT STARTED |
-| 4 | Manually create Skills | 07 | NOT STARTED |
+| 4 | Manually create Skills | 07 | VALIDATED IN RUNNING APP |
 | 5 | Attach multiple pinned Skills | 07-09 | NOT STARTED |
 | 6 | Configure and enforce manager ownership permissions | 05-06, 15 | NOT STARTED |
 | 7 | Manually launch from Agent Type | 09 | NOT STARTED |

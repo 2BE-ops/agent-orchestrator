@@ -18,6 +18,7 @@ var (
 // RegistryStore atomically persists typed definitions, immutable versions,
 // ownership policy and audit history. It never starts or configures a process.
 type RegistryStore interface {
+	CreateRegistryEntries(context.Context, []domain.RegistryCreate, domain.RegistryMutation) ([]domain.RegistryEntry, error)
 	CreateRegistryEntry(context.Context, string, domain.RegistryKind, domain.RegistryMetadata, domain.RegistryDefinition, domain.RegistryMutation) (domain.RegistryEntry, error)
 	GetRegistryEntry(context.Context, string) (domain.RegistryEntry, error)
 	ListRegistryEntries(context.Context, domain.RegistryKind, string, int) ([]domain.RegistryEntry, error)

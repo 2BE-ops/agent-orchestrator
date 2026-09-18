@@ -69,6 +69,13 @@ type RegistryViewResponse struct {
 	Version RegistryVersionResponse `json:"version"`
 }
 
+// RegistryImportResponse identifies new disabled records and unresolved setup.
+type RegistryImportResponse struct {
+	Root           RegistryViewResponse    `json:"root"`
+	ImportedSkills []RegistryEntryResponse `json:"importedSkills"`
+	Requirements   []string                `json:"requirements"`
+}
+
 // RegistryListResponse contains one stable ID-ordered page.
 type RegistryListResponse struct {
 	Items      []RegistryViewResponse `json:"items"`
@@ -107,7 +114,7 @@ func registryEntryResponse(entry domain.RegistryEntry) RegistryEntryResponse {
 
 func registryVersionResponse(version domain.RegistryVersion) RegistryVersionResponse {
 	return RegistryVersionResponse{EntryID: version.EntryID, Number: version.Number, ParentVersion: version.ParentVersion,
-		Definition: version.Definition, ContentHash: version.ContentHash, Origin: string(version.Actor.Origin), CreatedBy: version.Actor.ID, Reason: version.Reason, CreatedAt: version.CreatedAt}
+		Definition: version.Definition.NormalizeLists(), ContentHash: version.ContentHash, Origin: string(version.Actor.Origin), CreatedBy: version.Actor.ID, Reason: version.Reason, CreatedAt: version.CreatedAt}
 }
 
 func registryViewResponse(view registrysvc.View) RegistryViewResponse {

@@ -95,6 +95,48 @@ state. Full daemon/desktop restart with active workers remains stage 23/25 work.
 Native provider/model capability controls, portable bundles, Skill resource
 materialization and worker launch are intentionally the next stages.
 
+## Stage 07 — Skill resources and portable definitions (2026-09-18)
+
+- Added Skill resource/tool/MCP requirement editing and inspection, portable
+  schema v1 export/import for both registry kinds, CLI commands and four API
+  routes. Export embeds exact pinned Skill content while excluding local IDs,
+  actors and provider/account references. Missing local bindings remain explicit.
+- Imports use one atomic creation transaction for up to 32 Skill dependencies
+  plus the root, with disabled state and every manager permission false. An
+  invalid later dependency rolls back earlier identities, versions, audit and
+  CDC. Unknown JSON fields, schemas, unsafe resource paths and oversized content
+  are rejected. File/directory collisions, including the generated SKILL.md
+  root, are now rejected before materialization.
+- Native Skill materialization and temporary attachments will consume these
+  immutable contents through stage 09 worker snapshots; authoring/import does
+  not write to provider Skill directories or execute resources.
+
+| Command / check | Result |
+| --- | --- |
+| Focused registry domain/store/controller/CLI tests | PASS; includes portable round trip, exact historical Skill after newer activation, binding-reference exclusion, strict malformed bundle rejection and atomic rollback |
+| Full domain / SQLite / store / API / spec / envelope / skillassets / CLI / telemetry suites | PASS; final domain 1.011s, SQLite 46.409s, store 18.421s, API 0.874s, CLI 20.748s |
+| Full HTTP controllers suite | Same two stage 06 Windows failures (mobile config rename and file-URL clone); registry tests pass |
+| Pinned golangci-lint v2.12.2 on touched packages | PASS, 0 issues |
+| `go build ./...` | PASS |
+| Root `npm.cmd run api` | PASS, pinned generator; spec drift tests pass |
+| Root `npm.cmd run frontend:typecheck` | PASS |
+| Registry/editor/transfer/API client Vitest suites | PASS, 3 files / 44 tests, 6.43s |
+| Renderer Vite production build | PASS, 5.22s; existing large-chunk advisory |
+| `git diff --cached --check` | PASS |
+
+The isolated Electron and daemon were fully stopped, rebuilt and restarted
+against the same scratch profile. The disabled cloned Agent Type from stage 06
+was still present. Through actual desktop controls: authored a Skill resource
+and tool requirement, created/activated Skill v2, exported that exact version,
+downloaded JSON under the scratch AO directory, selected the file for import,
+inspected requirements, imported it, and verified resource content plus disabled
+state and all three manager permissions off. No renderer errors observed.
+Screenshots inspected: `.cache/adaptive-tests/electron-registry-import.png` and
+`electron-registry-import-policy.png`. The first download automation attempt was
+cancelled by the CDP download behavior; using the page's explicit scratch
+download directory verified the actual Download JSON control successfully.
+No worker or paid harness call was started.
+
 ## Historical initial audit (superseded environment facts)
 
 ## Repository and access

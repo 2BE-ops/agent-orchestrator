@@ -18,6 +18,8 @@ import (
 
 // RegistryService is the authoring boundary shared with native manager tools.
 type RegistryService interface {
+	Export(context.Context, domain.RegistryKind, string, int64) (registrysvc.PortableBundle, error)
+	Import(context.Context, domain.RegistryActor, domain.RegistryKind, registrysvc.ImportInput) (registrysvc.Imported, error)
 	List(context.Context, domain.RegistryKind, string, int) ([]registrysvc.View, error)
 	Get(context.Context, domain.RegistryKind, string) (registrysvc.View, error)
 	Create(context.Context, domain.RegistryActor, domain.RegistryKind, registrysvc.CreateInput) (registrysvc.View, error)
@@ -45,12 +47,14 @@ func (c *RegistryController) Register(r chi.Router) {
 			r.Use(k.available)
 			r.Get(resource.path, k.list)
 			r.Post(resource.path, k.create)
+			r.Post(resource.path+"/import", k.importBundle)
 			r.Get(resource.path+"/{id}", k.get)
 			r.Patch(resource.path+"/{id}", k.update)
 			r.Post(resource.path+"/{id}/clone", k.clone)
 			r.Get(resource.path+"/{id}/versions", k.versions)
 			r.Post(resource.path+"/{id}/versions", k.appendVersion)
 			r.Get(resource.path+"/{id}/versions/{version}", k.version)
+			r.Get(resource.path+"/{id}/versions/{version}/export", k.exportBundle)
 			r.Post(resource.path+"/{id}/activate", k.activate)
 			r.Get(resource.path+"/{id}/audit", k.audit)
 		})
@@ -74,6 +78,37 @@ func (c *registryKindController) available(next http.Handler) http.Handler {
 
 func registryHumanActor() domain.RegistryActor {
 	return domain.RegistryActor{Origin: domain.RegistryUser, ID: "local-user"}
+}
+
+func (c *registryKindController) importBundle(w http.ResponseWriter, r *http.Request) {
+	var input registrysvc.ImportInput
+	if !decodeRegistryBody(w, r, &input) {
+		return
+	}
+	result, err := c.svc.Import(r.Context(), registryHumanActor(), c.kind, input)
+	if err != nil {
+		envelope.WriteError(w, r, err)
+		return
+	}
+	response := RegistryImportResponse{Root: registryViewResponse(result.Root), ImportedSkills: make([]RegistryEntryResponse, 0, len(result.Skills)), Requirements: result.Requirements}
+	for _, skill := range result.Skills {
+		response.ImportedSkills = append(response.ImportedSkills, registryEntryResponse(skill))
+	}
+	envelope.WriteJSON(w, http.StatusCreated, response)
+}
+
+func (c *registryKindController) exportBundle(w http.ResponseWriter, r *http.Request) {
+	number, err := strconv.ParseInt(chi.URLParam(r, "version"), 10, 64)
+	if err != nil || number < 1 {
+		envelope.WriteError(w, r, apierr.Invalid("INVALID_REGISTRY_VERSION", "Version must be positive", nil))
+		return
+	}
+	bundle, err := c.svc.Export(r.Context(), c.kind, chi.URLParam(r, "id"), number)
+	if err != nil {
+		envelope.WriteError(w, r, err)
+		return
+	}
+	envelope.WriteJSON(w, http.StatusOK, bundle)
 }
 
 func (c *registryKindController) list(w http.ResponseWriter, r *http.Request) {

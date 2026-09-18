@@ -167,6 +167,11 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"RegistryMetadataInput":                                "RegistryMetadataInput",
 	"RegistryActivateInput":                                "RegistryActivateInput",
 	"RegistryCloneInput":                                   "RegistryCloneInput",
+	"RegistryImportInput":                                  "RegistryImportInput",
+	"RegistryPortableBundle":                               "PortableRegistryBundle",
+	"RegistryPortableAgentType":                            "PortableAgentType",
+	"RegistryPortableSkill":                                "PortableSkill",
+	"ControllersRegistryImportResponse":                    "RegistryImportResponse",
 	"ControllersSettingsResponse":                          "SettingsResponse",
 	"ControllersDesktopWorkspaceLocationResponse":          "DesktopWorkspaceLocationResponse",
 	"ControllersUpdateSessionInterfaceRequest":             "UpdateSessionInterfaceRequest",
@@ -1516,7 +1521,7 @@ func devOperations() []operation {
 }
 
 func registryOperations() []operation {
-	ops := make([]operation, 0, 20)
+	ops := make([]operation, 0, 24)
 	for _, resource := range []struct{ path, name string }{{"/api/v1/agent-types", "AgentType"}, {"/api/v1/skills", "Skill"}} {
 		for _, endpoint := range []struct {
 			method, suffix, verb, summary string
@@ -1526,6 +1531,8 @@ func registryOperations() []operation {
 		}{
 			{http.MethodGet, "", "list", "List definitions", nil, controllers.RegistryListResponse{}, http.StatusOK, []any{controllers.RegistryListQuery{}}},
 			{http.MethodPost, "", "create", "Create a definition and first version", registrysvc.CreateInput{}, controllers.RegistryViewResponse{}, http.StatusCreated, nil},
+			{http.MethodPost, "/import", "import", "Import a portable bundle as new disabled definitions", registrysvc.ImportInput{}, controllers.RegistryImportResponse{}, http.StatusCreated, nil},
+			{http.MethodGet, "/{id}/versions/{version}/export", "export", "Export a pinned portable bundle without local bindings", nil, registrysvc.PortableBundle{}, http.StatusOK, []any{controllers.RegistryIDParam{}, controllers.RegistryVersionParam{}}},
 			{http.MethodGet, "/{id}", "get", "Inspect the active definition", nil, controllers.RegistryViewResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}}},
 			{http.MethodPatch, "/{id}", "update", "Update metadata and ownership policy", registrysvc.MetadataInput{}, controllers.RegistryEntryResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}}},
 			{http.MethodPost, "/{id}/clone", "clone", "Clone a pinned definition", registrysvc.CloneInput{}, controllers.RegistryViewResponse{}, http.StatusCreated, []any{controllers.RegistryIDParam{}}},

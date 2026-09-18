@@ -8,7 +8,7 @@ import { AgentRegistry } from "./AgentRegistry";
 const api = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), versions: vi.fn(), audit: vi.fn(), create: vi.fn(), update: vi.fn(), append: vi.fn(), activate: vi.fn(), clone: vi.fn() }));
 vi.mock("../lib/registry-api", () => ({ registryQueryRoot: ["adaptive-registry"], listRegistry: api.list, getRegistry: api.get,
 	registryVersions: api.versions, registryAudit: api.audit, createRegistry: api.create, updateRegistry: api.update,
-	appendRegistryVersion: api.append, activateRegistryVersion: api.activate, cloneRegistry: api.clone }));
+	appendRegistryVersion: api.append, activateRegistryVersion: api.activate, cloneRegistry: api.clone, exportRegistry: vi.fn(), importRegistry: vi.fn() }));
 vi.mock("../lib/api-client", () => ({ apiClient: { GET: vi.fn().mockResolvedValue({ data: { supported: [{ id: "codex", label: "Codex" }, { id: "claude-code", label: "Claude Code" }] } }) }, apiErrorMessage: (error: unknown) => error instanceof Error ? error.message : String(error) }));
 
 const view: RegistryView = {
@@ -55,9 +55,13 @@ describe("AgentRegistry", () => {
 		await user.click(screen.getByRole("button", { name: "Create Skill" }));
 		await user.type(screen.getByLabelText("Name", { exact: true }), "Review practice");
 		await user.type(screen.getByLabelText("Instructions"), "Inspect error handling");
+		await user.type(screen.getByLabelText("Required tools (one per line)"), "git");
+		await user.click(screen.getByRole("button", { name: "Add resource" }));
+		await user.type(screen.getByLabelText("Resource path 1"), "references/review.md");
+		await user.type(screen.getByLabelText("Resource content 1"), "Inspect changed files");
 		await user.type(screen.getByLabelText("Reason for this change"), "Reusable review");
 		await user.click(screen.getByRole("button", { name: "Save" }));
-		await waitFor(() => expect(api.create).toHaveBeenCalledWith("skill", expect.objectContaining({ definition: { skill: expect.objectContaining({ instructions: "Inspect error handling" }) } })));
+		await waitFor(() => expect(api.create).toHaveBeenCalledWith("skill", expect.objectContaining({ definition: { skill: expect.objectContaining({ instructions: "Inspect error handling", requiredTools: ["git"], resources: [{path: "references/review.md", content: "Inspect changed files"}] }) } })));
 	});
 
 	it("retains a draft and reports a stale revision instead of overwriting", async () => {
