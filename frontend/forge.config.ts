@@ -216,7 +216,7 @@ const config: ForgeConfig = {
 				if (version.status !== 0 || version.stdout.trim() !== "tmux 3.5a") {
 					throw new Error(`packaged tmux failed verification at ${binary}: ${version.stderr || version.stdout}`);
 				}
-				const socket = path.join(tmpdir(), `ao-packaged-tmux-${process.pid}-${path.basename(outputPath)}.sock`);
+				const socket = path.join(tmpdir(), `ao-tmux-smoke-${process.pid}.sock`);
 				const smoke = spawnSync(binary, ["-S", socket, "-f", "/dev/null", "new-session", "-d", "true"], {
 					encoding: "utf8",
 				});
