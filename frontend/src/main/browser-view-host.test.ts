@@ -192,7 +192,7 @@ function setupHost(agentBrowserRuntime?: import("./agent-browser-runtime").Agent
 		canGoBack: () => false,
 		canGoForward: () => false,
 		capturePage: vi.fn(async () => ({
-			isEmpty: () => false,
+			isEmpty: (): boolean => false,
 			toJPEG: () => Buffer.from("snapshot"),
 			toPNG: () => Buffer.from("png-snapshot"),
 			getSize: () => ({ width: 640, height: 480 }),
@@ -419,6 +419,36 @@ describe("browser screenshots", () => {
 		await expect(invokeFromTab("browser:captureScreenshot", 99, state.viewId)).rejects.toThrow(
 			"Browser tab is unavailable",
 		);
+		expect(writeImage).not.toHaveBeenCalled();
+	});
+});
+
+describe("annotation screenshots", () => {
+	it("copies an annotation capture to the system clipboard", async () => {
+		const { invoke, invokeFromTab, webContents, writeImage } = setupHost();
+		await invoke("browser:ensure", "sess-1");
+
+		const copied = await invokeFromTab("browser:annotation:capture", 99);
+
+		expect(copied).toBe(true);
+		expect(webContents.capturePage).toHaveBeenCalledOnce();
+		expect(writeImage).toHaveBeenCalledWith(expect.objectContaining({ isEmpty: expect.any(Function) }));
+	});
+
+	it("resolves false without touching the clipboard when the page cannot be captured", async () => {
+		const { invoke, invokeFromTab, webContents, writeImage } = setupHost();
+		await invoke("browser:ensure", "sess-1");
+		webContents.capturePage.mockResolvedValueOnce({
+			isEmpty: () => true,
+			toJPEG: () => Buffer.from("snapshot"),
+			toPNG: () => Buffer.from("png-snapshot"),
+			getSize: () => ({ width: 640, height: 480 }),
+			resize: vi.fn(() => ({ toPNG: () => Buffer.from("resized-png") })),
+		});
+
+		const copied = await invokeFromTab("browser:annotation:capture", 99);
+
+		expect(copied).toBe(false);
 		expect(writeImage).not.toHaveBeenCalled();
 	});
 });

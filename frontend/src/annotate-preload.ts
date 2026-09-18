@@ -335,13 +335,9 @@ async function captureScreenshot(): Promise<void> {
 	const root = ensureOverlay();
 	root.querySelectorAll<HTMLElement>(".chrome").forEach((item) => { item.hidden = true; });
 	await waitForPaint();
-	const snapshot = await ipcRenderer.invoke("browser:annotation:capture");
-	if (snapshot?.data && snapshot?.mimeType) {
-		session.screenshots.push({ ...snapshot, id: localId("screenshot"), createdAt: new Date().toISOString() });
-		emitState();
-	}
+	const copied = Boolean(await ipcRenderer.invoke("browser:annotation:capture"));
 	renderAll();
-	showScreenshotNotice();
+	if (copied) showScreenshotNotice();
 }
 
 function discardSelected(): void {
@@ -1427,7 +1423,7 @@ function ensureOverlay(): ShadowRoot {
 	(document.documentElement ?? document.body).appendChild(host);
 	shadow = host.attachShadow({ mode: "open" });
 	registerFonts(shadow);
-	shadow.innerHTML = `<style>${overlayStyles()}</style><div class="hover" hidden></div><div class="markers"></div><div class="composer-mount"></div><div class="screenshot-notice chrome" hidden>Screenshot added to this batch</div>`;
+	shadow.innerHTML = `<style>${overlayStyles()}</style><div class="hover" hidden></div><div class="markers"></div><div class="composer-mount"></div><div class="screenshot-notice chrome" hidden>Screenshot copied to clipboard</div>`;
 	return shadow;
 }
 

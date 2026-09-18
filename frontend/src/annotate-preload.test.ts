@@ -545,4 +545,35 @@ describe("annotation adjustment preload", () => {
 		expect(latestSession().annotations).toHaveLength(1);
 		expect(overlayRoot().querySelectorAll(".marker")).toHaveLength(1);
 	});
+
+	it("copies a screenshot to the clipboard instead of adding it to the batch", async () => {
+		electronMocks.invoke.mockResolvedValue(true);
+		const listener = electronMocks.listeners.get("browser:annotation:action");
+		if (!listener) throw new Error("annotation action listener was not registered");
+		listener({}, "capture");
+
+		await vi.waitFor(() => {
+			expect(overlayRoot().querySelector<HTMLElement>(".screenshot-notice")?.hidden).toBe(false);
+		});
+		expect(electronMocks.invoke).toHaveBeenCalledWith("browser:annotation:capture");
+		expect(overlayRoot().querySelector<HTMLElement>(".screenshot-notice")?.textContent).toBe(
+			"Screenshot copied to clipboard",
+		);
+		// Nothing joins the annotation batch, so no session state is emitted.
+		expect(electronMocks.send.mock.calls.some(([channel]) => channel === "browser:annotation:state")).toBe(false);
+	});
+
+	it("keeps the screenshot notice hidden when the clipboard copy fails", async () => {
+		electronMocks.invoke.mockResolvedValue(false);
+		const listener = electronMocks.listeners.get("browser:annotation:action");
+		if (!listener) throw new Error("annotation action listener was not registered");
+		listener({}, "capture");
+
+		await vi.waitFor(() => {
+			expect(electronMocks.invoke).toHaveBeenCalledWith("browser:annotation:capture");
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(overlayRoot().querySelector<HTMLElement>(".screenshot-notice")?.hidden).toBe(true);
+		expect(electronMocks.send.mock.calls.some(([channel]) => channel === "browser:annotation:state")).toBe(false);
+	});
 });
