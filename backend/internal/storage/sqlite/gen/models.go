@@ -12,6 +12,30 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 )
 
+type AdaptiveProviderBinding struct {
+	ID        string
+	Name      string
+	Harness   string
+	Provider  string
+	ProjectID string
+	Enabled   int64
+	Revision  int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type AdaptiveProviderBindingAudit struct {
+	Seq       int64
+	BindingID string
+	Revision  int64
+	Action    string
+	ActorID   string
+	Reason    string
+	Name      string
+	Enabled   int64
+	CreatedAt time.Time
+}
+
 type AdaptiveRegistry struct {
 	ID                string
 	Kind              string

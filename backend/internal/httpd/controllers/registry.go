@@ -18,6 +18,12 @@ import (
 
 // RegistryService is the authoring boundary shared with native manager tools.
 type RegistryService interface {
+	CreateBinding(context.Context, domain.RegistryActor, registrysvc.BindingCreateInput) (domain.ProviderBinding, error)
+	Bindings(context.Context, string, int) ([]domain.ProviderBinding, error)
+	Binding(context.Context, string) (domain.ProviderBinding, error)
+	UpdateBinding(context.Context, domain.RegistryActor, string, registrysvc.BindingUpdateInput) (domain.ProviderBinding, error)
+	BindingAudit(context.Context, string, int64, int) ([]domain.ProviderBindingAudit, error)
+	Check(context.Context, string, registrysvc.CheckInput) (registrysvc.ConfigurationCheck, error)
 	Export(context.Context, domain.RegistryKind, string, int64) (registrysvc.PortableBundle, error)
 	Import(context.Context, domain.RegistryActor, domain.RegistryKind, registrysvc.ImportInput) (registrysvc.Imported, error)
 	List(context.Context, domain.RegistryKind, string, int) ([]registrysvc.View, error)
@@ -38,6 +44,16 @@ type RegistryController struct{ Svc RegistryService }
 
 // Register exposes distinct Agent Type and Skill resources over shared rules.
 func (c *RegistryController) Register(r chi.Router) {
+	bindings := &registryKindController{svc: c.Svc, kind: domain.RegistryAgentType}
+	r.Group(func(r chi.Router) {
+		r.Use(bindings.available)
+		r.Get("/provider-bindings", bindings.listBindings)
+		r.Post("/provider-bindings", bindings.createBinding)
+		r.Get("/provider-bindings/{id}", bindings.getBinding)
+		r.Patch("/provider-bindings/{id}", bindings.updateBinding)
+		r.Get("/provider-bindings/{id}/audit", bindings.bindingAudit)
+		r.Post("/agent-types/{id}/validate", bindings.checkConfiguration)
+	})
 	for _, resource := range []struct {
 		path string
 		kind domain.RegistryKind

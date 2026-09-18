@@ -4,6 +4,55 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 08 — native capabilities and provider references (2026-09-18)
+
+Added adapter-declared configuration fields, bounded Chat capability inspection,
+native model selection, permission controls and shared native sign-in navigation.
+Provider bindings contain only a native provider reference, optional project
+scope and descriptive state. Migration 0150 preserves immutable targets and
+audited revision-checked label/availability changes. Credentials and arbitrary
+endpoint configuration are not accepted. Required missing bindings never fall
+back to defaults. All mutation provenance comes from the human controller.
+
+The shared configuration check distinguishes invalid options from unavailable
+native prerequisites. Fresh worker launch will resolve project defaults and
+one-off overrides before this check in stage 09; this milestone exposes advisory
+authoring checks. Unknown Skill tool/MCP requirements remain explicitly unverified
+and cannot silently grant capabilities. Active-worker adoption is not a fresh
+launch and must retain its snapshot in stage 09.
+
+| Command/check | Result |
+| --- | --- |
+| `npm run sqlc`, `npm run api` | PASS; migration/query and code-first API artifacts regenerated |
+| `go test ./internal/service/registry ./internal/domain ./internal/storage/sqlite/... ./internal/adapters/agent/codex ./internal/httpd/apispec/...` | PASS; full listed suites, SQLite 31.71s, store 8.75s |
+| Configuration/registry/provider/migration/spec focused tests across service/agent, HTTP and SQLite | PASS; strict credential-field rejection, API error envelopes, disabled/missing binding, native scope/model/effort/capability validation and audit/CDC covered |
+| Four focused frontend files: binding editor/checks, configuration editor, registry and API client | PASS, 46 tests, 7.64s |
+| `npm run frontend:typecheck` | PASS |
+| `go build ./...`; touched service/SQLite/HTTP `go vet` | PASS |
+| Pinned golangci-lint over touched packages | 12 existing findings in unchanged `codex_secure_fs_windows.go`; exact categories 5 errcheck, 2 gocritic, 3 gosec, 2 staticcheck |
+| Same pinned lint with `--new-from-rev=ac7e7cc26` | PASS, 0 new issues |
+| `npx vite build --config vite.renderer.config.ts` | PASS, 2.53s; existing chunk-size warning. Initial command used nonexistent `.mts` suffix, corrected and rerun |
+| Real isolated Electron + rebuilt Go daemon | PASS for binding/editor/validation flow below |
+
+Earlier stage-08 full service/agent tests exposed existing Windows ACL ancestor,
+symlink-privilege and model-cache timing failures. Full service/chat exposed a
+duplicate conversation-message ID in the existing completed-Codex handoff test.
+These are not labeled passed; they join the recorded platform/CI follow-ups.
+Logs are retained under ignored `.cache/adaptive-tests/*stage08*`.
+
+The existing isolated worktree/data were reused without dependency reinstallation.
+The Go daemon was rebuilt and Electron restarted on 3036 with CDP 9336. The real
+UI created `Lab native Codex`, saved and activated Agent Type v3 using the binding,
+disabled that binding and observed validation rejection, re-enabled it and
+observed native installed/authorized readiness, then reloaded and verified the
+version persisted. The initial script expected unavailable native auth; actual
+fresh readiness was ready, so verification was corrected to test the observed
+state plus an explicitly disabled binding. No worker was launched. Screenshots
+`electron-provider-binding.png`, `electron-provider-unavailable.png` and
+`electron-provider-readiness.png` were captured and visually inspected. Custom
+native provider/scope cases have injected-catalog coverage; live custom-provider
+worker execution remains a later validation requirement.
+
 ## Stage 05 — registry persistence (2026-09-18)
 
 - Resumed in the user-provided full-access session. `git fetch upstream` passed;

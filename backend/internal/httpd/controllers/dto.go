@@ -26,6 +26,48 @@ type RegistryIDParam struct {
 	ID string `path:"id"`
 }
 
+// ProviderBindingResponse exposes a native reference without credential state.
+type ProviderBindingResponse struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Harness   string    `json:"harness"`
+	Provider  string    `json:"provider"`
+	ProjectID string    `json:"projectId"`
+	Enabled   bool      `json:"enabled"`
+	Revision  int64     `json:"revision"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ProviderBindingListResponse contains stable paginated local references.
+type ProviderBindingListResponse struct {
+	Items      []ProviderBindingResponse `json:"items"`
+	NextCursor string                    `json:"nextCursor,omitempty"`
+}
+
+// ProviderBindingAuditResponse exposes one immutable human change.
+type ProviderBindingAuditResponse struct {
+	Sequence  int64     `json:"sequence"`
+	BindingID string    `json:"bindingId"`
+	Revision  int64     `json:"revision"`
+	Action    string    `json:"action"`
+	ActorID   string    `json:"actorId"`
+	Reason    string    `json:"reason"`
+	Name      string    `json:"name"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// ProviderBindingAuditListResponse bounds the immutable authoring history.
+type ProviderBindingAuditListResponse struct {
+	Events     []ProviderBindingAuditResponse `json:"events"`
+	NextCursor string                         `json:"nextCursor,omitempty"`
+}
+
+func providerBindingResponse(binding domain.ProviderBinding) ProviderBindingResponse {
+	return ProviderBindingResponse{ID: binding.ID, Name: binding.Name, Harness: string(binding.Harness), Provider: binding.Provider, ProjectID: binding.ProjectID, Enabled: binding.Enabled, Revision: binding.Revision, CreatedAt: binding.CreatedAt, UpdatedAt: binding.UpdatedAt}
+}
+
 // RegistryVersionParam selects immutable configuration history.
 type RegistryVersionParam struct {
 	Version int64 `path:"version" minimum:"1"`
@@ -1541,6 +1583,14 @@ type AgentModelsRefreshQuery struct {
 
 // AgentModelsResponse is the normalized model picker for one agent.
 type AgentModelsResponse = ports.AgentModelCatalog
+
+// AgentConfigurationResponse exposes declared adapter fields and mode support.
+type AgentConfigurationResponse = agentsvc.Configuration
+
+// AgentConfigurationQuery selects which mode's capabilities to inspect.
+type AgentConfigurationQuery struct {
+	Mode string `query:"mode,omitempty" enum:"tui,chat"`
+}
 
 // AgentModelInfo is one selectable model or agent-owned mode.
 type AgentModelInfo = ports.AgentModelInfo

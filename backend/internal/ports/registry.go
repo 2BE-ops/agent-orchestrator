@@ -18,6 +18,11 @@ var (
 // RegistryStore atomically persists typed definitions, immutable versions,
 // ownership policy and audit history. It never starts or configures a process.
 type RegistryStore interface {
+	CreateProviderBinding(context.Context, domain.ProviderBinding, domain.RegistryMutation) (domain.ProviderBinding, error)
+	GetProviderBinding(context.Context, string) (domain.ProviderBinding, error)
+	ListProviderBindings(context.Context, string, int) ([]domain.ProviderBinding, error)
+	UpdateProviderBinding(context.Context, string, string, bool, domain.RegistryMutation) (domain.ProviderBinding, error)
+	ListProviderBindingAudit(context.Context, string, int64, int) ([]domain.ProviderBindingAudit, error)
 	CreateRegistryEntries(context.Context, []domain.RegistryCreate, domain.RegistryMutation) ([]domain.RegistryEntry, error)
 	CreateRegistryEntry(context.Context, string, domain.RegistryKind, domain.RegistryMetadata, domain.RegistryDefinition, domain.RegistryMutation) (domain.RegistryEntry, error)
 	GetRegistryEntry(context.Context, string) (domain.RegistryEntry, error)

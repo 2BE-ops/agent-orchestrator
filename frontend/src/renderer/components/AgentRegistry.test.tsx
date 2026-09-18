@@ -8,7 +8,8 @@ import { AgentRegistry } from "./AgentRegistry";
 const api = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), versions: vi.fn(), audit: vi.fn(), create: vi.fn(), update: vi.fn(), append: vi.fn(), activate: vi.fn(), clone: vi.fn() }));
 vi.mock("../lib/registry-api", () => ({ registryQueryRoot: ["adaptive-registry"], listRegistry: api.list, getRegistry: api.get,
 	registryVersions: api.versions, registryAudit: api.audit, createRegistry: api.create, updateRegistry: api.update,
-	appendRegistryVersion: api.append, activateRegistryVersion: api.activate, cloneRegistry: api.clone, exportRegistry: vi.fn(), importRegistry: vi.fn() }));
+	appendRegistryVersion: api.append, activateRegistryVersion: api.activate, cloneRegistry: api.clone, exportRegistry: vi.fn(), importRegistry: vi.fn(),
+	listProviderBindings: vi.fn().mockResolvedValue({ items: [] }), getProviderBinding: vi.fn(), createProviderBinding: vi.fn(), updateProviderBinding: vi.fn(), checkRegistryConfiguration: vi.fn(), registryProjectsQuery: { queryKey: ["registry-projects"], queryFn: async () => [] } }));
 vi.mock("../lib/api-client", () => ({ apiClient: { GET: vi.fn().mockResolvedValue({ data: { supported: [{ id: "codex", label: "Codex" }, { id: "claude-code", label: "Claude Code" }] } }) }, apiErrorMessage: (error: unknown) => error instanceof Error ? error.message : String(error) }));
 
 const view: RegistryView = {

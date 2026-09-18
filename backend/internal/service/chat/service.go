@@ -1354,6 +1354,17 @@ func (s *Service) SupportsChat(harness domain.AgentHarness) bool {
 	return s.drivers.SupportsChat(harness)
 }
 
+// InspectCapabilities shares the preflight probe without creating a conversation.
+// The clone prevents configuration clients from modifying the service cache.
+func (s *Service) InspectCapabilities(ctx context.Context, harness domain.AgentHarness) (ports.ChatCapabilities, error) {
+	driver, err := s.drivers.Driver(harness)
+	if err != nil {
+		return nil, err
+	}
+	capabilities, err := s.driverCapabilities(ctx, harness, driver)
+	return maps.Clone(capabilities), err
+}
+
 // PreflightChat reports whether a harness can start in chat mode right now.
 //
 // Called before any durable state exists, so an unsupported request costs nothing

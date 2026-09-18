@@ -15,10 +15,18 @@ import (
 )
 
 // Manager applies shared authoring validation before atomic persistence.
-type Manager struct{ store ports.RegistryStore }
+type Manager struct {
+	store  ports.RegistryStore
+	native NativeConfiguration
+}
 
 // New constructs the registry service over the daemon's existing store.
 func New(store ports.RegistryStore) *Manager { return &Manager{store: store} }
+
+// NewWithNative uses the daemon's shared native catalog/readiness authority.
+func NewWithNative(store ports.RegistryStore, native NativeConfiguration) *Manager {
+	return &Manager{store: store, native: native}
+}
 
 // View combines a stable registry identity with its pinned active configuration.
 type View struct {

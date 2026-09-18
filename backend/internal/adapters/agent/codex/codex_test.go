@@ -644,7 +644,7 @@ func TestGetPromptDeliveryStrategyIsInCommand(t *testing.T) {
 	}
 }
 
-func TestGetConfigSpecReportsModelField(t *testing.T) {
+func TestGetConfigSpecReportsSupportedFields(t *testing.T) {
 	plugin := &Plugin{}
 
 	spec, err := plugin.GetConfigSpec(context.Background())
@@ -656,6 +656,11 @@ func TestGetConfigSpecReportsModelField(t *testing.T) {
 			Key:         "model",
 			Type:        ports.ConfigFieldString,
 			Description: "Model override passed to `codex --model`.",
+		},
+		{
+			Key: "permissions", Type: ports.ConfigFieldEnum,
+			Description: "Native Codex approval and sandbox policy.",
+			Enum:        []string{"default", "accept-edits", "auto", "bypass-permissions"},
 		},
 	}
 	if !reflect.DeepEqual(spec.Fields, want) {

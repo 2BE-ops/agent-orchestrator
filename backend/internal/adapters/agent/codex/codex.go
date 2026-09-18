@@ -107,6 +107,11 @@ func (p *Plugin) GetConfigSpec(ctx context.Context) (ports.ConfigSpec, error) {
 				Type:        ports.ConfigFieldString,
 				Description: "Model override passed to `codex --model`.",
 			},
+			{
+				Key: "permissions", Type: ports.ConfigFieldEnum,
+				Description: "Native Codex approval and sandbox policy.",
+				Enum:        []string{"default", "accept-edits", "auto", "bypass-permissions"},
+			},
 		},
 	}, nil
 }

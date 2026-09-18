@@ -12,6 +12,8 @@ import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 import { RegistryExport, RegistryImport } from "./RegistryTransfer";
 import { SkillContentEditor } from "./SkillContentEditor";
+import { AgentTypeConfigurationEditor } from "./AgentTypeConfigurationEditor";
+import { RegistryConfigurationCheck } from "./RegistryConfigurationCheck";
 
 const fieldClass = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-primary";
 const labelClass = "grid gap-1.5 text-sm";
@@ -87,6 +89,7 @@ function RegistryDetail({ kind, view, onEdit, onChanged, onClone }: { kind: Regi
 		<div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => onEdit("configuration")}>{t("registry.newVersion", "New version")}</Button><Button variant="outline" onClick={() => onEdit("metadata")}>{t("registry.editPolicy", "Edit details and policy")}</Button><Button variant="outline" disabled={action.isPending} onClick={() => action.mutate({ action: "disable" })}>{view.entry.metadata.enabled ? t("registry.disable", "Disable") : t("registry.enable", "Enable")}</Button></div>
 		{action.isError && <p role="alert" className="text-destructive">{apiErrorMessage(action.error)}</p>}
 		<DefinitionSummary definition={view.version.definition} />
+		{kind === "agent_type" && <RegistryConfigurationCheck key={`${view.entry.activeVersion}:${view.entry.revision}`} id={view.entry.id} version={view.entry.activeVersion} />}
 		<RegistryExport key={view.entry.activeVersion} kind={kind} id={view.entry.id} version={view.entry.activeVersion} />
 		<section><h3 className="mb-2 font-medium">{t("registry.versions", "Version history")}</h3>
 			{history.isPending && <p role="status">{t("registry.loading", "Loading registry…")}</p>}{history.isError && <p role="alert">{apiErrorMessage(history.error)}</p>}
@@ -151,6 +154,7 @@ function RegistryEditor({ kind, editor, onCancel, onSaved }: { kind: RegistryKin
 				<label className={labelClass}>{t("registry.harness", "Harness")}<select aria-label={t("registry.harness", "Harness")} required className={fieldClass} value={definition.agentType.harness} onChange={(e) => setAgent({ harness: e.target.value, config: {}, providerBindingId: undefined, sessionMode: undefined })}><option value="">{t("registry.selectHarness", "Select a harness")}</option>{harnesses.data?.map((harness) => <option key={harness.id} value={harness.id}>{harness.label}</option>)}</select></label>
 				{harnesses.isPending && <p role="status">{t("registry.loadingHarnesses", "Loading supported harnesses…")}</p>}{harnesses.isError && <p role="alert">{apiErrorMessage(harnesses.error)}</p>}
 				<label className={labelClass}>{t("registry.maxParallel", "Maximum parallel workers")}<Input type="number" min={1} max={1000} required value={definition.agentType.maxParallelWorkers} onChange={(e) => setAgent({ maxParallelWorkers: Number(e.target.value) })} /></label>
+				{definition.agentType.harness && <AgentTypeConfigurationEditor definition={definition.agentType} onChange={setAgent} />}
 			</>}
 			<label className={labelClass}>{t("registry.instructions", "Instructions")}<textarea aria-label={t("registry.instructions", "Instructions")} className={fieldClass} rows={8} maxLength={65536} required={kind === "skill"} value={definition.agentType?.instructions ?? definition.skill?.instructions ?? ""} onChange={(e) => setInstructions(e.target.value)} /></label>
 			<label className={labelClass}>{t("registry.capabilities", "Capabilities (comma separated)")}<Input value={capabilities} onChange={(e) => setCapabilities(e.target.value)} /></label>

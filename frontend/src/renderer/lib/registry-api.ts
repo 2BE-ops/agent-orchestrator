@@ -8,6 +8,46 @@ export type RegistryDefinition = components["schemas"]["RegistryDefinition"];
 export type RegistryMetadata = components["schemas"]["RegistryMetadata"];
 export const registryQueryRoot = ["adaptive-registry"] as const;
 export type PortableRegistryBundle = components["schemas"]["PortableRegistryBundle"];
+export type ProviderBinding = components["schemas"]["ProviderBindingResponse"];
+
+export async function getProviderBinding(id: string) {
+	const result = await apiClient.GET("/api/v1/provider-bindings/{id}", { params: { path: { id } } });
+	if (result.error) throw new Error(apiErrorMessage(result.error));
+	return result.data!;
+}
+
+export const registryProjectsQuery = {
+	queryKey: ["registry-projects"],
+	queryFn: async () => {
+		const result = await apiClient.GET("/api/v1/projects");
+		if (result.error) throw new Error(apiErrorMessage(result.error));
+		return result.data!.projects;
+	},
+};
+
+export async function listProviderBindings(cursor = "") {
+	const result = await apiClient.GET("/api/v1/provider-bindings", { params: { query: { cursor, limit: 100 } } });
+	if (result.error) throw new Error(apiErrorMessage(result.error));
+	return result.data!;
+}
+
+export async function createProviderBinding(body: components["schemas"]["ProviderBindingCreateInput"]) {
+	const result = await apiClient.POST("/api/v1/provider-bindings", { body });
+	if (result.error) throw new Error(apiErrorMessage(result.error));
+	return result.data!;
+}
+
+export async function updateProviderBinding(id: string, body: components["schemas"]["ProviderBindingUpdateInput"]) {
+	const result = await apiClient.PATCH("/api/v1/provider-bindings/{id}", { params: { path: { id } }, body });
+	if (result.error) throw new Error(apiErrorMessage(result.error));
+	return result.data!;
+}
+
+export async function checkRegistryConfiguration(id: string, version: number, projectId: string) {
+	const result = await apiClient.POST("/api/v1/agent-types/{id}/validate", { params: { path: { id } }, body: { version, projectId } });
+	if (result.error) throw new Error(apiErrorMessage(result.error));
+	return result.data!;
+}
 
 export async function exportRegistry(kind: RegistryKind, id: string, version: number) {
 	const path = kind === "agent_type" ? "/api/v1/agent-types/{id}/versions/{version}/export" : "/api/v1/skills/{id}/versions/{version}/export";

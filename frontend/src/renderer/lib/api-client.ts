@@ -62,6 +62,11 @@ export function setApiDaemonStatus(nextStatus: DaemonStatus): void {
 const ROUTE_TEMPLATES = [
 	"/api/v1/agents",
 	"/api/v1/agent-types",
+	"/api/v1/agent-types/{id}/validate",
+	"/api/v1/provider-bindings",
+	"/api/v1/provider-bindings/{id}",
+	"/api/v1/provider-bindings/{id}/audit",
+	"/api/v1/agents/{agent}/configuration",
 	"/api/v1/agent-types/import",
 	"/api/v1/agent-types/{id}/versions/{version}/export",
 	"/api/v1/agent-types/{id}",
@@ -159,6 +164,7 @@ const ROUTE_TEMPLATES = [
 const RESOURCE_SEGMENTS = new Set([
 	"agents",
 	"agent-types",
+	"provider-bindings",
 	"skills",
 	"projects",
 	"sessions",

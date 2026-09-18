@@ -424,6 +424,67 @@ paths:
       summary: Clone a pinned definition
       tags:
       - registry
+  /api/v1/agent-types/{id}/validate:
+    post:
+      operationId: validateAgentType
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistryCheckInput'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistryConfigurationCheck'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Check an exact version's native configuration and readiness
+      tags:
+      - registry
   /api/v1/agent-types/{id}/versions:
     get:
       operationId: listVersionsAgentType
@@ -790,6 +851,52 @@ paths:
                 $ref: '#/components/schemas/APIError'
           description: Not Implemented
       summary: Open the fixed native authentication flow for one agent
+      tags:
+      - agents
+  /api/v1/agents/{agent}/configuration:
+    get:
+      operationId: getAgentConfiguration
+      parameters:
+      - description: Agent adapter identifier.
+        in: path
+        name: agent
+        required: true
+        schema:
+          description: Agent adapter identifier.
+          type: string
+      - in: query
+        name: mode
+        schema:
+          enum:
+          - tui
+          - chat
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentConfigurationResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect declared adapter fields and mode-specific native capabilities
       tags:
       - agents
   /api/v1/agents/{agent}/install:
@@ -3061,6 +3168,300 @@ paths:
       summary: Initialize a selected folder as a Git repository with an initial commit
       tags:
       - projects
+  /api/v1/provider-bindings:
+    get:
+      operationId: listProviderBindings
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          maximum: 200
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderBindingListResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: List local native provider references
+      tags:
+      - registry
+    post:
+      operationId: createProviderBinding
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderBindingCreateInput'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderBindingResponse'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Create a reusable native provider reference
+      tags:
+      - registry
+  /api/v1/provider-bindings/{id}:
+    get:
+      operationId: getProviderBinding
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderBindingResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect a local native provider reference
+      tags:
+      - registry
+    patch:
+      operationId: updateProviderBinding
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderBindingUpdateInput'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderBindingResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Rename or disable a local provider reference
+      tags:
+      - registry
+  /api/v1/provider-bindings/{id}/audit:
+    get:
+      operationId: listProviderBindingAudit
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          maximum: 200
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderBindingAuditListResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect native provider reference history
+      tags:
+      - registry
   /api/v1/prs/{id}/merge:
     post:
       operationId: mergePR
@@ -8674,6 +9075,55 @@ components:
         permissions:
           type: string
       type: object
+    AgentConfigurationField:
+      properties:
+        description:
+          type: string
+        key:
+          type: string
+        options:
+          items:
+            type: string
+          type: array
+        type:
+          type: string
+      required:
+      - key
+      - type
+      - description
+      - options
+      type: object
+    AgentConfigurationResponse:
+      properties:
+        capabilityState:
+          enum:
+          - supported
+          - unsupported
+          - unknown
+          type: string
+        chatCapabilities:
+          items:
+            type: string
+          type: array
+        fields:
+          items:
+            $ref: '#/components/schemas/AgentConfigurationField'
+          type: array
+        harness:
+          type: string
+        sessionModes:
+          items:
+            type: string
+          type: array
+        warning:
+          type: string
+      required:
+      - harness
+      - fields
+      - sessionModes
+      - chatCapabilities
+      - capabilityState
+      type: object
     AgentInfo:
       properties:
         authStatus:
@@ -12114,6 +12564,131 @@ components:
       - providerTurnId
       - activityId
       type: object
+    ProviderBindingAuditListResponse:
+      properties:
+        events:
+          items:
+            $ref: '#/components/schemas/ProviderBindingAuditResponse'
+          type: array
+        nextCursor:
+          type: string
+      required:
+      - events
+      type: object
+    ProviderBindingAuditResponse:
+      properties:
+        action:
+          type: string
+        actorId:
+          type: string
+        bindingId:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        enabled:
+          type: boolean
+        name:
+          type: string
+        reason:
+          type: string
+        revision:
+          format: int64
+          type: integer
+        sequence:
+          format: int64
+          type: integer
+      required:
+      - sequence
+      - bindingId
+      - revision
+      - action
+      - actorId
+      - reason
+      - name
+      - enabled
+      - createdAt
+      type: object
+    ProviderBindingCreateInput:
+      properties:
+        harness:
+          type: string
+        name:
+          type: string
+        projectId:
+          type: string
+        provider:
+          type: string
+        reason:
+          type: string
+      required:
+      - name
+      - harness
+      - provider
+      - reason
+      type: object
+    ProviderBindingListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProviderBindingResponse'
+          type: array
+        nextCursor:
+          type: string
+      required:
+      - items
+      type: object
+    ProviderBindingResponse:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        enabled:
+          type: boolean
+        harness:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        projectId:
+          type: string
+        provider:
+          type: string
+        revision:
+          format: int64
+          type: integer
+        updatedAt:
+          format: date-time
+          type: string
+      required:
+      - id
+      - name
+      - harness
+      - provider
+      - projectId
+      - enabled
+      - revision
+      - createdAt
+      - updatedAt
+      type: object
+    ProviderBindingUpdateInput:
+      properties:
+        enabled:
+          type: boolean
+        expectedRevision:
+          format: int64
+          type: integer
+        name:
+          type: string
+        reason:
+          type: string
+      required:
+      - name
+      - enabled
+      - expectedRevision
+      - reason
+      type: object
     PushDeviceEnvelope:
       properties:
         device:
@@ -12225,6 +12800,16 @@ components:
       - reason
       - createdAt
       type: object
+    RegistryCheckInput:
+      properties:
+        projectId:
+          type: string
+        version:
+          format: int64
+          type: integer
+      required:
+      - version
+      type: object
     RegistryCloneInput:
       properties:
         name:
@@ -12238,6 +12823,42 @@ components:
       - version
       - name
       - reason
+      type: object
+    RegistryConfigurationCheck:
+      properties:
+        bindingRevision:
+          format: int64
+          type: integer
+        catalogFingerprint:
+          type: string
+        issues:
+          items:
+            $ref: '#/components/schemas/RegistryConfigurationIssue'
+          type: array
+        readiness:
+          $ref: '#/components/schemas/AgentReadinessSnapshot'
+        ready:
+          type: boolean
+      required:
+      - ready
+      - issues
+      - readiness
+      type: object
+    RegistryConfigurationIssue:
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        state:
+          enum:
+          - invalid
+          - unavailable
+          type: string
+      required:
+      - code
+      - state
+      - message
       type: object
     RegistryCreateInput:
       properties:

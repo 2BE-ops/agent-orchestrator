@@ -168,6 +168,15 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"RegistryActivateInput":                                "RegistryActivateInput",
 	"RegistryCloneInput":                                   "RegistryCloneInput",
 	"RegistryImportInput":                                  "RegistryImportInput",
+	"RegistryBindingCreateInput":                           "ProviderBindingCreateInput",
+	"RegistryBindingUpdateInput":                           "ProviderBindingUpdateInput",
+	"RegistryCheckInput":                                   "RegistryCheckInput",
+	"RegistryConfigurationCheck":                           "RegistryConfigurationCheck",
+	"RegistryConfigurationIssue":                           "RegistryConfigurationIssue",
+	"ControllersProviderBindingResponse":                   "ProviderBindingResponse",
+	"ControllersProviderBindingListResponse":               "ProviderBindingListResponse",
+	"ControllersProviderBindingAuditResponse":              "ProviderBindingAuditResponse",
+	"ControllersProviderBindingAuditListResponse":          "ProviderBindingAuditListResponse",
 	"RegistryPortableBundle":                               "PortableRegistryBundle",
 	"RegistryPortableAgentType":                            "PortableAgentType",
 	"RegistryPortableSkill":                                "PortableSkill",
@@ -387,6 +396,8 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"ControllersListAgentAuthPlansResponse":       "ListAgentAuthPlansResponse",
 	"ControllersStartAgentAuthResponse":           "StartAgentAuthResponse",
 	"PortsAgentModelCatalog":                      "AgentModelsResponse",
+	"AgentConfiguration":                          "AgentConfigurationResponse",
+	"AgentConfigurationField":                     "AgentConfigurationField",
 	"PortsAgentModelInfo":                         "AgentModelInfo",
 	"ControllersListNotificationsQuery":           "ListNotificationsQuery",
 	"ControllersNotificationStreamQuery":          "NotificationStreamQuery",
@@ -1140,6 +1151,12 @@ func shellTerminalOperations() []operation {
 func agentOperations() []operation {
 	return []operation{
 		{
+			method: http.MethodGet, path: "/api/v1/agents/{agent}/configuration", id: "getAgentConfiguration", tag: "agents",
+			summary:    "Inspect declared adapter fields and mode-specific native capabilities",
+			pathParams: []any{controllers.AgentIDParam{}, controllers.AgentConfigurationQuery{}},
+			resps:      []respUnit{{http.StatusOK, controllers.AgentConfigurationResponse{}}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}},
+		},
+		{
 			method: http.MethodGet, path: "/api/v1/agents/auth-plans", id: "listAgentAuthPlans", tag: "agents",
 			summary: "Return display-safe native authentication plans for supported agents",
 			resps: []respUnit{
@@ -1521,7 +1538,22 @@ func devOperations() []operation {
 }
 
 func registryOperations() []operation {
-	ops := make([]operation, 0, 24)
+	ops := make([]operation, 0, 30)
+	for _, endpoint := range []struct {
+		method, path, id, summary string
+		request, response         any
+		status                    int
+		params                    []any
+	}{
+		{http.MethodGet, "/api/v1/provider-bindings", "listProviderBindings", "List local native provider references", nil, controllers.ProviderBindingListResponse{}, http.StatusOK, []any{controllers.RegistryListQuery{}}},
+		{http.MethodPost, "/api/v1/provider-bindings", "createProviderBinding", "Create a reusable native provider reference", registrysvc.BindingCreateInput{}, controllers.ProviderBindingResponse{}, http.StatusCreated, nil},
+		{http.MethodGet, "/api/v1/provider-bindings/{id}", "getProviderBinding", "Inspect a local native provider reference", nil, controllers.ProviderBindingResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}}},
+		{http.MethodPatch, "/api/v1/provider-bindings/{id}", "updateProviderBinding", "Rename or disable a local provider reference", registrysvc.BindingUpdateInput{}, controllers.ProviderBindingResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}}},
+		{http.MethodGet, "/api/v1/provider-bindings/{id}/audit", "listProviderBindingAudit", "Inspect native provider reference history", nil, controllers.ProviderBindingAuditListResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}, controllers.RegistryListQuery{}}},
+		{http.MethodPost, "/api/v1/agent-types/{id}/validate", "validateAgentType", "Check an exact version's native configuration and readiness", registrysvc.CheckInput{}, registrysvc.ConfigurationCheck{}, http.StatusOK, []any{controllers.RegistryIDParam{}}},
+	} {
+		ops = append(ops, operation{method: endpoint.method, path: endpoint.path, id: endpoint.id, tag: "registry", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
+	}
 	for _, resource := range []struct{ path, name string }{{"/api/v1/agent-types", "AgentType"}, {"/api/v1/skills", "Skill"}} {
 		for _, endpoint := range []struct {
 			method, suffix, verb, summary string
