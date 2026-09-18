@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
+	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite/sqlitetest"
 )
 
@@ -13,6 +14,58 @@ type workerDefaultMode domain.SessionMode
 
 func (m workerDefaultMode) DefaultSessionMode(context.Context) domain.SessionMode {
 	return domain.SessionMode(m)
+}
+
+func TestWorkerExecutionChangeRetainsContentAndRequiresExplicitProviderRebinding(t *testing.T) {
+	ctx := context.Background()
+	native := nativeReady()
+	native.catalog.Models = append(native.catalog.Models, ports.AgentModelInfo{ID: "configured/other", Provider: "configured"})
+	svc := NewWithNative(sqlitetest.MustOpen(t), native)
+	actor := domain.RegistryActor{Origin: domain.RegistryUser, ID: "human"}
+	binding, err := svc.CreateBinding(ctx, actor, BindingCreateInput{Name: "Native source", Harness: domain.HarnessCodex, Provider: "configured", Reason: "Select source provider"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := workerTypeInput()
+	input.Definition.AgentType.ProviderBindingID = binding.ID
+	entry, err := svc.Create(ctx, actor, domain.RegistryAgentType, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := svc.ResolveWorker(ctx, domain.WorkerSelection{AgentTypeID: entry.Entry.ID}, domain.ProjectRecord{}, domain.SessionModeTUI, actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current.SystemPrompt = "Retained project rules"
+	current.ContentHash = current.Hash()
+	metadata := entry.Entry.Metadata
+	metadata.Enabled = false
+	if _, err := svc.Update(ctx, actor, domain.RegistryAgentType, entry.Entry.ID, MetadataInput{Metadata: metadata, ExpectedRevision: 1, Reason: "Disable future selection"}); err != nil {
+		t.Fatal(err)
+	}
+	target := domain.HarnessClaudeCode
+	project := domain.ProjectRecord{Config: domain.ProjectConfig{Worker: domain.RoleOverride{Harness: target, AgentConfig: domain.AgentConfig{Model: "configured/other"}}}}
+	if _, err := svc.ResolveWorkerChange(ctx, current, domain.WorkerOverrides{Harness: &target}, project); err == nil {
+		t.Fatal("source provider silently transplanted")
+	}
+	empty := ""
+	changed, err := svc.ResolveWorkerChange(ctx, current, domain.WorkerOverrides{Harness: &target, ProviderBindingID: &empty}, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed.Provider != nil || changed.Effective.Harness != target || changed.Effective.Config.Model != "configured/other" || changed.Effective.Config.Effort != "" || changed.SystemPrompt != current.SystemPrompt || changed.AgentType != current.AgentType {
+		t.Fatalf("wrong switched configuration: %+v", changed)
+	}
+	if current.Effective.Harness != domain.HarnessCodex || current.Provider == nil || current.ContentHash != current.Hash() {
+		t.Fatal("original snapshot mutated")
+	}
+	changed, err = svc.ResolveWorkerChange(ctx, current, domain.WorkerOverrides{Model: &empty, ProviderBindingID: &empty}, domain.ProjectRecord{Config: domain.ProjectConfig{Worker: domain.RoleOverride{Harness: domain.HarnessCodex, AgentConfig: domain.AgentConfig{Model: "changed-project-model"}}}})
+	if err != nil || changed.Effective.Config.Model != "" || changed.Effective.Config.Effort != "" {
+		t.Fatalf("clearing inherited project drift: %+v %v", changed, err)
+	}
+	if _, err := svc.ResolveWorkerChange(ctx, current, domain.WorkerOverrides{Instructions: &empty}, project); err == nil {
+		t.Fatal("execution change replaced retained content")
+	}
 }
 
 func TestWorkerAuthoringCheckUsesActualProjectDefaults(t *testing.T) {

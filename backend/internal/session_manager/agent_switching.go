@@ -1327,6 +1327,10 @@ func (m *Manager) preserveCurrentNativeSession(ctx context.Context, store ports.
 
 func (m *Manager) prepareTargetActivation(ctx context.Context, store ports.AgentSwitchStore, rec domain.SessionRecord, project domain.ProjectRecord, agent ports.Agent, caps ports.ContinuationCapabilities, sw domain.AgentSwitch, modelOverride string) (preparedTargetActivation, error) {
 	harness := sw.TargetHarness
+	snapshot, err := m.prepareWorkerHarness(ctx, rec, project, sw, strings.TrimSpace(modelOverride))
+	if err != nil {
+		return preparedTargetActivation{}, err
+	}
 	if m.agentReadiness != nil {
 		readiness, readinessErr := m.agentReadiness.EnsureAgentReadiness(ctx, string(harness), domain.AgentReadinessPurposeLaunch)
 		if readinessErr != nil {
@@ -1342,7 +1346,12 @@ func (m *Manager) prepareTargetActivation(ctx context.Context, store ports.Agent
 			return preparedTargetActivation{}, ErrTargetAgentUnauthorized
 		}
 	}
-	systemPrompt, err := m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	var systemPrompt string
+	if snapshot != nil {
+		systemPrompt, err = m.workerSnapshotPrompt(ctx, rec.ID, *snapshot)
+	} else {
+		systemPrompt, err = m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	}
 	if err != nil {
 		return preparedTargetActivation{}, fmt.Errorf("system prompt: %w", err)
 	}
@@ -1352,6 +1361,9 @@ func (m *Manager) prepareTargetActivation(ctx context.Context, store ports.Agent
 		return preparedTargetActivation{}, fmt.Errorf("system prompt file: %w", err)
 	}
 	config := effectiveAgentConfig(harness, rec.Kind, project.Config)
+	if snapshot != nil {
+		config = snapshot.Effective.Config
+	}
 	if model := strings.TrimSpace(modelOverride); model != "" {
 		config.Model = model
 	}

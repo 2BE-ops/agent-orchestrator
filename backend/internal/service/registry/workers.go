@@ -161,3 +161,63 @@ func (m *Manager) ValidateWorkerRestore(ctx context.Context, snapshot domain.Wor
 func configurationUnavailable(check ConfigurationCheck) error {
 	return apierr.Invalid("WORKER_CONFIGURATION_UNAVAILABLE", "Resolve the Agent Type's native configuration requirements before launch", map[string]any{"issues": check.Issues})
 }
+
+// ResolveWorkerChange validates an explicit execution change against retained
+// content. Same-harness edits never inherit newly changed project defaults.
+func (m *Manager) ResolveWorkerChange(ctx context.Context, current domain.WorkerConfiguration, override domain.WorkerOverrides, project domain.ProjectRecord) (domain.WorkerConfiguration, error) {
+	if err := current.Validate(); err != nil {
+		return current, err
+	}
+	projectConfig := domain.ProjectConfig{}
+	selection := current.Selection.Overrides
+	if override.Harness != nil && *override.Harness != current.Effective.Harness {
+		projectConfig = project.Config
+		selection.Model = nil
+		selection.Mode = nil
+		selection.Effort = nil
+	}
+	current.Effective = resolveWorkerOptions(current.Effective, override, projectConfig, current.Effective.SessionMode)
+	if override.Harness != nil {
+		selection.Harness = override.Harness
+	}
+	if override.SessionMode != nil {
+		selection.SessionMode = override.SessionMode
+	}
+	if override.Model != nil {
+		selection.Model = override.Model
+		selection.Mode = nil
+		selection.Effort = nil
+	}
+	if override.Mode != nil {
+		selection.Mode = override.Mode
+		selection.Model = nil
+		selection.Effort = nil
+	}
+	if override.Effort != nil {
+		selection.Effort = override.Effort
+	}
+	if override.Permissions != nil {
+		selection.Permissions = override.Permissions
+	}
+	if override.ProviderBindingID != nil {
+		selection.ProviderBindingID = override.ProviderBindingID
+	}
+	if override.Instructions != nil || override.Skills != nil {
+		return current, apierr.Invalid("WORKER_CONTENT_IMMUTABLE", "Execution changes retain the original instructions and Skill content", nil)
+	}
+	current.Selection.Overrides = selection
+	check, err := m.checkConfiguration(ctx, current.Effective, project.ID, append([]domain.WorkerSkillSnapshot{}, current.Skills...))
+	if err != nil {
+		return current, err
+	}
+	if !check.Ready {
+		return current, configurationUnavailable(check)
+	}
+	current.Provider, err = m.ResolveBinding(ctx, current.Effective, project.ID)
+	if err != nil {
+		return current, err
+	}
+	current.CatalogFingerprint = check.CatalogFingerprint
+	current.ContentHash = current.Hash()
+	return current, current.Validate()
+}

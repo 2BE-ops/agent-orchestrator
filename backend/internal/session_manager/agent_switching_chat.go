@@ -160,10 +160,18 @@ func (m *Manager) executeChatAgentSwitch(
 	if m.chat == nil {
 		return result, fmt.Errorf("switch Chat agent %s: %w", id, ports.ErrChatUnsupported)
 	}
+	snapshot, err := m.prepareWorkerHarness(ctx, rec, project, result, strings.TrimSpace(cfg.Model))
+	if err != nil {
+		return result, err
+	}
+	baseAgentConfig := effectiveAgentConfig(cfg.TargetHarness, rec.Kind, project.Config)
+	if snapshot != nil {
+		baseAgentConfig = snapshot.Effective.Config
+	}
 	if err := m.chat.PreflightChat(
 		ctx,
 		cfg.TargetHarness,
-		effectiveAgentConfig(cfg.TargetHarness, rec.Kind, project.Config).Permissions,
+		baseAgentConfig.Permissions,
 	); err != nil {
 		return result, fmt.Errorf("switch Chat agent %s: target preflight: %w", id, err)
 	}
@@ -171,20 +179,27 @@ func (m *Manager) executeChatAgentSwitch(
 	if !ok {
 		return result, fmt.Errorf("switch Chat agent %s: %w", id, ErrInterfaceHandoffUnsupported)
 	}
-	baseAgentConfig := effectiveAgentConfig(cfg.TargetHarness, rec.Kind, project.Config)
-	agentConfig, err := m.resolveChatAgentConfig(ctx, ports.SpawnConfig{
-		ProjectID: rec.ProjectID,
-		Kind:      rec.Kind,
-		Harness:   cfg.TargetHarness,
-		AgentConfig: ports.AgentConfig{
-			Model: strings.TrimSpace(cfg.Model),
-		},
-	}, domain.ProjectConfig{AgentConfig: baseAgentConfig})
+	agentConfig := baseAgentConfig
+	if snapshot == nil {
+		agentConfig, err = m.resolveChatAgentConfig(ctx, ports.SpawnConfig{
+			ProjectID: rec.ProjectID,
+			Kind:      rec.Kind,
+			Harness:   cfg.TargetHarness,
+			AgentConfig: ports.AgentConfig{
+				Model: strings.TrimSpace(cfg.Model),
+			},
+		}, domain.ProjectConfig{AgentConfig: baseAgentConfig})
+	}
 	if err != nil {
 		return result, fmt.Errorf("switch Chat agent %s: target config: %w", id, err)
 	}
 
-	systemPrompt, err := m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	var systemPrompt string
+	if snapshot != nil {
+		systemPrompt, err = m.workerSnapshotPrompt(ctx, rec.ID, *snapshot)
+	} else {
+		systemPrompt, err = m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	}
 	if err != nil {
 		return result, fmt.Errorf("switch Chat agent %s: system prompt: %w", id, err)
 	}
@@ -617,7 +632,19 @@ func (m *Manager) rollbackStoppedChatAgentSwitchSource(
 	if !ok {
 		return ErrUnknownHarness
 	}
-	systemPrompt, err := m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	snapshot, err := m.workerSnapshot(ctx, rec.ID)
+	if err != nil {
+		return err
+	}
+	if err := m.validateWorkerFreshRestore(ctx, snapshot, current); err != nil {
+		return err
+	}
+	var systemPrompt string
+	if snapshot != nil {
+		systemPrompt, err = m.workerSnapshotPrompt(ctx, rec.ID, *snapshot)
+	} else {
+		systemPrompt, err = m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	}
 	if err != nil {
 		return err
 	}
@@ -626,6 +653,9 @@ func (m *Manager) rollbackStoppedChatAgentSwitchSource(
 		return err
 	}
 	agentConfig := effectiveAgentConfig(rec.Harness, rec.Kind, project.Config)
+	if snapshot != nil {
+		agentConfig = snapshot.Effective.Config
+	}
 	env := m.runtimeEnv(rec.ID, rec.ProjectID, rec.IssueID, project.Config.Env)
 	m.augmentAgentRuntimeEnv(sourceAgent, env)
 	if err := m.prepareWorkspace(

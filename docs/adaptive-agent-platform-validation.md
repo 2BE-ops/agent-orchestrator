@@ -4,6 +4,30 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 09c2 — harness-switch execution configurations (2026-09-18)
+
+TUI and Chat harness switches prepare a validated execution configuration before
+source teardown and activate it in the existing ownership-transfer transaction.
+They retain frozen Type/Skill content and standing project instructions. Selecting
+a different harness explicitly records clearing the previous harness's provider
+reference; it cannot silently transplant that binding or incompatible model/
+effort aliases. Target-native defaults and requested models pass the same native
+validation. Same-harness changes never re-inherit edited project defaults. Failed
+Chat switch recovery uses the retained source configuration.
+
+Tests PASS for explicit provider rebinding, disabled original Type retention,
+cleared options, immutable source content, native target-preparation arguments,
+and fault-injected atomic ownership/configuration activation for both TUI and
+Chat. Full registry (2.60s) and SQLite store (14.42s) suites PASS. The full manager
+suite (39.91s) reproduces exactly the eight already confirmed Windows baseline
+failures listed under 09b; no additional failure appeared. Backend build and
+pinned changed-code lint against `fcd09f60e` PASS (0 issues). Complete pending
+diff and whitespace reviewed. Logs: ignored `*stage09c2*` files.
+
+This increment has automated evidence; native multi-harness switching and its
+history UI are not yet live-validated. Live model settings/history presentation
+remain in progress, so stage 09 remains open.
+
 ## Stage 09c1 — execution history and interface changes (2026-09-18)
 
 Migration 0152 adds immutable execution configurations and append-only activation

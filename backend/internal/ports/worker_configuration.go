@@ -17,6 +17,7 @@ type WorkerConfigurationStore interface {
 // service, with a separate check for fresh restoration of historical content.
 type WorkerConfigurationResolver interface {
 	ResolveWorker(context.Context, domain.WorkerSelection, domain.ProjectRecord, domain.SessionMode, domain.RegistryActor) (domain.WorkerConfiguration, error)
+	ResolveWorkerChange(context.Context, domain.WorkerConfiguration, domain.WorkerOverrides, domain.ProjectRecord) (domain.WorkerConfiguration, error)
 	ValidateWorkerRestore(context.Context, domain.WorkerConfiguration, string) error
 }
 

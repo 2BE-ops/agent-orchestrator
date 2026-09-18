@@ -258,7 +258,7 @@ func TestWorkerResourceRejectsTraversalAndRetainsExistingContent(t *testing.T) {
 	}
 }
 
-func TestConfiguredWorkerInterfaceUsesPreparedSnapshotAcrossModeCommit(t *testing.T) {
+func TestConfiguredWorkerControllerChangesRetainInstructionsAndNativeOptions(t *testing.T) {
 	ctx := context.Background()
 	dataDir := t.TempDir()
 	store := sqlitetest.MustOpen(t)
@@ -311,5 +311,22 @@ func TestConfiguredWorkerInterfaceUsesPreparedSnapshotAcrossModeCommit(t *testin
 	current, err := manager.workerSnapshot(ctx, rec.ID)
 	if err != nil || current.ContentHash != original.ContentHash {
 		t.Fatalf("rollback did not restore original config: %v", err)
+	}
+	rec, _, err = store.GetSession(ctx, rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := &switchTestAgent{configDir: filepath.Join(dataDir, "target-native"), available: map[string]ports.NativeSessionAvailability{}}
+	sw := domain.AgentSwitch{ID: "prepared-switch", SessionID: rec.ID, FromHarness: rec.Harness, TargetHarness: domain.HarnessCodex}
+	prepared, err := manager.prepareTargetActivation(ctx, store, rec, domain.ProjectRecord{}, target, target.ContinuationCapabilities(), sw, "provider/reviewer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.launch.Config.Model != "provider/reviewer" || prepared.launch.Config.Effort != "" || !strings.Contains(prepared.launch.SystemPrompt, "Retain these instructions across interface changes") {
+		t.Fatalf("harness preflight lost retained content: %+v", prepared.launch)
+	}
+	stillSource, err := manager.workerSnapshot(ctx, rec.ID)
+	if err != nil || stillSource.Effective.Harness != rec.Harness {
+		t.Fatal("harness preparation prematurely activated target")
 	}
 }

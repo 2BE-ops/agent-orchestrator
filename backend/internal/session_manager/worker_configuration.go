@@ -103,3 +103,40 @@ func (m *Manager) validateWorkerFreshRestore(ctx context.Context, snapshot *doma
 	}
 	return m.workerConfigurations.ValidateWorkerRestore(ctx, *snapshot, string(rec.ProjectID))
 }
+
+func (m *Manager) prepareWorkerHarness(ctx context.Context, rec domain.SessionRecord, project domain.ProjectRecord, sw domain.AgentSwitch, model string) (*domain.WorkerConfiguration, error) {
+	snapshot, err := m.workerSnapshot(ctx, rec.ID)
+	if err != nil || snapshot == nil {
+		return snapshot, err
+	}
+	store, ok := m.store.(ports.WorkerExecutionStore)
+	if !ok || m.workerConfigurations == nil {
+		return nil, apierr.NotImplemented("WORKER_CONFIGURATION_UNAVAILABLE", "Worker execution history is unavailable")
+	}
+	current, sequence, found, err := store.GetEffectiveWorkerConfiguration(ctx, rec.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, fmt.Errorf("worker configuration disappeared")
+	}
+	if current.Effective.Harness != rec.Harness || current.Effective.SessionMode != domain.NormalizeSessionMode(rec.Mode) {
+		return nil, apierr.Conflict("WORKER_EXECUTION_SEGMENT_REQUIRED", "Resolve the current worker configuration before switching harness", nil)
+	}
+	// An explicit different harness uses that harness's native provider reference.
+	// The old binding cannot be transplanted; this clearing is retained in history.
+	binding := ""
+	override := domain.WorkerOverrides{Harness: &sw.TargetHarness, ProviderBindingID: &binding}
+	if model != "" {
+		override.Model = &model
+	}
+	changed, err := m.workerConfigurations.ResolveWorkerChange(ctx, current, override, project)
+	if err != nil {
+		return nil, err
+	}
+	execution, err := store.PrepareWorkerExecution(ctx, rec.ControllerOwner(), domain.WorkerExecution{ID: "switch-" + string(sw.ID), SessionID: rec.ID, SourceKind: "agent_switch", SourceID: string(sw.ID), PreviousActivation: sequence, Configuration: changed, Actor: domain.RegistryActor{Origin: domain.RegistryUser, ID: "local-user"}, Reason: "Switch worker harness to " + string(sw.TargetHarness) + " using its native provider configuration", CreatedAt: m.clock()})
+	if err != nil {
+		return nil, err
+	}
+	return &execution.Configuration, nil
+}

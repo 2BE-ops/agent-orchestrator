@@ -243,3 +243,19 @@ func switchWorkerInterfaceExecution(ctx context.Context, q *gen.Queries, id doma
 	}
 	return activateWorkerExecution(ctx, q, execution, rollback, now)
 }
+
+func switchWorkerHarnessExecution(ctx context.Context, q *gen.Queries, id domain.SessionID, switchID domain.AgentSwitchID, now time.Time) error {
+	_, _, configured, err := effectiveWorkerConfiguration(ctx, q, id)
+	if err != nil || !configured {
+		return err
+	}
+	row, err := q.GetWorkerExecutionBySource(ctx, gen.GetWorkerExecutionBySourceParams{SessionID: string(id), SourceKind: "agent_switch", SourceID: string(switchID)})
+	if err != nil {
+		return fmt.Errorf("read prepared worker harness configuration: %w", err)
+	}
+	execution, err := workerExecutionFromRow(row)
+	if err != nil {
+		return err
+	}
+	return activateWorkerExecution(ctx, q, execution, false, now)
+}
