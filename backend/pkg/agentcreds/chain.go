@@ -3,8 +3,8 @@ package agentcreds
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -92,23 +92,6 @@ func lookPathInEnvironment(name string, environment []string) (string, error) {
 	return "", &exec.Error{Name: name, Err: exec.ErrNotFound}
 }
 
-func newWithCommandRunner(client *http.Client, runner providerCommandRunner) *Validator {
-	v := New(client)
-	if runner != nil {
-		v.execCmd = runner
-	}
-	return v
-}
-
-// ValidateVertexViaCLI asks gcloud for an access token and probes with it.
-//
-// gcloud has already resolved whatever the chain holds — user login, service
-// account impersonation, workload identity federation — so one command turns
-// an unresolvable credential into an ordinary bearer token.
-func (v *Validator) ValidateVertexViaCLI(ctx context.Context, project, region string) Result {
-	return v.validateVertexViaCLI(ctx, project, region, "", commandInvocation{})
-}
-
 func (v *Validator) validateVertexViaCLI(ctx context.Context, project, region, baseURL string, invocation commandInvocation) Result {
 	result := Result{Provider: ProviderVertex, Source: "gcloud", CheckedAt: time.Now()}
 	out, err := v.execCmd(ctx, invocation, "gcloud", "auth", "print-access-token")
@@ -118,7 +101,7 @@ func (v *Validator) validateVertexViaCLI(ctx context.Context, project, region, b
 		result.Err = commandDiagnosticError(err, out.Stderr)
 		return result
 	}
-	token := strings.TrimSpace(lastNonEmptyLine(string(out.Stdout)))
+	token := strings.TrimSpace(string(out.Stdout))
 	if token == "" {
 		result.State = StateUnknown
 		result.Detail = "gcloud returned no access token"
@@ -128,17 +111,6 @@ func (v *Validator) validateVertexViaCLI(ctx context.Context, project, region, b
 		Kind: KindGoogleAccessToken, Secret: token, Source: "gcloud",
 		Provider: ProviderVertex, Project: project, Region: region, BaseURL: baseURL,
 	})
-}
-
-// ValidateBedrockViaCLI asks the aws CLI to list Bedrock foundation models.
-//
-// Here the exit code is the verdict: the CLI resolves the chain, signs, and
-// calls the same control-plane endpoint the signed probe would. A non-zero
-// exit is reported as Unknown rather than a rejection, because the CLI
-// conflates "credentials refused" with "no CLI config", "wrong profile", and
-// "network down", and this layer must never manufacture a lockout.
-func (v *Validator) ValidateBedrockViaCLI(ctx context.Context, region string) Result {
-	return v.validateBedrockViaCLI(ctx, region, commandInvocation{})
 }
 
 func (v *Validator) validateBedrockViaCLI(ctx context.Context, region string, invocation commandInvocation) Result {
@@ -172,20 +144,29 @@ func (v *Validator) validateBedrockViaCLI(ctx context.Context, region string, in
 	return result
 }
 
+func parseBedrockModels(body []byte) ([]Model, error) {
+	var payload struct {
+		ModelSummaries []struct {
+			ModelID      string `json:"modelId"`
+			ProviderName string `json:"providerName"`
+		} `json:"modelSummaries"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+	models := make([]Model, 0, len(payload.ModelSummaries))
+	for _, summary := range payload.ModelSummaries {
+		if isClaudeModelID(summary.ModelID) || strings.EqualFold(summary.ProviderName, "Anthropic") {
+			models = append(models, Model{ID: summary.ModelID})
+		}
+	}
+	return models, nil
+}
+
 func commandDiagnosticError(err error, stderr []byte) error {
 	detail := strings.TrimSpace(string(stderr))
 	if detail == "" {
 		return err
 	}
 	return fmt.Errorf("%w: %s", err, detail)
-}
-
-func lastNonEmptyLine(text string) string {
-	lines := strings.Split(strings.TrimSpace(text), "\n")
-	for index := len(lines) - 1; index >= 0; index-- {
-		if trimmed := strings.TrimSpace(lines[index]); trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
 }

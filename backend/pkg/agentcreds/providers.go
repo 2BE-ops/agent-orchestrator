@@ -33,15 +33,15 @@ const (
 // a credential to a host that should never have seen it.
 func ParseProvider(value string) (Provider, bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "firstparty", "anthropic", "first_party":
+	case "", "firstparty":
 		return ProviderFirstParty, true
-	case "gateway", "proxy":
+	case "gateway":
 		return ProviderGateway, true
-	case "foundry", "azure":
+	case "foundry":
 		return ProviderFoundry, true
-	case "bedrock", "aws":
+	case "bedrock":
 		return ProviderBedrock, true
-	case "vertex", "gcp", "google":
+	case "vertex":
 		return ProviderVertex, true
 	default:
 		return "", false
@@ -53,10 +53,8 @@ func (v *Validator) requestFor(ctx context.Context, provider Provider, cred Cred
 	switch provider {
 	case ProviderFirstParty, ProviderGateway:
 		return v.anthropicRequest(ctx, provider, cred)
-	case ProviderFoundry:
+	case ProviderFoundry, ProviderBedrock:
 		return requestSpec{}, errors.New("agentcreds: Azure AI Foundry does not expose a models endpoint")
-	case ProviderBedrock:
-		return v.bedrockRequest(ctx, cred)
 	case ProviderVertex:
 		return v.vertexRequest(ctx, cred)
 	default:

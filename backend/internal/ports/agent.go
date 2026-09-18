@@ -43,10 +43,6 @@ const (
 	// (a config file, an env var, or a CLI that reports loggedIn) reports
 	// configured instead, and must never render as a ready state.
 	AgentAuthStatusConfigured AgentAuthStatus = "configured"
-	// AgentAuthStatusUnavailable means the agent's binary is not installed, so
-	// there is nothing to authenticate. It is distinct from unauthenticated:
-	// the remedy is an install, not a login.
-	AgentAuthStatusUnavailable AgentAuthStatus = "unavailable"
 )
 
 // Agent is the contract every CLI coding agent adapter (claude-code, codex, …)

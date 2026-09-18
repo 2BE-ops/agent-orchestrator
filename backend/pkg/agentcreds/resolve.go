@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -107,12 +108,8 @@ func ResolveProvider(reported string, opts ResolveOptions) (Provider, bool) {
 }
 
 func envTruthy(value string) bool {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
-	}
+	parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+	return err == nil && parsed
 }
 
 // ResolveLocal finds the credential Claude Code will use for the given
@@ -130,12 +127,10 @@ func ResolveLocal(ctx context.Context, provider Provider, opts ResolveOptions) (
 		cred.Provider = ProviderGateway
 		cred.BaseURL = opts.env("ANTHROPIC_BASE_URL")
 		return cred, true
-	case ProviderFoundry:
-		return resolveFoundry(opts)
 	case ProviderBedrock:
-		return resolveBedrock(opts)
+		return Credential{}, false
 	case ProviderVertex:
-		return resolveVertex(ctx, opts)
+		return resolveVertex(opts)
 	default:
 		return Credential{}, false
 	}
@@ -198,18 +193,13 @@ func loadOAuth(ctx context.Context, opts ResolveOptions) (secret, source string,
 
 // readCredentialsFile reads ~/.claude/.credentials.json.
 func readCredentialsFile(ctx context.Context, opts ResolveOptions) (secret, source string, ok bool) {
-	if ctx.Err() != nil {
-		return "", "", false
-	}
+	_ = ctx
 	dir, err := claudeConfigDir(opts)
 	if err != nil {
 		return "", "", false
 	}
 	data, err := os.ReadFile(filepath.Join(dir, ".credentials.json"))
 	if err != nil {
-		return "", "", false
-	}
-	if ctx.Err() != nil {
 		return "", "", false
 	}
 	token, ok := oauthTokenFromCredentialsJSON(data)
@@ -258,23 +248,6 @@ func claudeConfigDir(opts ResolveOptions) (string, error) {
 	return filepath.Join(home, ".claude"), nil
 }
 
-func resolveFoundry(opts ResolveOptions) (Credential, bool) {
-	resource := opts.env("ANTHROPIC_FOUNDRY_RESOURCE")
-	if key := opts.env("ANTHROPIC_FOUNDRY_API_KEY"); key != "" {
-		return Credential{
-			Kind: KindAzureAPIKey, Secret: key, Source: "ANTHROPIC_FOUNDRY_API_KEY",
-			Provider: ProviderFoundry, Resource: resource, BaseURL: opts.env("ANTHROPIC_FOUNDRY_BASE_URL"),
-		}, true
-	}
-	if token := opts.env("ANTHROPIC_FOUNDRY_AUTH_TOKEN"); token != "" {
-		return Credential{
-			Kind: KindAuthToken, Secret: token, Source: "ANTHROPIC_FOUNDRY_AUTH_TOKEN",
-			Provider: ProviderFoundry, Resource: resource, BaseURL: opts.env("ANTHROPIC_FOUNDRY_BASE_URL"),
-		}, true
-	}
-	return Credential{}, false
-}
-
 func configuredFoundryModels(opts ResolveOptions) []Model {
 	seen := map[string]struct{}{}
 	models := make([]Model, 0, 3)
@@ -296,31 +269,7 @@ func configuredFoundryModels(opts ResolveOptions) []Model {
 	return models
 }
 
-func resolveBedrock(opts ResolveOptions) (Credential, bool) {
-	region := firstNonEmpty(opts.env("AWS_REGION"), opts.env("AWS_DEFAULT_REGION"))
-	baseURL := opts.env("ANTHROPIC_BEDROCK_BASE_URL")
-	if token := opts.env("AWS_BEARER_TOKEN_BEDROCK"); token != "" {
-		return Credential{
-			Kind: KindAuthToken, Secret: token, Source: "AWS_BEARER_TOKEN_BEDROCK",
-			Provider: ProviderBedrock, Region: region, BaseURL: baseURL,
-		}, true
-	}
-	accessKey := opts.env("AWS_ACCESS_KEY_ID")
-	secretKey := opts.env("AWS_SECRET_ACCESS_KEY")
-	if accessKey != "" && secretKey != "" {
-		// Packed as one secret so there is a single field to keep out of logs.
-		packed := accessKey + "\n" + secretKey + "\n" + opts.env("AWS_SESSION_TOKEN")
-		return Credential{
-			Kind: KindAWSSigV4, Secret: packed, Source: "AWS_ACCESS_KEY_ID",
-			Provider: ProviderBedrock, Region: region, BaseURL: baseURL,
-		}, true
-	}
-	// Anything else is chain-sourced: IMDS, container credentials, an SSO
-	// profile, credential_process. Not resolvable here by design.
-	return Credential{}, false
-}
-
-func resolveVertex(ctx context.Context, opts ResolveOptions) (Credential, bool) {
+func resolveVertex(opts ResolveOptions) (Credential, bool) {
 	region := firstNonEmpty(opts.env("CLOUD_ML_REGION"), opts.env("GOOGLE_CLOUD_REGION"), "us-east5")
 	project := firstNonEmpty(opts.env("ANTHROPIC_VERTEX_PROJECT_ID"), opts.env("GOOGLE_CLOUD_PROJECT"))
 	baseURL := opts.env("ANTHROPIC_VERTEX_BASE_URL")
@@ -329,33 +278,6 @@ func resolveVertex(ctx context.Context, opts ResolveOptions) (Credential, bool) 
 			Kind: KindGoogleAccessToken, Secret: token, Source: "GOOGLE_OAUTH_ACCESS_TOKEN",
 			Provider: ProviderVertex, Region: region, Project: project, BaseURL: baseURL,
 		}, true
-	}
-	if path := opts.env("GOOGLE_APPLICATION_CREDENTIALS"); path != "" {
-		if ctx.Err() != nil {
-			return Credential{}, false
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return Credential{}, false
-		}
-		if ctx.Err() != nil {
-			return Credential{}, false
-		}
-		cred := Credential{
-			Kind: KindGoogleServiceAccount, Secret: string(data), Source: "GOOGLE_APPLICATION_CREDENTIALS",
-			Provider: ProviderVertex, Region: region, Project: project, BaseURL: baseURL,
-		}
-		if cred.Project == "" {
-			// A service-account key names its own project, which saves the
-			// user from having to set a second variable.
-			var key struct {
-				ProjectID string `json:"project_id"`
-			}
-			if json.Unmarshal(data, &key) == nil {
-				cred.Project = key.ProjectID
-			}
-		}
-		return cred, true
 	}
 	return Credential{}, false
 }

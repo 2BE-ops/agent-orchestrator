@@ -25,8 +25,26 @@ func (v *Validator) ValidateLocal(ctx context.Context, reportedProvider string, 
 			Detail: "the configured API provider is not one this build can validate",
 		}
 	}
-
 	cred, found := ResolveLocal(ctx, provider, opts)
+	return v.ValidateResolvedLocal(ctx, provider, cred, found, opts)
+}
+
+// ValidateResolvedLocal validates a provider and credential that the caller
+// already resolved from the same local environment.
+func (v *Validator) ValidateResolvedLocal(
+	ctx context.Context,
+	provider Provider,
+	cred Credential,
+	found bool,
+	opts ResolveOptions,
+) Result {
+	if provider == ProviderFoundry {
+		return Result{
+			State: StateUnknown, Provider: provider, Models: configuredFoundryModels(opts), CheckedAt: time.Now(),
+			Detail: "Azure AI Foundry deployments were read from Claude configuration; invocation permission was not verified",
+		}
+	}
+
 	if !found {
 		// Nothing readable. For Bedrock and Vertex that is the expected case
 		// rather than an error: the credential almost certainly exists, in a
@@ -45,14 +63,6 @@ func (v *Validator) ValidateLocal(ctx context.Context, reportedProvider string, 
 			}
 		}
 	}
-	if provider == ProviderFoundry {
-		return Result{
-			State: StateUnknown, Provider: provider, Source: cred.Source,
-			Fingerprint: cred.Fingerprint(), Models: configuredFoundryModels(opts), CheckedAt: time.Now(),
-			Detail: "Azure AI Foundry deployments were read from Claude configuration; invocation permission was not verified",
-		}
-	}
-
 	result := v.Validate(ctx, cred)
 
 	// A rejection that came from AO sending a malformed request is our bug,
@@ -67,16 +77,10 @@ func (v *Validator) ValidateLocal(ctx context.Context, reportedProvider string, 
 		}
 	}
 
-	// A signed Bedrock or Vertex probe that could not even be built — a
-	// malformed key file, a missing region — is worth one CLI attempt before
-	// giving up, since the CLI needs none of what we were missing.
+	// A Vertex probe that could not be built is worth one gcloud attempt before
+	// giving up, since gcloud can resolve credentials AO cannot read directly.
 	if result.State == StateUnknown && result.Err != nil && !errors.Is(result.Err, ErrInvalidCredential) {
-		switch provider {
-		case ProviderBedrock:
-			if cliResult := v.validateBedrockViaCLI(ctx, cred.Region, opts.commandInvocation()); cliResult.State != StateUnknown || len(cliResult.Models) > 0 {
-				return cliResult
-			}
-		case ProviderVertex:
+		if provider == ProviderVertex {
 			if cliResult := v.validateVertexViaCLI(ctx, cred.Project, cred.Region, cred.BaseURL, opts.commandInvocation()); cliResult.State != StateUnknown {
 				return cliResult
 			}
