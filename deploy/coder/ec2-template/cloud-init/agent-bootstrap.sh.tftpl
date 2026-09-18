@@ -1,0 +1,83 @@
+#!/bin/bash
+# EC2 user_data for an AO Cloud "coder" session instance.
+#
+# Rendered by Terraform templatefile() from main.tf. Only ${...} tokens are
+# Terraform template expressions; every $NAME and $(...) below is literal shell.
+# The four template inputs are:
+#   durable_root   AO_CLOUD_CODER_DURABLE_ROOT, the persistent mount point
+#   data_volume_id the EBS volume id (vol-...) to find, format-if-empty, and mount
+#   agent_token    coder_agent.main.token
+#   agent_init     coder_agent.main.init_script (downloads + runs the coder agent)
+#
+# It runs as root on every fresh instance launch (the instance is created anew on
+# each Coder start), so it must be idempotent and MUST NOT reformat a volume that
+# already carries durable state.
+set -euxo pipefail
+exec > >(tee -a /var/log/ao-user-data.log) 2>&1
+echo "ao user_data start: $(date -u +%FT%TZ)"
+
+DURABLE_ROOT="${durable_root}"
+VOL_ID="${data_volume_id}"
+# Nitro/NVMe presents an EBS volume with the volume id (dashes stripped) as its
+# device serial. t3.medium is a Nitro instance, so /dev/sdh is remapped.
+VOL_SERIAL="$(echo "$VOL_ID" | tr -d '-')"
+
+# --- 1. Find the attached durable volume ----------------------------------
+DATA_DEV=""
+for attempt in $(seq 1 60); do
+  cand="$(lsblk -dno NAME,SERIAL | awk -v s="$VOL_SERIAL" '$2==s {print "/dev/"$1; exit}')"
+  if [ -n "$cand" ] && [ -b "$cand" ]; then
+    DATA_DEV="$cand"
+    break
+  fi
+  # Fallback for non-Nitro instance types that keep the requested device name.
+  for classic in /dev/sdh /dev/xvdh; do
+    if [ -b "$classic" ]; then
+      DATA_DEV="$classic"
+      break
+    fi
+  done
+  [ -n "$DATA_DEV" ] && break
+  sleep 2
+done
+if [ -z "$DATA_DEV" ]; then
+  echo "FATAL: durable volume $VOL_ID never attached" >&2
+  exit 1
+fi
+echo "durable volume $VOL_ID is $DATA_DEV"
+
+# --- 2. Create a filesystem only on first use, then mount ------------------
+# blkid succeeds only if the volume already has a filesystem. A fresh volume
+# (new session) gets one; a returning volume (resume after idle-pause) is left
+# untouched so the durable-session-id marker and repository survive.
+if ! blkid "$DATA_DEV" >/dev/null 2>&1; then
+  echo "no filesystem on $DATA_DEV; creating ext4 (first launch of this session)"
+  mkfs.ext4 -L ao-durable "$DATA_DEV"
+else
+  echo "existing filesystem on $DATA_DEV; preserving durable state (resume)"
+fi
+mkdir -p "$DURABLE_ROOT"
+mount "$DATA_DEV" "$DURABLE_ROOT"
+# Own the mount as the coder agent user. AO's bootstrap adds o+x traversal and
+# carves out repository/.ao owned by the ao-worker user beneath it.
+chown coder:coder "$DURABLE_ROOT"
+chmod 0755 "$DURABLE_ROOT"
+mountpoint -q "$DURABLE_ROOT" || { echo "FATAL: $DURABLE_ROOT is not a mount point after mount" >&2; exit 1; }
+echo "durable root $DURABLE_ROOT mounted from $DATA_DEV"
+
+# --- 3. Launch the coder agent as the coder user --------------------------
+# The agent binary is downloaded fresh by init_script (version-matched to the
+# Coder server), identical to how the Docker template's container starts it.
+cat > /opt/coder-agent-init.sh <<'AO_CODER_INIT_EOF'
+${agent_init}
+AO_CODER_INIT_EOF
+chown coder:coder /opt/coder-agent-init.sh
+chmod 0755 /opt/coder-agent-init.sh
+
+export CODER_AGENT_TOKEN='${agent_token}'
+# Background it so cloud-init completes even if init_script runs the agent in the
+# foreground. AO then observes the agent connect + report ready and streams
+# ao-worker over the agent PTY.
+setsid sudo --preserve-env=CODER_AGENT_TOKEN -u coder /bin/bash /opt/coder-agent-init.sh \
+  > /var/log/coder-agent.log 2>&1 &
+echo "coder agent launched: $(date -u +%FT%TZ)"
