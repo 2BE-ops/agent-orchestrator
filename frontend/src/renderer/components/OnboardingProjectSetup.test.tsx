@@ -21,7 +21,6 @@ vi.mock("../lib/api-client", () => ({
 
 vi.mock("./CreateProjectFlow", () => ({
 	CloudProjectCard: () => <div data-testid="cloud-project-card" />,
-	CloudSignInPanel: () => <div data-testid="cloud-sign-in-panel" />,
 	CreateProjectFlow: () => null,
 }));
 
@@ -63,9 +62,11 @@ it("offers cloud as a project source once the cloud step enabled it", async () =
 		/>,
 	);
 
-	expect(screen.queryByTestId("cloud-sign-in-panel")).not.toBeInTheDocument();
+	// Signed out, the dialog asks for AO Cloud rather than the project form.
+	expect(screen.queryByRole("button", { name: "Sign in to AO Cloud" })).not.toBeInTheDocument();
 	await user.click(screen.getByRole("button", { name: "Create a cloud project" }));
-	expect(await screen.findByTestId("cloud-sign-in-panel")).toBeInTheDocument();
+	expect(await screen.findByRole("button", { name: "Sign in to AO Cloud" })).toBeInTheDocument();
+	expect(screen.queryByTestId("cloud-project-card")).not.toBeInTheDocument();
 });
 
 it("goes straight to the cloud project form when the account is signed in", async () => {

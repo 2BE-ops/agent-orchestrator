@@ -19,7 +19,6 @@ const routeMocks = vi.hoisted(() => ({
 	navigate: vi.fn(),
 	agentsQuery: {} as MockAgentsQuery,
 	requestOnboardingFinish: vi.fn(),
-	openGlobalSettings: vi.fn(),
 	clearOnboardingFinishError: vi.fn(),
 	onboardingFinishRequest: null as null | {
 		path: string;
@@ -55,7 +54,6 @@ vi.mock("../stores/ui-store", () => ({
 	useResolvedTheme: () => "dark" as const,
 	useUiStore: (selector: (state: unknown) => unknown) =>
 		selector({
-			openGlobalSettings: routeMocks.openGlobalSettings,
 			requestOnboardingFinish: routeMocks.requestOnboardingFinish,
 			clearOnboardingFinishError: routeMocks.clearOnboardingFinishError,
 			onboardingFinishRequest: routeMocks.onboardingFinishRequest,
@@ -112,7 +110,6 @@ async function goToGitHubStep(user: ReturnType<typeof userEvent.setup>) {
 beforeEach(() => {
 	routeMocks.navigate.mockReset();
 	routeMocks.requestOnboardingFinish.mockReset();
-	routeMocks.openGlobalSettings.mockReset();
 	routeMocks.clearOnboardingFinishError.mockReset();
 	routeMocks.onboardingFinishRequest = null;
 	routeMocks.onboardingFinishError = null;
@@ -379,7 +376,6 @@ describe("onboarding route", () => {
 		// Sending the user to Settings and the home route used to drop them out of
 		// setup with no way back to the step they were on.
 		expect(routeMocks.navigate).not.toHaveBeenCalled();
-		expect(routeMocks.openGlobalSettings).not.toHaveBeenCalled();
 	});
 
 	it("surfaces a failed install with the reason and a retry in place", async () => {
@@ -460,7 +456,7 @@ describe("onboarding route", () => {
 
 		expect(await screen.findByRole("heading", { name: "Run sessions in the cloud" })).toBeInTheDocument();
 		expect(screen.getByText("Optional. Everything works locally either way.")).toBeInTheDocument();
-		expect(screen.getByText(/Adds the choice to run a project in a remote sandbox/)).toBeInTheDocument();
+		expect(screen.getByText("Lets you run a project in a remote sandbox.")).toBeInTheDocument();
 		expect(screen.getByText(/Early preview/)).toBeInTheDocument();
 
 		// Choosing applies the setting in place; Continue is what moves the flow on.
@@ -499,25 +495,6 @@ describe("onboarding route", () => {
 
 		expect(await screen.findByRole("button", { name: "Sign in with GitHub" })).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
-	});
-
-	it("offers mobile pairing from the last step", async () => {
-		const user = userEvent.setup();
-		await renderOnboarding();
-		await goToOrchestratorStep(user);
-		const orchestrators = screen.getByRole("region", { name: "Orchestrator agent" });
-		await user.click(within(orchestrators).getByRole("button", { name: "Claude Code" }));
-		await user.click(screen.getByRole("button", { name: "Choose workers" }));
-		const workers = await screen.findByRole("region", { name: "Worker agents" });
-		await user.click(within(workers).getByRole("button", { name: "Codex" }));
-		await user.click(screen.getByRole("button", { name: "See how it works" }));
-		await screen.findByRole("heading", { name: "Give your orchestrator a goal." });
-
-		await user.click(screen.getByRole("button", { name: "Set up AO mobile" }));
-
-		expect(window.localStorage.getItem("ao.onboarding.completed")).toBe("1");
-		expect(routeMocks.navigate).toHaveBeenCalledWith({ to: "/" });
-		expect(routeMocks.openGlobalSettings).toHaveBeenCalledWith("mobile");
 	});
 
 	it("installs the GitHub CLI in place when it is missing", async () => {
