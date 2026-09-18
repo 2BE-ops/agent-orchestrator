@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import aoLogo from "../../../assets/ao-logo.svg";
 import feedbackBackground from "../../landing/public/optimized/feature4.webp";
 import visibilityBackground from "../../landing/public/optimized/feature.webp";
-import { OnboardingFeedbackPreview } from "./OnboardingFeedbackPreview";
+import { FeedbackLoopDemo } from "../../landing/src/app/components/FeaturesSection/components/FeedbackLoopDemo/FeedbackLoopDemo";
 import { FleetBoardDemo, type FleetBoardAssets } from "../../landing/src/app/components/FeaturesSection/components/FleetBoardDemo/FleetBoardDemo";
 import { OnboardingProjectSetup } from "./OnboardingProjectSetup";
 import { OnboardingCloudStep } from "./OnboardingCloudStep";
@@ -877,7 +877,9 @@ function PreviewStage({ step }: { step: "welcome" | "feedback" }) {
 				{step === "welcome" ? (
 					<FleetBoardDemo assets={LANDING_PREVIEW_ASSETS} />
 				) : (
-					<OnboardingFeedbackPreview />
+					<div className="w-full [&_[class*='preview-terminal']]:font-mono [&_main]:font-mono">
+						<FeedbackLoopDemo agentIcon={claudeCodeLogo} />
+					</div>
 				)}
 			</div>
 		</div>
