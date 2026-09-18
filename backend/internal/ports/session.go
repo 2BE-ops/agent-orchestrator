@@ -16,8 +16,12 @@ var ErrActivityProjectionContention = errors.New("activity projection contention
 // SpawnConfig is the request to start a new session: which project/issue, which
 // agent harness, and the branch/prompt the agent launches with.
 type SpawnConfig struct {
-	ProjectID domain.ProjectID
-	IssueID   domain.IssueID
+	// WorkerSelection opts into immutable registry launch configuration. Actor is
+	// trusted server context and is never decoded from a public request body.
+	WorkerSelection *domain.WorkerSelection
+	WorkerActor     domain.RegistryActor
+	ProjectID       domain.ProjectID
+	IssueID         domain.IssueID
 	// ParentSessionID identifies the AO orchestrator that requested this worker
 	// through `ao spawn`. The daemon validates this reference and derives any
 	// inherited settings itself; callers never supply an inherited policy.

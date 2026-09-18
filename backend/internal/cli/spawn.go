@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -20,6 +21,9 @@ import (
 const maxDisplayNameLen = 20
 
 type spawnOptions struct {
+	agentType       string
+	typeVersion     int64
+	workerOverrides string
 	project         string
 	standalone      bool
 	harness         string
@@ -39,17 +43,24 @@ type spawnOptions struct {
 // spawnRequest mirrors the daemon's SpawnSessionRequest body for
 // POST /api/v1/sessions. The CLI keeps its own copy so it need not import httpd.
 type spawnRequest struct {
-	ProjectID       string `json:"projectId,omitempty"`
-	IssueID         string `json:"issueId,omitempty"`
-	ParentSessionID string `json:"parentSessionId,omitempty"`
-	TrackerProvider string `json:"trackerProvider,omitempty"`
-	Kind            string `json:"kind,omitempty"`
-	Mode            string `json:"mode,omitempty"`
-	Harness         string `json:"harness,omitempty"`
-	Branch          string `json:"branch,omitempty"`
-	Prompt          string `json:"prompt,omitempty"`
-	Model           string `json:"model,omitempty"`
-	DisplayName     string `json:"displayName"`
+	WorkerSelection *workerSelectionRequest `json:"workerSelection,omitempty"`
+	ProjectID       string                  `json:"projectId,omitempty"`
+	IssueID         string                  `json:"issueId,omitempty"`
+	ParentSessionID string                  `json:"parentSessionId,omitempty"`
+	TrackerProvider string                  `json:"trackerProvider,omitempty"`
+	Kind            string                  `json:"kind,omitempty"`
+	Mode            string                  `json:"mode,omitempty"`
+	Harness         string                  `json:"harness,omitempty"`
+	Branch          string                  `json:"branch,omitempty"`
+	Prompt          string                  `json:"prompt,omitempty"`
+	Model           string                  `json:"model,omitempty"`
+	DisplayName     string                  `json:"displayName"`
+}
+
+type workerSelectionRequest struct {
+	AgentTypeID string          `json:"agentTypeId"`
+	Version     int64           `json:"version,omitempty"`
+	Overrides   json.RawMessage `json:"overrides"`
 }
 
 type spawnResult struct {
@@ -72,6 +83,16 @@ func newSpawnCommand(ctx *commandContext) *cobra.Command {
 			"fresh isolated workspace. Git projects use worktrees; standalone agents use an AO-managed plain directory.",
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.agentType = strings.TrimSpace(opts.agentType)
+			if cmd.Flags().Changed("agent-type") && opts.agentType == "" {
+				return usageError{fmt.Errorf("--agent-type must name a local Agent Type")}
+			}
+			if opts.typeVersion < 0 || (opts.agentType == "" && (cmd.Flags().Changed("type-version") || opts.workerOverrides != "")) {
+				return usageError{fmt.Errorf("--type-version and --worker-overrides require --agent-type; version must not be negative")}
+			}
+			if opts.agentType != "" && (opts.harness != "" || opts.model != "" || opts.mode != "" || opts.kind == "orchestrator") {
+				return usageError{fmt.Errorf("--agent-type starts a worker; put harness/model/mode changes in --worker-overrides")}
+			}
 			if opts.standalone && strings.TrimSpace(opts.project) != "" {
 				return usageError{fmt.Errorf("--standalone and --project cannot be used together")}
 			}
@@ -101,7 +122,7 @@ func newSpawnCommand(ctx *commandContext) *cobra.Command {
 				if strings.TrimSpace(opts.branch) != "" || strings.TrimSpace(opts.issue) != "" || strings.TrimSpace(opts.claimPR) != "" {
 					return usageError{fmt.Errorf("standalone sessions do not support --branch, --issue, or --claim-pr")}
 				}
-				if strings.TrimSpace(opts.harness) == "" {
+				if strings.TrimSpace(opts.harness) == "" && opts.agentType == "" {
 					return usageError{fmt.Errorf("--agent is required with --standalone")}
 				}
 				opts.kind = "worker"
@@ -126,11 +147,13 @@ func newSpawnCommand(ctx *commandContext) *cobra.Command {
 				opts.project = project.ID
 			}
 
-			harness, err := resolveSpawnHarness(opts.harness, opts.kind, project)
-			if err != nil {
-				return err
+			if opts.agentType == "" {
+				harness, err := resolveSpawnHarness(opts.harness, opts.kind, project)
+				if err != nil {
+					return err
+				}
+				opts.harness = harness
 			}
-			opts.harness = harness
 
 			if isScratchProject(project) {
 				if strings.TrimSpace(opts.branch) != "" {
@@ -141,7 +164,7 @@ func newSpawnCommand(ctx *commandContext) *cobra.Command {
 				}
 			}
 
-			if !opts.skipAgentCheck {
+			if !opts.skipAgentCheck && opts.agentType == "" {
 				if err := ctx.preflightSpawnAgentAuth(cmd.Context(), cmd, opts.harness); err != nil {
 					return err
 				}
@@ -165,6 +188,16 @@ func newSpawnCommand(ctx *commandContext) *cobra.Command {
 				Prompt:          opts.prompt,
 				Model:           strings.TrimSpace(opts.model),
 				DisplayName:     name,
+			}
+			if opts.agentType != "" {
+				overrides := json.RawMessage(`{}`)
+				if opts.workerOverrides != "" {
+					overrides, err = readRegistryJSON(cmd.InOrStdin(), opts.workerOverrides)
+					if err != nil {
+						return err
+					}
+				}
+				req.WorkerSelection = &workerSelectionRequest{AgentTypeID: opts.agentType, Version: opts.typeVersion, Overrides: overrides}
 			}
 			var res spawnResult
 			if err := ctx.postJSON(cmd.Context(), "sessions", req, &res); err != nil {
@@ -204,6 +237,9 @@ func newSpawnCommand(ctx *commandContext) *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
+	f.StringVar(&opts.agentType, "agent-type", "", "Launch from this local Agent Type id")
+	f.Int64Var(&opts.typeVersion, "type-version", 0, "Pin an Agent Type version (0 resolves the active version once)")
+	f.StringVar(&opts.workerOverrides, "worker-overrides", "", "One-off override JSON file or - for stdin; requires --agent-type")
 	// --agent is an alias for --harness so the more intuitive `ao spawn --agent
 	// droid` works identically; both resolve to the same harness flag.
 	f.SetNormalizeFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
@@ -213,7 +249,7 @@ func newSpawnCommand(ctx *commandContext) *cobra.Command {
 		return pflag.NormalizedName(name)
 	})
 	f.StringVar(&opts.project, "project", "", "Project id to spawn the session in (default: AO_PROJECT_ID or the current registered repo)")
-	f.BoolVar(&opts.standalone, "standalone", false, "Spawn a projectless worker in an AO-managed plain directory (requires --agent)")
+	f.BoolVar(&opts.standalone, "standalone", false, "Spawn a projectless worker in an AO-managed plain directory (requires --agent or --agent-type)")
 	f.StringVar(&opts.harness, "harness", "", "Agent harness / --agent: claude-code, codex, aider, opencode, grok, droid, amp, agy, crush, cursor, qwen, copilot, goose, auggie, continue, devin, cline, kimi, muse, kiro, kilocode, vibe, pi, kimchi, prime-agent, autohand (default: project worker.agent; orchestrator spawns default to project orchestrator.agent; required if the project has none)")
 	f.StringVar(&opts.kind, "kind", "", "Session role: worker or orchestrator (default: worker)")
 	f.StringVar(&opts.mode, "mode", "", "Initial session interface: chat (structured agent connection) or tui (the agent's native terminal). Omitted uses the daemon default; compatible sessions can switch later.")

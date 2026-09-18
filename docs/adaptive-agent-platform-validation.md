@@ -4,6 +4,70 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 09b — manual launch and retained configuration (2026-09-18)
+
+Agent Type selection now reaches the existing shared session manager from direct
+HTTP/CLI spawn and task delegation. It resolves exact versions, compatible project
+defaults and explicit one-off overrides, checks fresh native prerequisites, and
+atomically persists the sealed snapshot with the existing session seed. Ordered
+Skill instructions/resources are materialized beneath the isolated AO data root
+using confined filesystem operations, without editing native user Skill folders.
+Existing resource content must match; changed content is rejected, not overwritten.
+Restoration uses retained instructions/options, including explicitly empty values.
+Chat host adoption skips fresh-process validation; fresh controllers require it.
+
+The desktop composer supports exact Type versions, native model/mode/permission
+choices, one-off instructions and temporary Skill composition. Registry launch
+opens that same composer. The inspector reads historical launch facts without
+consulting current Type availability. CLI flags are `--agent-type`,
+`--type-version` and `--worker-overrides`; mixed legacy configuration is rejected.
+The advisory registry check now resolves the same project/interface defaults as
+launch. Generated OpenAPI and frontend types include selection and history.
+
+| Check | Result |
+| --- | --- |
+| Worker/registry/provider/CLI/API/spec focused tests | PASS; exact pins, explicit clearing, trusted actor, legacy-null history, errors/request IDs, resource retention, rejected unavailable launch, TUI/Chat restore across SQLite reopen, and Chat adoption vs fresh launch |
+| Full `service/registry`, `service/session`, `cli`, HTTP router/spec/specgen/envelope suites | PASS; service/session 47.02s, CLI 19.05s |
+| Full `session_manager` | FAIL: eight existing Windows cases listed below; new worker tests PASS |
+| Full HTTP controllers | FAIL: existing concurrent `mobile.json` rename access denial and Windows clone file-URL rejection, recorded in prior milestones |
+| Six frontend files (selection, inspector, registry launch, composer, registry, session inspector) | PASS, 165 tests, 48.98s |
+| `npm run frontend:typecheck` | PASS |
+| Pinned golangci-lint, touched packages, `--new-from-rev=6f28a74fa` | PASS, 0 issues |
+| `go build ./...`; relevant `go vet` | PASS |
+| Renderer Vite build; isolated lab daemon build | PASS; existing renderer chunk-size warning |
+| `git diff --check`; complete pending source/contract diff review | PASS |
+| Real Electron manual Type launch, retained configuration, reload | PASS for an idle native Codex Chat worker; no model turn/completion claimed |
+
+The full manager failures are `TestBuildSourceHandoffRequestUsesCurrentNativeSessionContext`,
+`TestSwitchAgentFreshPreservesAOIdentityAndDeliversArtifact`,
+`TestSwitchAgentRefreshesLateSourceNativeIdentityAtStopBoundary`,
+`TestWriteAgentHandoffFileIsPrivateAtomicAndImmutable`,
+`TestInterfaceTransitionReservedTranscriptRequiresUntouchedTerminal/lookup_error`,
+`TestSpawn_DefaultsBranchUnderDevNamespaceForDevDataDir`,
+`TestSpawnAndRestore_PrependsResolvedBinaryAndNodeDirsToRuntimePATH`, and
+`TestSpawn_DoesNotAddNodeRuntimeForNativeBinary`. The last three were independently
+reproduced against stage-08 sources. All first five also reproduced against an
+isolated archive of pre-change commit `6f28a74fa` (`GOWORK=off`), confirming they
+precede 09b. They involve Windows path escaping, Unix permission expectations
+and the Windows non-directory lookup result. Full-suite acceptance remains
+outstanding; none of these failures is labeled passed.
+
+Reused the isolated Electron worktree/data and native Codex provider binding.
+The UI launched Type `Lab Codex reviewer` v3 with Skill `Lab review evidence` v1,
+one-off Chat mode and bounded validation instructions, creating `standalone-1`.
+Native Chat connected and displayed idle with its native default model picker.
+The inspector displayed exact versions, binding and USER provenance, and retained
+the one-off override after renderer reload. Screenshots
+`electron-worker-selection.png` and `electron-worker-history.png` were captured
+and visually inspected. No worker prompt, paid model completion, repository
+change, or heterogeneous live execution is claimed by this check.
+
+Stage 09 remains IN PROGRESS. Later harness/interface/model changes still need
+immutable execution segments before the complete restore feature is accepted.
+The current guard rejects a fresh restore whose harness/interface differs from
+the original snapshot rather than silently restoring incompatible defaults.
+Relevant logs/scripts/screenshots remain ignored under `.cache/adaptive-tests`.
+
 ## Stage 09a — atomic worker snapshot persistence (2026-09-18)
 
 The first stage-09 milestone adds sealed schema-v1 configuration records,

@@ -2354,6 +2354,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/worker-configuration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the immutable worker launch configuration */
+        get: operations["getWorkerConfiguration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/workspace/diffs": {
         parameters: {
             query?: never;
@@ -3647,17 +3664,18 @@ export interface components {
             resolveError: string;
         };
         DelegateTaskRequest: {
-            /** @enum {string} */
-            agent?: "claude-code" | "codex" | "aider" | "opencode" | "grok" | "droid" | "amp" | "agy" | "crush" | "cursor" | "qwen" | "copilot" | "goose" | "auggie" | "continue" | "devin" | "cline" | "kimi" | "muse" | "kiro" | "kilocode" | "vibe" | "pi" | "kimchi" | "omp" | "prime-agent" | "autohand" | "fake";
-            /** @enum {string} */
-            approvalMode?: "default" | "accept-edits" | "auto" | "bypass-permissions";
+            /** @enum {null|string} */
+            agent?: "claude-code" | "codex" | "aider" | "opencode" | "grok" | "droid" | "amp" | "agy" | "crush" | "cursor" | "qwen" | "copilot" | "goose" | "auggie" | "continue" | "devin" | "cline" | "kimi" | "muse" | "kiro" | "kilocode" | "vibe" | "pi" | "kimchi" | "omp" | "prime-agent" | "autohand" | "fake" | null;
+            /** @enum {null|string} */
+            approvalMode?: "default" | "accept-edits" | "auto" | "bypass-permissions" | null;
             attachments?: components["schemas"]["AttachmentInput"][];
             brief: string;
             effort?: null | string;
-            /** @enum {string} */
-            mode?: "tui" | "chat";
+            /** @enum {null|string} */
+            mode?: "tui" | "chat" | null;
             model?: string;
             projectId: string;
+            workerSelection?: components["schemas"]["WorkerSelection"];
         };
         DelegateTaskResponse: {
             ok: boolean;
@@ -4841,19 +4859,20 @@ export interface components {
             attachments?: components["schemas"]["AttachmentInput"][];
             branch?: string;
             displayName?: string;
-            /** @enum {string} */
-            harness?: "claude-code" | "codex" | "aider" | "opencode" | "grok" | "droid" | "amp" | "agy" | "crush" | "cursor" | "qwen" | "copilot" | "goose" | "auggie" | "continue" | "devin" | "cline" | "kimi" | "muse" | "kiro" | "kilocode" | "vibe" | "pi" | "kimchi" | "omp" | "prime-agent" | "autohand";
+            /** @enum {null|string} */
+            harness?: "claude-code" | "codex" | "aider" | "opencode" | "grok" | "droid" | "amp" | "agy" | "crush" | "cursor" | "qwen" | "copilot" | "goose" | "auggie" | "continue" | "devin" | "cline" | "kimi" | "muse" | "kiro" | "kilocode" | "vibe" | "pi" | "kimchi" | "omp" | "prime-agent" | "autohand" | null;
             issueId?: string;
             /** @enum {string} */
             kind?: "worker" | "orchestrator";
-            /** @enum {string} */
-            mode?: "chat" | "tui";
+            /** @enum {null|string} */
+            mode?: "chat" | "tui" | null;
             model?: string;
             parentSessionId?: string;
             projectId?: string;
             prompt?: string;
             /** @enum {string} */
             trackerProvider?: "github" | "gitlab";
+            workerSelection?: components["schemas"]["WorkerSelection"];
         };
         SpawnSessionResponse: {
             promptBytes: number;
@@ -5059,6 +5078,66 @@ export interface components {
             processedTokens: null | number;
             /** @description Input not read from an existing provider cache. Includes cache writes. */
             uncachedInputTokens: null | number;
+        };
+        WorkerConfiguration: {
+            actorId: string;
+            agentType: components["schemas"]["WorkerDefinitionRef"];
+            catalogFingerprint?: string;
+            contentHash: string;
+            /** Format: date-time */
+            createdAt: string;
+            effective: components["schemas"]["AgentTypeDefinition"];
+            origin: string;
+            provider?: components["schemas"]["WorkerProviderReference"];
+            schemaVersion: number;
+            selection: components["schemas"]["WorkerSelection"];
+            skills: components["schemas"]["WorkerSkillSnapshot"][];
+            systemPrompt: string;
+        };
+        WorkerConfigurationResponse: {
+            configuration: null | components["schemas"]["WorkerConfiguration"];
+        };
+        WorkerDefinitionRef: {
+            contentHash: string;
+            id: string;
+            name: string;
+            /** Format: int64 */
+            version: number;
+        };
+        WorkerOverrides: {
+            effort?: null | string;
+            harness?: null | string;
+            instructions?: null | string;
+            mode?: null | string;
+            model?: null | string;
+            permissions?: null | string;
+            providerBindingId?: null | string;
+            sessionMode?: null | string;
+            skills?: null | components["schemas"]["SkillVersionRef"][];
+        };
+        WorkerProviderReference: {
+            /** Format: date-time */
+            createdAt: string;
+            enabled: boolean;
+            harness: null | string;
+            id: string;
+            name: string;
+            projectId: string;
+            provider: string;
+            /** Format: int64 */
+            revision: number;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        WorkerSelection: {
+            agentTypeId: string;
+            overrides: components["schemas"]["WorkerOverrides"];
+            /** Format: int64 */
+            version?: number;
+        };
+        WorkerSkillSnapshot: {
+            definition: components["schemas"]["SkillDefinition"];
+            reference: components["schemas"]["WorkerDefinitionRef"];
         };
         WorkspaceCommitSummary: {
             author: string;
@@ -14288,6 +14367,56 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getWorkerConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session identifier, e.g. project-1. */
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerConfigurationResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

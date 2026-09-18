@@ -283,11 +283,11 @@ func (s *Service) spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 		if cfg.IssueID != "" || strings.TrimSpace(cfg.Branch) != "" {
 			return domain.Session{}, 0, 0, apierr.Invalid("STANDALONE_PROJECT_FEATURE_UNSUPPORTED", "Standalone sessions do not support issues or branches", nil)
 		}
-		if cfg.Harness == "" {
+		if cfg.Harness == "" && cfg.WorkerSelection == nil {
 			return domain.Session{}, 0, 0, apierr.Invalid("HARNESS_REQUIRED", "harness is required for a standalone session", nil)
 		}
 	}
-	if s.agentReadiness != nil && cfg.Harness != "" {
+	if s.agentReadiness != nil && cfg.Harness != "" && cfg.WorkerSelection == nil {
 		readiness, err := s.agentReadiness.EnsureAgentReadiness(ctx, string(cfg.Harness), domain.AgentReadinessPurposeLaunch)
 		if err != nil {
 			return domain.Session{}, 0, 0, err

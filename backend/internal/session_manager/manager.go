@@ -369,10 +369,11 @@ type conversationSettingsStore interface {
 // Manager coordinates internal session spawn, restore, kill, and cleanup over
 // the outbound ports. User-facing read-model assembly lives in the service package.
 type Manager struct {
-	runtime   runtimeController
-	agents    ports.AgentResolver
-	workspace ports.Workspace
-	store     Store
+	runtime              runtimeController
+	agents               ports.AgentResolver
+	workspace            ports.Workspace
+	store                Store
+	workerConfigurations ports.WorkerConfigurationResolver
 	// agentSwitchReporting supplies the exact authorization snapshot immediately
 	// before each failure-aware store transaction. Nil is fail-closed.
 	agentSwitchReporting ports.AgentSwitchReportingPolicy
@@ -519,6 +520,11 @@ func (m *Manager) SetModelCatalog(catalog interface {
 	Models(context.Context, string, string, bool) (ports.AgentModelCatalog, error)
 }) {
 	m.modelCatalog = catalog
+}
+
+// SetWorkerConfigurationResolver binds registry resolution before reconciliation.
+func (m *Manager) SetWorkerConfigurationResolver(resolver ports.WorkerConfigurationResolver) {
+	m.workerConfigurations = resolver
 }
 
 // latestUserPromptRecorder narrows the post-delivery write to the pane prompt's
@@ -682,13 +688,14 @@ const (
 
 // Deps are the collaborators a Session Manager needs; New wires them together.
 type Deps struct {
-	Runtime         runtimeController
-	Agents          ports.AgentResolver
-	Workspace       ports.Workspace
-	Store           Store
-	ReportingPolicy ports.AgentSwitchReportingPolicy
-	DaemonRunID     string
-	Messenger       ports.AgentMessenger
+	WorkerConfigurations ports.WorkerConfigurationResolver
+	Runtime              runtimeController
+	Agents               ports.AgentResolver
+	Workspace            ports.Workspace
+	Store                Store
+	ReportingPolicy      ports.AgentSwitchReportingPolicy
+	DaemonRunID          string
+	Messenger            ports.AgentMessenger
 	// Defaults supplies the daemon-owned default session interface for spawns that
 	// name no mode. Nil means always use the compatibility default.
 	Defaults SessionModeDefaults
@@ -740,6 +747,7 @@ func New(d Deps) *Manager {
 		agents:                         d.Agents,
 		workspace:                      d.Workspace,
 		store:                          d.Store,
+		workerConfigurations:           d.WorkerConfigurations,
 		agentSwitchReporting:           d.ReportingPolicy,
 		daemonRunID:                    strings.TrimSpace(d.DaemonRunID),
 		defaults:                       d.Defaults,
@@ -843,6 +851,13 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 	if projectKind == domain.ProjectKindScratch && strings.TrimSpace(cfg.Branch) != "" {
 		return domain.SessionRecord{}, 0, 0, fmt.Errorf("spawn: %w", ErrScratchBranchUnsupported)
 	}
+	var workerSnapshot *domain.WorkerConfiguration
+	if cfg.WorkerSelection != nil {
+		cfg, workerSnapshot, err = m.resolveConfiguredWorker(ctx, cfg, project)
+		if err != nil {
+			return domain.SessionRecord{}, 0, 0, err
+		}
+	}
 	if cfg.ParentSessionID != "" && cfg.AgentConfig.Permissions == "" {
 		permissions, err := m.inheritedSpawnPermissions(ctx, cfg.ProjectID, cfg.ParentSessionID)
 		if err != nil {
@@ -871,7 +886,7 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 	// Resolve the effective agent config (project base + role override + spawn
 	// override) and validate the model before any durable state is created. A
 	// model the harness cannot honor should not leave a seed row behind.
-	agentConfig := applySpawnAgentConfig(effectiveAgentConfig(cfg.Harness, cfg.Kind, project.Config), cfg.AgentConfig)
+	agentConfig := spawnAgentConfig(cfg, project.Config)
 	if err := validateSpawnModel(cfg.Harness, agentConfig.Model); err != nil {
 		return domain.SessionRecord{}, 0, 0, fmt.Errorf("spawn: %w: %s", ErrUnsupportedModel, err.Error())
 	}
@@ -909,7 +924,7 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 				"harness", cfg.Harness, "error", err)
 			mode = domain.SessionModeTUI
 		}
-		if mode == domain.SessionModeChat {
+		if mode == domain.SessionModeChat && !cfg.AgentConfigResolved {
 			resolved, err := m.resolveChatAgentConfig(ctx, cfg, project.Config)
 			if err != nil {
 				return domain.SessionRecord{}, 0, 0, fmt.Errorf("spawn: %w", err)
@@ -935,12 +950,32 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 	promptBytes := len(prompt)
 	systemPromptBytes := len(systemPrompt)
 
-	rec, err := m.store.CreateSession(ctx, seedRecord(cfg, project.Config, m.clock()))
+	seed := seedRecord(cfg, project.Config, m.clock())
+	var rec domain.SessionRecord
+	if workerSnapshot != nil {
+		workerSnapshot.SystemPrompt = systemPrompt
+		workerSnapshot.ContentHash = workerSnapshot.Hash()
+		configuredStore, ok := m.store.(ports.WorkerConfigurationStore)
+		if !ok {
+			return domain.SessionRecord{}, 0, 0, fmt.Errorf("worker configuration storage is unavailable")
+		}
+		rec, err = configuredStore.CreateConfiguredSession(ctx, seed, *workerSnapshot)
+	} else {
+		rec, err = m.store.CreateSession(ctx, seed)
+	}
 	if err != nil {
 		return domain.SessionRecord{}, 0, 0, wrapSpawnStageEarly(ErrSpawnCreate, err)
 	}
 	m.markFreshSessionStatusReady(rec.ID)
 	id := rec.ID
+	if workerSnapshot != nil {
+		systemPrompt, err = m.workerSnapshotPrompt(ctx, id, *workerSnapshot)
+		if err != nil {
+			m.rollbackSpawnSeedRowAfterFailure(ctx, id)
+			return domain.SessionRecord{}, 0, 0, wrapSpawnStage(id, ErrSpawnSystemPrompt, err)
+		}
+		systemPromptBytes = len(systemPrompt)
+	}
 	systemPromptFile, err := m.prepareSystemPromptFile(id, cfg.Harness, systemPrompt)
 	if err != nil {
 		m.rollbackSpawnSeedRowAfterFailure(ctx, id)
@@ -1614,6 +1649,13 @@ func restoredAgentConfig(rec domain.SessionRecord, cfg domain.ProjectConfig) por
 		merged.Model = rec.Metadata.Model
 	}
 	return merged
+}
+
+func spawnAgentConfig(cfg ports.SpawnConfig, project domain.ProjectConfig) ports.AgentConfig {
+	if cfg.AgentConfigResolved {
+		return cfg.AgentConfig
+	}
+	return applySpawnAgentConfig(effectiveAgentConfig(cfg.Harness, cfg.Kind, project), cfg.AgentConfig)
 }
 
 func applySpawnAgentConfig(base, override ports.AgentConfig) ports.AgentConfig {
@@ -2446,7 +2488,19 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 	}
 	// Recompute standing instructions, then reapply the durable finalized inbound
 	// handoff for this exact native conversation when one exists.
-	systemPrompt, err := m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	snapshot, err := m.workerSnapshot(ctx, rec.ID)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	if err := m.validateWorkerFreshRestore(ctx, snapshot, rec); err != nil {
+		return RestoreResult{}, err
+	}
+	var systemPrompt string
+	if snapshot != nil {
+		systemPrompt, err = m.workerSnapshotPrompt(ctx, rec.ID, *snapshot)
+	} else {
+		systemPrompt, err = m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	}
 	if err != nil {
 		return RestoreResult{}, fmt.Errorf("%s %s: system prompt: %w", operation, rec.ID, err)
 	}
@@ -2463,6 +2517,9 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 	// Restore resolves the project model while retaining this session's pinned
 	// permission policy independently of future project defaults.
 	agentConfig := restoredAgentConfig(rec, project.Config)
+	if snapshot != nil {
+		agentConfig = snapshot.Effective.Config
+	}
 	if rec.Metadata.Permissions != "" {
 		agentConfig.Permissions = rec.Metadata.Permissions
 	}
@@ -4007,7 +4064,7 @@ func seedRecord(cfg ports.SpawnConfig, projectConfig domain.ProjectConfig, now t
 		// Resolved before this point and persisted here. There is no UPDATE
 		// statement that can change it afterwards.
 		Mode:              domain.NormalizeSessionMode(cfg.RequestedMode),
-		Metadata:          domain.SessionMetadata{Permissions: applySpawnAgentConfig(effectiveAgentConfig(cfg.Harness, cfg.Kind, projectConfig), cfg.AgentConfig).Permissions},
+		Metadata:          domain.SessionMetadata{Permissions: spawnAgentConfig(cfg, projectConfig).Permissions},
 		AutoReviewEnabled: projectConfig.AutoReview,
 		AutoInjectReview:  true,
 		AutoInjectCI:      true,

@@ -21,7 +21,7 @@ import (
 type bindingNative struct{}
 
 func (bindingNative) Configuration(context.Context, string, domain.SessionMode) (agentsvc.Configuration, error) {
-	return agentsvc.Configuration{Fields: []agentsvc.ConfigurationField{{Key: "model"}}, CapabilityState: "supported"}, nil
+	return agentsvc.Configuration{Fields: []agentsvc.ConfigurationField{{Key: "model"}, {Key: "permissions", Options: []string{"auto"}}}, CapabilityState: "supported"}, nil
 }
 func (bindingNative) Models(context.Context, string, string, bool) (ports.AgentModelCatalog, error) {
 	return ports.AgentModelCatalog{Models: []ports.AgentModelInfo{{ID: "native/model", Provider: "native"}}}, nil

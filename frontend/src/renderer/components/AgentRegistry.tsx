@@ -14,6 +14,7 @@ import { RegistryExport, RegistryImport } from "./RegistryTransfer";
 import { SkillContentEditor } from "./SkillContentEditor";
 import { AgentTypeConfigurationEditor } from "./AgentTypeConfigurationEditor";
 import { RegistryConfigurationCheck } from "./RegistryConfigurationCheck";
+import { RegistryWorkerLaunch } from "./RegistryWorkerLaunch";
 
 const fieldClass = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-primary";
 const labelClass = "grid gap-1.5 text-sm";
@@ -77,6 +78,7 @@ function RegistryDetail({ kind, view, onEdit, onChanged, onClone }: { kind: Regi
 	const { t } = useTranslation();
 	const [compare, setCompare] = useState<RegistryVersion>();
 	const [cloneName, setCloneName] = useState("");
+	const [launching, setLaunching] = useState(false);
 	const history = useInfiniteQuery({ queryKey: [...registryQueryRoot, kind, view.entry.id, "versions"], queryFn: ({ pageParam }) => registryVersions(kind, view.entry.id, pageParam), initialPageParam: "", getNextPageParam: (page) => page.nextCursor || undefined });
 	const audit = useInfiniteQuery({ queryKey: [...registryQueryRoot, kind, view.entry.id, "audit"], queryFn: ({ pageParam }) => registryAudit(kind, view.entry.id, pageParam), initialPageParam: "", getNextPageParam: (page) => page.nextCursor || undefined });
 	const action = useMutation({ mutationFn: async (input: { action: "activate" | "disable" | "clone"; version?: number }) => {
@@ -89,6 +91,8 @@ function RegistryDetail({ kind, view, onEdit, onChanged, onClone }: { kind: Regi
 		<div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => onEdit("configuration")}>{t("registry.newVersion", "New version")}</Button><Button variant="outline" onClick={() => onEdit("metadata")}>{t("registry.editPolicy", "Edit details and policy")}</Button><Button variant="outline" disabled={action.isPending} onClick={() => action.mutate({ action: "disable" })}>{view.entry.metadata.enabled ? t("registry.disable", "Disable") : t("registry.enable", "Enable")}</Button></div>
 		{action.isError && <p role="alert" className="text-destructive">{apiErrorMessage(action.error)}</p>}
 		<DefinitionSummary definition={view.version.definition} />
+		{kind === "agent_type" && <Button disabled={!view.entry.metadata.enabled} onClick={() => setLaunching(true)}>{t("registry.launchWorker", "Launch worker")}</Button>}
+		{launching && <RegistryWorkerLaunch key={view.entry.activeVersion} id={view.entry.id} version={view.entry.activeVersion} onClose={() => setLaunching(false)} />}
 		{kind === "agent_type" && <RegistryConfigurationCheck key={`${view.entry.activeVersion}:${view.entry.revision}`} id={view.entry.id} version={view.entry.activeVersion} />}
 		<RegistryExport key={view.entry.activeVersion} kind={kind} id={view.entry.id} version={view.entry.activeVersion} />
 		<section><h3 className="mb-2 font-medium">{t("registry.versions", "Version history")}</h3>

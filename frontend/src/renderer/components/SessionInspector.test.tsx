@@ -56,6 +56,8 @@ vi.mock("../lib/preview-mode", () => ({
   usesPreviewWorkspaceData: false,
 }));
 
+vi.mock("./WorkerConfigurationInspector", () => ({ WorkerConfigurationInspector: () => null }));
+
 vi.mock("../lib/api-client", () => ({
   apiClient: {
     GET: getMock,

@@ -33,11 +33,14 @@ import {
 import { STANDALONE_WORKSPACE_ID } from "../types/workspace";
 import { AgentModelCombobox, type ModelEffortSelection } from "./settings/AgentModelCombobox";
 import { SettingsOptionMenu } from "./settings/SettingsOptionMenu";
+import { WorkerSelectionPanel } from "./WorkerSelectionPanel";
+import type { WorkerSelection } from "../lib/registry-api";
 
 type Project = components["schemas"]["Project"];
 type DelegateAgent = components["schemas"]["DelegateTaskRequest"]["agent"];
 
 type CreateTaskInput = {
+	workerSelection?: WorkerSelection;
 	projectId: string;
 	brief: string;
 	agent?: DelegateAgent;
@@ -76,6 +79,7 @@ function hasErrorDetail(details: components["schemas"]["APIError"]["details"] | 
 }
 
 export type TaskComposerProps = {
+	initialWorkerSelection?: WorkerSelection;
 	projectId?: string;
 	onCreated: (sessionId: string) => void;
 	onDirtyChange?: (dirty: boolean) => void;
@@ -84,6 +88,7 @@ export type TaskComposerProps = {
 };
 
 export function TaskComposer({
+	initialWorkerSelection,
 	projectId,
 	onCreated,
 	onDirtyChange,
@@ -103,6 +108,7 @@ export function TaskComposer({
 	const [mode, setMode] = useState("");
 	const [effort, setEffort] = useState("");
 	const [agent, setAgent] = useState("");
+	const [workerSelection, setWorkerSelection] = useState<WorkerSelection | undefined>(initialWorkerSelection);
 	const [agentTouched, setAgentTouched] = useState(false);
 	const [modelTouched, setModelTouched] = useState(false);
 	const [effortTouched, setEffortTouched] = useState(false);
@@ -168,6 +174,7 @@ export function TaskComposer({
 				body: {
 					projectId: input.projectId,
 					brief: input.brief,
+					...(input.workerSelection ? { workerSelection: input.workerSelection } : {}),
 					agent: input.agent,
 					...(input.model ? { model: input.model } : {}),
 					...(input.effort !== undefined ? { effort: input.effort } : {}),
@@ -214,6 +221,7 @@ export function TaskComposer({
 			const { data, error } = await apiClient.POST("/api/v1/sessions", {
 				body: {
 					kind: "worker",
+					...(input.workerSelection ? { workerSelection: input.workerSelection } : {}),
 					harness: input.agent as components["schemas"]["SpawnSessionRequest"]["harness"],
 					prompt: input.brief,
 					displayName,
@@ -353,7 +361,7 @@ export function TaskComposer({
 		if (!effortTouched) setEffort(selectedAgent === defaultWorkerAgent ? defaultWorkerEffort : "");
 	}, [defaultWorkerAgent, defaultWorkerEffort, effortTouched, selectedAgent]);
 
-	const isDirty = isPromptDirty || modelTouched || effortTouched || attachments.length > 0;
+	const isDirty = isPromptDirty || modelTouched || effortTouched || attachments.length > 0 || !!workerSelection;
 	const handlePromptChange = useCallback((value: string) => {
 		const nextDirty = value.trim() !== "";
 		setIsPromptDirty((wasDirty) => (wasDirty === nextDirty ? wasDirty : nextDirty));
@@ -391,13 +399,14 @@ export function TaskComposer({
 			const sessionId = await createTask({
 				projectId,
 				brief,
+				workerSelection: !isCloudProject ? workerSelection : undefined,
 				// The visible selection is authoritative: it is either the user's pick
 				// or the resolved default, so spawning names it explicitly.
-				agent: selectedAgent ? (selectedAgent as CreateTaskInput["agent"]) : undefined,
-				model: requestedModel,
-				effort: interfaceMode === "tui" || !effortTouched ? undefined : effort,
-				mode: interfaceMode,
-				approvalMode,
+				agent: !workerSelection && selectedAgent ? (selectedAgent as CreateTaskInput["agent"]) : undefined,
+				model: workerSelection ? undefined : requestedModel,
+				effort: workerSelection || interfaceMode === "tui" || !effortTouched ? undefined : effort,
+				mode: workerSelection ? undefined : interfaceMode,
+				approvalMode: workerSelection ? undefined : approvalMode,
 				attachments: attachmentPayloads.length > 0 ? attachmentPayloads : undefined,
 			});
 			onCreated(sessionId);
@@ -408,7 +417,7 @@ export function TaskComposer({
 				hasErrorDetail(err.details, "missingCapabilities", "approvals") &&
 				hasErrorDetail(err.details, "allowedApprovalModes", "bypass-permissions");
 			setFallbackAction(
-				canBypassApprovals
+				workerSelection ? undefined : canBypassApprovals
 					? "bypass-permissions"
 					: interfaceMode !== "tui" &&
 							err instanceof TaskCreateError &&
@@ -416,16 +425,21 @@ export function TaskComposer({
 						? "tui"
 						: undefined,
 			);
-			setError(err instanceof Error ? err.message : t("newTask.unableToStart"));
+			const issues = err instanceof TaskCreateError && Array.isArray(err.details?.issues)
+				? err.details.issues.flatMap((issue) => typeof issue === "object" && issue !== null && "message" in issue && typeof issue.message === "string" ? [issue.message] : [])
+				: [];
+			setError([err instanceof Error ? err.message : t("newTask.unableToStart"), ...issues].join(" "));
 		} finally {
 			setIsSubmitting(false);
 		}
 	};
 
 	return (
+		<div className="space-y-3">
+		{!isCloudProject && <WorkerSelectionPanel selection={workerSelection} onChange={setWorkerSelection} projectId={isStandalone ? "" : projectId ?? ""} disabled={isSubmitting} />}
 		<TaskComposerView
 			autoFocusPrompt={autoFocusTitle}
-			canSubmit={Boolean(projectId) && (!isStandalone || selectedAgent !== "")}
+			canSubmit={Boolean(projectId) && (!isStandalone || selectedAgent !== "" || !!workerSelection)}
 			onPromptChange={handlePromptChange}
 			labels={{
 				addFile: t("newTask.addFile"),
@@ -489,16 +503,16 @@ export function TaskComposer({
 				showFallbackAction: fallbackAction !== undefined,
 				error,
 				isSubmitting,
-				modelWarning: displayedModelWarning,
+				modelWarning: workerSelection ? undefined : displayedModelWarning,
 				onFallbackAction: (brief) =>
 					void (fallbackAction === "bypass-permissions"
 						? submitTask(brief, undefined, "bypass-permissions")
 						: submitTask(brief, "tui")),
-				onSubmit: (brief) => void submitTask(brief, requiresTuiFallback ? "tui" : undefined),
+				onSubmit: (brief) => void submitTask(brief, !workerSelection && requiresTuiFallback ? "tui" : undefined),
 			}}
-			renderAgentControl={(control) => <DesktopAgentControl {...control} />}
+			renderAgentControl={(control) => workerSelection ? <span className="text-xs">{t("registry.agentType", "Agent Type")} · v{workerSelection.version}</span> : <DesktopAgentControl {...control} />}
 			renderModelControl={(control) => (
-				<TaskModelPicker {...control} onRefresh={refreshSelectedModels}
+				workerSelection ? null : <TaskModelPicker {...control} onRefresh={refreshSelectedModels}
 					tuning={selectedAgent === "codex" && !requiresTuiFallback ? {
 						effort,
 						onEffortChange: (value) => { setEffort(value); setEffortTouched(true); },
@@ -507,6 +521,7 @@ export function TaskComposer({
 				/>
 			)}
 		/>
+		</div>
 	);
 }
 

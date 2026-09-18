@@ -59,6 +59,7 @@ import { formatTokenCount } from "../lib/format-token-count";
 import type { WorkspaceSession, WorkspaceSummary } from "../types/workspace";
 import { findProjectOrchestrator, sortedPRs, STANDALONE_WORKSPACE_ID } from "../types/workspace";
 import { getAgentActivityView, getSessionTimelinePillView } from "../lib/session-presentation";
+import { WorkerConfigurationInspector } from "./WorkerConfigurationInspector";
 import { aoBridge } from "../lib/bridge";
 import { BrowserPanelView, type BrowserAnnotationQueueModel } from "./BrowserPanel";
 import type { BrowserViewModel } from "../hooks/useBrowserView";
@@ -323,6 +324,7 @@ const SummaryView = memo(function SummaryView({
 				<>
 					<ActivityTimeline prs={prSummaries} session={session} />
 					<ResumeAgentControl session={session} />
+					{session.kind === "worker" && !session.cloud && !usePreviewData && <WorkerConfigurationInspector sessionId={session.id} />}
 				</>
 			}
 			activityTitle={t("inspector.activity")}

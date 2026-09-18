@@ -259,6 +259,13 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"ControllersListSessionsResponse":                     "ListSessionsResponse",
 	"ControllersSpawnSessionRequest":                      "SpawnSessionRequest",
 	"ControllersSpawnSessionResponse":                     "SpawnSessionResponse",
+	"ControllersWorkerConfigurationResponse":              "WorkerConfigurationResponse",
+	"DomainWorkerConfiguration":                           "WorkerConfiguration",
+	"DomainWorkerSelection":                               "WorkerSelection",
+	"DomainWorkerOverrides":                               "WorkerOverrides",
+	"DomainWorkerDefinitionRef":                           "WorkerDefinitionRef",
+	"DomainWorkerSkillSnapshot":                           "WorkerSkillSnapshot",
+	"DomainProviderBinding":                               "WorkerProviderReference",
 	"ControllersSessionResponse":                          "SessionResponse",
 	"ControllersSessionPreviewResponse":                   "SessionPreviewResponse",
 	"ControllersSetSessionPreviewRequest":                 "SetSessionPreviewRequest",
@@ -1943,6 +1950,7 @@ func projectOperations() []operation {
 
 func sessionOperations() []operation {
 	return []operation{
+		{method: http.MethodGet, path: "/api/v1/sessions/{sessionId}/worker-configuration", id: "getWorkerConfiguration", tag: "sessions", summary: "Read the immutable worker launch configuration", pathParams: []any{controllers.SessionIDParam{}}, resps: []respUnit{{http.StatusOK, controllers.WorkerConfigurationResponse{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}},
 		{
 			method: http.MethodGet, path: "/api/v1/sessions", id: "listSessions", tag: "sessions",
 			summary:    "List sessions",

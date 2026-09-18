@@ -323,7 +323,16 @@ func (m *Manager) resumeChatController(
 
 	// Recomputed rather than persisted, matching the terminal path: a restored
 	// session keeps its standing instructions across the relaunch.
-	systemPrompt, err := m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	snapshot, err := m.workerSnapshot(ctx, rec.ID)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	var systemPrompt string
+	if snapshot != nil {
+		systemPrompt, err = m.workerSnapshotPrompt(ctx, rec.ID, *snapshot)
+	} else {
+		systemPrompt, err = m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	}
 	if err != nil {
 		return RestoreResult{}, fmt.Errorf("%s %s: system prompt: %w", operation, rec.ID, err)
 	}
@@ -333,6 +342,9 @@ func (m *Manager) resumeChatController(
 	}
 
 	agentConfig := restoredAgentConfig(rec, project.Config)
+	if snapshot != nil {
+		agentConfig = snapshot.Effective.Config
+	}
 	if rec.Metadata.Permissions != "" {
 		agentConfig.Permissions = rec.Metadata.Permissions
 	}
@@ -371,6 +383,9 @@ func (m *Manager) resumeChatController(
 		AdditionalDirectories:   additionalDirectories,
 		ExpectedControllerOwner: rec.ControllerOwner(),
 		PrepareControllerEnv: func(launchCtx context.Context, expected domain.SessionControllerOwner) (map[string]string, error) {
+			if err := m.validateWorkerFreshRestore(launchCtx, snapshot, rec); err != nil {
+				return nil, err
+			}
 			prepared, launchEnv, prepareErr := m.prepareChatControllerEnv(
 				launchCtx, rec, project.Config.Env, expected,
 			)

@@ -60,6 +60,9 @@ vi.mock("../lib/api-client", () => ({
 }));
 
 vi.mock("../lib/telemetry", () => ({ captureRendererEvent: h.capture }));
+// Selection editing is covered by WorkerSelectionPanel tests. These tests
+// exercise composer submission and its legacy harness controls independently.
+vi.mock("./WorkerSelectionPanel", () => ({ WorkerSelectionPanel: () => null }));
 
 import { TaskComposer } from "./TaskComposer";
 import { agentReadiness } from "../test/agent-readiness-fixtures";
@@ -102,6 +105,27 @@ afterEach(() => {
 });
 
 describe("TaskComposer", () => {
+	it("submits exact Agent Type pins and one-off clearing without legacy configuration", async () => {
+		const onCreated = vi.fn();
+		h.post.mockResolvedValueOnce({ data: { session: { id: "configured-1" } } });
+		const selection = { agentTypeId: "reviewer", version: 3, overrides: { instructions: "", skills: [] } };
+		render(<Wrap><TaskComposer projectId="__standalone__" initialWorkerSelection={selection} onCreated={onCreated} /></Wrap>);
+		fireEvent.change(task(), { target: { value: "Review evidence" } });
+		fireEvent.click(screen.getByText("Start task"));
+		await waitFor(() => expect(onCreated).toHaveBeenCalledWith("configured-1"));
+		const body = h.post.mock.calls[0][1].body;
+		expect(body.workerSelection).toEqual(selection);
+		for (const key of ["harness", "model", "effort", "mode", "approvalMode"]) expect(body[key]).toBeUndefined();
+	});
+
+	it("shows native configuration issues without offering an ineffective legacy fallback", async () => {
+		h.post.mockResolvedValueOnce({ error: { code: "WORKER_CONFIGURATION_UNAVAILABLE", message: "Resolve requirements", details: { issues: [{ message: "Bound provider is unavailable" }] } } });
+		render(<Wrap><TaskComposer projectId="__standalone__" initialWorkerSelection={{agentTypeId:"reviewer",version:1,overrides:{}}} onCreated={vi.fn()} /></Wrap>);
+		fireEvent.change(task(), { target: { value: "Review evidence" } });
+		fireEvent.click(screen.getByText("Start task"));
+		expect(await screen.findByText(/Bound provider is unavailable/)).toBeInTheDocument();
+		expect(screen.queryByText("Create as TUI")).not.toBeInTheDocument();
+	});
 	it("starts a standalone worker without loading or sending a project", async () => {
 		const onCreated = vi.fn();
 		h.post.mockResolvedValueOnce({ data: { session: { id: "standalone-1" } } });

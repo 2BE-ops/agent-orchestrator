@@ -9,6 +9,20 @@ export type RegistryMetadata = components["schemas"]["RegistryMetadata"];
 export const registryQueryRoot = ["adaptive-registry"] as const;
 export type PortableRegistryBundle = components["schemas"]["PortableRegistryBundle"];
 export type ProviderBinding = components["schemas"]["ProviderBindingResponse"];
+export type WorkerSelection = components["schemas"]["WorkerSelection"];
+
+export async function getRegistryVersion(kind: RegistryKind, id: string, version: number) {
+	const path = kind === "agent_type" ? "/api/v1/agent-types/{id}/versions/{version}" : "/api/v1/skills/{id}/versions/{version}";
+	const result = await apiClient.GET(path, { params: { path: { id, version } } });
+	if (result.error) throw new Error(apiErrorMessage(result.error));
+	return result.data!;
+}
+
+export async function getWorkerConfiguration(sessionId: string) {
+	const result = await apiClient.GET("/api/v1/sessions/{sessionId}/worker-configuration", { params: { path: { sessionId } } });
+	if (result.error) throw new Error(apiErrorMessage(result.error));
+	return result.data!.configuration;
+}
 
 export async function getProviderBinding(id: string) {
 	const result = await apiClient.GET("/api/v1/provider-bindings/{id}", { params: { path: { id } } });

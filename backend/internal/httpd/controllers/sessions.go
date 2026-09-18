@@ -168,6 +168,7 @@ func (c *SessionsController) Register(r chi.Router) {
 	r.Post("/sessions", c.spawn)
 	r.Post("/sessions/cleanup", c.cleanup)
 	r.Get("/sessions/{sessionId}", c.get)
+	r.Get("/sessions/{sessionId}/worker-configuration", c.workerConfiguration)
 	r.Get("/sessions/{sessionId}/preview", c.preview)
 	r.Post("/sessions/{sessionId}/preview", c.setPreview)
 	r.Delete("/sessions/{sessionId}/preview", c.clearPreview)
@@ -282,7 +283,7 @@ func (c *SessionsController) spawn(w http.ResponseWriter, r *http.Request) {
 		envelope.WriteAPIError(w, r, http.StatusBadRequest, "bad_request", attachErr.code, attachErr.message, nil)
 		return
 	}
-	sess, promptBytes, systemPromptBytes, err := c.Svc.Spawn(r.Context(), ports.SpawnConfig{ProjectID: in.ProjectID, IssueID: in.IssueID, ParentSessionID: in.ParentSessionID, TrackerProvider: in.TrackerProvider, Kind: in.Kind, Harness: in.Harness, Branch: in.Branch, RequestedMode: in.Mode, Prompt: in.Prompt, DisplayName: displayName, Attachments: attachments, AgentConfig: ports.AgentConfig{Model: in.Model}})
+	sess, promptBytes, systemPromptBytes, err := c.Svc.Spawn(r.Context(), ports.SpawnConfig{WorkerSelection: in.WorkerSelection, WorkerActor: registryHumanActor(), ProjectID: in.ProjectID, IssueID: in.IssueID, ParentSessionID: in.ParentSessionID, TrackerProvider: in.TrackerProvider, Kind: in.Kind, Harness: in.Harness, Branch: in.Branch, RequestedMode: in.Mode, Prompt: in.Prompt, DisplayName: displayName, Attachments: attachments, AgentConfig: ports.AgentConfig{Model: in.Model}})
 	if err != nil {
 		envelope.WriteError(w, r, err)
 		return
@@ -1543,14 +1544,15 @@ func (c *SessionsController) delegateTask(w http.ResponseWriter, r *http.Request
 	}
 
 	out, err := c.Svc.DelegateTask(r.Context(), sessionsvc.DelegateTaskInput{
-		ProjectID:      in.ProjectID,
-		Brief:          domain.SanitizeControlChars(in.Brief),
-		RequestedAgent: in.Agent,
-		Model:          domain.SanitizeControlChars(strings.TrimSpace(in.Model)),
-		Effort:         sanitizedOptionalString(in.Effort),
-		ApprovalMode:   in.ApprovalMode,
-		RequestedMode:  in.Mode,
-		Attachments:    attachments,
+		WorkerSelection: in.WorkerSelection,
+		ProjectID:       in.ProjectID,
+		Brief:           domain.SanitizeControlChars(in.Brief),
+		RequestedAgent:  in.Agent,
+		Model:           domain.SanitizeControlChars(strings.TrimSpace(in.Model)),
+		Effort:          sanitizedOptionalString(in.Effort),
+		ApprovalMode:    in.ApprovalMode,
+		RequestedMode:   in.Mode,
+		Attachments:     attachments,
 	})
 	if err != nil {
 		envelope.WriteError(w, r, err)

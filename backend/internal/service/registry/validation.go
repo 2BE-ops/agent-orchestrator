@@ -42,7 +42,29 @@ func (m *Manager) Check(ctx context.Context, id string, input CheckInput) (Confi
 	if err != nil {
 		return ConfigurationCheck{}, err
 	}
-	result, err := m.CheckConfiguration(ctx, *version.Definition.AgentType, input.ProjectID)
+	var project domain.ProjectRecord
+	if input.ProjectID != "" {
+		projects, ok := m.store.(interface {
+			GetProject(context.Context, string) (domain.ProjectRecord, bool, error)
+		})
+		if !ok {
+			return ConfigurationCheck{}, apierr.NotImplemented("PROJECT_CONFIGURATION_UNAVAILABLE", "Project configuration is unavailable")
+		}
+		var found bool
+		project, found, err = projects.GetProject(ctx, input.ProjectID)
+		if err != nil {
+			return ConfigurationCheck{}, err
+		}
+		if !found {
+			return ConfigurationCheck{}, apierr.NotFound("PROJECT_NOT_FOUND", "Unknown project")
+		}
+	}
+	defaultMode := domain.DefaultSessionMode
+	if m.defaults != nil {
+		defaultMode = m.defaults.DefaultSessionMode(ctx)
+	}
+	definition := resolveWorkerOptions(*version.Definition.AgentType, domain.WorkerOverrides{}, project.Config, defaultMode)
+	result, err := m.CheckConfiguration(ctx, definition, input.ProjectID)
 	if !entry.Metadata.Enabled {
 		result.Issues = append(result.Issues, ConfigurationIssue{Code: "DEFINITION_DISABLED", State: "invalid", Message: "Enable this Agent Type before launch."})
 		result.Ready = false
@@ -53,6 +75,10 @@ func (m *Manager) Check(ctx context.Context, id string, input CheckInput) (Confi
 // CheckConfiguration is shared with the worker snapshot/launch path. It never
 // starts a worker, writes native settings or substitutes a different provider.
 func (m *Manager) CheckConfiguration(ctx context.Context, definition domain.AgentTypeDefinition, projectID string) (ConfigurationCheck, error) {
+	return m.checkConfiguration(ctx, definition, projectID, nil)
+}
+
+func (m *Manager) checkConfiguration(ctx context.Context, definition domain.AgentTypeDefinition, projectID string, retained []domain.WorkerSkillSnapshot) (ConfigurationCheck, error) {
 	result := ConfigurationCheck{Issues: []ConfigurationIssue{}}
 	if err := (domain.RegistryDefinition{AgentType: &definition}).Validate(domain.RegistryAgentType); err != nil {
 		return result, invalid(err)
@@ -162,23 +188,33 @@ func (m *Manager) CheckConfiguration(ctx context.Context, definition domain.Agen
 			add("CHAT_CAPABILITIES_MISSING", "invalid", "The Chat driver lacks capabilities required for these permissions.")
 		}
 	}
-	for _, pin := range definition.Skills {
-		entry, err := m.entry(ctx, domain.RegistrySkill, pin.ID)
-		if err != nil || !entry.Metadata.Enabled {
-			add("SKILL_UNAVAILABLE", "invalid", "A pinned Skill is missing or disabled: "+pin.ID)
-			continue
+	skills := make([]domain.SkillDefinition, 0, len(definition.Skills))
+	if retained != nil {
+		for _, skill := range retained {
+			skills = append(skills, skill.Definition)
 		}
-		version, err := m.store.GetRegistryVersion(ctx, pin.ID, pin.Version)
-		if err != nil {
-			add("SKILL_VERSION_UNAVAILABLE", "invalid", "A pinned Skill version could not be loaded: "+pin.ID)
-			continue
+	} else {
+		for _, pin := range definition.Skills {
+			entry, err := m.entry(ctx, domain.RegistrySkill, pin.ID)
+			if err != nil || !entry.Metadata.Enabled {
+				add("SKILL_UNAVAILABLE", "invalid", "A pinned Skill is missing or disabled: "+pin.ID)
+				continue
+			}
+			version, err := m.store.GetRegistryVersion(ctx, pin.ID, pin.Version)
+			if err != nil {
+				add("SKILL_VERSION_UNAVAILABLE", "invalid", "A pinned Skill version could not be loaded: "+pin.ID)
+				continue
+			}
+			skills = append(skills, *version.Definition.Skill)
 		}
-		for _, tool := range version.Definition.Skill.RequiredTools {
+	}
+	for _, skill := range skills {
+		for _, tool := range skill.RequiredTools {
 			if mode != domain.SessionModeChat || configuration.CapabilityState != "supported" || !slices.Contains(configuration.ChatCapabilities, tool) {
 				add("SKILL_TOOL_UNVERIFIED", "unavailable", "The harness has not advertised required tool capability: "+tool)
 			}
 		}
-		for _, server := range version.Definition.Skill.RequiredMCPServers {
+		for _, server := range skill.RequiredMCPServers {
 			add("SKILL_MCP_UNVERIFIED", "unavailable", "Native MCP server availability must be verified before this Skill can launch: "+server)
 		}
 	}

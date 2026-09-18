@@ -495,6 +495,8 @@ func Run() error {
 	}
 	agentSvc = agentsvc.NewWithDeps(agentDeps)
 	agentSvc.WarmModelCatalogs(ctx)
+	registrySvc := registrysvc.NewWithNative(store, agentSvc)
+	registrySvc.SetSessionDefaults(settingsSvc)
 
 	sessionSvc, reviewSvc, wiredSessMgr, err := startSession(ctx, cfg, runtimeAdapter, store, lcStack.LCM, messenger, telemetrySink, agents, agentSvc, managedPreview, browserBroker, browserAuthority, chatLauncher{svc: chatSvc}, settingsSvc, policyCoordinator, tracker, codexOperationGate, log)
 	if err != nil {
@@ -507,6 +509,11 @@ func Run() error {
 	}
 	sessionSvc.SetChatProviderPreserver(chatSvc.PreservesProviderOnRestart)
 	sessMgr = wiredSessMgr
+	if configured, ok := sessMgr.(interface {
+		SetWorkerConfigurationResolver(ports.WorkerConfigurationResolver)
+	}); ok {
+		configured.SetWorkerConfigurationResolver(registrySvc)
+	}
 	if tunable, ok := sessMgr.(interface {
 		SetModelCatalog(interface {
 			Models(context.Context, string, string, bool) (ports.AgentModelCatalog, error)
@@ -768,7 +775,7 @@ func Run() error {
 		PRs:                prActions,
 		Reviews:            reviewSvc,
 		Notifications:      notifier,
-		Registry:           registrysvc.NewWithNative(store, agentSvc),
+		Registry:           registrySvc,
 		NotificationStream: notificationHub,
 		Push:               pushRegistry,
 		Presence:           presenceTracker,

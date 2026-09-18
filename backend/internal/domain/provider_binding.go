@@ -9,15 +9,15 @@ import (
 // ProviderBinding names an existing native provider configuration. It never
 // carries credentials, environment values, arbitrary paths or commands.
 type ProviderBinding struct {
-	ID        string
-	Name      string
-	Harness   AgentHarness
-	Provider  string
-	ProjectID string
-	Enabled   bool
-	Revision  int64
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID        string       `json:"id"`
+	Name      string       `json:"name"`
+	Harness   AgentHarness `json:"harness"`
+	Provider  string       `json:"provider"`
+	ProjectID string       `json:"projectId"`
+	Enabled   bool         `json:"enabled"`
+	Revision  int64        `json:"revision"`
+	CreatedAt time.Time    `json:"createdAt"`
+	UpdatedAt time.Time    `json:"updatedAt"`
 }
 
 // ProviderBindingAudit retains each human change independently of CDC retention.

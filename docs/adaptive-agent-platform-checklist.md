@@ -54,7 +54,7 @@ Stage 03 completes with this commit.
 | 06 | Agent Type service/API/CLI and registry UI | VALIDATED IN RUNNING APP | Shared service, 20 routes, generated contracts, HTTP-only CLI, desktop editor and CDC refresh. Registry API/CLI, relevant lint, frontend typecheck and 174 focused tests PASS; 40 topbar tests PASS. Real Electron create/pin/version/compare/activate/rollback/audit/clone/disable/reload verified. Full-suite Windows/dependency failures recorded in validation, not labeled passed. Stage 05 commit `1be075cf6` pushed. |
 | 07 | Skill authoring/versioning/API/UI/import/export | VALIDATED IN RUNNING APP | Bounded resources/tool/MCP requirements, exact-version portable bundles, atomic disabled imports and CLI/API/UI implemented. Round-trip/strict-input/rollback tests, 44 frontend tests, typecheck, touched lint, backend and renderer builds PASS. Real Electron resource/version/export download/file import/policy flow and full daemon restart persistence verified. Native materialization/temporary attachments remain stage 09 integration. Stage 06 pushed as `c4c03aa5b`. |
 | 08 | Provider/capability integration and binding UI | VALIDATED IN RUNNING APP | Native ConfigSpec/model/readiness integration, mode-aware Chat inspection, immutable-target provider references, migration 0150, strict API and desktop binding editor/checks. Domain/registry/SQLite/Codex/spec suites, focused API tests, 46 frontend tests, typecheck, builds, vet and changed-code lint PASS. Real Electron create/bind v3/disable rejection/re-enable/readiness/reload verified. Custom-provider fixtures pass; live custom-provider and worker launch evidence remains stages 09/25. Baseline Windows suite/lint gaps recorded. Stage 07 pushed as `ac7e7cc26`. |
-| 09 | Worker snapshots and manual Agent Type launch | IN PROGRESS | Stage 08 pushed as `b0037f535`. Stage 09a snapshot persistence: migration 0151, sealed content and atomic seed insertion with permission/availability rechecks; full domain/SQLite suites and pinned relevant lint PASS. Fault-injected rollback/CDC, restart, immutability and seed cleanup tested. Shared launch/restore, resources and composer/inspector remain in progress. |
+| 09 | Worker snapshots and manual Agent Type launch | IN PROGRESS | 09a pushed as `6f28a74fa`. 09b connects shared launch/restore, exact ordered resources, CLI/API, composer and history inspector. Focused backend tests, 165 frontend tests, typecheck, build/vet, generated contracts and changed-code lint PASS. Real isolated Electron launched idle native Codex Chat `standalone-1` from Type v3 with Skill v1 and a one-off override; retained history verified after reload. Full service/session and CLI suites PASS; full manager/HTTP Windows failures recorded. Next: execution segments for later harness/interface/model changes, then complete stage-09 restart/heterogeneous validation. |
 | 10 | Task DAG, revisions, criteria and leases | NOT STARTED | Transactional cycles/exclusivity; attempt-to-session seed association |
 | 11 | Knowledge, bounded context and manifests | NOT STARTED | Candidate/accepted knowledge and file/source provenance |
 | 12 | Worker result schema and typed communication | NOT STARTED | Ownership, bounded payloads, persistent idempotent delivery |
@@ -99,8 +99,8 @@ Numbers refer to the assignment's 48 Definition of Done items.
 | 4 | Manually create Skills | 07 | VALIDATED IN RUNNING APP |
 | 5 | Attach multiple pinned Skills | 07-09 | NOT STARTED |
 | 6 | Configure and enforce manager ownership permissions | 05-06, 15 | NOT STARTED |
-| 7 | Manually launch from Agent Type | 09 | NOT STARTED |
-| 8 | Explicit type selection when creating a task | 09-10 | NOT STARTED |
+| 7 | Manually launch from Agent Type | 09 | VALIDATED IN RUNNING APP |
+| 8 | Explicit type selection when creating a task | 09-10 | IN PROGRESS: composer/CLI/API exact pins tested; persistent task integration remains stage 10 |
 | 9 | Automatic Agent Manager selection | 15 | NOT STARTED |
 | 10 | Give orchestrator a high-level goal | 17 | NOT STARTED |
 | 11 | Persistent orchestrator-created task dependencies | 10, 17 | NOT STARTED |
@@ -148,7 +148,7 @@ Numbers refer to the assignment's 48 Definition of Done items.
 | --- | --- | --- |
 | Type/Skill versions | Inspect, clone, diff, active-version rollback, disable, experimental/promotion history | NOT STARTED |
 | Import/export | Round trip, schema rejection, unresolved bindings, no secrets or execution | NOT STARTED |
-| Snapshot reproducibility | Project default edits and registry edits do not alter running/restored attempts | NOT STARTED |
+| Snapshot reproducibility | Project default edits and registry edits do not alter running/restored attempts | TESTED for original TUI/Chat configuration, retained resources and reopened SQLite; later execution-segment integration remains stage 09 |
 | Ownership | Manager cannot spoof human origin or select/modify/version prohibited types | NOT STARTED |
 | Criteria | Worker cannot lower criteria; revision retained and audited | NOT STARTED |
 | DAG safety | Cycle, cross-project edge, duplicate task/edge, cancellation, depth/pending bounds | NOT STARTED |

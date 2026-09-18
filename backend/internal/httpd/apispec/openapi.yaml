@@ -7119,6 +7119,45 @@ paths:
       summary: Switch a logical AO session to another agent harness
       tags:
       - sessions
+  /api/v1/sessions/{sessionId}/worker-configuration:
+    get:
+      operationId: getWorkerConfiguration
+      parameters:
+      - description: Session identifier, e.g. project-1.
+        in: path
+        name: sessionId
+        required: true
+        schema:
+          description: Session identifier, e.g. project-1.
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerConfigurationResponse'
+          description: OK
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Read the immutable worker launch configuration
+      tags:
+      - sessions
   /api/v1/sessions/{sessionId}/workspace/diffs:
     post:
       operationId: getSessionWorkspaceDiffs
@@ -11148,14 +11187,18 @@ components:
           - prime-agent
           - autohand
           - fake
-          type: string
+          type:
+          - "null"
+          - string
         approvalMode:
           enum:
           - default
           - accept-edits
           - auto
           - bypass-permissions
-          type: string
+          type:
+          - "null"
+          - string
         attachments:
           items:
             $ref: '#/components/schemas/AttachmentInput'
@@ -11172,12 +11215,16 @@ components:
           enum:
           - tui
           - chat
-          type: string
+          type:
+          - "null"
+          - string
         model:
           maxLength: 256
           type: string
         projectId:
           type: string
+        workerSelection:
+          $ref: '#/components/schemas/WorkerSelection'
       required:
       - projectId
       - brief
@@ -14275,7 +14322,9 @@ components:
           - omp
           - prime-agent
           - autohand
-          type: string
+          type:
+          - "null"
+          - string
         issueId:
           type: string
         kind:
@@ -14287,7 +14336,9 @@ components:
           enum:
           - chat
           - tui
-          type: string
+          type:
+          - "null"
+          - string
         model:
           maxLength: 256
           type: string
@@ -14303,6 +14354,8 @@ components:
           - github
           - gitlab
           type: string
+        workerSelection:
+          $ref: '#/components/schemas/WorkerSelection'
       type: object
     SpawnSessionResponse:
       properties:
@@ -14814,6 +14867,174 @@ components:
       - processedTokens
       - cacheReadTokens
       - estimatedCost
+      type: object
+    WorkerConfiguration:
+      properties:
+        actorId:
+          type: string
+        agentType:
+          $ref: '#/components/schemas/WorkerDefinitionRef'
+        catalogFingerprint:
+          type: string
+        contentHash:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        effective:
+          $ref: '#/components/schemas/AgentTypeDefinition'
+        origin:
+          type: string
+        provider:
+          $ref: '#/components/schemas/WorkerProviderReference'
+        schemaVersion:
+          type: integer
+        selection:
+          $ref: '#/components/schemas/WorkerSelection'
+        skills:
+          items:
+            $ref: '#/components/schemas/WorkerSkillSnapshot'
+          type: array
+        systemPrompt:
+          type: string
+      required:
+      - schemaVersion
+      - agentType
+      - selection
+      - effective
+      - skills
+      - origin
+      - actorId
+      - systemPrompt
+      - createdAt
+      - contentHash
+      type: object
+    WorkerConfigurationResponse:
+      properties:
+        configuration:
+          anyOf:
+          - type: "null"
+          - $ref: '#/components/schemas/WorkerConfiguration'
+            type: object
+      required:
+      - configuration
+      type: object
+    WorkerDefinitionRef:
+      properties:
+        contentHash:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          format: int64
+          type: integer
+      required:
+      - id
+      - version
+      - name
+      - contentHash
+      type: object
+    WorkerOverrides:
+      properties:
+        effort:
+          type:
+          - "null"
+          - string
+        harness:
+          type:
+          - "null"
+          - string
+        instructions:
+          type:
+          - "null"
+          - string
+        mode:
+          type:
+          - "null"
+          - string
+        model:
+          type:
+          - "null"
+          - string
+        permissions:
+          type:
+          - "null"
+          - string
+        providerBindingId:
+          type:
+          - "null"
+          - string
+        sessionMode:
+          type:
+          - "null"
+          - string
+        skills:
+          items:
+            $ref: '#/components/schemas/SkillVersionRef'
+          type:
+          - "null"
+          - array
+      type: object
+    WorkerProviderReference:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        enabled:
+          type: boolean
+        harness:
+          type:
+          - "null"
+          - string
+        id:
+          type: string
+        name:
+          type: string
+        projectId:
+          type: string
+        provider:
+          type: string
+        revision:
+          format: int64
+          type: integer
+        updatedAt:
+          format: date-time
+          type: string
+      required:
+      - id
+      - name
+      - harness
+      - provider
+      - projectId
+      - enabled
+      - revision
+      - createdAt
+      - updatedAt
+      type: object
+    WorkerSelection:
+      properties:
+        agentTypeId:
+          type: string
+        overrides:
+          $ref: '#/components/schemas/WorkerOverrides'
+        version:
+          format: int64
+          type: integer
+      required:
+      - agentTypeId
+      - overrides
+      type: object
+    WorkerSkillSnapshot:
+      properties:
+        definition:
+          $ref: '#/components/schemas/SkillDefinition'
+        reference:
+          $ref: '#/components/schemas/WorkerDefinitionRef'
+      required:
+      - reference
+      - definition
       type: object
     WorkspaceCommitSummary:
       properties:
