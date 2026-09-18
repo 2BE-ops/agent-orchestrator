@@ -165,8 +165,16 @@ function cacheDescriptor(
 	// against session.terminalGeneration — so a restore does not look like a
 	// generation change that would dispose the fresh terminal on the next render.
 	const nonce = terminalResetNonce(session.id);
+	// The worker epoch is deliberately NOT in the cache key. A fresh cloud session
+	// attaches optimistically before its worker is up, when the epoch is still
+	// unknown; the moment the worker comes online the polled epoch flips from
+	// undefined to its first value, and folding that into the key would evict the
+	// just-attached terminal and remount it (connected -> blank -> terminal). The
+	// reconcile loop instead disposes a worker terminal when its epoch moves
+	// BETWEEN two known values (a genuine re-provision), and a restore rebuilds via
+	// the nonce, so the key only needs the restore nonce to force a clean re-mint.
 	return {
-		cacheKey: `${ownerKey}|handle:${handleId}|generation:${generation}|reset:${nonce}`,
+		cacheKey: `${ownerKey}|handle:${handleId}|reset:${nonce}`,
 		generation,
 		handleId,
 		kind: "worker",
@@ -527,14 +535,35 @@ export function TerminalCacheProvider({
 				removeEntry(entry.cacheKey);
 				continue;
 			}
-			if (
-				entry.kind === "worker" &&
-				session &&
-				(session.terminalHandleId !== entry.handleId ||
-					(session.terminalGeneration ?? "") !== (entry.generation ?? ""))
-			) {
-				removeEntry(entry.cacheKey);
-				continue;
+			if (entry.kind === "worker" && session) {
+				const sessionGen = session.terminalGeneration ?? "";
+				const entryGen = entry.generation ?? "";
+				if (session.terminalHandleId !== entry.handleId) {
+					// A different handle is a different logical terminal: dispose. The
+					// handle is in the cache key, so the pane re-activates a fresh
+					// entry on its own.
+					removeEntry(entry.cacheKey);
+					continue;
+				}
+				const epochReprovisioned = entryGen !== "" && sessionGen !== "" && entryGen !== sessionGen;
+				if (epochReprovisioned) {
+					// The worker epoch moved BETWEEN two known values: a genuine
+					// re-provision (idle-resume or a silent restart). Bump the reset
+					// nonce so the pane rebuilds its cache entry and mux against the
+					// live box with a fresh cursor, exactly as a user restore does.
+					// Update the entry's recorded epoch first so this does not fire
+					// again on the next reconcile before the rebuild lands.
+					entry.generation = sessionGen;
+					useTerminalResetStore.getState().advanceEpoch(entry.sessionId ?? session.id);
+					continue;
+				}
+				if (entryGen === "" && sessionGen !== "") {
+					// Unknown -> first-known: the worker just came online for the SAME
+					// terminal. Adopt the epoch in place. The cache key does not carry
+					// the epoch, so this does NOT remount the just-attached pane (which
+					// would blank it: connected -> blank -> terminal).
+					entry.generation = sessionGen;
+				}
 			}
 			if (session && entry.props.session !== session) {
 				entry.props = { ...entry.props, session };
@@ -1157,11 +1186,15 @@ function AttachedTerminal({
 	// LATCHED on that first reveal so a later transient reconnect (hasAttached
 	// briefly flips back to false) never flashes the cover back over an
 	// already-visible terminal. The latch resets when the terminal identity
-	// changes (a new session, or a restore under a new worker epoch) so a fresh
-	// box connects cleanly again. Cloud only; local panes keep their existing
-	// messageless replay cover and reattaching banner. The top-right timer lives
-	// in SessionView's CloudLifecycleStatus.
-	const cloudTerminalIdentity = `${handleId ?? ""}:${session?.terminalGeneration ?? ""}`;
+	// changes (a new session) so a fresh box connects cleanly again. It is keyed
+	// on the handle only, NOT the worker epoch: the epoch flips from unknown to its
+	// first value the instant the worker comes online, and keying on it would reset
+	// the latch and re-show the cover over an already-revealed pane (the second
+	// blank). A real re-provision (idle-resume or restore) remounts this component
+	// outright, giving a fresh latch anyway. Cloud only; local panes keep their
+	// existing messageless replay cover and reattaching banner. The top-right timer
+	// lives in SessionView's CloudLifecycleStatus.
+	const cloudTerminalIdentity = `${handleId ?? ""}`;
 	const cloudRevealedIdentityRef = useRef(cloudTerminalIdentity);
 	const cloudRevealedRef = useRef(false);
 	if (cloudRevealedIdentityRef.current !== cloudTerminalIdentity) {

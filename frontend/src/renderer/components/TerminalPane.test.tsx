@@ -764,6 +764,44 @@ describe("TerminalCacheProvider", () => {
 		}
 	});
 
+	it("adopts a fresh cloud worker's first epoch in place without remounting", async () => {
+		// A fresh cloud worker attaches before its sandbox is up, while the epoch is
+		// still unknown; the moment the worker comes online the polled epoch flips
+		// from undefined to its first value. That must NOT remount the just-attached
+		// pane, which the user would see as connected -> blank -> terminal.
+		const cloud = { orgId: "cloud-org" } as const;
+		const connecting = { ...sessionA, cloud, terminalGeneration: undefined };
+		const online = { ...connecting, terminalGeneration: "5605" };
+		const view = renderCachedPane({ session: connecting, sessions: [connecting] });
+		try {
+			const terminal = await waitFor(() => activeXterm());
+			expect(xtermMounts.value).toBe(1);
+			act(() => {
+				view.queryClient.setQueryData(workspaceQueryKey, workspaceWithSessions([online]));
+			});
+			view.show(online);
+			// The reconcile loop runs on the query update; adoption is synchronous, so
+			// no remount and no second attach should ever occur.
+			expect(activeXterm()).toBe(terminal);
+			expect(xtermMounts.value).toBe(1);
+			expect(xtermUnmounts.value).toBe(0);
+			expect(attachMock).toHaveBeenCalledTimes(1);
+
+			// A genuine later epoch advance (idle-resume) still re-mints, proving the
+			// adopted epoch was recorded rather than ignored.
+			const resumed = { ...online, terminalGeneration: "5606" };
+			act(() => {
+				view.queryClient.setQueryData(workspaceQueryKey, workspaceWithSessions([resumed]));
+			});
+			view.show(resumed);
+			await waitFor(() => expect(activeXterm()).not.toBe(terminal));
+			expect(xtermMounts.value).toBe(2);
+			expect(attachMock).toHaveBeenCalledTimes(2);
+		} finally {
+			view.restore();
+		}
+	});
+
 	it("disposes parked entries when their session is removed", async () => {
 		const view = renderCachedPane({ session: sessionA, sessions: [sessionA, sessionB] });
 		try {
