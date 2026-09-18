@@ -911,11 +911,11 @@ function bannerText(
 	error?: string,
 ): string | undefined {
 	// Cloud only: before the first successful open (the sandbox worker is still
-	// coming up), show a calm "Connecting…" rather than the alarming
-	// "disconnected — reattaching". A local terminal keeps its original wording
-	// verbatim, so local behavior is unchanged.
+	// coming up), the centered connecting cover owns the "Connecting" message, so
+	// suppress the top-left banner entirely to avoid a second overlapping loader.
+	// A local terminal keeps its original "disconnected — reattaching" wording.
 	if (state === "reattaching") {
-		return isCloud && !hasAttached ? t("terminal.connecting") : t("terminal.reattaching");
+		return isCloud && !hasAttached ? undefined : t("terminal.reattaching");
 	}
 	if (state === "error") return t("terminal.error", { error: error ?? t("terminal.connectionFailed") });
 	return undefined;
@@ -1151,6 +1151,16 @@ function AttachedTerminal({
 	// a terminal they cannot type into, and it never flickers back once the new
 	// epoch attaches (the epoch only moves forward). Cloud only.
 	const isBoxComingUp = Boolean(session?.cloud) && isReconnecting;
+	// The single connecting state for a cloud terminal: from first connect (fresh
+	// spawn) OR a restore/resume box coming up, until the pane has attached once.
+	// It drives ONE opaque centered "Connecting" cover so the live xterm cursor
+	// never bleeds through and there is no second banner; the top-right timer
+	// lives in SessionView's CloudLifecycleStatus. Cloud only, so local panes keep
+	// their existing messageless replay cover and reattaching banner.
+	const isCloudConnecting =
+		Boolean(attachSession?.cloud) &&
+		!isCloudConnectError &&
+		(isBoxComingUp || (!hasAttached && (state === "connecting" || state === "reattaching")));
 	const showEndedState = (state === "exited" || canRestoreSession) && !isBoxComingUp;
 	const emptyStateTitle = session ? t("terminal.startingSession") : "Agent Orchestrator";
 	const emptyStateMessage = session
@@ -1201,12 +1211,17 @@ function AttachedTerminal({
 						</div>
 					</div>
 				)}
-				{isBoxComingUp && !showReplayCover && (
-					<div className="terminal-surface absolute inset-0 grid place-items-center font-mono text-control">
+				{isCloudConnecting && (
+					<div
+						className="terminal-surface absolute inset-0 grid place-items-center font-mono text-control"
+						data-testid="terminal-connecting-cover"
+					>
 						<div className="text-terminal">{t("terminal.connecting")}</div>
 					</div>
 				)}
-				{showReplayCover && <ReplayCover message={attachSession?.cloud ? t("terminal.connecting") : undefined} />}
+				{showReplayCover && !isCloudConnecting && (
+					<ReplayCover message={attachSession?.cloud ? t("terminal.connecting") : undefined} />
+				)}
 				{isCloudConnectError && <CloudConnectError onRetry={handleRetry} />}
 				{banner && (
 					<div className="absolute inset-x-3 top-2 rounded-md border border-border bg-surface/95 px-3 py-1.5 font-mono text-caption text-muted-foreground">

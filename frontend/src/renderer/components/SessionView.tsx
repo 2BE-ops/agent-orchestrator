@@ -415,6 +415,14 @@ function SessionInspectorRail({
 // x-transform). Summary/Reviews/Files share a utility width, while Browser
 // automatically grows into a co-work canvas. Chat readability clamps either
 // profile before the conversation can become unusably narrow.
+// Formats a connecting elapsed time as "7s" under a minute, then "1:03".
+function formatCloudElapsed(seconds: number): string {
+	if (seconds < 60) return `${seconds}s`;
+	const m = Math.floor(seconds / 60);
+	const s = seconds % 60;
+	return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 function CloudLifecycleStatus({ stage }: { stage: CloudLifecycleStage }) {
 	const { t } = useTranslation();
 	const label = {
@@ -427,6 +435,42 @@ function CloudLifecycleStatus({ stage }: { stage: CloudLifecycleStage }) {
 	}[stage];
 	const settled = stage === "connected";
 	const paused = stage === "paused_by_coder";
+	const connecting = !settled && !paused;
+	// One elapsed-time counter for the whole connecting window (fresh spawn or
+	// restore); anchored on the first connecting render and reset once it
+	// settles. Hooks stay unconditional (called every render) so the settled
+	// early-return below never changes hook order.
+	const connectingStartRef = useRef<number | null>(null);
+	if (connecting && connectingStartRef.current === null) connectingStartRef.current = Date.now();
+	if (!connecting) connectingStartRef.current = null;
+	const [elapsedSeconds, setElapsedSeconds] = useState(0);
+	useEffect(() => {
+		if (!connecting) return;
+		const start = connectingStartRef.current ?? Date.now();
+		const tick = () => setElapsedSeconds(Math.max(0, Math.round((Date.now() - start) / 1000)));
+		tick();
+		const id = setInterval(tick, 1000);
+		return () => clearInterval(id);
+	}, [connecting]);
+
+	// Connected is the resting state: a bare green dot, no pill or visible label.
+	// The accessible name still announces "Connected" via aria-label.
+	if (settled) {
+		return (
+			<motion.div
+				animate={{ opacity: 1, y: 0 }}
+				aria-label={label}
+				aria-live="polite"
+				className="absolute right-3 top-3 z-20 flex items-center"
+				data-cloud-lifecycle-stage={stage}
+				initial={{ opacity: 0, y: -4 }}
+				role="status"
+			>
+				<span aria-hidden="true" className="size-1.5 rounded-full bg-success" />
+			</motion.div>
+		);
+	}
+
 	return (
 		<motion.div
 			animate={{ opacity: 1, y: 0 }}
@@ -434,7 +478,7 @@ function CloudLifecycleStatus({ stage }: { stage: CloudLifecycleStage }) {
 			className={cn(
 				"absolute right-3 top-3 z-20 flex h-7 items-center gap-2 rounded-sm border px-2.5",
 				"bg-background/92 font-mono text-[11px] tracking-tight shadow-sm backdrop-blur-sm",
-				settled ? "border-success/30 text-passive" : "border-border/80 text-foreground",
+				"border-border/80 text-foreground",
 			)}
 			data-cloud-lifecycle-stage={stage}
 			initial={{ opacity: 0, y: -4 }}
@@ -442,12 +486,9 @@ function CloudLifecycleStatus({ stage }: { stage: CloudLifecycleStage }) {
 		>
 			<span
 				aria-hidden="true"
-				className={cn(
-					"size-1.5 rounded-full",
-					settled ? "bg-success" : paused ? "bg-warning" : "animate-pulse bg-primary",
-				)}
+				className={cn("size-1.5 rounded-full", paused ? "bg-warning" : "animate-pulse bg-primary")}
 			/>
-			{label}
+			{paused ? label : formatCloudElapsed(elapsedSeconds)}
 		</motion.div>
 	);
 }

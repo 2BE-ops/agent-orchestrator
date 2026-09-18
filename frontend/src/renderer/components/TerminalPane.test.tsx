@@ -520,7 +520,9 @@ describe("TerminalPane replay cover", () => {
 		replaySettled.value = false;
 		const view = renderPane({ ...worker, terminalHandleId: "term-1", cloud: { orgId: "org-1" } });
 		try {
-			expect(screen.getByTestId("terminal-replay-cover")).toHaveTextContent("Connecting…");
+			// Before the first attach, a cloud terminal shows the single opaque
+			// connecting cover (not the replay cover), with a bare "Connecting".
+			expect(screen.getByTestId("terminal-connecting-cover")).toHaveTextContent("Connecting");
 			expect(terminalSessionOptions.at(-1)?.waitForInitialOutput).toBe(true);
 		} finally {
 			view.restore();
