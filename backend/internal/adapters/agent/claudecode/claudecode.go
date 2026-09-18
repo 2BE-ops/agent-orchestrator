@@ -427,19 +427,6 @@ func claudeEnvAuthStatus(ctx context.Context) (ports.AgentAuthStatus, bool, erro
 	return ports.AgentAuthStatusUnknown, false, nil
 }
 
-// claudeLocalAuthStatus is retained for tests and callers that need the combined
-// env-or-config heuristic without spawning the CLI.
-func claudeLocalAuthStatus(ctx context.Context) (ports.AgentAuthStatus, bool, error) {
-	if status, ok, err := claudeEnvAuthStatus(ctx); err != nil || ok {
-		return status, ok, err
-	}
-	cfgPath, err := claudeConfigPath()
-	if err != nil {
-		return ports.AgentAuthStatusUnknown, false, err
-	}
-	return claudeConfigAuthStatus(cfgPath)
-}
-
 func claudeConfigAuthStatus(path string) (ports.AgentAuthStatus, bool, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
