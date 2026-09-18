@@ -393,7 +393,8 @@ func parseVibeModels(raw []byte) ([]ports.AgentModelInfo, error) {
 	return normalize(models), nil
 }
 
-func parseClineModels(raw []byte) ([]ports.AgentModelInfo, error) {	var config struct {
+func parseClineModels(raw []byte) ([]ports.AgentModelInfo, error) {
+	var config struct {
 		LastUsedProvider string                     `json:"lastUsedProvider"`
 		Providers        map[string]json.RawMessage `json:"providers"`
 	}
