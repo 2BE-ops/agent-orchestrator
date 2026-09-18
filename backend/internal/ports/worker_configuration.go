@@ -29,3 +29,9 @@ type WorkerExecutionStore interface {
 	ListWorkerExecutions(context.Context, domain.SessionID, int64, int) ([]domain.WorkerExecutionActivation, error)
 	GetWorkerExecution(context.Context, domain.SessionID, string) (domain.WorkerExecution, error)
 }
+
+// WorkerConversationSettingsStore commits native turn preferences and their
+// execution attribution together, fencing both controller and configuration.
+type WorkerConversationSettingsStore interface {
+	CommitWorkerConversationSettings(context.Context, domain.SessionControllerOwner, string, domain.ConversationSettings, domain.WorkerExecution) error
+}

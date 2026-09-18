@@ -14883,6 +14883,8 @@ components:
           type: string
         effective:
           $ref: '#/components/schemas/AgentTypeDefinition'
+        nativeSettings:
+          $ref: '#/components/schemas/WorkerNativeSettings'
         origin:
           type: string
         provider:
@@ -14935,6 +14937,19 @@ components:
       - version
       - name
       - contentHash
+      type: object
+    WorkerNativeSettings:
+      properties:
+        approvalMode:
+          type:
+          - "null"
+          - string
+        model:
+          type: string
+        openCodeMode:
+          type: string
+        reasoningEffort:
+          type: string
       type: object
     WorkerOverrides:
       properties:

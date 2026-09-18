@@ -261,6 +261,7 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"ControllersSpawnSessionResponse":                     "SpawnSessionResponse",
 	"ControllersWorkerConfigurationResponse":              "WorkerConfigurationResponse",
 	"DomainWorkerConfiguration":                           "WorkerConfiguration",
+	"DomainConversationSettings":                          "WorkerNativeSettings",
 	"DomainWorkerSelection":                               "WorkerSelection",
 	"DomainWorkerOverrides":                               "WorkerOverrides",
 	"DomainWorkerDefinitionRef":                           "WorkerDefinitionRef",

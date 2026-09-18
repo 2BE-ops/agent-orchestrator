@@ -50,6 +50,7 @@ type WorkerConfiguration struct {
 	AgentType          WorkerDefinitionRef   `json:"agentType"`
 	Selection          WorkerSelection       `json:"selection"`
 	Effective          AgentTypeDefinition   `json:"effective"`
+	NativeSettings     *ConversationSettings `json:"nativeSettings,omitempty"`
 	Skills             []WorkerSkillSnapshot `json:"skills"`
 	Provider           *ProviderBinding      `json:"provider,omitempty"`
 	Origin             RegistryOrigin        `json:"origin"`

@@ -4,6 +4,32 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 09c3 — durable per-turn settings attribution (2026-09-18)
+
+Configured Chat workers validate model, effort, permissions and native binding
+through the shared registry resolver before changing next-turn preferences.
+Preferences and their immutable execution activation now commit in one database
+transaction, fenced by controller generation, controller ownership and previous
+configuration sequence. The original launch remains unchanged. Restoration uses
+the latest recorded permissions; a later harness change drops provider-owned
+settings from its predecessor. Legacy sessions retain their existing settings path.
+
+New real-SQL tests PASS for unsupported native settings, unchanged controller on
+rejection, stale controller/configuration fences, cross-conversation rejection,
+fault-injected settings/history/CDC rollback, duplicate suppression, and database
+reopen. Full domain, registry (1.10s), store (9.03s), and Chat (42.61s) suites PASS;
+the earlier intermittent Chat baseline failure did not reproduce in this run.
+Focused configured-worker manager tests, complete API-spec suites, backend build,
+affected-package vet, frontend typecheck and changed-code pinned lint PASS
+(0 issues). API/schema regenerated together; source and whitespace diff reviewed.
+Whole-repository lint again cannot typecheck the pre-existing Windows
+`persistenthost/host_race_test.go` uses of `syscall.Kill`; this is not a full lint
+pass. Logs: ignored `*stage09c3*` files.
+
+Native provider-owned live controls and execution-history UI remain next; this
+increment covers the per-turn settings endpoint, not those separate controls.
+No new live provider turn has been claimed. Stage 09 remains in progress.
+
 ## Stage 09c2 — harness-switch execution configurations (2026-09-18)
 
 TUI and Chat harness switches prepare a validated execution configuration before

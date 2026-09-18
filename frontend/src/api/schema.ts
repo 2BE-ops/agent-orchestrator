@@ -5087,6 +5087,7 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             effective: components["schemas"]["AgentTypeDefinition"];
+            nativeSettings?: components["schemas"]["WorkerNativeSettings"];
             origin: string;
             provider?: components["schemas"]["WorkerProviderReference"];
             schemaVersion: number;
@@ -5103,6 +5104,12 @@ export interface components {
             name: string;
             /** Format: int64 */
             version: number;
+        };
+        WorkerNativeSettings: {
+            approvalMode?: null | string;
+            model?: string;
+            openCodeMode?: string;
+            reasoningEffort?: string;
         };
         WorkerOverrides: {
             effort?: null | string;

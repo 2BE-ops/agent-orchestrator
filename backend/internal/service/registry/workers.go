@@ -172,6 +172,7 @@ func (m *Manager) ResolveWorkerChange(ctx context.Context, current domain.Worker
 	selection := current.Selection.Overrides
 	if override.Harness != nil && *override.Harness != current.Effective.Harness {
 		projectConfig = project.Config
+		current.NativeSettings = nil
 		selection.Model = nil
 		selection.Mode = nil
 		selection.Effort = nil

@@ -1336,7 +1336,11 @@ func (s *Store) SetConversationSettings(
 ) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	if err := s.qw.UpdateConversationTurnSettings(ctx, gen.UpdateConversationTurnSettingsParams{
+	return updateConversationSettings(ctx, s.qw, conversationID, settings, now)
+}
+
+func updateConversationSettings(ctx context.Context, q *gen.Queries, conversationID string, settings domain.ConversationSettings, now time.Time) error {
+	if err := q.UpdateConversationTurnSettings(ctx, gen.UpdateConversationTurnSettingsParams{
 		Model:           nullableString(settings.Model),
 		ReasoningEffort: nullableString(settings.ReasoningEffort),
 		ApprovalMode:    nullableString(string(settings.ApprovalMode)),

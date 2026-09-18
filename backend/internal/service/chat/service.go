@@ -47,6 +47,7 @@ type Service struct {
 	onAccountChanged       func(domain.SessionID, string, domain.AgentHarness)
 	onCodexCapacityChanged func(domain.SessionID, string, ports.CodexCapacityObservation)
 	stopProviderHost       func(context.Context, domain.SessionID) error
+	workerConfigurations   ports.WorkerConfigurationResolver
 
 	mu           sync.RWMutex
 	controllers  map[domain.SessionID]*Controller
@@ -1693,7 +1694,8 @@ func (s *Service) SetTurnSettings(
 	id domain.SessionID,
 	settings domain.ConversationSettings,
 ) (domain.ConversationSettings, error) {
-	if _, err := s.requireChatSession(ctx, id); err != nil {
+	record, err := s.requireChatSession(ctx, id)
+	if err != nil {
 		return domain.ConversationSettings{}, err
 	}
 	controller, err := s.Controller(id)
@@ -1704,7 +1706,7 @@ func (s *Service) SetTurnSettings(
 	defer controller.configMu.Unlock()
 	// The turn-settings endpoint does not own provider session mode choices.
 	settings.OpenCodeMode = controller.Settings().OpenCodeMode
-	if err := controller.SetSettings(ctx, settings); err != nil {
+	if err := s.setWorkerTurnSettings(ctx, record, controller, settings); err != nil {
 		return domain.ConversationSettings{}, err
 	}
 	return controller.Settings(), nil

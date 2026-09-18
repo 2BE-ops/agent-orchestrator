@@ -497,6 +497,7 @@ func Run() error {
 	agentSvc.WarmModelCatalogs(ctx)
 	registrySvc := registrysvc.NewWithNative(store, agentSvc)
 	registrySvc.SetSessionDefaults(settingsSvc)
+	chatSvc.SetWorkerConfigurationResolver(registrySvc)
 
 	sessionSvc, reviewSvc, wiredSessMgr, err := startSession(ctx, cfg, runtimeAdapter, store, lcStack.LCM, messenger, telemetrySink, agents, agentSvc, managedPreview, browserBroker, browserAuthority, chatLauncher{svc: chatSvc}, settingsSvc, policyCoordinator, tracker, codexOperationGate, log)
 	if err != nil {

@@ -2520,7 +2520,7 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 	if snapshot != nil {
 		agentConfig = snapshot.Effective.Config
 	}
-	if rec.Metadata.Permissions != "" {
+	if snapshot == nil && rec.Metadata.Permissions != "" {
 		agentConfig.Permissions = rec.Metadata.Permissions
 	}
 	var env map[string]string

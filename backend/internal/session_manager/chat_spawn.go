@@ -345,7 +345,7 @@ func (m *Manager) resumeChatController(
 	if snapshot != nil {
 		agentConfig = snapshot.Effective.Config
 	}
-	if rec.Metadata.Permissions != "" {
+	if snapshot == nil && rec.Metadata.Permissions != "" {
 		agentConfig.Permissions = rec.Metadata.Permissions
 	}
 	additionalDirectories, err := m.restoredWorkspaceProjectDirectories(ctx, rec, project, ws.Path)
