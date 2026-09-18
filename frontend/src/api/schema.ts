@@ -2993,6 +2993,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tasks/{taskId}/attempts/{attemptId}/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect exact sealed worker input and provenance */
+        get: operations["getTaskContext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tasks/{taskId}/audit": {
         parameters: {
             query?: never;
@@ -3698,6 +3715,25 @@ export interface components {
         };
         ContainerReapConfig: {
             disabled?: boolean;
+        };
+        ContextBudget: {
+            maxBytes: number;
+            maxEstimatedTokens: number;
+            maxSourceBytes: number;
+            maxSources: number;
+        };
+        ContextSource: {
+            content?: string;
+            contentHash?: string;
+            /** @enum {string} */
+            disposition: "inline" | "reference" | "omitted";
+            id: string;
+            /** @enum {string} */
+            kind: "task" | "criteria" | "parent" | "dependency" | "knowledge" | "file" | "agent_type" | "skill" | "result" | "interface_contract" | "selection";
+            reason: string;
+            sourceHash?: string;
+            /** Format: int64 */
+            version?: number;
         };
         ControllersRequestRereviewRequest: {
             /** @description Tracked pull request URL. Required when the session has multiple PRs. */
@@ -5489,6 +5525,27 @@ export interface components {
             /** Format: int64 */
             sequence: number;
             taskId: string;
+        };
+        TaskContextSnapshot: {
+            attemptId: string;
+            basePrompt: string;
+            budget: components["schemas"]["ContextBudget"];
+            configurationHash: string;
+            contentHash: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            criteriaVersion: number;
+            estimatedTokens: number;
+            executionOperationId: string;
+            prompt: string;
+            schemaVersion: number;
+            sessionId: string;
+            sources: components["schemas"]["ContextSource"][];
+            systemPromptBytes: number;
+            systemPromptHash: string;
+            task: components["schemas"]["TaskRevisionRef"];
+            totalBytes: number;
         };
         TaskDefinition: {
             brief: string;
@@ -18082,6 +18139,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdaptiveTaskAttemptsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getTaskContext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskContextSnapshot"];
                 };
             };
             /** @description Bad Request */

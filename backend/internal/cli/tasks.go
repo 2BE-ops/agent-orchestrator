@@ -16,6 +16,16 @@ import (
 // bypass scheduler admission. JSON payloads mirror the public daemon contract.
 func newTaskCommand(ctx *commandContext) *cobra.Command {
 	root := &cobra.Command{Use: "task", Aliases: []string{"tasks"}, Short: "Author persistent tasks and inspect planning/attempt history (JSON output)"}
+	root.AddCommand(&cobra.Command{Use: "context <task-id> <attempt-id>", Short: "Inspect exact worker context, provenance and omissions", Args: usageArgs(cobra.ExactArgs(2)), RunE: func(cmd *cobra.Command, args []string) error {
+		if strings.TrimSpace(args[0]) == "" || strings.TrimSpace(args[1]) == "" {
+			return usageError{errors.New("task and attempt ids must not be blank")}
+		}
+		var response json.RawMessage
+		if err := ctx.getJSON(cmd.Context(), "tasks/"+url.PathEscape(args[0])+"/attempts/"+url.PathEscape(args[1])+"/context", &response); err != nil {
+			return err
+		}
+		return writeJSON(cmd.OutOrStdout(), response)
+	}})
 	for _, spec := range []struct {
 		use, suffix, short     string
 		project, page, version bool

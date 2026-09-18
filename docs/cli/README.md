@@ -90,6 +90,20 @@ intent and retained lease facts. `ao task intents <id>` pages control history.
 blocks new admissions for the task and its descendants; active ownership remains
 reserved for lifecycle cleanup. A `cancelling` state is not proof a worker stopped.
 
+`ao task context <task-id> <attempt-id>` inspects the exact sealed prompt,
+versioned sources, hashes, byte/token estimates and omission reasons. It returns
+404 until context is sealed; inspection never launches work or reads files.
+Task definitions may include up to 16 portable workspace-relative `contextFiles`.
+The builder combines frozen task/criteria/dependencies, parent planning, explicit
+regular text files and up to 32 accepted relevant knowledge records. Pinned
+knowledge ranks before task links, category tags and general project facts.
+Candidate, invalidated and unrelated claims are excluded. Known credential paths,
+symlinks, unavailable, oversized and binary files are recorded as omitted.
+Type/Skill content remains linked to the exact worker configuration and resources.
+Default inline input is limited to 192 KiB and 48 Ki estimated tokens including
+system instructions; token estimates use four UTF-8 bytes per token. Restoration
+retains the original context after knowledge or file changes.
+
 `ao task` (alias `ao tasks`) authors work independently of worker sessions and
 returns JSON. `create <project> --file <path>` accepts the task API body:
 

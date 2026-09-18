@@ -28,6 +28,7 @@ type AdaptiveTaskService interface {
 	Revisions(context.Context, string, int64, int) ([]domain.TaskRevision, error)
 	Audit(context.Context, string, int64, int) ([]domain.TaskAudit, error)
 	Attempts(context.Context, string, int64, int) ([]tasksvc.AttemptView, error)
+	Context(context.Context, string, string) (domain.TaskContextSnapshot, error)
 	ChangeIntent(context.Context, domain.AdaptiveActor, string, tasksvc.IntentInput) (domain.TaskIntent, error)
 	Intents(context.Context, string, int64, int) ([]domain.TaskIntent, error)
 }
@@ -49,6 +50,7 @@ func (c *AdaptiveTasksController) Register(r chi.Router) {
 		r.Get("/tasks/{taskId}/criteria/{version}", c.criteria)
 		r.Get("/tasks/{taskId}/audit", c.audit)
 		r.Get("/tasks/{taskId}/attempts", c.attempts)
+		r.Get("/tasks/{taskId}/attempts/{attemptId}/context", c.context)
 		r.Post("/tasks/{taskId}/intents", c.changeIntent)
 		r.Get("/tasks/{taskId}/intents", c.intents)
 	})
@@ -88,6 +90,15 @@ func (c *AdaptiveTasksController) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	envelope.WriteJSON(w, http.StatusOK, AdaptiveTaskResponse(view))
+}
+
+func (c *AdaptiveTasksController) context(w http.ResponseWriter, r *http.Request) {
+	snapshot, err := c.Svc.Context(r.Context(), chi.URLParam(r, "taskId"), chi.URLParam(r, "attemptId"))
+	if err != nil {
+		envelope.WriteError(w, r, err)
+		return
+	}
+	envelope.WriteJSON(w, http.StatusOK, snapshot)
 }
 
 func (c *AdaptiveTasksController) list(w http.ResponseWriter, r *http.Request) {

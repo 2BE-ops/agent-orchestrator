@@ -31,6 +31,7 @@ it("redacts knowledge identities from telemetry routes", () => {
 });
 
 it("redacts task and project identities from task telemetry routes", () => {
+	expect(normalizeApiOperation("GET", "/api/v1/tasks/private-task/attempts/private-attempt/context")).toBe("GET /api/v1/tasks/:id/attempts/:id/context");
 	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/tasks")).toBe("GET /api/v1/projects/:id/tasks");
 	expect(normalizeApiOperation("GET", "/api/v1/tasks/private-task/criteria/12")).toBe("GET /api/v1/tasks/:id/criteria/:id");
 });

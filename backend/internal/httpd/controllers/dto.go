@@ -63,6 +63,11 @@ type AdaptiveTaskIDParam struct {
 	TaskID string `path:"taskId"`
 }
 
+// AdaptiveTaskAttemptParam identifies one retained worker attempt.
+type AdaptiveTaskAttemptParam struct {
+	AttemptID string `path:"attemptId"`
+}
+
 // AdaptiveTaskVersionParam selects immutable task or criteria history.
 type AdaptiveTaskVersionParam struct {
 	Version int64 `path:"version" minimum:"1"`

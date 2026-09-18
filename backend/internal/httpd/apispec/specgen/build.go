@@ -147,6 +147,10 @@ func schemaName(_ reflect.Type, defaultName string) string {
 // the drift test fails until the spec is regenerated, which flags the gap.
 var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names include reset-credit contracts; no credential value is stored here.
 	"ControllersAdaptiveTaskIDParam":                       "AdaptiveTaskIDParam",
+	"ControllersAdaptiveTaskAttemptParam":                  "AdaptiveTaskAttemptParam",
+	"DomainTaskContextSnapshot":                            "TaskContextSnapshot",
+	"DomainContextBudget":                                  "ContextBudget",
+	"DomainContextSource":                                  "ContextSource",
 	"ControllersAdaptiveTaskVersionParam":                  "AdaptiveTaskVersionParam",
 	"ControllersAdaptiveTaskListQuery":                     "AdaptiveTaskListQuery",
 	"ControllersAdaptiveTaskCreateRequest":                 "AdaptiveTaskCreateRequest",
@@ -1642,6 +1646,7 @@ func adaptiveTaskOperations() []operation {
 		{http.MethodGet, "/tasks/{taskId}/criteria/{version}", "getTaskCriteria", "Inspect exact historical acceptance criteria", nil, domain.AcceptanceCriteriaVersion{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskVersionParam{}}},
 		{http.MethodGet, "/tasks/{taskId}/audit", "listTaskAudit", "Inspect durable planning and ownership actions", nil, controllers.AdaptiveTaskAuditResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskListQuery{}}},
 		{http.MethodGet, "/tasks/{taskId}/attempts", "listTaskAttempts", "Inspect frozen attempts and worker associations", nil, controllers.AdaptiveTaskAttemptsResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/tasks/{taskId}/attempts/{attemptId}/context", "getTaskContext", "Inspect exact sealed worker input and provenance", nil, domain.TaskContextSnapshot{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskAttemptParam{}}},
 		{http.MethodGet, "/tasks/{taskId}/intents", "listTaskIntents", "Inspect audited admission and cancellation instructions", nil, controllers.AdaptiveTaskIntentsResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskListQuery{}}},
 		{http.MethodPost, "/tasks/{taskId}/intents", "changeTaskIntent", "Request run or cancellation intent without releasing worker ownership", controllers.AdaptiveTaskIntentRequest{}, domain.TaskIntent{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}}},
 	} {

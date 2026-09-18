@@ -18,6 +18,7 @@ func TestTaskCLIHTTPBoundary(t *testing.T) {
 		{[]string{"task", "criteria", "task-1", "1"}, http.MethodGet, "/api/v1/tasks/task-1/criteria/1"},
 		{[]string{"task", "audit", "task-1"}, http.MethodGet, "/api/v1/tasks/task-1/audit"},
 		{[]string{"task", "attempts", "task-1"}, http.MethodGet, "/api/v1/tasks/task-1/attempts"},
+		{[]string{"task", "context", "task-1", "attempt-1"}, http.MethodGet, "/api/v1/tasks/task-1/attempts/attempt-1/context"},
 		{[]string{"task", "intents", "task-1"}, http.MethodGet, "/api/v1/tasks/task-1/intents"},
 		{[]string{"task", "set-intent", "task-1", "--file", "-"}, http.MethodPost, "/api/v1/tasks/task-1/intents"},
 		{[]string{"task", "create", "project", "--file", "-"}, http.MethodPost, "/api/v1/projects/project/tasks"},
@@ -65,5 +66,20 @@ func TestTaskCLIPreservesDaemonError(t *testing.T) {
 	_, _, err := executeCLI(t, aliveDeps(), "task", "show", "task")
 	if ExitCode(err) != 1 || !strings.Contains(err.Error(), "TASK_REVISION_CONFLICT") || !strings.Contains(err.Error(), "task-request") {
 		t.Fatalf("lost daemon envelope: %v", err)
+	}
+}
+
+func TestTaskContextCLIUsageAndDaemonError(t *testing.T) {
+	for _, args := range [][]string{{"task", "context"}, {"task", "context", "task"}, {"task", "context", "", "attempt"}, {"task", "context", "task", ""}} {
+		if _, _, err := executeCLI(t, aliveDeps(), args...); ExitCode(err) != 2 {
+			t.Fatalf("missing context identity: %v %v", args, err)
+		}
+	}
+	cfg := setConfigEnv(t)
+	srv, _ := reviewServer(t, http.StatusNotFound, `{"message":"No sealed context","code":"TASK_CONTEXT_NOT_FOUND","requestId":"context-request"}`)
+	writeRunFileFor(t, cfg, srv)
+	_, _, err := executeCLI(t, aliveDeps(), "task", "context", "task", "attempt")
+	if ExitCode(err) != 1 || !strings.Contains(err.Error(), "TASK_CONTEXT_NOT_FOUND") || !strings.Contains(err.Error(), "context-request") {
+		t.Fatalf("lost context error: %v", err)
 	}
 }

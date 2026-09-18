@@ -19,6 +19,7 @@ type Store interface {
 	ports.TaskLeaseStore
 	ports.TaskIntentStore
 	ports.TaskExecutionStore
+	ports.TaskContextStore
 	GetSession(context.Context, domain.SessionID) (domain.SessionRecord, bool, error)
 	GetProject(context.Context, string) (domain.ProjectRecord, bool, error)
 	GetRegistryEntry(context.Context, string) (domain.RegistryEntry, error)
@@ -289,6 +290,26 @@ func (m *Manager) Attempts(ctx context.Context, id string, after int64, limit in
 		result = append(result, view)
 	}
 	return result, nil
+}
+
+// Context inspects a sealed historical input; reading never constructs a new
+// prompt, opens workspace files or grants launch/lease authority.
+func (m *Manager) Context(ctx context.Context, taskID, attemptID string) (domain.TaskContextSnapshot, error) {
+	attempt, err := m.store.GetTaskAttempt(ctx, attemptID)
+	if err != nil {
+		return domain.TaskContextSnapshot{}, mapError(err)
+	}
+	if attempt.TaskID != taskID {
+		return domain.TaskContextSnapshot{}, mapError(ports.ErrTaskNotFound)
+	}
+	snapshot, found, err := m.store.GetTaskContext(ctx, attemptID)
+	if err != nil {
+		return domain.TaskContextSnapshot{}, err
+	}
+	if !found {
+		return domain.TaskContextSnapshot{}, apierr.NotFound("TASK_CONTEXT_NOT_FOUND", "This attempt has no sealed context")
+	}
+	return snapshot, nil
 }
 
 func (m *Manager) historyPage(ctx context.Context, id string, after int64, limit int) error {

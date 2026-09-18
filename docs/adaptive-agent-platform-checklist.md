@@ -56,8 +56,8 @@ Stage 03 completes with this commit.
 | 08 | Provider/capability integration and binding UI | VALIDATED IN RUNNING APP | Native ConfigSpec/model/readiness integration, mode-aware Chat inspection, immutable-target provider references, migration 0150, strict API and desktop binding editor/checks. Domain/registry/SQLite/Codex/spec suites, focused API tests, 46 frontend tests, typecheck, builds, vet and changed-code lint PASS. Real Electron create/bind v3/disable rejection/re-enable/readiness/reload verified. Custom-provider fixtures pass; live custom-provider and worker launch evidence remains stages 09/25. Baseline Windows suite/lint gaps recorded. Stage 07 pushed as `ac7e7cc26`. |
 | 09 | Worker snapshots and manual Agent Type launch | TESTED | Pushed through 09c4 `dd348ec1e`; 09c5 completes recoverable provider-owned controls (0153), retained native settings, dispatch/ownership fences and queue recovery. Shared launch/restore/resources, CLI/API/composer, interface/harness/per-turn execution history and live inspector complete. Full domain/registry/SQLite/store/Chat/session, focused manager, API-spec, build/vet/typecheck/changed-code lint and 40 latest frontend tests PASS. Native Codex reply-only turn, effort/history, renderer and full desktop/daemon restart validated in 09c4. Broader live combinations and empty never-prompted native thread recovery remain stage 23/25; Windows baseline suite gaps recorded. |
 | 10 | Task DAG, revisions, criteria and leases | TESTED | Pushed through 10d2 `ec7d2a9b1`; 10e adds audited run/cancel intent (0158), descendant admission fences, derived planning/lease/cancellation state, pending native operation inspection, API/CLI. Five intent-store tests, two state tests, HTTP/CLI, full domain/SQLite/task/CLI/spec suites, native task regression, 38 frontend tests, typecheck/build/lint PASS. Known Windows HTTP/manager gaps retained. Review/completion facts depend on 12/13; shared scheduling/reconciliation/control cleanup and live graph remain 16/20/21/23/25. |
-| 11 | Knowledge, bounded context and manifests | IN PROGRESS | Pushed through 11c1 `94e6a1270`. 11c2 implements bounded context selection, accepted knowledge ranking, confined file reads, native TUI/Chat input and historical restoration. Five native context tests, knowledge selection, file checks, full domain/SQLite/store/CDC/context/task/Chat/session, build and lint PASS. Symlink test skipped for Windows privilege; manager eight baseline failures and daemon cleanup baseline reproduced. Next: API/CLI inspection; findings/contracts extend context in 12, management UI in 22. |
-| 12 | Worker result schema and typed communication | NOT STARTED | Ownership, bounded payloads, persistent idempotent delivery |
+| 11 | Knowledge, bounded context and manifests | TESTED | Persistence `94e6a1270` and builder/native consumption `51ef12a3e` pushed. 11c3 adds scoped context API/CLI inspection, contracts and telemetry redaction. Focused HTTP/CLI, full task/CLI/telemetry/router/spec/envelope, 39 frontend tests, typecheck/build/lint PASS. Windows gaps recorded precisely. Findings/contracts extend context in 12; desktop inspection and live provider context remain 21/22/25. |
+| 12 | Worker result schema and typed communication | IN PROGRESS | Implement bounded immutable worker claims, attempt/session/generation ownership, exact context/configuration attribution and idempotent submissions; then typed communication and durable delivery. |
 | 13 | Evaluator and attributable performance history | NOT STARTED | Objective evidence, target commits, sample sizes |
 | 14 | Persistent Agent Manager service/controller/tools | NOT STARTED | Native harness execution; validated proposals and durable inbox |
 | 15 | Automatic selection/composition/dynamic creation | NOT STARTED | Candidate rationale, permissions, approval gates, creation bounds |
@@ -104,11 +104,11 @@ Numbers refer to the assignment's 48 Definition of Done items.
 | 5 | Attach multiple pinned Skills | 07-09 | NOT STARTED |
 | 6 | Configure and enforce manager ownership permissions | 05-06, 15 | NOT STARTED |
 | 7 | Manually launch from Agent Type | 09 | VALIDATED IN RUNNING APP |
-| 8 | Explicit type selection when creating a task | 09-10 | IN PROGRESS: composer/CLI/API exact pins and durable task authoring/reference validation tested; native task dispatch and desktop graph integration remain |
+| 8 | Explicit type selection when creating a task | 09-10 | TESTED in composer/CLI/API and native task dispatch adapters; desktop task graph integration remains 21/25 |
 | 9 | Automatic Agent Manager selection | 15 | NOT STARTED |
 | 10 | Give orchestrator a high-level goal | 17 | NOT STARTED |
-| 11 | Persistent orchestrator-created task dependencies | 10, 17 | NOT STARTED |
-| 12 | Acceptance criteria frozen before work | 10 | NOT STARTED |
+| 11 | Persistent orchestrator-created task dependencies | 10, 17 | IN PROGRESS: persistent DAG and orchestrator-authority storage tested; native orchestrator protocol remains 17 |
+| 12 | Acceptance criteria frozen before work | 10 | TESTED: versioned planning, exclusive attempt pins, transactional context seal and native launch tests |
 | 13 | Manager inspects available Types/Skills | 14-15 | NOT STARTED |
 | 14 | Manager selects existing Types | 15 | NOT STARTED |
 | 15 | Manager composes existing Skills | 15 | NOT STARTED |
@@ -118,8 +118,8 @@ Numbers refer to the assignment's 48 Definition of Done items.
 | 19 | Concurrent heterogeneous workers | 09, 16, 25 | NOT STARTED |
 | 20 | Preserve session/worktree/Git/PR/CI/review behavior | 09, 23-25 | NOT STARTED |
 | 21 | Structured communication/handoffs | 12 | NOT STARTED |
-| 22 | Persist useful project knowledge | 11 | NOT STARTED |
-| 23 | Task-specific context with provenance | 11 | NOT STARTED |
+| 22 | Persist useful project knowledge | 11 | TESTED: versioned review/status/provenance, API/CLI and accepted context selection; desktop inspection remains 22/25 |
+| 23 | Task-specific context with provenance | 11 | TESTED: bounded sealed context, native launch/restore and API/CLI; findings/contracts integration and live provider evidence remain 12/25 |
 | 24 | Independently evaluate outcomes | 13 | NOT STARTED |
 | 25 | Type/Skill/version performance | 13, 22 | NOT STARTED |
 | 26 | Manager routing outcomes | 18 | NOT STARTED |
@@ -154,7 +154,7 @@ Numbers refer to the assignment's 48 Definition of Done items.
 | Import/export | Round trip, schema rejection, unresolved bindings, no secrets or execution | NOT STARTED |
 | Snapshot reproducibility | Project default edits and registry edits do not alter running/restored attempts | TESTED for original TUI/Chat configuration, retained resources and reopened SQLite; later execution-segment integration remains stage 09 |
 | Ownership | Manager cannot spoof human origin or select/modify/version prohibited types | NOT STARTED |
-| Criteria | Worker cannot lower criteria; revision retained and audited | NOT STARTED |
+| Criteria | Worker cannot lower criteria; revision retained and audited | TESTED: role denial, immutable revisions, attempt pins and context seal/readback |
 | DAG safety | Cycle, cross-project edge, duplicate task/edge, cancellation, depth/pending bounds | NOT STARTED |
 | Lease safety | Races, expiry, delayed heartbeat, unknown liveness, confirmed exit, retry exhaustion | NOT STARTED |
 | Resource limits | Direct spawn, delegation, intake, restore and dynamic manager paths; runaway recursion | NOT STARTED |

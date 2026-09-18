@@ -86,6 +86,7 @@ var legacyActorlessUserCLICommands = map[string]struct{}{
 	"ao task set-criteria":      {},
 	"ao task audit":             {},
 	"ao task attempts":          {},
+	"ao task context":           {},
 	"ao task intents":           {},
 	"ao task set-intent":        {},
 	"ao knowledge":              {},

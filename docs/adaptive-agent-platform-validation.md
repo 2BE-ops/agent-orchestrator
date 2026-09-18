@@ -4,6 +4,26 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 11c3 — context inspection API and CLI (2026-09-19)
+
+`GET /tasks/{taskId}/attempts/{attemptId}/context` and `ao task context` expose
+the sealed input and provenance without rebuilding, reading files or launching.
+The service verifies that the attempt belongs to the requested task; missing
+context has an explicit 404 while storage failures remain failures. Generated
+OpenAPI/TypeScript contracts and telemetry route/command classification accompany
+the new endpoint. CLI docs describe file selection, knowledge relevance and budgets.
+
+Focused HTTP/CLI/service/telemetry tests PASS, including unrelated/missing attempts,
+exact response preservation, usage errors and daemon error/request-ID envelopes.
+Full CLI (23.875s), task service, telemetry, HTTP router/spec/envelope suites PASS;
+full controllers retain only the two recorded pairing/clone Windows failures.
+Frontend client tests PASS (39), frontend typecheck, backend build and changed-code
+pinned lint PASS (0 issues). API generation PASS; semantic comparison against HEAD
+found zero changes to pre-existing paths or schemas. Logs: ignored `*stage11c3*`.
+The initial test compile used the wrong envelope type name; corrected to the
+existing APIError and all affected checks rerun. Desktop context/knowledge UI and
+live provider validation remain later stages, not established by these API tests.
+
 ## Stage 11c2 — bounded builder and native consumption (2026-09-19)
 
 The shared builder seals input after actual workspace provisioning and before

@@ -3,6 +3,7 @@ package controllers_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -48,6 +49,52 @@ func createAdaptiveTaskHTTP(t *testing.T, router http.Handler) controllers.Adapt
 		t.Fatal(err)
 	}
 	return task
+}
+
+type contextReadStore struct {
+	tasksvc.Store
+	snapshot domain.TaskContextSnapshot
+	found    bool
+	err      error
+	reads    int
+}
+
+func (s *contextReadStore) GetTaskContext(context.Context, string) (domain.TaskContextSnapshot, bool, error) {
+	s.reads++
+	return s.snapshot, s.found, s.err
+}
+
+func TestAdaptiveTaskContextReadScopesAttemptAndPreservesErrors(t *testing.T) {
+	r, s, _ := adaptiveTaskRouter(t)
+	task := createAdaptiveTaskHTTP(t, r)
+	ctx := context.Background()
+	_, _, err := s.ReserveTask(ctx, domain.TaskReservation{ID: "attempt", TaskID: task.Task.ID, LaunchIntentID: "launch", HolderID: "scheduler", Mutation: domain.TaskMutation{Actor: domain.AdaptiveActor{Kind: "USER", ID: "human"}, Reason: "Prepare task", ExpectedRevision: 1}, Now: time.Now().UTC(), TTL: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := &contextReadStore{Store: s, found: true, snapshot: domain.TaskContextSnapshot{AttemptID: "attempt", SessionID: "worker", Prompt: "Exact retained context", ContentHash: strings.Repeat("a", 64)}}
+	router := chi.NewRouter()
+	router.Use(middleware.RequestID)
+	router.Route("/api/v1", (&controllers.AdaptiveTasksController{Svc: tasksvc.New(read)}).Register)
+	path := "/tasks/" + task.Task.ID + "/attempts/attempt/context"
+	w := registryRequest(t, router, http.MethodGet, path, nil, http.StatusOK)
+	var snapshot domain.TaskContextSnapshot
+	if err := json.Unmarshal(w.Body.Bytes(), &snapshot); err != nil || snapshot.ContentHash != read.snapshot.ContentHash || snapshot.Prompt != read.snapshot.Prompt {
+		t.Fatalf("context changed across HTTP: %+v %v", snapshot, err)
+	}
+	registryRequest(t, router, http.MethodGet, "/tasks/other/attempts/attempt/context", nil, http.StatusNotFound)
+	registryRequest(t, router, http.MethodGet, "/tasks/"+task.Task.ID+"/attempts/missing/context", nil, http.StatusNotFound)
+	if read.reads != 1 {
+		t.Fatal("unrelated task could read attempt context")
+	}
+	read.found = false
+	w = registryRequest(t, router, http.MethodGet, path, nil, http.StatusNotFound)
+	var missing envelope.APIError
+	if err := json.Unmarshal(w.Body.Bytes(), &missing); err != nil || missing.Code != "TASK_CONTEXT_NOT_FOUND" || missing.RequestID == "" {
+		t.Fatalf("missing context envelope: %s %v", w.Body.String(), err)
+	}
+	read.err = errors.New("context database unavailable")
+	registryRequest(t, router, http.MethodGet, path, nil, http.StatusInternalServerError)
 }
 
 func TestAdaptiveTasksAuthoringCriteriaAndHistory(t *testing.T) {
