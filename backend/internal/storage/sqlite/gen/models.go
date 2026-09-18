@@ -196,6 +196,44 @@ type AdaptiveTaskLease struct {
 	ReleaseReason  string
 }
 
+type AdaptiveTaskMessage struct {
+	Sequence              int64
+	ID                    string
+	ProjectID             string
+	TaskID                string
+	AttemptID             string
+	SessionID             string
+	NativeGeneration      string
+	SourceOwner           string
+	TaskRevision          int64
+	CriteriaVersion       int64
+	ConfigurationHash     string
+	ConfigurationSequence int64
+	ContextHash           string
+	TargetTaskID          string
+	CorrelationID         string
+	ReplyToID             sql.NullString
+	ResultID              sql.NullString
+	IdempotencyKey        string
+	Definition            string
+	ContentHash           string
+	CreatedAt             time.Time
+}
+
+type AdaptiveTaskMessageDelivery struct {
+	ID              string
+	MessageID       string
+	Number          int64
+	TargetAttemptID string
+	SessionID       string
+	Owner           string
+	DeliveryKey     string
+	State           string
+	Reason          string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
 type AdaptiveTaskResult struct {
 	ID                    string
 	AttemptID             string

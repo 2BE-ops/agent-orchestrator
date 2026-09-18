@@ -24,6 +24,21 @@ type TaskInterfaceClaim struct {
 	Files    []string `json:"files" nullable:"true"`
 }
 
+// Validate bounds an interface claim and its portable workspace file references.
+func (c TaskInterfaceClaim) Validate() error {
+	if !resultText(c.Name, 200, true) || !resultText(c.Contract, 8000, true) || len(c.Files) > 16 {
+		return fmt.Errorf("invalid interface claim")
+	}
+	seen := map[string]bool{}
+	for _, file := range c.Files {
+		if !ValidContextFilePath(file) || seen[file] {
+			return fmt.Errorf("interface files must be unique portable workspace paths")
+		}
+		seen[file] = true
+	}
+	return nil
+}
+
 // TaskKnowledgeCandidate remains a proposal attributed to its result owner.
 type TaskKnowledgeCandidate struct {
 	Title      string   `json:"title"`
@@ -82,15 +97,8 @@ func (d TaskResultDefinition) Validate() error {
 		return fmt.Errorf("worker result exceeds structured claim bounds")
 	}
 	for _, contract := range d.Interfaces {
-		if !resultText(contract.Name, 200, true) || !resultText(contract.Contract, 8000, true) || len(contract.Files) > 16 {
-			return fmt.Errorf("invalid interface claim")
-		}
-		seen := map[string]bool{}
-		for _, file := range contract.Files {
-			if !ValidContextFilePath(file) || seen[file] {
-				return fmt.Errorf("interface files must be unique portable workspace paths")
-			}
-			seen[file] = true
+		if err := contract.Validate(); err != nil {
+			return err
 		}
 	}
 	for _, test := range d.Tests {

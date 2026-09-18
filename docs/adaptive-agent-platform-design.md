@@ -382,6 +382,24 @@ project and attempt ownership; persist first, then deliver via existing
 mode-aware `Send`/Chat delivery. Correlation IDs and delivery keys prevent
 duplicate effects after restart. The orchestrator observes the same timeline.
 
+Stage 12 typed-message realization retains schema-v1 messages up to 32 KiB, 256
+per source attempt and 10,000 per project. A message targets another task in the
+same project, including one without a worker yet; replies retain the thread and
+reverse the original task pair. Answers reference questions. Attached results
+must belong to the sending attempt. Source attribution uses the same transactional
+controller/context/configuration checks as result submission. Exact retries only
+acknowledge retained content. Messages do not modify planning or acceptance.
+
+Migration 0163 stores immutable messages separately from bounded native delivery
+attempts. The daemon reserves the current target attempt/session/controller before
+I/O and may send only on a newly created claim. A replay never authorizes another
+send. Only a proven `not_sent` outcome allows retry (at most four attempts); a
+`dispatching` record surviving restart or an `uncertain` outcome requires
+reconciliation. `handed_off` means transport acceptance, not agent acknowledgement.
+The existing TUI paste/Enter transport cannot prove recipient receipt; neither
+elapsed time nor daemon restart may be treated as evidence to repeat that write.
+Stable message delivery keys also feed the existing Chat idempotency boundary.
+
 ## Evaluation, management and evolution
 
 Evaluations reference exact criteria and target commits. Gather objective facts

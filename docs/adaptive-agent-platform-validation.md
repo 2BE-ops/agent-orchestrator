@@ -4,6 +4,39 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 12c1 — typed messages and durable delivery reservations (2026-09-19)
+
+Migration 0163 persists eight typed message kinds with immutable source task,
+attempt, controller, criteria, context and configuration attribution. Messages
+are bounded to 32 KiB, 256 per attempt and 10,000 per project; targets stay within
+the project and replies retain thread/task scope. Attached results remain claims
+owned by the source attempt. Source guards are shared with result submission.
+The project timeline supports sender/recipient filtering and stable pagination.
+
+The delivery journal reserves an exact target before native I/O, atomically with
+audit/trigger CDC. Replaying a reservation cannot authorize another send. Only a
+proven not_sent outcome permits retry, at most four times; dispatching/uncertain
+records remain excluded from automatic retries after restart. handed_off is only
+transport acceptance. Native send/reconciliation wiring is the next slice.
+
+One domain and eight store message tests PASS, including concurrent submissions
+and claims, malformed/foreign/thread/result references, immutable history, restart,
+bounded attempts/project history, cancellation/expiry/termination/native guards,
+audit failure rollback and no planning or lease changes. Existing result tests
+and populated migration/downgrade regression PASS (focused store 1.868s, SQLite
+0.957s). Full domain, SQLite (39.182s), store (21.875s), CDC, task/context suites and
+backend build PASS. Final affected full rerun PASS (store 15.069s); pinned lint
+across domain/ports/SQLite PASS, 0 issues. sqlc generation and diff checks PASS.
+Logs: ignored `*stage12c1*`. No native/provider or desktop validation is claimed.
+
+Tests caught mixed named/positional sqlc parameters in paging; all parameters in
+that query now use names and generated code was regenerated. A fixture referenced
+a nonexistent session-number field and tried to rewind the guarded heartbeat;
+fixtures now use normal session allocation and explicit expired database facts.
+Lint-required exported comments and a shadowed builtin name were corrected, then
+the full affected tests/lint rerun. Review bounded resolution reasons so the audit
+reason plus both IDs remains within the existing 2,000-byte vocabulary.
+
 ## Stage 12b — worker-result service, API and CLI (2026-09-19)
 
 The shared service derives author, attempt and activation from the current native

@@ -78,82 +78,11 @@ func (s *Store) SubmitTaskResult(ctx context.Context, input domain.TaskResultSub
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		attempt, err := q.GetTaskAttempt(ctx, input.AttemptID)
-		if err != nil {
-			return taskReadError(err)
-		}
-		lease, err := q.GetTaskLease(ctx, input.AttemptID)
-		if err != nil {
-			return taskReadError(err)
-		}
-		if lease.ReleasedAt.Valid {
-			return ports.ErrTaskLeaseFenced
-		}
-		dispatch, err := q.GetTaskWorkerDispatch(ctx, input.AttemptID)
-		if err != nil {
-			return taskReadError(err)
-		}
-		if dispatch.SessionID != string(input.SessionID) {
-			return ports.ErrTaskLeaseFenced
-		}
-		session, err := q.GetSession(ctx, input.SessionID)
-		if err != nil {
-			return taskReadError(err)
-		}
-		rec := rowToRecord(session)
-		if rec.Kind != domain.KindWorker || rec.IsTerminated || rec.ControllerOwner() != input.SourceOwner {
-			return ports.ErrTaskLeaseFenced
-		}
-		task, err := q.GetAdaptiveTask(ctx, attempt.TaskID)
-		if err != nil {
-			return taskReadError(err)
-		}
-		if string(rec.ProjectID) != task.ProjectID {
-			return ports.ErrTaskLeaseFenced
-		}
-		if _, err := q.GetActiveAgentSwitch(ctx, input.SessionID); err == nil {
-			return ports.ErrTaskLeaseFenced
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		transition, err := q.GetLatestSessionInterfaceTransition(ctx, input.SessionID)
-		if err == nil {
-			// DAEMON_RESTARTED is the existing reconciler's confirmed closed
-			// recovery record, not an outstanding unknown-controller fence.
-			if !transition.Phase.Terminal() || (transition.Phase == domain.SessionInterfaceTransitionRecovery && transition.ErrorCode != "DAEMON_RESTARTED") {
-				return ports.ErrTaskLeaseFenced
-			}
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		if _, err := q.PendingTaskAttemptExecution(ctx, input.AttemptID); err == nil {
-			return ports.ErrTaskLeaseFenced
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		if _, err := q.PendingWorkerNativeChange(ctx, string(input.SessionID)); err == nil {
-			return ports.ErrTaskLeaseFenced
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		contextRow, err := q.GetTaskContext(ctx, input.AttemptID)
-		if err != nil {
-			return taskReadError(err)
-		}
-		frozen, err := taskContextFromRow(contextRow)
+		facts, err := readTaskWorkerFacts(ctx, q, input.AttemptID, input.SessionID, input.SourceOwner, input.ExpectedActivation)
 		if err != nil {
 			return err
 		}
-		if frozen.SessionID != input.SessionID || frozen.Task.TaskID != attempt.TaskID || frozen.Task.Revision != attempt.TaskRevision || frozen.CriteriaVersion != attempt.CriteriaVersion {
-			return ports.ErrTaskConflict
-		}
-		configuration, activation, found, err := effectiveWorkerConfiguration(ctx, q, input.SessionID)
-		if err != nil {
-			return err
-		}
-		if !found || activation != input.ExpectedActivation || configuration.Effective.Harness != rec.Harness || configuration.Effective.SessionMode != domain.NormalizeSessionMode(rec.Mode) {
-			return ports.ErrTaskConflict
-		}
+		attempt, frozen, configuration, activation := facts.attempt, facts.context, facts.configuration, facts.activation
 		latest, err := q.LatestTaskResult(ctx, input.AttemptID)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err

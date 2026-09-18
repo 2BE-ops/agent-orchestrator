@@ -40,7 +40,7 @@ INSERT INTO sessions(id,project_id,num,activity_last_at,created_at,updated_at) V
 	if _, err := s.ReviseAcceptanceCriteria(ctx, "migration-task", criteria, mutation); err != nil {
 		t.Fatal(err)
 	}
-	upTo(t, db, 162)
+	upTo(t, db, 163)
 	mutation.ExpectedRevision = 2
 	_, lease, err := s.ReserveTask(ctx, domain.TaskReservation{ID: "upgrade-attempt", TaskID: "migration-task", LaunchIntentID: "upgrade-launch", HolderID: "scheduler", Mutation: mutation, Now: time.Now().UTC(), TTL: time.Minute})
 	if err != nil {
@@ -66,6 +66,13 @@ INSERT INTO sessions(id,project_id,num,activity_last_at,created_at,updated_at) V
 	}
 	if _, err := db.Exec(`INSERT INTO adaptive_task_results(id,attempt_id,task_id,number,session_id,native_generation,source_owner,task_revision,criteria_version,configuration_hash,configuration_sequence,context_hash,idempotency_key,definition,content_hash,created_at)
 VALUES('result','upgrade-attempt','migration-task',1,'task-upgrade-1','upgrade-native','{}',2,2,printf('%064d',0),0,printf('%064d',0),'migration-result','{}',printf('%064d',0),CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
+	// Populate message and delivery references before testing downgrade order.
+	if _, err := db.Exec(`INSERT INTO adaptive_task_messages(id,project_id,task_id,attempt_id,session_id,native_generation,source_owner,task_revision,criteria_version,configuration_hash,configuration_sequence,context_hash,target_task_id,correlation_id,idempotency_key,definition,content_hash,created_at)
+VALUES('message','task-upgrade','migration-task','upgrade-attempt','task-upgrade-1','upgrade-native','{}',2,2,printf('%064d',0),0,printf('%064d',0),'migration-task','thread','migration-message','{}',printf('%064d',0),CURRENT_TIMESTAMP);
+INSERT INTO adaptive_task_message_deliveries(id,message_id,number,target_attempt_id,session_id,owner,delivery_key,state,reason,created_at,updated_at)
+VALUES('delivery','message',1,'upgrade-attempt','task-upgrade-1','{}','delivery-key','uncertain','Migration fixture',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);`); err != nil {
 		t.Fatal(err)
 	}
 	var integrity string
