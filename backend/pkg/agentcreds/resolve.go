@@ -238,9 +238,6 @@ func claudeConfigDir(opts ResolveOptions) (string, error) {
 	if dir := opts.env("CLAUDE_CONFIG_DIR"); dir != "" {
 		return dir, nil
 	}
-	if dir := opts.env("XDG_CONFIG_HOME"); dir != "" && opts.goos() != "windows" {
-		return filepath.Join(dir, "claude"), nil
-	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("agentcreds: resolve home directory: %w", err)

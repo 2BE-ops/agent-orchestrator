@@ -81,6 +81,23 @@ func TestCredentialsFileIsSourceFive(t *testing.T) {
 	}
 }
 
+func TestClaudeConfigDirIgnoresXDGConfigHome(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := claudeConfigDir(ResolveOptions{
+		Env:  envFrom(map[string]string{"XDG_CONFIG_HOME": t.TempDir()}),
+		GOOS: "linux",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(home, ".claude"); got != want {
+		t.Fatalf("config dir = %q, want %q", got, want)
+	}
+}
+
 // Every env source must outrank the file, or AO validates the subscription
 // while the agent uses the env var.
 func TestEnvBeatsCredentialsFile(t *testing.T) {
