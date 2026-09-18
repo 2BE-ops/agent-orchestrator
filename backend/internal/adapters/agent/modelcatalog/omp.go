@@ -13,8 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	_ "modernc.org/sqlite" // register sqlite driver for OMP credential probes
+
+	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 )
 
 // discoverOMPCatalog lists models through `omp models --json` and keeps only
