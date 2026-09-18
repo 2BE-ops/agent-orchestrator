@@ -8,7 +8,7 @@ export function SetupList({ children, className }: { children: ReactNode; classN
 	return <div className={cn("flex w-full flex-col divide-y divide-border/60", className)}>{children}</div>;
 }
 
-export function SetupRow({ icon, label, description, trailing, disabled, selected, onClick, ariaLabel, variant = "row" }: {
+export function SetupRow({ icon, label, description, trailing, disabled, selected, onClick, variant = "row" }: {
 	icon: ReactNode;
 	label: string;
 	description?: string;
@@ -16,7 +16,6 @@ export function SetupRow({ icon, label, description, trailing, disabled, selecte
 	disabled?: boolean;
 	selected?: boolean;
 	onClick?: () => void;
-	ariaLabel?: string;
 	/** `row` sits in a shared list with dividers and no surface of its own;
 	 *  `card` is the standalone rounded surface the project step uses. */
 	variant?: "row" | "card";
@@ -25,7 +24,7 @@ export function SetupRow({ icon, label, description, trailing, disabled, selecte
 	return (
 		<button
 			type="button"
-			aria-label={ariaLabel ?? label}
+			aria-label={label}
 			aria-pressed={selected}
 			disabled={disabled}
 			onClick={onClick}
