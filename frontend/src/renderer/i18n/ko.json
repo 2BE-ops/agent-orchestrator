@@ -1599,7 +1599,6 @@
 	"files.editFileLabel": "Edit {{file}}",
 	"files.saveError": "Unable to save workspace file",
 	"files.preview": "미리보기",
-	"files.addFileFeedback": "파일 {{file}}에 피드백 추가",
 	"files.addLineFeedback": "{{file}}의 {{side}} 쪽 {{line}}행에 피드백 추가",
 	"files.oldSide": "이전",
 	"files.newSide": "새",

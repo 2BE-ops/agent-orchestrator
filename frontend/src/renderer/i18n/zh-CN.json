@@ -1611,7 +1611,6 @@
 	"files.editFileLabel": "Edit {{file}}",
 	"files.saveError": "Unable to save workspace file",
 	"files.preview": "预览",
-	"files.addFileFeedback": "为文件 {{file}} 添加反馈",
 	"files.addLineFeedback": "为 {{file}} 的{{side}}第 {{line}} 行添加反馈",
 	"files.oldSide": "旧侧",
 	"files.newSide": "新侧",
