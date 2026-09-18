@@ -11,11 +11,9 @@ import (
 type fakeIdentityResolver struct {
 	identity ports.SCMIdentity
 	err      error
-	calls    int
 }
 
 func (f *fakeIdentityResolver) AuthenticatedIdentityForProvider(context.Context, string, string) (ports.SCMIdentity, error) {
-	f.calls++
 	return f.identity, f.err
 }
 

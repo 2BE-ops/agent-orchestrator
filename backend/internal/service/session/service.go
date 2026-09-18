@@ -194,10 +194,8 @@ type Service struct {
 	signalCapable         func(domain.AgentHarness) bool
 	chatProviderPreserved func(domain.SessionID) bool
 	// githubIdentity optionally resolves the operator's authenticated GitHub
-	// account so the handle rides along with product telemetry. Nil (the common
-	// test path) disables it and the emitter degrades to anonymous. There is no
-	// dedicated opt-out: the handle is part of telemetry and stops when telemetry
-	// is turned off, which prevents the carrier event from being emitted at all.
+	// account so the handle rides along with product telemetry. Nil disables it
+	// and the emitter degrades to anonymous.
 	githubIdentity ports.ScopedIdentityResolver
 }
 
@@ -236,7 +234,7 @@ type Deps struct {
 	// ever downgraded to no_signal.
 	SignalCapable func(domain.AgentHarness) bool
 	// GithubIdentity resolves the operator's authenticated GitHub account so the
-	// handle rides along with product telemetry. Nil disables it.
+	// handle rides along with product telemetry.
 	GithubIdentity ports.ScopedIdentityResolver
 }
 
@@ -411,12 +409,10 @@ func (s *Service) emitSpawned(ctx context.Context, rec domain.SessionRecord, dur
 }
 
 // githubActor returns the operator's GitHub login when the authenticated
-// account resolves to a human. Every failure mode (resolver unset, no token,
-// GET /user failure, offline, org or bot account, empty login) degrades to
-// ("", false) so the event stays anonymous. There is no separate consent gate:
-// the handle is part of product telemetry, so turning telemetry off stops the
-// carrier event before it is ever emitted. The identity lookup is cached by the
-// SCM provider. Host is left empty because GitHub identity is not host-scoped.
+// account resolves to a human, and ("", false) for every failure mode (resolver
+// unset, no token, GET /user failure, offline, org or bot account, empty login)
+// so the event stays anonymous. Host is left empty because GitHub identity is
+// not host-scoped.
 func (s *Service) githubActor(ctx context.Context) (string, bool) {
 	if s.githubIdentity == nil {
 		return "", false

@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -224,6 +225,10 @@ type PostHogSink struct {
 	distinctID   string
 	defaultAgent string
 	tenure       *tenureTracker
+	// personProfileSet flips true the first time an event carries the operator's
+	// GitHub handle, so the identified person `$set` is sent once per process
+	// rather than on every spawn. See properties().
+	personProfileSet atomic.Bool
 	// appVersion stamps app_version/ao_version on every exported event. Empty
 	// leaves the properties off entirely rather than reporting a misleading
 	// "unknown" that would show up as a real version in release breakdowns.
@@ -407,13 +412,7 @@ func (s *PostHogSink) properties(ev ports.TelemetryEvent) map[string]any {
 		// so skip PostHog person-profile processing: identified events bill at
 		// several times the anonymous rate and the profiles would hold nothing.
 		"$process_person_profile": false,
-		// Location: let PostHog derive coarse geography (country, region, city)
-		// from the connection IP at ingestion, so aggregate "which areas hold the
-		// most installs" breakdowns by $geoip_country_name work. Set explicitly
-		// rather than relying on a library default so the behaviour is intentional
-		// and cannot silently flip. It stays anonymous: $process_person_profile
-		// above remains false unless a consented event sets it, and we never
-		// resolve or send precise coordinates ourselves.
+		// PostHog's default; pinned so coarse geo breakdowns can't silently flip off.
 		"$geoip_disable": false,
 	}
 	if remoteEventName(ev.Name) != ev.Name {
@@ -456,11 +455,12 @@ func (s *PostHogSink) properties(ev ports.TelemetryEvent) map[string]any {
 	for k, v := range sanitizeRemotePayload(ev.Name, ev.Payload) {
 		props[k] = v
 	}
-	// The operator's GitHub handle is the one product-telemetry property tied to a
-	// person. When the sanitized payload carries it, mirror it into a person `$set`
-	// and flip this single event to identified so a breakdown by github_actor
-	// becomes possible; every other event keeps the anonymous default above.
-	if actor, ok := props["github_actor"]; ok {
+	// Mirror the handle into a person property once per process; it is stable, so
+	// re-sending $set on every spawn would only multiply identified-event cost
+	// (see $process_person_profile above) against the 200 spawns/day the limiter
+	// allows. github_actor still rides every spawn as an event property, so
+	// activity breakdowns stay complete.
+	if actor, ok := props["github_actor"]; ok && s.personProfileSet.CompareAndSwap(false, true) {
 		props["$set"] = map[string]any{"github_actor": actor}
 		props["$process_person_profile"] = true
 	}

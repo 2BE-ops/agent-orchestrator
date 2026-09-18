@@ -344,6 +344,24 @@ func TestPropertiesDerivesPersonSetFromGithubActor(t *testing.T) {
 	if set["github_actor"] != "octocat" {
 		t.Fatalf("$set.github_actor = %#v, want octocat", set["github_actor"])
 	}
+
+	// The handle is stable, so a second spawn keeps the event property but does
+	// not resend the identified person $set: only the first event per process
+	// pays the identified rate.
+	next := sink.properties(ports.TelemetryEvent{
+		Name:    "ao.session.spawned",
+		Source:  "session_service",
+		Payload: map[string]any{"kind": "worker", "github_actor": "octocat"},
+	})
+	if next["github_actor"] != "octocat" {
+		t.Fatalf("second properties.github_actor = %#v, want octocat", next["github_actor"])
+	}
+	if _, ok := next["$set"]; ok {
+		t.Fatalf("second event set a person profile again: %#v", next["$set"])
+	}
+	if next["$process_person_profile"] != false {
+		t.Fatalf("second properties.$process_person_profile = %#v, want false", next["$process_person_profile"])
+	}
 }
 
 func TestSanitizeRemotePayloadDropsUnlistedReviewKeys(t *testing.T) {

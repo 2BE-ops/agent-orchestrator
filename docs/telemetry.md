@@ -25,15 +25,10 @@ AO sends structured events in a few broad categories:
   user's own GitHub username, so this particular value is not anonymous. We use
   it to understand which organizations and developers get the most value from
   AO, so we can prioritize improvements and reach out for feedback
-- The GitHub username of the account signed in to AO's GitHub integration. AO
-  resolves your authenticated GitHub login and sends it on session-start events,
-  both as an event property (`github_actor`) and as a PostHog person property, so
-  we can see which developers are most active and reach out for feedback. AO only
-  sends it when the signed-in account is a personal (human) account, never an
-  organization or bot token, and if no GitHub token is available it sends nothing.
-  This is part of product telemetry: it has no separate control, and turning
-  telemetry off (see below) stops it along with everything else. See "Sharing your
-  GitHub handle" below
+- The GitHub username of the account signed in to AO's GitHub integration, sent
+  on session-start events so we can see which developers are most active and reach
+  out for feedback. It is part of product telemetry with no separate control. See
+  "Sharing your GitHub handle" below for exactly what is sent and when
 - Reliability data, such as an error type and context, a crash message and
   stack trace after path redaction, an HTTP status, or an agent waiting for
   input
@@ -73,11 +68,11 @@ Product telemetry is designed not to include:
 - API keys, access tokens, passwords, or other credentials
 - Names or email addresses
 
-The two exceptions are the GitHub owner segment and, when the "Share your GitHub
-handle" setting is on, your authenticated GitHub username. Both are described
-under "What AO sends". The owner segment is limited to the owning organization or
-account and never includes the repository, path, or URL. Aside from these,
-product telemetry is designed not to carry account identities.
+The two exceptions are the GitHub owner segment and your authenticated GitHub
+username. Both are described under "What AO sends". The owner segment is limited
+to the owning organization or account and never includes the repository, path, or
+URL. Aside from these, product telemetry is designed not to carry account
+identities.
 
 The optional website waitlist is separate from product telemetry. If you submit
 an email address, company role, and social profile there, they are used to manage
@@ -99,9 +94,8 @@ that waitlist as described in the [privacy policy](https://orchestrator.inc/priv
 - Session recording is disabled in the desktop and mobile apps. AO does not
   automatically record screens, clicks, or touches.
 - Person profiles are off for every event except the session-start event that
-  carries your GitHub handle while the "Share your GitHub handle" setting is on.
-  That one event sets a person property so activity can be grouped by GitHub
-  username; with the setting off, no event creates or updates a person profile.
+  carries your GitHub handle. That one event sets a person property so activity
+  can be grouped by GitHub username; every other event stays anonymous.
 
 Separately from remote telemetry, the daemon can keep a local copy of
 operational events in AO's SQLite database. While local telemetry is active, AO
