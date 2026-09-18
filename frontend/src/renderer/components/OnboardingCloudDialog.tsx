@@ -59,7 +59,7 @@ export function OnboardingCloudDialog({ onClose, onCreated }: { onClose: () => v
 								</div>
 							</div>
 							<div className="flex shrink-0 justify-end gap-2 px-4 pb-4 pt-3">
-								<Button type="button" variant="primary" onClick={signIn}>
+								<Button type="button" variant="primary" onClick={() => signIn()}>
 									{t("shell.signInToAOCloud")}
 								</Button>
 							</div>
