@@ -40,7 +40,7 @@ INSERT INTO sessions(id,project_id,num,activity_last_at,created_at,updated_at) V
 	if _, err := s.ReviseAcceptanceCriteria(ctx, "migration-task", criteria, mutation); err != nil {
 		t.Fatal(err)
 	}
-	upTo(t, db, 164)
+	upTo(t, db, 166)
 	if err := s.SetTaskMessageDispatchCursor(ctx, 19); err != nil {
 		t.Fatal(err)
 	}
@@ -75,6 +75,10 @@ VALUES('result','upgrade-attempt','migration-task',1,'task-upgrade-1','upgrade-n
 		t.Fatal(err)
 	}
 	// Populate message and delivery references before testing downgrade order.
+	if _, err := db.Exec(`INSERT INTO adaptive_task_evaluations(id,project_id,task_id,attempt_id,result_id,number,task_revision,criteria_version,idempotency_key,request_hash,snapshot,content_hash,created_at)
+VALUES('evaluation','task-upgrade','migration-task','upgrade-attempt','result',1,2,2,'evaluation-key',printf('%064d',0),'{}',printf('%064d',0),CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Exec(`INSERT INTO adaptive_task_messages(id,project_id,task_id,attempt_id,session_id,native_generation,source_owner,task_revision,criteria_version,configuration_hash,configuration_sequence,context_hash,target_task_id,correlation_id,idempotency_key,definition,content_hash,created_at)
 VALUES('message','task-upgrade','migration-task','upgrade-attempt','task-upgrade-1','upgrade-native','{}',2,2,printf('%064d',0),0,printf('%064d',0),'migration-task','thread','migration-message','{}',printf('%064d',0),CURRENT_TIMESTAMP);
 INSERT INTO adaptive_task_message_deliveries(id,message_id,number,target_attempt_id,session_id,owner,delivery_key,state,reason,created_at,updated_at)

@@ -155,6 +155,22 @@ type AdaptiveTaskDispatch struct {
 	CreatedAt         time.Time
 }
 
+type AdaptiveTaskEvaluation struct {
+	ID              string
+	ProjectID       string
+	TaskID          string
+	AttemptID       string
+	ResultID        string
+	Number          int64
+	TaskRevision    int64
+	CriteriaVersion int64
+	IdempotencyKey  string
+	RequestHash     string
+	Snapshot        string
+	ContentHash     string
+	CreatedAt       time.Time
+}
+
 type AdaptiveTaskExecutionOperation struct {
 	ID          string
 	AttemptID   string
@@ -736,6 +752,7 @@ type PRCheck struct {
 	CreatedAt  time.Time
 	Conclusion string
 	Details    string
+	ObservedAt sql.NullTime
 }
 
 type PRComment struct {

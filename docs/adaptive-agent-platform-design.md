@@ -449,6 +449,24 @@ is reused, with added configuration attribution; a reviewer is not a duplicate
 implementation worker. Distinguish a review finding, crash, environment failure,
 planning mistake and human rejection in outcomes.
 
+Stage 13's initial collector snapshots independently observed CI facts under the
+same transaction as evaluation and audit. Migration 0165 preserves assessment,
+frozen criteria/result/context hashes and the exact historical worker activation;
+at most 64 assessments per attempt, with stable retry keys and expected versions.
+Only the latest result can receive a new assessment; exact historical retries
+remain acknowledgements. Outcomes do not themselves release native ownership.
+
+CI criteria pin exact required check names before dispatch. Passing requires
+success on the result commit/current PR head and complete snapshot membership.
+Existing PR storage retains old check rows, so migration 0166 records each check's
+observation timestamp and compares it with the parent CI snapshot timestamp.
+Checks missing from a newer snapshot and legacy rows without provenance cannot
+pass. These timestamps identify stored observations, not a claim of recent network
+refresh. Relevant check collection is capped at 128 with explicit truncation;
+incomplete collections cannot pass. New criterion fields use omitempty so prior
+criteria and context hashes remain stable. Remaining evidence kinds are initially
+inconclusive rather than accepted from a worker's claims.
+
 Manager selection first filters permitted, enabled, compatible types, then
 considers existing Skills before proposing evolution or new types. Persist
 candidates, rejection reasons, selected versions, policy preference, and rationale.

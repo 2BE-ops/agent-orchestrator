@@ -10763,6 +10763,10 @@ components:
       properties:
         artifactPath:
           type: string
+        checkNames:
+          items:
+            type: string
+          type: array
         command:
           items:
             type: string
@@ -10772,6 +10776,7 @@ components:
           - test
           - build
           - lint
+          - ci
           - review
           - artifact
           - manual

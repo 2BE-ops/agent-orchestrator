@@ -3283,9 +3283,10 @@ export interface components {
         };
         AcceptanceCriterion: {
             artifactPath?: string;
+            checkNames?: string[];
             command?: string[];
             /** @enum {string} */
-            evidenceKind: "test" | "build" | "lint" | "review" | "artifact" | "manual";
+            evidenceKind: "test" | "build" | "lint" | "ci" | "review" | "artifact" | "manual";
             id: string;
             requirement: string;
         };

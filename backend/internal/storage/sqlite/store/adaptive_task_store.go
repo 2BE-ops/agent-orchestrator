@@ -346,7 +346,11 @@ func (s *Store) GetAcceptanceCriteria(ctx context.Context, id string, number int
 	if err != nil {
 		return domain.AcceptanceCriteriaVersion{}, taskReadError(err)
 	}
-	result := domain.AcceptanceCriteriaVersion{TaskID: id, Number: row.Number, PreviousVersion: row.PreviousVersion.Int64, ContentHash: row.ContentHash, Reason: row.Reason, CreatedAt: row.CreatedAt}
+	return taskCriteriaFromRow(row)
+}
+
+func taskCriteriaFromRow(row gen.AdaptiveTaskCriterium) (domain.AcceptanceCriteriaVersion, error) {
+	result := domain.AcceptanceCriteriaVersion{TaskID: row.TaskID, Number: row.Number, PreviousVersion: row.PreviousVersion.Int64, ContentHash: row.ContentHash, Reason: row.Reason, CreatedAt: row.CreatedAt}
 	if err := json.Unmarshal([]byte(row.Definition), &result.Definition); err != nil {
 		return result, err
 	}

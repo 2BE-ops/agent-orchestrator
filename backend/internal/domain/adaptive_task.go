@@ -43,9 +43,10 @@ func (m TaskMutation) ValidatePlanning() error {
 type AcceptanceCriterion struct {
 	ID           string   `json:"id"`
 	Requirement  string   `json:"requirement"`
-	EvidenceKind string   `json:"evidenceKind" enum:"test,build,lint,review,artifact,manual"`
+	EvidenceKind string   `json:"evidenceKind" enum:"test,build,lint,ci,review,artifact,manual"`
 	Command      []string `json:"command,omitempty"`
 	ArtifactPath string   `json:"artifactPath,omitempty"`
+	CheckNames   []string `json:"checkNames,omitempty"`
 }
 
 // AcceptanceCriteria is versioned independently of task planning revisions.
@@ -65,7 +66,7 @@ func (c AcceptanceCriteria) Validate() error {
 		}
 		seen[item.ID] = true
 		switch item.EvidenceKind {
-		case "test", "build", "lint", "review", "artifact", "manual":
+		case "test", "build", "lint", "ci", "review", "artifact", "manual":
 		default:
 			return fmt.Errorf("unknown acceptance evidence kind")
 		}
@@ -82,6 +83,20 @@ func (c AcceptanceCriteria) Validate() error {
 		}
 		if item.EvidenceKind == "artifact" && strings.TrimSpace(item.ArtifactPath) == "" {
 			return fmt.Errorf("artifact verification requires a path")
+		}
+		if item.EvidenceKind == "ci" {
+			if len(item.CheckNames) < 1 || len(item.CheckNames) > 16 || len(item.Command) != 0 || item.ArtifactPath != "" {
+				return fmt.Errorf("CI verification requires 1 to 16 exact check names and no command or artifact path")
+			}
+			names := map[string]bool{}
+			for _, name := range item.CheckNames {
+				if !resultText(name, 300, true) || names[name] {
+					return fmt.Errorf("invalid or duplicate CI check name")
+				}
+				names[name] = true
+			}
+		} else if len(item.CheckNames) != 0 {
+			return fmt.Errorf("check names require CI evidence kind")
 		}
 	}
 	encoded, err := json.Marshal(c)

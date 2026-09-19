@@ -4,6 +4,44 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 13a — immutable CI evaluation evidence (2026-09-19)
+
+Migration 0165 retains at most 64 immutable assessments per attempt, with exact
+result/criteria/context and configuration-at-submission attribution. Collection
+accepts no caller verdict or evidence; it reads stored SCM facts and commits the
+assessment with audit/trigger CDC atomically. Expected versions and stable keys
+fence competing collections and preserve historical retry acknowledgements.
+Only the latest result may receive a new assessment. Evaluations never release
+leases, modify planning or execute worker-reported commands.
+
+Frozen criteria now support `ci` with 1–16 exact check names. Older definitions
+retain identical JSON/hashes. Passing requires every named check's success on the
+exact result commit and current PR head, with matching per-check/complete-snapshot
+observation provenance. Migration 0166 adds nullable per-check observation time;
+old rows remain unknown until actually observed. This prevents retained checks
+absent from a newer snapshot from satisfying criteria. Times describe the stored
+observation, not every provider refresh; no arbitrary age cutoff is claimed.
+Missing, pending, skipped, cancelled, stale-head or truncated evidence cannot pass.
+The bounded collector retains 128 relevant checks and their source URLs. Other
+criterion kinds remain inconclusive until their independent collectors are added.
+
+Two domain tests, six store tests and the new upgrade/downgrade test PASS, plus the
+populated task migration regression. Coverage includes legacy hashes, frozen
+criteria, no trust in worker claims, removed checks, complete evidence, exact
+configuration across TUI/Chat activation, concurrent collection, actor restrictions,
+audit rollback, immutable history, restart, pagination and collection/history caps.
+Focused domain 0.482s, SQLite 1.436s, store 0.874s. Final full domain/SQLite/store,
+SCM observer and HTTP/router/spec suites PASS (SQLite 34.366s, store 17.183s).
+Full task/context/session (60.329s), ports/CDC, CLI (19.436s), GitHub/GitLab adapters,
+frontend typecheck, backend build, sqlc/API generation and pinned affected-package
+lint PASS (0 issues). Logs: ignored `*stage13a*`.
+
+Initial checks found the missing migration-ledger additions and an import grouping;
+both were fixed before the final full rerun. One check command named a nonexistent
+router subpackage; the corrected full root HTTP suite passed. Service/API/CLI
+evaluation access, remaining evidence collectors, independent reviewer provenance,
+derived completion and performance aggregation are subsequent stage 13 slices.
+
 ## Stage 12e — native worker output instructions (2026-09-19)
 
 Reserved TUI and Chat launches now seal HTTP-only result/message argv, JSON request
