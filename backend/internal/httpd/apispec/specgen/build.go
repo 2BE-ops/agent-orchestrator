@@ -160,6 +160,27 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"DomainTaskEvaluationDefinition":                       "TaskEvaluationDefinition",
 	"DomainTaskEvaluationAttribution":                      "TaskEvaluationAttribution",
 	"ControllersTaskPerformanceWindow":                     "TaskPerformanceWindow",
+	"ControllersSetProjectGoalRequest":                     "SetProjectGoalRequest",
+	"ControllersProjectGoalResponse":                       "ProjectGoalResponse",
+	"ControllersProjectGoalVersionsResponse":               "ProjectGoalVersionsResponse",
+	"ControllersProjectGoalCompletionsResponse":            "ProjectGoalCompletionsResponse",
+	"ControllersProjectGoalCompletionResponse":             "ProjectGoalCompletionResponse",
+	"ControllersNativeOrchestratorGoalResponse":            "NativeOrchestratorGoalResponse",
+	"ControllersOrchestratorPlanRequest":                   "OrchestratorPlanRequest",
+	"ControllersOrchestratorPlanResponse":                  "OrchestratorPlanResponse",
+	"ControllersOrchestratorCompleteRequest":               "OrchestratorCompleteRequest",
+	"ControllersOrchestratorPlanReceiptsResponse":          "OrchestratorPlanReceiptsResponse",
+	"ControllersOrchestratorPlanReceiptResponse":           "OrchestratorPlanReceiptResponse",
+	"ControllersProjectFeedbackResponse":                   "ProjectFeedbackResponse",
+	"ControllersOrchestratorReceiptIDParam":                "OrchestratorReceiptIDParam",
+	"DomainProjectGoalVersion":                             "ProjectGoalVersion",
+	"DomainProjectGoalCompletion":                          "ProjectGoalCompletion",
+	"DomainProjectGoalEvidence":                            "ProjectGoalEvidence",
+	"DomainProjectGoalEvidenceTask":                        "ProjectGoalEvidenceTask",
+	"DomainOrchestratorPlanAction":                         "OrchestratorPlanAction",
+	"DomainOrchestratorPlanReceipt":                        "OrchestratorPlanReceipt",
+	"DomainOrchestratorPlanOutcome":                        "OrchestratorPlanOutcome",
+	"DomainProjectFeedbackItem":                            "ProjectFeedbackItem",
 	"ControllersAgentManagerConfigureRequest":              "AgentManagerConfigureRequest",
 	"ControllersAgentManagerConfigurationsResponse":        "AgentManagerConfigurationsResponse",
 	"ControllersAgentManagerAuditResponse":                 "AgentManagerAuditResponse",
@@ -753,6 +774,7 @@ func operations() []operation {
 	ops = append(ops, notificationOperations()...)
 	ops = append(ops, registryOperations()...)
 	ops = append(ops, adaptiveTaskOperations()...)
+	ops = append(ops, orchestratorGoalOperations()...)
 	ops = append(ops, agentManagerOperations()...)
 	ops = append(ops, projectKnowledgeOperations()...)
 	ops = append(ops, usageOperations()...)
@@ -1707,6 +1729,30 @@ func devOperations() []operation {
 			},
 		},
 	}
+}
+
+func orchestratorGoalOperations() []operation {
+	ops := make([]operation, 0, 10)
+	for _, endpoint := range []struct {
+		method, path, id, summary string
+		request, response         any
+		status                    int
+		params                    []any
+	}{
+		{http.MethodGet, "/projects/{id}/goal", "getProjectGoal", "Read the project's current high-level goal", nil, controllers.ProjectGoalResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodPost, "/projects/{id}/goal", "setProjectGoal", "Record a new user-authored goal version", controllers.SetProjectGoalRequest{}, controllers.ProjectGoalResponse{}, http.StatusCreated, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/goal/versions", "listProjectGoalVersions", "List immutable goal history", nil, controllers.ProjectGoalVersionsResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/goal/completions", "listProjectGoalCompletions", "List retained verified goal completions", nil, controllers.ProjectGoalCompletionsResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/orchestrator/goal", "getNativeOrchestratorGoal", "Read the current goal plus the live orchestrator generation", nil, controllers.NativeOrchestratorGoalResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodPost, "/projects/{id}/orchestrator/plan", "submitOrchestratorPlan", "Execute one sealed native planning action as the project's live orchestrator", controllers.OrchestratorPlanRequest{}, controllers.OrchestratorPlanResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodPost, "/projects/{id}/orchestrator/complete", "submitOrchestratorComplete", "Submit a native goal-completion assessment verified against durable task facts", controllers.OrchestratorCompleteRequest{}, controllers.ProjectGoalCompletionResponse{}, http.StatusCreated, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/orchestrator/feedback", "listProjectFeedback", "Read derived per-task loop facts without storing any status", nil, controllers.ProjectFeedbackResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/orchestrator/receipts", "listOrchestratorPlanReceipts", "List sealed native planning receipts", nil, controllers.OrchestratorPlanReceiptsResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/orchestrator/receipts/{receiptId}", "getOrchestratorPlanReceipt", "Inspect one sealed native planning receipt", nil, controllers.OrchestratorPlanReceiptResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.OrchestratorReceiptIDParam{}}},
+	} {
+		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "orchestrator", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
+	}
+	return ops
 }
 
 func agentManagerOperations() []operation {

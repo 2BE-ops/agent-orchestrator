@@ -24,6 +24,7 @@ func newOrchestratorCommand(ctx *commandContext) *cobra.Command {
 		Short: "Manage orchestrator sessions",
 	}
 	cmd.AddCommand(newOrchestratorListCommand(ctx))
+	addOrchestratorGoalCommands(cmd, ctx)
 	return cmd
 }
 

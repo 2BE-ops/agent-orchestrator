@@ -35,3 +35,10 @@ type OrchestratorPlanStore interface {
 	GetOrchestratorPlanReceipt(ctx context.Context, projectID domain.ProjectID, id string) (domain.OrchestratorPlanReceipt, error)
 	ListOrchestratorPlanReceipts(ctx context.Context, projectID domain.ProjectID, afterID string, limit int) ([]domain.OrchestratorPlanReceipt, error)
 }
+
+// ProjectFeedbackStore derives per-task loop facts at read time. Nothing is
+// stored: terminal outcomes, exhaustion and cancellation all come from the
+// durable rows the rest of the system already owns.
+type ProjectFeedbackStore interface {
+	ListProjectFeedback(ctx context.Context, projectID domain.ProjectID, afterTaskID string, limit int) ([]domain.ProjectFeedbackItem, error)
+}

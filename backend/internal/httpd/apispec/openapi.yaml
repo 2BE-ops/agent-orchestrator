@@ -4854,6 +4854,239 @@ paths:
       summary: Replace a project's per-project config
       tags:
       - projects
+  /api/v1/projects/{id}/goal:
+    get:
+      operationId: getProjectGoal
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectGoalResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Read the project's current high-level goal
+      tags:
+      - orchestrator
+    post:
+      operationId: setProjectGoal
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetProjectGoalRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectGoalResponse'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Record a new user-authored goal version
+      tags:
+      - orchestrator
+  /api/v1/projects/{id}/goal/completions:
+    get:
+      operationId: listProjectGoalCompletions
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectGoalCompletionsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: List retained verified goal completions
+      tags:
+      - orchestrator
+  /api/v1/projects/{id}/goal/versions:
+    get:
+      operationId: listProjectGoalVersions
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectGoalVersionsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: List immutable goal history
+      tags:
+      - orchestrator
   /api/v1/projects/{id}/knowledge:
     get:
       operationId: listProjectKnowledge
@@ -5012,6 +5245,368 @@ paths:
       summary: Record a project claim and its provenance
       tags:
       - knowledge
+  /api/v1/projects/{id}/orchestrator/complete:
+    post:
+      operationId: submitOrchestratorComplete
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrchestratorCompleteRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectGoalCompletionResponse'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Submit a native goal-completion assessment verified against durable
+        task facts
+      tags:
+      - orchestrator
+  /api/v1/projects/{id}/orchestrator/feedback:
+    get:
+      operationId: listProjectFeedback
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectFeedbackResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Read derived per-task loop facts without storing any status
+      tags:
+      - orchestrator
+  /api/v1/projects/{id}/orchestrator/goal:
+    get:
+      operationId: getNativeOrchestratorGoal
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NativeOrchestratorGoalResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Read the current goal plus the live orchestrator generation
+      tags:
+      - orchestrator
+  /api/v1/projects/{id}/orchestrator/plan:
+    post:
+      operationId: submitOrchestratorPlan
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrchestratorPlanRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestratorPlanResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Execute one sealed native planning action as the project's live orchestrator
+      tags:
+      - orchestrator
+  /api/v1/projects/{id}/orchestrator/receipts:
+    get:
+      operationId: listOrchestratorPlanReceipts
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestratorPlanReceiptsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: List sealed native planning receipts
+      tags:
+      - orchestrator
+  /api/v1/projects/{id}/orchestrator/receipts/{receiptId}:
+    get:
+      operationId: getOrchestratorPlanReceipt
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - description: The retained planning receipt id.
+        in: path
+        name: receiptId
+        required: true
+        schema:
+          description: The retained planning receipt id.
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestratorPlanReceiptResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect one sealed native planning receipt
+      tags:
+      - orchestrator
   /api/v1/projects/{id}/permissions:
     patch:
       operationId: setProjectPermissions
@@ -16974,6 +17569,29 @@ components:
       - createdAt
       - contentHash
       type: object
+    DomainProjectGoalBlocker:
+      properties:
+        reason:
+          type: string
+        revision:
+          format: int64
+          type: integer
+        state:
+          enum:
+          - pending
+          - working
+          - blocked
+          - failed
+          - cancelling
+          type: string
+        taskId:
+          type: string
+      required:
+      - taskId
+      - revision
+      - state
+      - reason
+      type: object
     DomainReviewerConfig:
       properties:
         agentConfig:
@@ -18093,6 +18711,19 @@ components:
       required:
       - muted
       type: object
+    NativeOrchestratorGoalResponse:
+      properties:
+        goal:
+          $ref: '#/components/schemas/ProjectGoalVersion'
+        sessionId:
+          type: string
+        sourceGeneration:
+          type: string
+      required:
+      - goal
+      - sourceGeneration
+      - sessionId
+      type: object
     NotificationEnvelope:
       properties:
         notification:
@@ -18189,6 +18820,132 @@ components:
           description: 'Windows shell selector: auto, git-bash, pwsh, powershell,
             cmd, or a custom executable path. Ignored on macOS and Linux.'
           type: string
+      type: object
+    OrchestratorCompleteRequest:
+      properties:
+        goalVersion:
+          format: int64
+          type: integer
+        reason:
+          type: string
+        sourceGeneration:
+          type: string
+        summary:
+          type: string
+      required:
+      - sourceGeneration
+      - goalVersion
+      - summary
+      - reason
+      type: object
+    OrchestratorPlanAction:
+      properties:
+        action:
+          enum:
+          - create_task
+          - revise_task
+          - freeze_criteria
+          type: string
+        criteria:
+          $ref: '#/components/schemas/AcceptanceCriteria'
+        definition:
+          $ref: '#/components/schemas/TaskDefinition'
+        expectedRevision:
+          format: int64
+          type: integer
+        reason:
+          type: string
+        taskId:
+          type: string
+      required:
+      - action
+      - expectedRevision
+      - reason
+      type: object
+    OrchestratorPlanOutcome:
+      properties:
+        action:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        criteriaVersion:
+          format: int64
+          type: integer
+        idempotencyKey:
+          type: string
+        projectId:
+          type: string
+        receiptId:
+          type: string
+        requestHash:
+          type: string
+        revision:
+          format: int64
+          type: integer
+        sessionId:
+          type: string
+        taskId:
+          type: string
+      required:
+      - receiptId
+      - projectId
+      - sessionId
+      - idempotencyKey
+      - action
+      - requestHash
+      - taskId
+      - revision
+      - criteriaVersion
+      - createdAt
+      type: object
+    OrchestratorPlanReceipt:
+      properties:
+        outcome:
+          $ref: '#/components/schemas/OrchestratorPlanOutcome'
+      required:
+      - outcome
+      type: object
+    OrchestratorPlanReceiptResponse:
+      properties:
+        receipt:
+          $ref: '#/components/schemas/OrchestratorPlanReceipt'
+      required:
+      - receipt
+      type: object
+    OrchestratorPlanReceiptsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/OrchestratorPlanReceipt'
+          type: array
+        nextAfterId:
+          type: string
+      required:
+      - items
+      type: object
+    OrchestratorPlanRequest:
+      properties:
+        action:
+          $ref: '#/components/schemas/OrchestratorPlanAction'
+        idempotencyKey:
+          type: string
+        sourceGeneration:
+          type: string
+      required:
+      - sourceGeneration
+      - idempotencyKey
+      - action
+      type: object
+    OrchestratorPlanResponse:
+      properties:
+        created:
+          type: boolean
+        receipt:
+          $ref: '#/components/schemas/OrchestratorPlanReceipt'
+      required:
+      - receipt
+      - created
       type: object
     OrchestratorResponse:
       properties:
@@ -18444,6 +19201,48 @@ components:
         worker:
           $ref: '#/components/schemas/RoleOverride'
       type: object
+    ProjectFeedbackItem:
+      properties:
+        evaluationId:
+          type: string
+        reason:
+          type: string
+        resultId:
+          type: string
+        revision:
+          format: int64
+          type: integer
+        state:
+          enum:
+          - pending
+          - working
+          - completed
+          - failed
+          - cancelling
+          - cancelled
+          type: string
+        taskId:
+          type: string
+        title:
+          type: string
+      required:
+      - taskId
+      - title
+      - revision
+      - state
+      - reason
+      type: object
+    ProjectFeedbackResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectFeedbackItem'
+          type: array
+        nextAfter:
+          type: string
+      required:
+      - items
+      type: object
     ProjectGetResponse:
       properties:
         project:
@@ -18456,6 +19255,150 @@ components:
       required:
       - status
       - project
+      type: object
+    ProjectGoalCompletion:
+      properties:
+        actor:
+          $ref: '#/components/schemas/AdaptiveActor'
+        createdAt:
+          format: date-time
+          type: string
+        evidence:
+          $ref: '#/components/schemas/ProjectGoalEvidence'
+        goalVersion:
+          format: int64
+          type: integer
+        id:
+          type: string
+        projectId:
+          type: string
+        reason:
+          type: string
+        summary:
+          type: string
+      required:
+      - id
+      - projectId
+      - goalVersion
+      - summary
+      - evidence
+      - actor
+      - reason
+      - createdAt
+      type: object
+    ProjectGoalCompletionResponse:
+      properties:
+        completion:
+          $ref: '#/components/schemas/ProjectGoalCompletion'
+        created:
+          type: boolean
+      required:
+      - completion
+      - created
+      type: object
+    ProjectGoalCompletionsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectGoalCompletion'
+          type: array
+        nextAfterId:
+          type: string
+      required:
+      - items
+      type: object
+    ProjectGoalEvidence:
+      properties:
+        blockers:
+          items:
+            $ref: '#/components/schemas/DomainProjectGoalBlocker'
+          type: array
+        goalHash:
+          type: string
+        goalVersion:
+          format: int64
+          type: integer
+        projectId:
+          type: string
+        verifiedTasks:
+          items:
+            $ref: '#/components/schemas/ProjectGoalEvidenceTask'
+          type: array
+      required:
+      - projectId
+      - goalVersion
+      - goalHash
+      - verifiedTasks
+      type: object
+    ProjectGoalEvidenceTask:
+      properties:
+        evaluationId:
+          type: string
+        factHash:
+          type: string
+        resultId:
+          type: string
+        revision:
+          format: int64
+          type: integer
+        state:
+          enum:
+          - completed
+          - cancelled
+          type: string
+        taskId:
+          type: string
+      required:
+      - taskId
+      - revision
+      - state
+      - factHash
+      type: object
+    ProjectGoalResponse:
+      properties:
+        goal:
+          $ref: '#/components/schemas/ProjectGoalVersion'
+      required:
+      - goal
+      type: object
+    ProjectGoalVersion:
+      properties:
+        actor:
+          $ref: '#/components/schemas/AdaptiveActor'
+        contentHash:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        goal:
+          type: string
+        number:
+          format: int64
+          type: integer
+        projectId:
+          type: string
+        reason:
+          type: string
+      required:
+      - projectId
+      - number
+      - goal
+      - actor
+      - reason
+      - contentHash
+      - createdAt
+      type: object
+    ProjectGoalVersionsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectGoalVersion'
+          type: array
+        nextAfter:
+          format: int64
+          type: integer
+      required:
+      - items
       type: object
     ProjectKnowledge:
       properties:
@@ -19938,6 +20881,18 @@ components:
           $ref: '#/components/schemas/ProjectConfig'
       required:
       - config
+      type: object
+    SetProjectGoalRequest:
+      properties:
+        goal:
+          description: The project's high-level goal wording.
+          type: string
+        reason:
+          description: Why this goal wording is recorded.
+          type: string
+      required:
+      - goal
+      - reason
       type: object
     SetProjectPermissionsInput:
       properties:

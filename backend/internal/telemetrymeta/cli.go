@@ -104,6 +104,16 @@ var legacyActorlessUserCLICommands = map[string]struct{}{
 	"ao agent-manager candidates":         {},
 	"ao agent-manager candidate":          {},
 
+	"ao orchestrator goal":          {},
+	"ao orchestrator set-goal":      {},
+	"ao orchestrator goal-versions": {},
+	"ao orchestrator completions":   {},
+	"ao orchestrator plan":          {},
+	"ao orchestrator complete":      {},
+	"ao orchestrator feedback":      {},
+	"ao orchestrator receipts":      {},
+	"ao orchestrator receipt":       {},
+
 	"ao task":                   {},
 	"ao task list":              {},
 	"ao task show":              {},

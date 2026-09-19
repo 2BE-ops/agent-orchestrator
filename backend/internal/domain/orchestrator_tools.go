@@ -19,7 +19,7 @@ type OrchestratorToolPaths struct {
 
 // Validate bounds literal argv/environment values without evaluating a shell.
 func (p OrchestratorToolPaths) Validate() error {
-	if p.SchemaVersion < 1 || p.SchemaVersion > 1 || strings.TrimSpace(p.Executable) == "" || !utf8.ValidString(p.Executable) || !utf8.ValidString(p.RunFile) || len(p.Executable) > 4096 || len(p.RunFile) > 4096 || strings.IndexFunc(p.Executable, unicode.IsControl) >= 0 || strings.IndexFunc(p.RunFile, unicode.IsControl) >= 0 {
+	if p.SchemaVersion != 1 || strings.TrimSpace(p.Executable) == "" || !utf8.ValidString(p.Executable) || !utf8.ValidString(p.RunFile) || len(p.Executable) > 4096 || len(p.RunFile) > 4096 || strings.IndexFunc(p.Executable, unicode.IsControl) >= 0 || strings.IndexFunc(p.RunFile, unicode.IsControl) >= 0 {
 		return fmt.Errorf("invalid orchestrator CLI routing paths")
 	}
 	return nil

@@ -57,6 +57,7 @@ import (
 	importsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/importer"
 	knowledgesvc "github.com/aoagents/agent-orchestrator/backend/internal/service/knowledge"
 	notificationsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/notification"
+	orchestratorsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/orchestrator"
 	prsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/pr"
 	projectsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/project"
 	registrysvc "github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
@@ -794,6 +795,7 @@ func Run() error {
 		Notifications:      notifier,
 		Registry:           registrySvc,
 		AdaptiveTasks:      tasksvc.New(store, tasksvc.WithArtifactCollector(taskverify.Artifacts{}), tasksvc.WithNativeReviews(registrySvc, reviewSvc)),
+		OrchestratorGoals:  orchestratorsvc.New(store),
 		AgentManagers:      managerSvc,
 		ProjectKnowledge:   knowledgesvc.New(store),
 		NotificationStream: notificationHub,

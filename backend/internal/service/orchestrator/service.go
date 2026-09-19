@@ -19,6 +19,7 @@ import (
 type Store interface {
 	ports.ProjectGoalStore
 	ports.OrchestratorPlanStore
+	ports.ProjectFeedbackStore
 	GetProject(context.Context, string) (domain.ProjectRecord, bool, error)
 	GetSession(context.Context, domain.SessionID) (domain.SessionRecord, bool, error)
 	ListSessions(context.Context, domain.ProjectID) ([]domain.SessionRecord, error)
@@ -172,6 +173,19 @@ func (m *Manager) Complete(ctx context.Context, project domain.ProjectID, input 
 	request := domain.ProjectGoalCompletionRequest{ID: uuid.NewString(), ProjectID: project, GoalVersion: input.GoalVersion, Summary: input.Summary, Actor: domain.AdaptiveActor{Kind: "ORCHESTRATOR", ID: string(rec.ID), SessionID: rec.ID}, Reason: input.Reason, Now: time.Now().UTC()}
 	completion, created, err := m.store.CompleteProjectGoal(ctx, request)
 	return completion, created, mapError(err)
+}
+
+// Feedback derives the project's per-task loop facts (limit 1-100). Terminal
+// outcomes, exhaustion and cancellation all come from durable rows.
+func (m *Manager) Feedback(ctx context.Context, project domain.ProjectID, afterTaskID string, limit int) ([]domain.ProjectFeedbackItem, error) {
+	if err := m.project(ctx, project); err != nil {
+		return nil, err
+	}
+	if limit < 1 || limit > 100 {
+		return nil, apierr.Invalid("INVALID_FEEDBACK_PAGE", "Feedback limit must be between 1 and 100", nil)
+	}
+	items, err := m.store.ListProjectFeedback(ctx, project, afterTaskID, limit)
+	return items, mapError(err)
 }
 
 // Receipts pages retained planning receipts (limit 1-100).

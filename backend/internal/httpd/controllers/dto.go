@@ -3110,3 +3110,83 @@ type MuteDeviceRequest struct {
 type InstallIDParam struct {
 	InstallID string `path:"installId" description:"The device's stable install id."`
 }
+
+// SetProjectGoalRequest is the body of POST /api/v1/projects/{id}/goal.
+type SetProjectGoalRequest struct {
+	Goal   string `json:"goal" description:"The project's high-level goal wording."`
+	Reason string `json:"reason" description:"Why this goal wording is recorded."`
+}
+
+// ProjectGoalResponse is the { goal } envelope for goal reads and writes.
+type ProjectGoalResponse struct {
+	Goal domain.ProjectGoalVersion `json:"goal"`
+}
+
+// ProjectGoalVersionsResponse pages immutable goal history.
+type ProjectGoalVersionsResponse struct {
+	Items     []domain.ProjectGoalVersion `json:"items"`
+	NextAfter int64                       `json:"nextAfter,omitempty"`
+}
+
+// ProjectGoalCompletionsResponse pages retained goal completions.
+type ProjectGoalCompletionsResponse struct {
+	Items       []domain.ProjectGoalCompletion `json:"items"`
+	NextAfterID string                         `json:"nextAfterId,omitempty"`
+}
+
+// ProjectGoalCompletionResponse returns one verified completion decision.
+type ProjectGoalCompletionResponse struct {
+	Completion domain.ProjectGoalCompletion `json:"completion"`
+	Created    bool                         `json:"created"`
+}
+
+// NativeOrchestratorGoalResponse is the live read an orchestrator session
+// starts each planning cycle from.
+type NativeOrchestratorGoalResponse struct {
+	Goal             domain.ProjectGoalVersion `json:"goal"`
+	SourceGeneration string                    `json:"sourceGeneration"`
+	SessionID        domain.SessionID          `json:"sessionId"`
+}
+
+// OrchestratorPlanRequest is the body of POST /api/v1/projects/{id}/orchestrator/plan.
+type OrchestratorPlanRequest struct {
+	SourceGeneration string                        `json:"sourceGeneration"`
+	IdempotencyKey   string                        `json:"idempotencyKey"`
+	Action           domain.OrchestratorPlanAction `json:"action"`
+}
+
+// OrchestratorPlanResponse returns one sealed planning receipt.
+type OrchestratorPlanResponse struct {
+	Receipt domain.OrchestratorPlanReceipt `json:"receipt"`
+	Created bool                           `json:"created"`
+}
+
+// OrchestratorCompleteRequest is the body of POST /api/v1/projects/{id}/orchestrator/complete.
+type OrchestratorCompleteRequest struct {
+	SourceGeneration string `json:"sourceGeneration"`
+	GoalVersion      int64  `json:"goalVersion"`
+	Summary          string `json:"summary"`
+	Reason           string `json:"reason"`
+}
+
+// OrchestratorPlanReceiptsResponse pages retained planning receipts.
+type OrchestratorPlanReceiptsResponse struct {
+	Items       []domain.OrchestratorPlanReceipt `json:"items"`
+	NextAfterID string                           `json:"nextAfterId,omitempty"`
+}
+
+// OrchestratorPlanReceiptResponse returns one retained planning receipt.
+type OrchestratorPlanReceiptResponse struct {
+	Receipt domain.OrchestratorPlanReceipt `json:"receipt"`
+}
+
+// ProjectFeedbackResponse pages derived per-task loop facts.
+type ProjectFeedbackResponse struct {
+	Items     []domain.ProjectFeedbackItem `json:"items"`
+	NextAfter string                       `json:"nextAfter,omitempty"`
+}
+
+// OrchestratorReceiptIDParam selects one sealed planning receipt.
+type OrchestratorReceiptIDParam struct {
+	ReceiptID string `path:"receiptId" description:"The retained planning receipt id."`
+}

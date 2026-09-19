@@ -182,6 +182,19 @@ type ProjectGoalCompletionRequest struct {
 	Now         time.Time
 }
 
+// ProjectFeedbackItem is one derived per-task fact for the orchestrator loop.
+// It is a read projection over durable rows: nothing here is stored, and the
+// same query after a restart returns the same answers.
+type ProjectFeedbackItem struct {
+	TaskID       string `json:"taskId"`
+	Title        string `json:"title"`
+	Revision     int64  `json:"revision"`
+	State        string `json:"state" enum:"pending,working,completed,failed,cancelling,cancelled"`
+	Reason       string `json:"reason"`
+	ResultID     string `json:"resultId,omitempty"`
+	EvaluationID string `json:"evaluationId,omitempty"`
+}
+
 // Validate bounds a completion submission before any fact verification runs.
 func (r ProjectGoalCompletionRequest) Validate() error {
 	if r.Now.IsZero() {
