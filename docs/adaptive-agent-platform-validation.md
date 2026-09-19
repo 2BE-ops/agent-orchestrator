@@ -4,6 +4,97 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 19 - Experiments, comparable cohorts and policy-controlled evolution (2026-09-19)
+
+Commits `51e0c68c6` (storage) and `b45b64e3e` (service/API/CLI) on
+`feature/adaptive-agent-platform`.
+
+### What was built
+
+- Migration `0181_evolution_experiments.sql`: `adaptive_experiments` and
+  `adaptive_recommendations`. Scope/echo insert triggers verify both pinned
+  versions exist for the same entry and kind and that the sealed snapshot
+  echoes its columns; scoped UPDATE triggers permit exactly one
+  running→concluded seal (with a conclusion outcome guard) and exactly one
+  pending→dismissed/adopted decision (matching the decision's disposition);
+  every other mutation and any delete aborts. Downgrade refuses with rows.
+- Domain (`domain/evolution.go`): `EvolutionExperiment` (pinned control and
+  candidate versions of one entry, hypothesis, minimum samples 1–1000),
+  `EvolutionConclusion` (outcome/promotion/reason/actor plus the sealed
+  evidence and verdict), `EvolutionEvidence` with per-cohort metrics,
+  `EvaluateEvolutionEvidence` gating promotion on both cohorts reaching the
+  minimum comparable attempts and zero confounded tasks, persisted
+  `EvolutionRecommendation`/`EvolutionDecision`, and the complete bounded
+  `DiffRegistryDefinitions` field diff (complete or refused at 64 fields).
+- Ports and SQLite store: cohort derivation reuses the stage-13 admission
+  reads (`ListTaskPerformanceAttempts` + `taskPerformanceAttempt`) inside one
+  locked transaction, paging to at most `EvolutionCohortLimit` (1000) attempts
+  and refusing wider windows with `ErrEvolutionCohortTooLarge`. Conclusions
+  recompute the evidence inside the write transaction — caller evidence is
+  never accepted — refuse `promote_candidate` with `ErrEvolutionNotEligible`
+  carrying the failed gates, and apply the entry's manager-versioning policy
+  (`version_permitted` for permitted managers and users, otherwise
+  `recommendation_required`).
+- Surfaces: `service/evolution` (minted identities, strict envelopes,
+  `EVOLUTION_NOT_ELIGIBLE` messages naming every failed gate), eleven HTTP
+  routes under `/projects/{id}/experiments` and `/recommendations` sharing the
+  strict page/window readers with the orchestrator surface, the thin
+  `ao evolution` CLI family (transport-tested), telemetry allowlist entries
+  including the parent path, the using-ao `evolution.md` command page, and
+  regenerated `openapi.yaml` + `frontend/src/api/schema.ts`.
+
+### Findings
+
+- Single-PK tables surface `SQLITE_CONSTRAINT_PRIMARYKEY` (1555), not the
+  secondary-index `SQLITE_CONSTRAINT_UNIQUE` (2067) the shared
+  `isSQLiteUnique` helper was written for (adaptive_tasks carries a separate
+  `UNIQUE(id,project_id)` index, which is why it never hit this). The
+  evolution store maps both codes via `isEvolutionDuplicate`.
+- The shared `taskReservation` test fixture pins admission to
+  2026-09-18T12:00Z, so evidence-window fixtures must cover that timestamp,
+  not the wall clock.
+- Confound seeding on one task requires releasing the first attempt's lease
+  (session terminated, owner proof supplied) before the other version can
+  reserve; attribution survives the release.
+- The strict page/window query readers were extracted and shared with the
+  orchestrator controller instead of duplicated; the two remaining
+  structurally parallel store list wrappers carry a justified `nolint:dupl`
+  matching the existing `agent_switching.go` precedent.
+- Telemetry classification requires the parent `ao evolution` command path in
+  `legacyActorlessUserCLICommands`, not only the leaf allowlist entries.
+
+### Test evidence (this machine, 2026-09-19)
+
+| Check | Result |
+| --- | --- |
+| `go test ./internal/domain/ -run "Evolution\|DiffRegistry" -count=1` | PASS |
+| `go test ./internal/storage/sqlite/ -count=1` (incl. `TestEvolutionMigrationSealsExperimentsAndRecommendations`, ledger 0181) | PASS |
+| `go test ./internal/storage/sqlite/store/ -count=1` (incl. 4 evolution store tests) | PASS |
+| `go test ./internal/service/evolution/ -count=1` | PASS |
+| `go test ./internal/httpd/... -count=1` | apispec/specgen/envelope/httpd PASS; controllers retain only the two documented Windows baselines (`TestBridgeStatusConcurrentSecurePairing` rename Access-denied, `TestProjectsAPI_Clone` INVALID_GIT_URL) |
+| `go test ./internal/httpd/controllers/ -run "Evolution\|Orchestrator\|AgentManagerRouting" -count=2` | PASS (stability re-run) |
+| `go test ./internal/cli/ -count=1` and `-run Evolution -count=2`; `./internal/service/evolution/`, `./internal/cli/ -count=2` | PASS |
+| `go test ./internal/telemetrymeta/ ./internal/skillassets/ -count=1` | PASS |
+| `go build ./...` | PASS |
+| `go vet` on all touched packages | PASS (only the documented `host_race_test.go syscall.Kill` baseline elsewhere) |
+| `npm run sqlc` after query edits | clean regeneration, no drift |
+| `npm run api` | contracts regenerated and committed together |
+| `npm run frontend:typecheck` | PASS |
+| golangci-lint v2.12.2 on domain/ports/sqlite/store/sqlite, service/evolution, controllers, apispec, cli, telemetrymeta, skillassets, daemon, httpd | 0 issues |
+| `go test -race` | NOT RUN (no supported C toolchain on this machine) |
+
+Known environment-dependent failures in `internal/service/agent`,
+`internal/service/importer` and `internal/service/project` are the documented
+stage-08 baselines (missing native binaries/credentials), unrelated to this
+change; every package touched by stage 19 passes.
+
+### Remaining for later stages
+
+Desktop experiment/recommendation surfaces (stage 22), native Manager
+`create_experiment`/`create_recommendation` tools over the same service (the
+manager-actor policy path is already enforced store-side; stage 25), live app
+demonstration (stage 25).
+
 ## Stage 18 - Manager/orchestrator outcome attribution (2026-09-19)
 
 Commits `6e88c21b4` (storage) and `dcb8ded5b` (service/API/CLI) on
