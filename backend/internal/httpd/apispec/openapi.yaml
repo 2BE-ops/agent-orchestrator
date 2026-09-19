@@ -4891,6 +4891,18 @@ paths:
         schema:
           description: Project identifier (registry key).
           type: string
+      - in: query
+        name: from
+        required: true
+        schema:
+          format: date-time
+          type: string
+      - in: query
+        name: to
+        required: true
+        schema:
+          format: date-time
+          type: string
       responses:
         "200":
           content:
@@ -5238,6 +5250,17 @@ paths:
         schema:
           description: Project identifier (registry key).
           type: string
+      - in: query
+        name: afterId
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
       responses:
         "200":
           content:
@@ -6011,6 +6034,17 @@ paths:
         schema:
           description: Project identifier (registry key).
           type: string
+      - in: query
+        name: afterId
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
       responses:
         "200":
           content:
@@ -6377,6 +6411,18 @@ paths:
         schema:
           description: Project identifier (registry key).
           type: string
+      - in: query
+        name: from
+        required: true
+        schema:
+          format: date-time
+          type: string
+      - in: query
+        name: to
+        required: true
+        schema:
+          format: date-time
+          type: string
       responses:
         "200":
           content:
@@ -6600,6 +6646,17 @@ paths:
         schema:
           description: Project identifier (registry key).
           type: string
+      - in: query
+        name: afterId
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
       responses:
         "200":
           content:

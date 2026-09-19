@@ -334,6 +334,13 @@ type OutcomeIDPageQuery struct {
 	Limit   int    `query:"limit" minimum:"1" maximum:"100" default:"20"`
 }
 
+// OutcomeWindowQuery bounds attribution summaries: routing and planning
+// aggregate one complete from/to window with neither bound defaulted.
+type OutcomeWindowQuery struct {
+	From time.Time `query:"from" required:"true"`
+	To   time.Time `query:"to" required:"true"`
+}
+
 // AdaptiveTaskCreateRequest contains authorable fields, never actor identity.
 type AdaptiveTaskCreateRequest tasksvc.CreateInput
 

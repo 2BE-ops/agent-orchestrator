@@ -4,6 +4,101 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 22 - Performance, knowledge, audit and control-center UI (2026-09-19)
+
+Desktop surfaces completing the adaptive read pattern (typed-client lib,
+TanStack Query, inline i18n defaults, loading/error/empty/disabled states,
+cursor or sequence paging on every list).
+
+### What was built
+
+- Contract repair completing the stage-21 Finding: `routing-summary` and
+  `planning-summary` validate one strict RFC3339 `from`/`to` window on the
+  wire but the generated spec declared no query container, and the
+  needs-human/experiments/recommendations lists validate `afterId`+`limit`
+  paging the spec also omitted. One new `OutcomeWindowQuery` DTO (required
+  date-time bounds) and the stage-21 `OutcomeIDPageQuery` registered across
+  those five specgen operations; `npm run api` regenerated openapi.yaml and
+  schema.ts together.
+- `adaptive-api.ts` extended with the windowed performance and summary reads
+  (trailing-30-day default helper), knowledge list/detail/versions plus
+  create/revise, control read/set, cancel-work, needs-human list/resolve,
+  manager and task audit pages, and experiment/recommendation pages.
+- `PerformanceMetricsView` at `/projects/{id}/performance`: adjustable
+  admission window (inverted windows refused with an explanation), cohort
+  summary retaining counts instead of percentages, the eight-dimension
+  grouping table with mixed/unseeded exclusion notes, routing decisions and
+  per-Type-version routing groups, planning receipts by action with planned
+  task fates, and cursor-paged attempt evidence carrying configuration
+  attribution, assessed outcomes and session-wide usage (null tokens render
+  as unknown, never zero).
+- `KnowledgeView` at `/projects/{id}/knowledge`: search/status filtering,
+  status/kind/version facts on every row, provenance inspection (actor,
+  reason, content hash, classification, tags, pinned), immutable version
+  history, revision through the optimistic version fence (expectedVersion =
+  the loaded pointer) and creation with recorded reasons; version conflicts
+  surface without losing the draft.
+- `AuditTimelineView` at `/projects/{id}/audit`: the project policy timeline
+  (Manager governance actions with author, reason and configuration version)
+  plus a task picker that loads any task's durable planning/ownership
+  history, both sequence-paged, with a link into the task graph.
+- `ControlCenterView` at `/projects/{id}/control`: effective control state
+  with provenance and active attempts, only the transitions the stored state
+  machine accepts offered (invalid targets disabled), confirmation before
+  stop and cancel-all, honest bulk-cancel reporting (cancelled counts,
+  retained live leases, per-session termination errors, kill-service
+  wiring), the open Needs Human queue with reason codes, detail, task links
+  and the resolve flow, and sealed experiments/recommendations with cohort
+  bounds and policy status (stage-19 desktop deferral).
+- Board navigation gained Performance/Knowledge/Audit/Control entries beside
+  the stage-21 graph and manager buttons (icon+label topbar buttons,
+  secondary priority, suppressed for standalone workspaces); routeTree
+  regenerated.
+
+### Findings
+
+- The summary/list endpoints' missing query containers were the last known
+  spec/handler drift in the adaptive read family; the handlers already
+  strictly validated everything the containers now declare.
+- `userEvent.type` cannot drive `datetime-local` inputs reliably (jsdom
+  key semantics); tests use `fireEvent.change` and derive expected ISO
+  bounds from the same local-time conversion the component performs.
+- The localization coverage gate caught bare "in /" and "out" JSX text in
+  the usage facts; routed through `t()` interpolation.
+- Knowledge revise keeps the loaded definition's classification, pinned
+  flag, sources and supersession pointer so edits cannot accidentally strip
+  provenance fields the form does not expose.
+
+### Test evidence
+
+- New suites: PerformanceMetricsView (6), KnowledgeView (7),
+  AuditTimelineView (5), ControlCenterView (10) — 28 tests PASS.
+- Adjacent suites PASS: ShellTopbar, SessionsBoard (48), TaskGraphView,
+  AgentManagerDashboard, i18n renderer-coverage, router, api-client (146
+  tests across the run).
+- `npm run typecheck` (frontend) PASS; backend `go build ./...`,
+  `go vet ./internal/httpd/...` PASS; `go test` over apispec, specgen,
+  cli, httpd trees PASS except the two recorded controllers Windows
+  baselines (`TestBridgeStatusConcurrentSecurePairing`,
+  `TestProjectsAPI_Clone`); pinned golangci-lint v2.12.2 on controllers +
+  apispec/specgen: 0 issues.
+- Full renderer suite (two runs): 25 files / 167 and 168 failing tests,
+  4792-4793 passing, 8 skipped across 337 files including the four new
+  suites. Every failing suite sits in the recorded baseline classes
+  (macOS packaging/signing/update, main-process Windows socket/file/
+  telemetry, landing deps, NewTaskDialog 12/12 proven pre-existing at
+  stage 21). The one renderer file outside those classes,
+  GlobalSettingsForm "renders the settings sections", failed in one run
+  and not the other (the two runs differ by exactly that one test), passes
+  44/44 in isolation, and imports nothing from this change - recorded as
+  full-suite load flake, not a regression. race NOT RUN (no GCC).
+
+### Remainder
+
+- Stage 23 failure/recovery integration; stage 24 full CI-equivalent runs;
+  stage 25 real Electron validation of these surfaces (including live
+  knowledge editing and control transitions against a running daemon).
+
 ## Stage 21 - Task graph and Agent Manager dashboard (2026-09-19)
 
 Desktop read surfaces over the durable adaptive APIs, following the

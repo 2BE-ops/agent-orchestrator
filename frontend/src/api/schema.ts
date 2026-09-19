@@ -14939,7 +14939,10 @@ export interface operations {
     };
     getAgentManagerRoutingSummary: {
         parameters: {
-            query?: never;
+            query: {
+                from: string;
+                to: string;
+            };
             header?: never;
             path: {
                 /** @description Project identifier (registry key). */
@@ -15390,7 +15393,10 @@ export interface operations {
     };
     listEvolutionExperiments: {
         parameters: {
-            query?: never;
+            query?: {
+                afterId?: string;
+                limit?: number;
+            };
             header?: never;
             path: {
                 /** @description Project identifier (registry key). */
@@ -16344,7 +16350,10 @@ export interface operations {
     };
     listProjectNeedsHuman: {
         parameters: {
-            query?: never;
+            query?: {
+                afterId?: string;
+                limit?: number;
+            };
             header?: never;
             path: {
                 /** @description Project identifier (registry key). */
@@ -16817,7 +16826,10 @@ export interface operations {
     };
     getOrchestratorPlanningSummary: {
         parameters: {
-            query?: never;
+            query: {
+                from: string;
+                to: string;
+            };
             header?: never;
             path: {
                 /** @description Project identifier (registry key). */
@@ -17104,7 +17116,10 @@ export interface operations {
     };
     listEvolutionRecommendations: {
         parameters: {
-            query?: never;
+            query?: {
+                afterId?: string;
+                limit?: number;
+            };
             header?: never;
             path: {
                 /** @description Project identifier (registry key). */
