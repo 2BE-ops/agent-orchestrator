@@ -4432,6 +4432,11 @@ func (m *Manager) buildSystemPrompt(ctx context.Context, kind domain.SessionKind
 	switch kind {
 	case domain.KindOrchestrator:
 		cfg.OrchestratorRules = project.Config.OrchestratorRules
+		if section, err := m.orchestratorProtocolSection(ctx, projectID); err != nil {
+			return "", err
+		} else if section != "" {
+			cfg.AdditionalSections = append(cfg.AdditionalSections, section)
+		}
 	case domain.KindAgentManager:
 		// The Manager's exact Type/Skills carry its configuration. Worker and
 		// orchestrator repository rules are separate roles, not inherited policy.
@@ -4471,6 +4476,36 @@ func (m *Manager) buildSystemPrompt(ctx context.Context, kind domain.SessionKind
 		cfg.AdditionalSections = append(cfg.AdditionalSections, pointer)
 	}
 	return buildSystemPromptText(cfg), nil
+}
+
+// projectGoalReader is the optional store capability behind the orchestrator
+// planning protocol. Stores without it keep the legacy orchestrator prompt.
+type projectGoalReader interface {
+	GetProjectGoal(ctx context.Context, projectID domain.ProjectID) (domain.ProjectGoalVersion, error)
+}
+
+// orchestratorProtocolSection renders the sealed planning protocol when the
+// project has a current goal. Like the rest of the system prompt it is
+// recomputed from current store state on restore, so the pinned goal version
+// follows the project rather than any one orchestrator generation.
+func (m *Manager) orchestratorProtocolSection(ctx context.Context, projectID domain.ProjectID) (string, error) {
+	goals, ok := m.store.(projectGoalReader)
+	if !ok || projectID == "" {
+		return "", nil
+	}
+	goal, err := goals.GetProjectGoal(ctx, projectID)
+	if errors.Is(err, ports.ErrGoalNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	executable, err := m.executable()
+	if err != nil {
+		return "", err
+	}
+	protocol := domain.OrchestratorProtocolContext{ProjectID: projectID, GoalVersion: goal.Number, GoalHash: goal.ContentHash, Tools: &domain.OrchestratorToolPaths{SchemaVersion: 1, Executable: executable, RunFile: m.runFilePath}}
+	return protocol.ToolPrompt()
 }
 
 // aoSkillPointer is appended to every agent system prompt. It points the agent
