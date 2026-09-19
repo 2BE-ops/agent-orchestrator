@@ -7,12 +7,14 @@ import { aoBridge } from "../../lib/bridge";
 import { appI18n } from "../../i18n";
 import { HarnessSettingsSection } from "./HarnessSettingsSection";
 
-const { terminalStateCallback } = vi.hoisted(() => ({
-	terminalStateCallback: { value: undefined as ((state: "exited") => void) | undefined },
+const { terminalFocusRequested, terminalStateCallback } = vi.hoisted(() => ({
+	terminalFocusRequested: { value: false },
+	terminalStateCallback: { value: undefined as ((state: "attached" | "exited" | "error") => void) | undefined },
 }));
 
 vi.mock("../TerminalPane", () => ({
-	TerminalPane: ({ onTerminalStateChange }: { onTerminalStateChange?: (state: "exited") => void }) => {
+	TerminalPane: ({ focusRequested, onTerminalStateChange }: { focusRequested?: boolean; onTerminalStateChange?: (state: "attached" | "exited" | "error") => void }) => {
+		terminalFocusRequested.value = focusRequested === true;
 		terminalStateCallback.value = onTerminalStateChange;
 		return <div data-testid="inline-terminal-body" />;
 	},
@@ -83,6 +85,7 @@ function renderSection() {
 describe("HarnessSettingsSection", () => {
 	beforeEach(async () => {
 		await appI18n.changeLanguage("en");
+		terminalFocusRequested.value = false;
 		terminalStateCallback.value = undefined;
 		window.ao!.clipboard.writeText = vi.fn().mockResolvedValue(undefined);
 		vi.spyOn(apiClient, "GET").mockImplementation(async (path) => {
@@ -226,6 +229,10 @@ describe("HarnessSettingsSection", () => {
 		await user.click(login);
 		await within(row).findByTestId("inline-terminal-body");
 		expect(terminalStateCallback.value).toBeDefined();
+		expect(terminalFocusRequested.value).toBe(false);
+
+		act(() => terminalStateCallback.value?.("attached"));
+		await waitFor(() => expect(terminalFocusRequested.value).toBe(true));
 
 		act(() => terminalStateCallback.value?.("exited"));
 		await waitFor(() => expect(probeCalls).toBe(1));
