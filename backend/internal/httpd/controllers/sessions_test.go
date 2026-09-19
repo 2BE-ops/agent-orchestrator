@@ -1453,6 +1453,18 @@ func TestSessionsAPI_SpawnRejectsUnknownExplicitMode(t *testing.T) {
 	}
 }
 
+func TestSessionsAPI_GenericSpawnCannotCreateAgentManager(t *testing.T) {
+	svc := newFakeSessionService()
+	srv := newSessionTestServer(t, svc)
+	for _, kind := range []string{"agent_manager", "unknown"} {
+		body, status, _ := doRequest(t, srv, http.MethodPost, "/api/v1/sessions", `{"projectId":"ao","kind":"`+kind+`","harness":"codex","prompt":"manage"}`)
+		assertErrorCode(t, body, status, http.StatusBadRequest, "SESSION_KIND_INVALID")
+		if len(svc.sessions) != 1 {
+			t.Fatalf("generic launch created reserved role: %#v", svc.sessions)
+		}
+	}
+}
+
 func TestSessionsAPI_SpawnsOMPChat(t *testing.T) {
 	svc := newFakeSessionService()
 	srv := newSessionTestServer(t, svc)

@@ -253,6 +253,9 @@ func NewWithDeps(d Deps) *Service {
 // Spawn creates a session and returns the API-facing read model plus
 // ephemeral prompt size measurements.
 func (s *Service) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Session, int, int, error) {
+	if cfg.Kind == domain.KindAgentManager {
+		return domain.Session{}, 0, 0, apierr.Invalid("AGENT_MANAGER_ADMISSION_REQUIRED", "Agent Manager sessions require adaptive manager admission", nil)
+	}
 	if cfg.ProjectID == "" && cfg.Kind != domain.KindWorker {
 		return domain.Session{}, 0, 0, apierr.Invalid("STANDALONE_WORKER_REQUIRED", "Standalone sessions must be workers", nil)
 	}

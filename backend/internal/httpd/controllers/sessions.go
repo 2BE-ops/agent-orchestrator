@@ -280,6 +280,10 @@ func (c *SessionsController) spawn(w http.ResponseWriter, r *http.Request) {
 	if in.Kind == "" {
 		in.Kind = domain.KindWorker
 	}
+	if in.Kind != domain.KindWorker && in.Kind != domain.KindOrchestrator {
+		envelope.WriteAPIError(w, r, http.StatusBadRequest, "validation", "SESSION_KIND_INVALID", "Generic session launch supports worker or orchestrator; Agent Managers require adaptive manager admission", nil)
+		return
+	}
 	attachments, attachErr := decodeSpawnAttachments(in.Attachments)
 	if attachErr != nil {
 		envelope.WriteAPIError(w, r, http.StatusBadRequest, "bad_request", attachErr.code, attachErr.message, nil)

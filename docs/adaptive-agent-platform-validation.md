@@ -4,6 +4,41 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 14a1 — distinct Agent Manager identity (2026-09-19)
+
+Migration 0168 transactionally widens the session-kind CHECK using the existing
+schema-edit approach, preserving parent-table foreign keys/CDC. The new
+`agent_manager` role requires a project, retains immutable role/project identity
+and permits at most one nonterminated manager per project. Manager Chat uses the
+existing session-scoped conversation model, separate from the orchestrator's
+project narrative. Generic API/service spawn denies manager admission. Dedicated
+durable policy/inbox/native admission follows; this is not a live manager claim.
+
+Tests cover upgrade/downgrade, retained legacy facts/CDC, schema integrity,
+atomic downgrade refusal with terminated manager history, eight racing seeds,
+separate project controllers, conversation isolation, reopen, retained old
+identity and rejection of resurrection over a replacement. Focused SQLite/store/
+session/HTTP PASS (2.061s/0.539s/0.097s/0.118s). Full domain (1.275s), ports
+(0.489s), SQLite (47.339s), store (29.570s), session service (60.147s), HTTP router
+(0.764s), API spec (0.336s), specgen (18.193s) and envelope (0.741s) PASS.
+
+Full HTTP controllers FAIL (20.700s) only at the recorded Windows pairing rename
+and file-URL clone tests. Full affected lint reports two unchanged G115 findings
+at `service/session/path_resolve_windows.go:38,42` (int to uint32 buffer length),
+outside this slice. They remain final platform-validation work, not passed lint.
+sqlc regeneration PASS with no generated changes. Logs: ignored
+`.cache/adaptive-tests/stage14a1-*`.
+Backend build and changed-code pinned lint (`--new-from-rev=b410f1200`, 0 issues)
+PASS. Complete staged diff and whitespace checks PASS.
+
+Periodic upstream fetch succeeded. Observed upstream main is now
+`1e4a394b20c470d281b2a7f6f63fd47c30af5019`; migrations still end at 0147, so
+0168 does not collide. Six commits since the prior observed `795286c4e` cover
+workspace diff inspection, mobile UX, landing asset size, chat/board styling and
+editor handoff. None changes session-kind/adaptive storage. These are not yet
+incorporated; final integration remains stage 26. Incorporated base stays
+`6d3ad8c7c`.
+
 ## Stage 13d2b — grouped metrics and performance API/CLI (2026-09-19)
 
 One consistent transaction summarizes up to 1000 admitted attempts by Type,

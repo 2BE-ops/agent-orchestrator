@@ -621,6 +621,20 @@ The orchestrator continues to own goal decomposition and calls structured task
 and delegation capabilities. Its instructions reference those capabilities, not
 provider-specific CLI invocation strings.
 
+Stage 14 chooses a distinct `agent_manager` session kind, one active controller
+per project. Its native Chat narrative uses the existing session-scoped
+conversation path, separate from the orchestrator's project-scoped narrative.
+Migration 0168 widens the exact session-kind constraint transactionally without
+rebuilding the heavily referenced sessions table (the established 0140 approach),
+retaining CDC and foreign keys. Manager kind/project identity is immutable;
+projectless managers and concurrent active manager seeds are rejected. Downgrade
+refuses retained manager history instead of relabeling it. The partial unique
+index is a final consistency guard, not evidence that an uncertain native owner
+has exited. Durable manager admission/reconciliation must precede replacement.
+Generic session API/service spawn cannot create this role. Stage 14's subsequent
+policy, inbox and native controller slices provide its dedicated admission path
+and restore behavior using existing session/conversation engines.
+
 Metrics retain denominators and time windows: attempted/completed, first-pass
 completion, revisions, CI failures, review findings, retries, duration and usage
 when measured. Attribute to all pinned Skills without claiming causality.
