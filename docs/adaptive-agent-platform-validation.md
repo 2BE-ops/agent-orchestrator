@@ -4,6 +4,118 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 20 - Dry-run, Needs Human and project controls (2026-09-19)
+
+Commits `f03ab00cd` (domain/storage/fencing) and `52ba632db`
+(service/API/CLI/contracts) on `feature/adaptive-agent-platform`.
+
+### What was built
+
+- Migration `0182_project_controls.sql`: `adaptive_project_controls` (one row
+  per project; absent means running) with a BEFORE UPDATE transition trigger
+  enforcing the state machine running to paused/draining/stopped,
+  paused to running/stopped, draining to running/paused/stopped,
+  stopped to running, plus project-scope/actor-shape guards and refused
+  deletes; and `adaptive_task_needs_human` with a sealed pending-snapshot
+  insert trigger (echoing id/taskId/projectId/reasonCode, requiring a real
+  createdAt and an empty resolution), a partial unique index holding one
+  pending row per task, a single pending-to-resolved transition trigger
+  (everything else unchanged), refused deletes and a retained-history Down
+  guard. Registered in the migration ledger; the round trip runs before any
+  rows.
+- Deterministic fencing inside the stage-16 transactions:
+  `admitSessionByKind` now takes the session record and refuses worker
+  creation for a fenced project (both `CreateSession` and
+  `CreateConfiguredSession`, hence all six launch callers), and
+  `ReserveTask`'s new-attempt path additionally requires an open control
+  state and no pending needs-human request on the task or any ancestor.
+  Idempotent dispatch replays bypass the fences, so queue recovery and
+  legitimate retries are never blocked. The fence surfaces as
+  `PROJECT_ADMISSIONS_FENCED` (429) next to the stage-16 scheduler envelopes.
+- Derived control state: `GetProjectControl` returns the stored control plus
+  `EffectiveState` and the live-attempt count; draining reports paused once
+  no unreleased lease remains - nothing is materialized at read time and the
+  fence stays exact across restarts (reopen test).
+- Needs Human: `RaiseTaskNeedsHuman`/`ResolveTaskNeedsHuman` with task-scope
+  identity minted from durable rows, one pending request per task, ancestor
+  lookup mirroring `CancelledTaskAncestor`, and the task read projection
+  (`service/task/state.go`) gaining the `needs-human` phase (with
+  `NeedsHumanTaskID`, and reconciliation preserved for retained leases) and
+  ancestor-blocked descendants naming the origin task.
+- Bulk cancel: one transaction enumerating project tasks bounded at 10000;
+  `pending` cancels unleased work and reports retained live leases, `all`
+  additionally marks leased work cancelling (already-cancelled work is not a
+  new control event). The daemon wires the control service with a terminator
+  adapter over the session kill service: cancel-all requests termination of
+  every live task-attempt worker session
+  (`ListProjectActiveAttemptSessions`) and reports each request, including
+  failures, without claiming anything stopped.
+- Dry-run: `DryRunPlan` simulates the exact sealed orchestrator plan actions
+  in one read-only snapshot transaction (new `readTx` over the read pool):
+  sequential per-action revision fences (a clean revise advances the
+  overlay), whole-plan graph validation through `validateTaskGraphMaps`
+  extracted from and shared with the write path, requested-worker resolution
+  against the immutable registry (version zero resolves to and reports the
+  active pin; an unresolvable worker blocks its action's applicability),
+  scheduler headroom, control state and `WouldAdmitDispatch`, and the cost
+  estimate fixed to `unknown`. A dedicated test proves zero mutations across
+  tasks/revisions/criteria/intents/audit/registry entries and
+  versions/sessions/attempts/leases/CDC sequence/needs-human rows.
+- Surfaces: `service/control` (minted request identity, typed envelopes),
+  seven HTTP routes (GET/POST `/projects/{id}/control`, POST
+  `/projects/{id}/control/cancel-work`, GET `/projects/{id}/needs-human`,
+  POST `/projects/{id}/dry-run`, POST `/tasks/{taskId}/needs-human` and its
+  `/resolve`) sharing the strict page reader, thin CLI
+  (`ao project control/pause/resume/drain/stop/cancel/needs-human/dry-run`,
+  `ao task needs-human/resolve-human`), telemetry allowlist entries, the
+  using-ao `project-control.md` page, and regenerated OpenAPI/TS.
+
+### Findings
+
+- `json.Marshal` of a `[]byte` body base64-encodes it; CLI request payloads
+  must be `json.RawMessage` (the evolution CLI already did this - the new
+  control commands initially sent base64 strings and the transport test
+  caught it).
+- The task migration walk test seeds reservations at migration 167; the
+  reservation path now carries the control/needs-human fences, so its
+  fixture seeding runs at the fully migrated schema (182) while the
+  downgrade assertions are unchanged. Manager assessment paths
+  (`EnqueueAgentManagerRequest`) intentionally do not fence on needs-human:
+  assessment is not admission; only reservation and launch are fenced, which
+  is also why the fence lives in `ReserveTask`'s new-attempt path rather
+  than inside the shared `requireTaskRunIntent` helper.
+- The dry-run overlay cannot name synthetic created tasks in dependencies or
+  parents (task identity is minted by AO and `TaskDefinition.Validate`
+  rejects control characters), so a within-plan cycle is only expressible
+  through mutual rewrites of existing tasks - the overlay test uses exactly
+  that, matching what sequential execution would refuse.
+- `ListAdaptiveTaskIDs` pages of 100 drive the bulk-cancel enumeration; the
+  10000 bound is re-checked per full page so a wider project refuses
+  instead of partially cancelling.
+
+### Test evidence
+
+| Suite | Result |
+| --- | --- |
+| `go test ./internal/domain/` | PASS (control state machine, needs human validation, cancellation, dry-run request bounds) |
+| `go test ./internal/storage/sqlite/` | PASS (0182 migration round trip before rows, ledger, scope/echo/transition/refusal triggers, re-raise after resolve, downgrade refusal; the adaptive-task migration walk now seeds at 182) |
+| `go test ./internal/storage/sqlite/store/` | PASS (control lifecycle fencing incl. unrelated project/standalone/controller exemption, reservation fence with idempotent replay, 8-way pause-vs-launch race under the single-writer lock, drain derivation through lease release, stop/resume, restart fence, needs-human task/descendant/sibling independence, raise/resolve/list/keyset, cancel pending vs all with foreign-project isolation, dry-run verdicts/blockers/cyclic overlay/control facts, zero-mutation proof, `-count=2` re-run PASS) |
+| `go test ./internal/service/control/` | PASS (envelope mapping, needs-human lifecycle through the service, cancel-all with a failing fake terminator reported honestly, unwired kill service reported; `-count=2` PASS) |
+| `go test ./internal/service/task/` | PASS (existing projection tests plus needs-human phase for task and descendant with resolve unblocking; `-count=2` PASS) |
+| `go test ./internal/cli/ ./internal/telemetrymeta/ ./internal/skillassets/` | PASS (control CLI transport test with exact envelopes/queries/exit-2 usage matrix, command-path classification, catalog) |
+| `go test ./internal/httpd/ ./internal/httpd/apispec/...` | PASS |
+| `go test ./internal/httpd/controllers/` | PASS except the two recorded Windows baselines (`TestBridgeStatusConcurrentSecurePairing` rename Access-denied, `TestProjectsAPI_Clone` INVALID_GIT_URL) - control/needs-human/dry-run API tests all PASS |
+| `go test ./internal/session_manager/` | PASS except its eight recorded Windows baselines (handoff/spawn/PATH profile); the new `PROJECT_ADMISSIONS_FENCED` mapping sits in the existing typed-refusal switch |
+| `go test ./internal/daemon/` | PASS except its one recorded Windows baseline (`TestStabilizeWorkingDirectoryChdirsToDataDir` TempDir cleanup ordering) |
+| `go build ./...`, `go vet` (touched packages), `gofmt` | PASS |
+| golangci-lint v2.12.2 (all touched packages) | 0 issues (the pre-existing `service/agent` Windows staticcheck/gosec findings are outside this change and remain documented stage-08 baselines) |
+| `npm run sqlc`, `npm run api`, `npm run frontend:typecheck` | clean |
+| `go test -race` | NOT RUN (no C compiler on this Windows account; unchanged) |
+
+Remainder for this milestone: desktop Control Center surfaces (stage 22),
+native orchestrator/manager dry-run tool integration and live application
+demonstration (stage 25).
+
 ## Stage 19 - Experiments, comparable cohorts and policy-controlled evolution (2026-09-19)
 
 Commits `51e0c68c6` (storage) and `b45b64e3e` (service/API/CLI) on
