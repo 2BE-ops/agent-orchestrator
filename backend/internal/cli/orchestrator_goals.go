@@ -19,19 +19,21 @@ func addOrchestratorGoalCommands(root *cobra.Command, ctx *commandContext) {
 	for _, spec := range []struct {
 		use, description, cursor string
 		args                     int
-		file, page               bool
+		file, page, window       bool
 	}{
-		{"goal <project>", "Read the current goal and the live orchestrator generation", "", 1, false, false},
-		{"set-goal <project>", "Record a user-authored goal version from JSON", "", 1, true, false},
-		{"goal-versions <project>", "List immutable goal history", "after", 1, false, true},
-		{"completions <project>", "List retained verified goal completions", "afterId", 1, false, true},
-		{"plan <project>", "Submit one native planning action from JSON", "", 1, true, false},
-		{"complete <project>", "Submit a native goal-completion assessment from JSON", "", 1, true, false},
-		{"feedback <project>", "Read derived per-task loop facts", "after", 1, false, true},
-		{"receipts <project>", "List sealed native planning receipts", "afterId", 1, false, true},
-		{"receipt <project> <receipt>", "Inspect one sealed planning receipt", "", 2, false, false},
+		{"goal <project>", "Read the current goal and the live orchestrator generation", "", 1, false, false, false},
+		{"set-goal <project>", "Record a user-authored goal version from JSON", "", 1, true, false, false},
+		{"goal-versions <project>", "List immutable goal history", "after", 1, false, true, false},
+		{"completions <project>", "List retained verified goal completions", "afterId", 1, false, true, false},
+		{"plan <project>", "Submit one native planning action from JSON", "", 1, true, false, false},
+		{"complete <project>", "Submit a native goal-completion assessment from JSON", "", 1, true, false, false},
+		{"feedback <project>", "Read derived per-task loop facts", "after", 1, false, true, false},
+		{"receipts <project>", "List sealed native planning receipts", "afterId", 1, false, true, false},
+		{"receipt <project> <receipt>", "Inspect one sealed planning receipt", "", 2, false, false, false},
+		{"planning-outcomes <project>", "Read planning receipts coupled with the fate of their tasks", "afterId", 1, false, true, false},
+		{"planning-summary <project>", "Aggregate one complete planning cohort", "", 1, false, false, true},
 	} {
-		var file, afterID string
+		var file, afterID, windowFrom, windowTo string
 		var limit int
 		command := &cobra.Command{Use: spec.use, Short: spec.description, Args: usageArgs(cobra.ExactArgs(spec.args)), RunE: func(cmd *cobra.Command, args []string) error {
 			for _, arg := range append(append([]string{}, args...), afterID) {
@@ -58,6 +60,13 @@ func addOrchestratorGoalCommands(root *cobra.Command, ctx *commandContext) {
 				path += "/orchestrator/" + strings.Split(spec.use, " ")[0]
 			}
 			query := url.Values{}
+			if spec.window {
+				window, err := attributionWindowValues(windowFrom, windowTo)
+				if err != nil {
+					return err
+				}
+				query = window
+			}
 			if spec.page {
 				if limit < 1 || limit > 100 || strings.TrimSpace(afterID) == "" && afterID != "" {
 					return usageError{errors.New("limit must be 1 to 100 and after must be a nonempty ID when supplied")}
@@ -100,6 +109,10 @@ func addOrchestratorGoalCommands(root *cobra.Command, ctx *commandContext) {
 		if spec.page {
 			command.Flags().IntVar(&limit, "limit", 20, "Maximum entries (1–100)")
 			command.Flags().StringVar(&afterID, "after", "", "Continue after the last returned entry")
+		}
+		if spec.window {
+			command.Flags().StringVar(&windowFrom, "from", "", "Window start as RFC3339 (required)")
+			command.Flags().StringVar(&windowTo, "to", "", "Window end as RFC3339 (required)")
 		}
 		root.AddCommand(command)
 	}

@@ -77,6 +77,7 @@ func newAgentManagerCommand(ctx *commandContext) *cobra.Command {
 	}}
 	configure.Flags().StringVar(&file, "file", "", "API request JSON file, or - for stdin (required)")
 	root.AddCommand(configure)
+	addAgentManagerAttributionCommands(root, ctx)
 	addAgentManagerInboxCommands(root, ctx)
 	addAgentManagerProposalCommands(root, ctx)
 	addAgentManagerRegistryCommands(root, ctx)

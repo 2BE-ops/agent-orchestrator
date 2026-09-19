@@ -63,6 +63,7 @@ func (t *TaskOutcomeTotals) add(state string) error {
 // read-time fate of the task it routed. State, attempts and evidence identity
 // are derived from durable facts on every read; nothing is stored.
 type ManagerRoutingOutcome struct {
+	Sequence     int64                `json:"sequence"`
 	DecisionID   string               `json:"decisionId"`
 	RequestID    string               `json:"requestId"`
 	TaskID       string               `json:"taskId"`

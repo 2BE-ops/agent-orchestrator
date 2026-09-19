@@ -20,6 +20,7 @@ type Store interface {
 	ports.ProjectGoalStore
 	ports.OrchestratorPlanStore
 	ports.ProjectFeedbackStore
+	ports.OrchestratorPlanningOutcomeStore
 	GetProject(context.Context, string) (domain.ProjectRecord, bool, error)
 	GetSession(context.Context, domain.SessionID) (domain.SessionRecord, bool, error)
 	ListSessions(context.Context, domain.ProjectID) ([]domain.SessionRecord, error)

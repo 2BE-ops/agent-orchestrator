@@ -3186,6 +3186,30 @@ type ProjectFeedbackResponse struct {
 	NextAfter string                       `json:"nextAfter,omitempty"`
 }
 
+// ManagerRoutingOutcomesResponse pages routing decisions coupled with the
+// read-time fate of each routed task.
+type ManagerRoutingOutcomesResponse struct {
+	Items     []domain.ManagerRoutingOutcome `json:"items"`
+	NextAfter int64                          `json:"nextAfter,omitempty"`
+}
+
+// ManagerRoutingSummaryResponse aggregates one complete routing cohort.
+type ManagerRoutingSummaryResponse struct {
+	Summary domain.ManagerRoutingSummary `json:"summary"`
+}
+
+// OrchestratorPlanningOutcomesResponse pages planning receipts coupled with the
+// read-time fate of their tasks.
+type OrchestratorPlanningOutcomesResponse struct {
+	Items       []domain.OrchestratorPlanningOutcome `json:"items"`
+	NextAfterID string                               `json:"nextAfterId,omitempty"`
+}
+
+// OrchestratorPlanningSummaryResponse aggregates one complete planning cohort.
+type OrchestratorPlanningSummaryResponse struct {
+	Summary domain.OrchestratorPlanningSummary `json:"summary"`
+}
+
 // OrchestratorReceiptIDParam selects one sealed planning receipt.
 type OrchestratorReceiptIDParam struct {
 	ReceiptID string `path:"receiptId" description:"The retained planning receipt id."`

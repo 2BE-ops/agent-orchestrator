@@ -135,3 +135,14 @@ answers from durable rows.
 
 Page or inspect sealed native planning receipts with `--after`/`--limit`
 (1–100). Receipts survive restart and are immutable.
+
+### ao orchestrator planning-outcomes / planning-summary
+
+`planning-outcomes` pages sealed planning receipts, each coupled with the
+derived fate of its task (`pending`, `working`, `completed`, `failed`,
+`cancelling`, `cancelled`), with `--after`/`--limit` (1–100).
+`planning-summary --from --to` (RFC3339, at most a 366-day window) aggregates
+one complete cohort: receipts by action (create/revise/freeze), created-task
+states and attempts across planned tasks. Windows beyond 1000 receipts are
+refused rather than partially summed. These are planning metrics — the plan
+author's outcomes — distinct from worker performance.

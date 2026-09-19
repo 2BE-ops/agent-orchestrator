@@ -114,6 +114,7 @@ func managerRoutingOutcome(ctx context.Context, q *gen.Queries, projectID domain
 		}
 	}
 	outcome := domain.ManagerRoutingOutcome{
+		Sequence:     row.Sequence,
 		DecisionID:   chosen.ProposalID,
 		RequestID:    requestID,
 		TaskID:       row.TaskID,

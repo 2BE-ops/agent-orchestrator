@@ -1514,6 +1514,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/agent-manager/routing-outcomes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read routing decisions coupled with the derived fate of their routed tasks */
+        get: operations["listAgentManagerRoutingOutcomes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/agent-manager/routing-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Aggregate one complete bounded routing-decision cohort */
+        get: operations["getAgentManagerRoutingSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/config": {
         parameters: {
             query?: never;
@@ -1663,6 +1697,40 @@ export interface paths {
         put?: never;
         /** Execute one sealed native planning action as the project's live orchestrator */
         post: operations["submitOrchestratorPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/orchestrator/planning-outcomes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read planning receipts coupled with the derived fate of their tasks */
+        get: operations["listOrchestratorPlanningOutcomes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/orchestrator/planning-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Aggregate one complete bounded planning cohort */
+        get: operations["getOrchestratorPlanningSummary"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5361,6 +5429,107 @@ export interface components {
             target: components["schemas"]["WorkerDefinitionRef"];
             workerConfigurationHash: string;
         };
+        DomainManagerRoutingOutcome: {
+            agentType?: components["schemas"]["WorkerDefinitionRef"];
+            /** Format: int64 */
+            attempts: number;
+            /** Format: date-time */
+            decidedAt: string;
+            decisionId: string;
+            evaluationId?: string;
+            /** @enum {string} */
+            optimization: "quality" | "balanced" | "speed" | "usage";
+            /** @enum {string} */
+            outcome: "accepted" | "rejected";
+            reason: string;
+            requestId: string;
+            resultId?: string;
+            /** Format: int64 */
+            revision: number;
+            /** Format: int64 */
+            sequence: number;
+            /** @enum {string} */
+            state: "pending" | "working" | "completed" | "failed" | "cancelling" | "cancelled";
+            taskId: string;
+            taskTitle: string;
+        };
+        DomainManagerRoutingSummary: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            observedAt: string;
+            /** Format: date-time */
+            to: string;
+            totals: components["schemas"]["DomainManagerRoutingTotals"];
+            types: components["schemas"]["DomainManagerRoutingTypeGroup"][];
+        };
+        DomainManagerRoutingTotals: {
+            /** Format: int64 */
+            accepted: number;
+            /** Format: int64 */
+            decisions: number;
+            /** Format: int64 */
+            rejected: number;
+            /** Format: int64 */
+            routedTaskAttempts: number;
+            routedTaskStates: components["schemas"]["DomainTaskOutcomeTotals"];
+        };
+        DomainManagerRoutingTypeGroup: {
+            agentTypeId: string;
+            /** Format: int64 */
+            cancelled: number;
+            /** Format: int64 */
+            completed: number;
+            /** Format: int64 */
+            failed: number;
+            name: string;
+            /** Format: int64 */
+            open: number;
+            /** Format: int64 */
+            routed: number;
+            /** Format: int64 */
+            version: number;
+        };
+        DomainOrchestratorPlanningOutcome: {
+            /** @enum {string} */
+            action: "create_task" | "revise_task" | "freeze_criteria";
+            /** Format: int64 */
+            attempts: number;
+            /** Format: date-time */
+            createdAt: string;
+            evaluationId?: string;
+            reason: string;
+            receiptId: string;
+            resultId?: string;
+            /** Format: int64 */
+            revision: number;
+            /** @enum {string} */
+            state: "pending" | "working" | "completed" | "failed" | "cancelling" | "cancelled";
+            taskId: string;
+            taskTitle: string;
+        };
+        DomainOrchestratorPlanningSummary: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            observedAt: string;
+            /** Format: date-time */
+            to: string;
+            totals: components["schemas"]["DomainOrchestratorPlanningTotals"];
+        };
+        DomainOrchestratorPlanningTotals: {
+            /** Format: int64 */
+            createTask: number;
+            /** Format: int64 */
+            freezeCriteria: number;
+            /** Format: int64 */
+            plannedTaskAttempts: number;
+            plannedTaskStates: components["schemas"]["DomainTaskOutcomeTotals"];
+            /** Format: int64 */
+            receipts: number;
+            /** Format: int64 */
+            reviseTask: number;
+        };
         DomainProjectGoalBlocker: {
             reason: string;
             /** Format: int64 */
@@ -5392,6 +5561,20 @@ export interface components {
             schemaVersion: number;
             sessionId: string;
             systemPrompt: string;
+        };
+        DomainTaskOutcomeTotals: {
+            /** Format: int64 */
+            cancelled: number;
+            /** Format: int64 */
+            cancelling: number;
+            /** Format: int64 */
+            completed: number;
+            /** Format: int64 */
+            failed: number;
+            /** Format: int64 */
+            pending: number;
+            /** Format: int64 */
+            working: number;
         };
         EditConversationMessageRequest: {
             clientMessageId?: string;
@@ -5702,6 +5885,14 @@ export interface components {
             sessionId: string;
             truncated: boolean;
         };
+        ManagerRoutingOutcomesResponse: {
+            items: components["schemas"]["DomainManagerRoutingOutcome"][];
+            /** Format: int64 */
+            nextAfter?: number;
+        };
+        ManagerRoutingSummaryResponse: {
+            summary: components["schemas"]["DomainManagerRoutingSummary"];
+        };
         MarkAllNotificationsReadRequest: {
             /** @description Acknowledge exactly these notifications. Omit to acknowledge every unread notification; paginating clients should send the ids they actually rendered so later pages stay unread. */
             ids?: string[];
@@ -5876,6 +6067,13 @@ export interface components {
         OrchestratorPlanResponse: {
             created: boolean;
             receipt: components["schemas"]["OrchestratorPlanReceipt"];
+        };
+        OrchestratorPlanningOutcomesResponse: {
+            items: components["schemas"]["DomainOrchestratorPlanningOutcome"][];
+            nextAfterId?: string;
+        };
+        OrchestratorPlanningSummaryResponse: {
+            summary: components["schemas"]["DomainOrchestratorPlanningSummary"];
         };
         OrchestratorResponse: {
             id: string;
@@ -14095,6 +14293,160 @@ export interface operations {
             };
         };
     };
+    listAgentManagerRoutingOutcomes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagerRoutingOutcomesResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getAgentManagerRoutingSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagerRoutingSummaryResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
     setProjectConfig: {
         parameters: {
             query?: never;
@@ -14883,6 +15235,160 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrchestratorPlanResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listOrchestratorPlanningOutcomes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrchestratorPlanningOutcomesResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getOrchestratorPlanningSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrchestratorPlanningSummaryResponse"];
                 };
             };
             /** @description Bad Request */

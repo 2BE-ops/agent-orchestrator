@@ -181,3 +181,17 @@ A Manager conversation retains its first engagement binding across requests and
 native generations. A task above its pinned clearance, or another engagement,
 becomes Needs Human without embedding the prohibited context. Other eligible
 projects continue through the bounded inbox scan.
+
+### ao agent-manager routing-outcomes / routing-summary
+
+`routing-outcomes` pages sealed routing decisions — one row per request that
+has a decision, carrying the accepted selection (exact Agent Type version) or
+the latest rejection plus the routed task's derived fate (`pending`,
+`working`, `completed`, `failed`, `cancelling`, `cancelled`) and its attempt
+count. Page with `--after` (the request arrival sequence returned as
+`sequence`) and `--limit` (1–100). `routing-summary --from --to` (RFC3339,
+at most 366 days) aggregates one complete cohort: decisions, accepted and
+rejected counts, routed-task states, attempts across routed work and per
+Type-version groups. Rejections never inflate routed-work counters; windows
+beyond 1000 routed requests are refused rather than partially summed. These
+are the Manager's routing metrics, distinct from worker performance.

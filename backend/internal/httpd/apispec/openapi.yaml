@@ -4809,6 +4809,121 @@ paths:
       summary: Close routing intent without changing tasks or native ownership
       tags:
       - agent-managers
+  /api/v1/projects/{id}/agent-manager/routing-outcomes:
+    get:
+      operationId: listAgentManagerRoutingOutcomes
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagerRoutingOutcomesResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Read routing decisions coupled with the derived fate of their routed
+        tasks
+      tags:
+      - agent-managers
+  /api/v1/projects/{id}/agent-manager/routing-summary:
+    get:
+      operationId: getAgentManagerRoutingSummary
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagerRoutingSummaryResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Aggregate one complete bounded routing-decision cohort
+      tags:
+      - agent-managers
   /api/v1/projects/{id}/config:
     put:
       operationId: setProjectConfig
@@ -5484,6 +5599,120 @@ paths:
                 $ref: '#/components/schemas/APIError'
           description: Not Implemented
       summary: Execute one sealed native planning action as the project's live orchestrator
+      tags:
+      - orchestrator
+  /api/v1/projects/{id}/orchestrator/planning-outcomes:
+    get:
+      operationId: listOrchestratorPlanningOutcomes
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestratorPlanningOutcomesResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Read planning receipts coupled with the derived fate of their tasks
+      tags:
+      - orchestrator
+  /api/v1/projects/{id}/orchestrator/planning-summary:
+    get:
+      operationId: getOrchestratorPlanningSummary
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestratorPlanningSummaryResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Aggregate one complete bounded planning cohort
       tags:
       - orchestrator
   /api/v1/projects/{id}/orchestrator/receipts:
@@ -17569,6 +17798,247 @@ components:
       - createdAt
       - contentHash
       type: object
+    DomainManagerRoutingOutcome:
+      properties:
+        agentType:
+          $ref: '#/components/schemas/WorkerDefinitionRef'
+        attempts:
+          format: int64
+          type: integer
+        decidedAt:
+          format: date-time
+          type: string
+        decisionId:
+          type: string
+        evaluationId:
+          type: string
+        optimization:
+          enum:
+          - quality
+          - balanced
+          - speed
+          - usage
+          type: string
+        outcome:
+          enum:
+          - accepted
+          - rejected
+          type: string
+        reason:
+          type: string
+        requestId:
+          type: string
+        resultId:
+          type: string
+        revision:
+          format: int64
+          type: integer
+        sequence:
+          format: int64
+          type: integer
+        state:
+          enum:
+          - pending
+          - working
+          - completed
+          - failed
+          - cancelling
+          - cancelled
+          type: string
+        taskId:
+          type: string
+        taskTitle:
+          type: string
+      required:
+      - sequence
+      - decisionId
+      - requestId
+      - taskId
+      - taskTitle
+      - revision
+      - outcome
+      - optimization
+      - state
+      - reason
+      - attempts
+      - decidedAt
+      type: object
+    DomainManagerRoutingSummary:
+      properties:
+        from:
+          format: date-time
+          type: string
+        observedAt:
+          format: date-time
+          type: string
+        to:
+          format: date-time
+          type: string
+        totals:
+          $ref: '#/components/schemas/DomainManagerRoutingTotals'
+        types:
+          items:
+            $ref: '#/components/schemas/DomainManagerRoutingTypeGroup'
+          type: array
+      required:
+      - from
+      - to
+      - observedAt
+      - totals
+      - types
+      type: object
+    DomainManagerRoutingTotals:
+      properties:
+        accepted:
+          format: int64
+          type: integer
+        decisions:
+          format: int64
+          type: integer
+        rejected:
+          format: int64
+          type: integer
+        routedTaskAttempts:
+          format: int64
+          type: integer
+        routedTaskStates:
+          $ref: '#/components/schemas/DomainTaskOutcomeTotals'
+      required:
+      - decisions
+      - accepted
+      - rejected
+      - routedTaskStates
+      - routedTaskAttempts
+      type: object
+    DomainManagerRoutingTypeGroup:
+      properties:
+        agentTypeId:
+          type: string
+        cancelled:
+          format: int64
+          type: integer
+        completed:
+          format: int64
+          type: integer
+        failed:
+          format: int64
+          type: integer
+        name:
+          type: string
+        open:
+          format: int64
+          type: integer
+        routed:
+          format: int64
+          type: integer
+        version:
+          format: int64
+          type: integer
+      required:
+      - agentTypeId
+      - name
+      - version
+      - routed
+      - completed
+      - failed
+      - cancelled
+      - open
+      type: object
+    DomainOrchestratorPlanningOutcome:
+      properties:
+        action:
+          enum:
+          - create_task
+          - revise_task
+          - freeze_criteria
+          type: string
+        attempts:
+          format: int64
+          type: integer
+        createdAt:
+          format: date-time
+          type: string
+        evaluationId:
+          type: string
+        reason:
+          type: string
+        receiptId:
+          type: string
+        resultId:
+          type: string
+        revision:
+          format: int64
+          type: integer
+        state:
+          enum:
+          - pending
+          - working
+          - completed
+          - failed
+          - cancelling
+          - cancelled
+          type: string
+        taskId:
+          type: string
+        taskTitle:
+          type: string
+      required:
+      - receiptId
+      - action
+      - taskId
+      - taskTitle
+      - revision
+      - state
+      - reason
+      - attempts
+      - createdAt
+      type: object
+    DomainOrchestratorPlanningSummary:
+      properties:
+        from:
+          format: date-time
+          type: string
+        observedAt:
+          format: date-time
+          type: string
+        to:
+          format: date-time
+          type: string
+        totals:
+          $ref: '#/components/schemas/DomainOrchestratorPlanningTotals'
+      required:
+      - from
+      - to
+      - observedAt
+      - totals
+      type: object
+    DomainOrchestratorPlanningTotals:
+      properties:
+        createTask:
+          format: int64
+          type: integer
+        freezeCriteria:
+          format: int64
+          type: integer
+        plannedTaskAttempts:
+          format: int64
+          type: integer
+        plannedTaskStates:
+          $ref: '#/components/schemas/DomainTaskOutcomeTotals'
+        receipts:
+          format: int64
+          type: integer
+        reviseTask:
+          format: int64
+          type: integer
+      required:
+      - receipts
+      - createTask
+      - reviseTask
+      - freezeCriteria
+      - plannedTaskStates
+      - plannedTaskAttempts
+      type: object
     DomainProjectGoalBlocker:
       properties:
         reason:
@@ -17655,6 +18125,34 @@ components:
       - prompt
       - createdAt
       - contentHash
+      type: object
+    DomainTaskOutcomeTotals:
+      properties:
+        cancelled:
+          format: int64
+          type: integer
+        cancelling:
+          format: int64
+          type: integer
+        completed:
+          format: int64
+          type: integer
+        failed:
+          format: int64
+          type: integer
+        pending:
+          format: int64
+          type: integer
+        working:
+          format: int64
+          type: integer
+      required:
+      - completed
+      - failed
+      - cancelled
+      - cancelling
+      - working
+      - pending
       type: object
     EditConversationMessageRequest:
       properties:
@@ -18524,6 +19022,25 @@ components:
       - entries
       - truncated
       type: object
+    ManagerRoutingOutcomesResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/DomainManagerRoutingOutcome'
+          type: array
+        nextAfter:
+          format: int64
+          type: integer
+      required:
+      - items
+      type: object
+    ManagerRoutingSummaryResponse:
+      properties:
+        summary:
+          $ref: '#/components/schemas/DomainManagerRoutingSummary'
+      required:
+      - summary
+      type: object
     MarkAllNotificationsReadRequest:
       properties:
         ids:
@@ -18946,6 +19463,24 @@ components:
       required:
       - receipt
       - created
+      type: object
+    OrchestratorPlanningOutcomesResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/DomainOrchestratorPlanningOutcome'
+          type: array
+        nextAfterId:
+          type: string
+      required:
+      - items
+      type: object
+    OrchestratorPlanningSummaryResponse:
+      properties:
+        summary:
+          $ref: '#/components/schemas/DomainOrchestratorPlanningSummary'
+      required:
+      - summary
       type: object
     OrchestratorResponse:
       properties:

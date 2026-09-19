@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -27,6 +28,8 @@ type OrchestratorGoalService interface {
 	Feedback(ctx context.Context, project domain.ProjectID, afterTaskID string, limit int) ([]domain.ProjectFeedbackItem, error)
 	Receipts(ctx context.Context, project domain.ProjectID, afterID string, limit int) ([]domain.OrchestratorPlanReceipt, error)
 	Receipt(ctx context.Context, project domain.ProjectID, id string) (domain.OrchestratorPlanReceipt, error)
+	PlanningOutcomes(ctx context.Context, project domain.ProjectID, afterReceiptID string, limit int) ([]domain.OrchestratorPlanningOutcome, error)
+	PlanningSummary(ctx context.Context, project domain.ProjectID, query domain.OutcomeAttributionQuery) (domain.OrchestratorPlanningSummary, error)
 }
 
 // OrchestratorController owns the durable project goal and native planning API.
@@ -46,6 +49,8 @@ func (c *OrchestratorController) Register(r chi.Router) {
 		r.Get("/projects/{id}/orchestrator/feedback", c.feedback)
 		r.Get("/projects/{id}/orchestrator/receipts", c.receipts)
 		r.Get("/projects/{id}/orchestrator/receipts/{receiptId}", c.receipt)
+		r.Get("/projects/{id}/orchestrator/planning-outcomes", c.planningOutcomes)
+		r.Get("/projects/{id}/orchestrator/planning-summary", c.planningSummary)
 	})
 }
 
@@ -209,6 +214,60 @@ func (c *OrchestratorController) receipt(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	envelope.WriteJSON(w, http.StatusOK, OrchestratorPlanReceiptResponse{Receipt: item})
+}
+
+func (c *OrchestratorController) planningOutcomes(w http.ResponseWriter, r *http.Request) {
+	afterID, limit, ok := parseIDPage(w, r)
+	if !ok {
+		return
+	}
+	items, err := c.Svc.PlanningOutcomes(r.Context(), goalProjectID(r), afterID, limit)
+	if err != nil {
+		envelope.WriteError(w, r, err)
+		return
+	}
+	response := OrchestratorPlanningOutcomesResponse{Items: items}
+	if len(items) == limit {
+		response.NextAfterID = items[len(items)-1].ReceiptID
+	}
+	envelope.WriteJSON(w, http.StatusOK, response)
+}
+
+func (c *OrchestratorController) planningSummary(w http.ResponseWriter, r *http.Request) {
+	from, to, ok := parseAttributionWindow(w, r)
+	if !ok {
+		return
+	}
+	summary, err := c.Svc.PlanningSummary(r.Context(), goalProjectID(r), domain.OutcomeAttributionQuery{ProjectID: goalProjectID(r), From: from, To: to})
+	if err != nil {
+		envelope.WriteError(w, r, err)
+		return
+	}
+	envelope.WriteJSON(w, http.StatusOK, OrchestratorPlanningSummaryResponse{Summary: summary})
+}
+
+// parseAttributionWindow reads the strict from/to window shared by routing and
+// planning attribution summaries.
+func parseAttributionWindow(w http.ResponseWriter, r *http.Request) (time.Time, time.Time, bool) {
+	invalid := apierr.Invalid("INVALID_ATTRIBUTION_WINDOW", "Use one RFC3339 from and to with from before to", nil)
+	query := r.URL.Query()
+	for key, values := range query {
+		if (key != "from" && key != "to") || len(values) != 1 {
+			envelope.WriteError(w, r, invalid)
+			return time.Time{}, time.Time{}, false
+		}
+	}
+	from, err := time.Parse(time.RFC3339Nano, query.Get("from"))
+	if err != nil {
+		envelope.WriteError(w, r, invalid)
+		return time.Time{}, time.Time{}, false
+	}
+	to, err := time.Parse(time.RFC3339Nano, query.Get("to"))
+	if err != nil || !from.Before(to) {
+		envelope.WriteError(w, r, invalid)
+		return time.Time{}, time.Time{}, false
+	}
+	return from, to, true
 }
 
 // goalProjectID reads the shared {id} project path parameter.

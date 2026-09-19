@@ -172,6 +172,10 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"ControllersOrchestratorPlanReceiptsResponse":          "OrchestratorPlanReceiptsResponse",
 	"ControllersOrchestratorPlanReceiptResponse":           "OrchestratorPlanReceiptResponse",
 	"ControllersProjectFeedbackResponse":                   "ProjectFeedbackResponse",
+	"ControllersManagerRoutingOutcomesResponse":            "ManagerRoutingOutcomesResponse",
+	"ControllersManagerRoutingSummaryResponse":             "ManagerRoutingSummaryResponse",
+	"ControllersOrchestratorPlanningOutcomesResponse":      "OrchestratorPlanningOutcomesResponse",
+	"ControllersOrchestratorPlanningSummaryResponse":       "OrchestratorPlanningSummaryResponse",
 	"ControllersOrchestratorReceiptIDParam":                "OrchestratorReceiptIDParam",
 	"DomainProjectGoalVersion":                             "ProjectGoalVersion",
 	"DomainProjectGoalCompletion":                          "ProjectGoalCompletion",
@@ -1732,7 +1736,7 @@ func devOperations() []operation {
 }
 
 func orchestratorGoalOperations() []operation {
-	ops := make([]operation, 0, 10)
+	ops := make([]operation, 0, 12)
 	for _, endpoint := range []struct {
 		method, path, id, summary string
 		request, response         any
@@ -1749,6 +1753,8 @@ func orchestratorGoalOperations() []operation {
 		{http.MethodGet, "/projects/{id}/orchestrator/feedback", "listProjectFeedback", "Read derived per-task loop facts without storing any status", nil, controllers.ProjectFeedbackResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
 		{http.MethodGet, "/projects/{id}/orchestrator/receipts", "listOrchestratorPlanReceipts", "List sealed native planning receipts", nil, controllers.OrchestratorPlanReceiptsResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
 		{http.MethodGet, "/projects/{id}/orchestrator/receipts/{receiptId}", "getOrchestratorPlanReceipt", "Inspect one sealed native planning receipt", nil, controllers.OrchestratorPlanReceiptResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.OrchestratorReceiptIDParam{}}},
+		{http.MethodGet, "/projects/{id}/orchestrator/planning-outcomes", "listOrchestratorPlanningOutcomes", "Read planning receipts coupled with the derived fate of their tasks", nil, controllers.OrchestratorPlanningOutcomesResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/orchestrator/planning-summary", "getOrchestratorPlanningSummary", "Aggregate one complete bounded planning cohort", nil, controllers.OrchestratorPlanningSummaryResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
 	} {
 		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "orchestrator", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
 	}
@@ -1756,7 +1762,7 @@ func orchestratorGoalOperations() []operation {
 }
 
 func agentManagerOperations() []operation {
-	ops := make([]operation, 0, 14)
+	ops := make([]operation, 0, 16)
 	for _, endpoint := range []struct {
 		method, path, id, summary string
 		request, response         any
@@ -1780,6 +1786,8 @@ func agentManagerOperations() []operation {
 		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/contexts", "listAgentManagerContexts", "Inspect bounded classified native input history", nil, controllers.AgentManagerContextsResponse{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}}},
 		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/decisions", "listAgentManagerDecisions", "Inspect retained deterministic assessments of native proposals", nil, controllers.AgentManagerDecisionsResponse{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}}},
 		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/decisions/{proposalId}", "getAgentManagerDecision", "Inspect an exact immutable assessment or pending status", nil, controllers.AgentManagerDecisionResponse{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}, controllers.AgentManagerProposalIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/routing-outcomes", "listAgentManagerRoutingOutcomes", "Read routing decisions coupled with the derived fate of their routed tasks", nil, controllers.ManagerRoutingOutcomesResponse{}, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/routing-summary", "getAgentManagerRoutingSummary", "Aggregate one complete bounded routing-decision cohort", nil, controllers.ManagerRoutingSummaryResponse{}, []any{controllers.ProjectIDParam{}}},
 		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/candidates", "listAgentManagerCandidates", "Check a bounded page of Manager candidate compatibility and exclusions", nil, controllers.AgentManagerCandidatesResponse{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}, controllers.AgentManagerCandidateQuery{}}},
 		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/candidates/{agentTypeId}", "checkAgentManagerCandidate", "Check an exact Type version against pinned task requirements", nil, domain.AgentManagerCandidate{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}, controllers.AgentManagerCandidateIDParam{}, controllers.AgentManagerCandidateVersionQuery{}}},
 		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/contexts/{contextId}", "getAgentManagerContext", "Inspect exact sealed input and native tool instructions", nil, domain.AgentManagerContext{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}, controllers.AgentManagerContextIDParam{}}},
