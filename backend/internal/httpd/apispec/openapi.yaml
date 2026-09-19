@@ -4540,6 +4540,146 @@ paths:
       summary: Inspect exact native output and parser outcome
       tags:
       - agent-managers
+  /api/v1/projects/{id}/agent-manager/requests/{requestId}/registry-receipts:
+    get:
+      operationId: listAgentManagerRegistryReceipts
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: afterId
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControllersAgentManagerRegistryReceiptsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect a request's sealed Manager registry authoring receipts
+      tags:
+      - agent-managers
+  /api/v1/projects/{id}/agent-manager/requests/{requestId}/registry-receipts/{receiptId}:
+    get:
+      operationId: getAgentManagerRegistryReceipt
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: receiptId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainAgentManagerRegistryReceipt'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect one sealed Manager registry authoring receipt
+      tags:
+      - agent-managers
   /api/v1/projects/{id}/agent-manager/requests/{requestId}/resolution:
     get:
       operationId: getAgentManagerRequestResolution
@@ -6322,6 +6462,75 @@ paths:
           description: Not Implemented
       summary: Retain generation-fenced native output and assess routing without launching
         a worker
+      tags:
+      - agent-managers
+  /api/v1/sessions/{sessionId}/agent-manager/requests/{requestId}/registry-actions:
+    post:
+      operationId: submitAgentManagerRegistryAction
+      parameters:
+      - description: Session identifier, e.g. project-1.
+        in: path
+        name: sessionId
+        required: true
+        schema:
+          description: Session identifier, e.g. project-1.
+          type: string
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControllersAgentManagerRegistryRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControllersAgentManagerRegistryResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Create or version registry definitions through governed native authoring
+        without activation
       tags:
       - agent-managers
   /api/v1/sessions/{sessionId}/agent-switches:
@@ -15343,6 +15552,40 @@ components:
       - disposition
       - reason
       type: object
+    ControllersAgentManagerRegistryReceiptsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/DomainAgentManagerRegistryReceipt'
+          type: array
+        nextAfterId:
+          type: string
+      required:
+      - items
+      type: object
+    ControllersAgentManagerRegistryRequest:
+      properties:
+        action:
+          $ref: '#/components/schemas/DomainAgentManagerRegistryAction'
+        idempotencyKey:
+          type: string
+        sourceGeneration:
+          type: string
+      required:
+      - sourceGeneration
+      - idempotencyKey
+      - action
+      type: object
+    ControllersAgentManagerRegistryResponse:
+      properties:
+        created:
+          type: boolean
+        receipt:
+          $ref: '#/components/schemas/DomainAgentManagerRegistryReceipt'
+      required:
+      - receipt
+      - created
+      type: object
     ControllersRequestRereviewRequest:
       properties:
         pullRequestUrl:
@@ -16434,6 +16677,106 @@ components:
       required:
       - state
       - lastActivityAt
+      type: object
+    DomainAgentManagerRegistryAction:
+      properties:
+        action:
+          enum:
+          - create
+          - append_version
+          type: string
+        definition:
+          $ref: '#/components/schemas/RegistryDefinition'
+        description:
+          type: string
+        entryId:
+          type: string
+        expectedRevision:
+          format: int64
+          type: integer
+        kind:
+          enum:
+          - agent_type
+          - skill
+          type: string
+        name:
+          type: string
+        reason:
+          type: string
+      required:
+      - action
+      - kind
+      - definition
+      - reason
+      type: object
+    DomainAgentManagerRegistryReceipt:
+      properties:
+        action:
+          $ref: '#/components/schemas/DomainAgentManagerRegistryAction'
+        classification:
+          enum:
+          - technical
+          - engagement
+          - mission
+          type: string
+        configurationHash:
+          type: string
+        contentHash:
+          type: string
+        contextHash:
+          type: string
+        contextId:
+          type: string
+        controllerId:
+          type: string
+        conversationContextHash:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        engagementId:
+          type: string
+        id:
+          type: string
+        metadataRevision:
+          format: int64
+          type: integer
+        nativeGeneration:
+          type: string
+        projectId:
+          type: string
+        requestHash:
+          type: string
+        requestId:
+          type: string
+        schemaVersion:
+          type: integer
+        sessionId:
+          type: string
+        target:
+          $ref: '#/components/schemas/WorkerDefinitionRef'
+        workerConfigurationHash:
+          type: string
+      required:
+      - schemaVersion
+      - id
+      - projectId
+      - requestId
+      - requestHash
+      - configurationHash
+      - controllerId
+      - sessionId
+      - nativeGeneration
+      - workerConfigurationHash
+      - contextId
+      - contextHash
+      - conversationContextHash
+      - classification
+      - action
+      - target
+      - metadataRevision
+      - createdAt
+      - contentHash
       type: object
     DomainReviewerConfig:
       properties:

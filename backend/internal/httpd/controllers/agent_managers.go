@@ -54,6 +54,12 @@ func (c *AgentManagersController) Register(r chi.Router) {
 		r.Get("/projects/{id}/agent-manager/requests/{requestId}/proposals/{proposalId}", c.proposal)
 		r.Post("/sessions/{sessionId}/agent-manager/requests/{requestId}/proposals", c.propose)
 	})
+	r.Group(func(r chi.Router) {
+		r.Use(c.available)
+		r.Get("/projects/{id}/agent-manager/requests/{requestId}/registry-receipts", c.registryReceipts)
+		r.Get("/projects/{id}/agent-manager/requests/{requestId}/registry-receipts/{receiptId}", c.registryReceipt)
+		r.Post("/sessions/{sessionId}/agent-manager/requests/{requestId}/registry-actions", c.registryAuthor)
+	})
 }
 
 func (c *AgentManagersController) available(next http.Handler) http.Handler {

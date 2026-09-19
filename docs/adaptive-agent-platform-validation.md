@@ -4,6 +4,40 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 15e - Manager registry authoring service, protocol v4 and exposure (2026-09-19)
+
+The Manager service exposes governed authoring through the same generation fence
+as proposals: project/owner are derived from the live Manager session (TUI launch
+or Chat controller generation), the service mints the registry entry identity for
+creations (native output never chooses IDs), and the store transaction rechecks
+delivery context, classification, policy flags and quotas. Receipt history pages
+are bounded 1-100 with a validated afterId cursor. Native protocol v4 chains the
+immutable v1/v2/v3 renderers and adds registry-author/registry-receipts/
+registry-receipt commands plus governed authoring instructions (prefer existing
+Types/Skills, then versions, then Skills, then Types; appending never activates;
+technical conversations only); the v1/v2/v3 goldens remain unchanged and v4 has
+its own pinned hash. The daemon inbox dispatcher now seals new input at v4.
+HTTP exposes session-scoped submission (288 KiB envelope) and project-scoped
+receipt history with strict query validation; the CLI mirrors it as
+`ao agent-manager registry-author|registry-receipts|registry-receipt`; telemetry
+allowlists classify all three as user-invocable. using-ao documents the v4
+protocol. Manager-authored definitions are proven (controller test) to appear in
+the normal `/skills` registry listing with manager origin — DoD 18 at the API
+level; desktop visual confirmation remains stage 25.
+
+Focused service/domain/CLI/telemetry/skillassets PASS (2.5s / 0.8s / 22.0s /
+0.5s / 0.4s); new HTTP controller tests PASS; full controllers suite retains
+only its two recorded Windows pairing/clone baselines; daemon retains its
+recorded CWD cleanup baseline. apispec/specgen PASS; `npm run api` regenerated
+openapi.yaml and schema.ts; frontend typecheck PASS; backend build PASS;
+pinned golangci-lint v2.12.2 on service/controllers/CLI/domain/telemetry/
+daemon/skillassets PASS (0 issues) after fixing gofmt alignment, an accidental
+route-block growth that tripped dupl (routes regrouped into their own chi
+Group), and mixed line endings introduced by edits. Race run remains NOT RUN
+(Windows GCC baseline). Composition/evolution approval surfaces, selectors,
+classified inspector, public delegation history and live message/review gates
+remain for stage 15.
+
 ## Stage 15d - governed Manager registry authoring storage (2026-09-19)
 
 Migration 0178 adds Manager registry authoring actions. The native controller may

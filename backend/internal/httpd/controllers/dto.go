@@ -66,6 +66,29 @@ type AgentManagerProposalsResponse struct {
 	Items []domain.AgentManagerProposal `json:"items"`
 }
 
+// AgentManagerRegistryRequest wraps native authoring output and its retry key.
+type AgentManagerRegistryRequest managersvc.RegistryActionInput
+
+// AgentManagerRegistryResponse includes the sealed authoring receipt and target.
+type AgentManagerRegistryResponse managersvc.RegistryActionReceipt
+
+// AgentManagerRegistryReceiptsResponse contains a request's retained receipts.
+type AgentManagerRegistryReceiptsResponse struct {
+	Items       []domain.AgentManagerRegistryReceipt `json:"items"`
+	NextAfterID string                               `json:"nextAfterId,omitempty"`
+}
+
+// AgentManagerRegistryReceiptQuery bounds retained receipt pages.
+type AgentManagerRegistryReceiptQuery struct {
+	AfterID string `query:"afterId"`
+	Limit   int    `query:"limit" minimum:"1" maximum:"100" default:"20"`
+}
+
+// AgentManagerRegistryReceiptIDParam identifies one sealed authoring receipt.
+type AgentManagerRegistryReceiptIDParam struct {
+	ReceiptID string `path:"receiptId"`
+}
+
 // AgentManagerDecisionsResponse contains at most five immutable assessments.
 type AgentManagerDecisionsResponse struct {
 	Items []domain.AgentManagerDecision `json:"items"`

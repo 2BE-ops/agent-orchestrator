@@ -938,7 +938,7 @@ func Run() error {
 					log.Error("Manager CLI routing unavailable", "error", err)
 					return
 				}
-				dispatcher, err := managersvc.NewInboxDispatcher(store, managerSvc, transport, domain.AgentManagerToolPaths{SchemaVersion: 3, Executable: executable, RunFile: cfg.RunFilePath}, log)
+				dispatcher, err := managersvc.NewInboxDispatcher(store, managerSvc, transport, domain.AgentManagerToolPaths{SchemaVersion: 4, Executable: executable, RunFile: cfg.RunFilePath}, log)
 				if err != nil {
 					log.Error("Manager inbox configuration invalid", "error", err)
 					return

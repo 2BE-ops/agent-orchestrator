@@ -18,7 +18,7 @@ type AgentManagerToolPaths struct {
 
 // Validate bounds literal argv/environment values without evaluating a shell.
 func (p AgentManagerToolPaths) Validate() error {
-	if (p.SchemaVersion < 1 || p.SchemaVersion > 3) || strings.TrimSpace(p.Executable) == "" || !utf8.ValidString(p.Executable) || !utf8.ValidString(p.RunFile) || len(p.Executable) > 4096 || strings.IndexFunc(p.Executable, unicode.IsControl) >= 0 || len(p.RunFile) > 4096 || strings.IndexFunc(p.RunFile, unicode.IsControl) >= 0 {
+	if (p.SchemaVersion < 1 || p.SchemaVersion > 4) || strings.TrimSpace(p.Executable) == "" || !utf8.ValidString(p.Executable) || !utf8.ValidString(p.RunFile) || len(p.Executable) > 4096 || strings.IndexFunc(p.Executable, unicode.IsControl) >= 0 || len(p.RunFile) > 4096 || strings.IndexFunc(p.RunFile, unicode.IsControl) >= 0 {
 		return fmt.Errorf("invalid Manager CLI routing paths")
 	}
 	return nil
@@ -41,6 +41,9 @@ func (c AgentManagerContext) toolPrompt() (string, error) {
 	}
 	if c.Tools.SchemaVersion == 3 {
 		return c.toolPromptV3()
+	}
+	if c.Tools.SchemaVersion == 4 {
+		return c.toolPromptV4()
 	}
 	executable := c.Tools.Executable
 	definition := AgentManagerProposalDefinition{SchemaVersion: 1, Action: "select_existing", AgentTypeID: "REPLACE_WITH_PERMITTED_TYPE_ID", AgentTypeVersion: 1, Rationale: "Replace with the evidence for your selection", Candidates: []AgentManagerCandidateReason{}}
@@ -186,6 +189,54 @@ does not mean persistence failed: retry the identical envelope/key, or inspect
 proposals and decisions. The daemon recovers unassessed output after restart.
 The exact decision command requires the proposal ID returned in the receipt.
 Do not copy decision narratives or higher-class context into worker instructions.
+
+AO_MANAGER_TOOLS_JSON
+` + string(data), nil
+}
+
+// toolPromptV4 adds governed registry authoring without changing v1-v3 history.
+func (c AgentManagerContext) toolPromptV4() (string, error) {
+	paths := *c.Tools
+	paths.SchemaVersion = 3
+	c.Tools = &paths
+	previous, err := c.toolPrompt()
+	if err != nil {
+		return "", err
+	}
+	prefix, encoded, _ := strings.Cut(previous, "AO_MANAGER_TOOLS_JSON\n")
+	var protocol map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(encoded), &protocol); err != nil {
+		return "", err
+	}
+	var commands map[string][]string
+	if err := json.Unmarshal(protocol["commands"], &commands); err != nil {
+		return "", err
+	}
+	commands["registryAuthor"] = []string{paths.Executable, "agent-manager", "registry-author", string(c.SessionID), c.RequestID, "--file", "-"}
+	commands["registryReceipts"] = []string{paths.Executable, "agent-manager", "registry-receipts", string(c.ProjectID), c.RequestID, "--limit", "100"}
+	commands["registryReceipt"] = []string{paths.Executable, "agent-manager", "registry-receipt", string(c.ProjectID), c.RequestID, "REPLACE_WITH_RECEIPT_ID"}
+	protocol["commands"], err = json.Marshal(commands)
+	if err != nil {
+		return "", err
+	}
+	protocol["schemaVersion"] = json.RawMessage(`4`)
+	data, err := json.Marshal(protocol)
+	if err != nil {
+		return "", err
+	}
+	return prefix + `registryAuthor submits one governed authoring envelope: action create or
+append_version with kind, definition and reason. AO mints registry identity;
+you never choose entry IDs. Authoring is available only for this technical
+conversation, never for engagement or mission material, and never to publish
+worker output, credentials or classified narratives as reusable instructions.
+Prefer existing Types and Skills, then new versions, then a new Skill, and only
+then a new Type; authoring quotas and policy bounds are enforced per request and
+refusals are retained as receipts without charging quotas. Appending a version
+never activates it; selection and promotion remain governed decisions. Keep one
+stable idempotencyKey per identical envelope; a changed envelope uses a new key.
+The receipt seals your request, context and exact target version with hashes;
+retain it. Inspect prior outcomes with registryReceipts before authoring, and
+compare your new definition against the version it evolves.
 
 AO_MANAGER_TOOLS_JSON
 ` + string(data), nil

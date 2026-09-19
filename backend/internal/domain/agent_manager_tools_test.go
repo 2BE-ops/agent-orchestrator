@@ -51,7 +51,7 @@ func TestAgentManagerToolsRetainLiteralNativeIdentityAndEnvelope(t *testing.T) {
 }
 
 func TestAgentManagerToolPathsRejectMissingExecutableAndControls(t *testing.T) {
-	for _, paths := range []AgentManagerToolPaths{{}, {SchemaVersion: 1, Executable: "ao\nother"}, {SchemaVersion: 1, Executable: "ao", RunFile: "file\x00"}, {SchemaVersion: 1, Executable: strings.Repeat("a", 4097)}, {SchemaVersion: 4, Executable: "ao"}, {SchemaVersion: 1, Executable: "ao", RunFile: string([]byte{0xff})}} {
+	for _, paths := range []AgentManagerToolPaths{{}, {SchemaVersion: 1, Executable: "ao\nother"}, {SchemaVersion: 1, Executable: "ao", RunFile: "file\x00"}, {SchemaVersion: 1, Executable: strings.Repeat("a", 4097)}, {SchemaVersion: 5, Executable: "ao"}, {SchemaVersion: 1, Executable: "ao", RunFile: string([]byte{0xff})}} {
 		if err := paths.Validate(); err == nil {
 			t.Fatalf("unsafe native routing accepted: %+v", paths)
 		}
@@ -132,5 +132,43 @@ func TestAgentManagerDecisionProtocolRetainsLiteralFeedbackTools(t *testing.T) {
 	}
 	if hash := ContextTextHash(text); hash != "1c37e79d61ea4cf1f86c931f5a0967d6b931ec222c7156d0b9e16fe0490e2e55" {
 		t.Fatalf("protocol v3 hash: %s", hash)
+	}
+}
+
+func TestAgentManagerRegistryProtocolAddsGovernedAuthoringTools(t *testing.T) {
+	c := managerContextFixture(t)
+	c.ProjectID = "project with spaces"
+	c.Tools = &AgentManagerToolPaths{SchemaVersion: 4, Executable: `C:\AO tools\ao $name.exe`, RunFile: `C:\AO data\running.json`}
+	var err error
+	c.Prompt, err = c.RenderPrompt()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.ContentHash = c.Hash()
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	_, encoded, _ := strings.Cut(c.Prompt, "AO_MANAGER_TOOLS_JSON\n")
+	var protocol struct {
+		SchemaVersion int                 `json:"schemaVersion"`
+		Commands      map[string][]string `json:"commands"`
+	}
+	if err := json.Unmarshal([]byte(encoded), &protocol); err != nil {
+		t.Fatal(err)
+	}
+	author := protocol.Commands["registryAuthor"]
+	receipts := protocol.Commands["registryReceipts"]
+	if protocol.SchemaVersion != 4 || len(author) != 7 || author[0] != c.Tools.Executable || author[3] != string(c.SessionID) || author[4] != c.RequestID || author[6] != "-" || len(receipts) != 7 || receipts[3] != string(c.ProjectID) || receipts[4] != c.RequestID || receipts[6] != "100" || len(protocol.Commands["registryReceipt"]) != 6 || len(protocol.Commands["decision"]) != 6 || len(protocol.Commands["candidates"]) != 7 || len(protocol.Commands["propose"]) != 7 {
+		t.Fatalf("authoring routing or retained prior tools lost: %+v", protocol)
+	}
+	if !strings.Contains(c.Prompt, "you never choose entry IDs") || !strings.Contains(c.Prompt, "never activates it") || !strings.Contains(c.Prompt, "engagement or mission material") {
+		t.Fatal("governed authoring rules missing")
+	}
+	text, err := c.toolPrompt()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash := ContextTextHash(text); hash != "02efc6fbb28327111dcaacc3e207731406c77d2dafcf0aad4046fdc195e922df" {
+		t.Fatalf("protocol v4 hash: %s", hash)
 	}
 }

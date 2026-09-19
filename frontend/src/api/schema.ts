@@ -1462,6 +1462,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/agent-manager/requests/{requestId}/registry-receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect a request's sealed Manager registry authoring receipts */
+        get: operations["listAgentManagerRegistryReceipts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/agent-manager/requests/{requestId}/registry-receipts/{receiptId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect one sealed Manager registry authoring receipt */
+        get: operations["getAgentManagerRegistryReceipt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/agent-manager/requests/{requestId}/resolution": {
         parameters: {
             query?: never;
@@ -1905,6 +1939,23 @@ export interface paths {
         put?: never;
         /** Retain generation-fenced native output and assess routing without launching a worker */
         post: operations["submitAgentManagerProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{sessionId}/agent-manager/requests/{requestId}/registry-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create or version registry definitions through governed native authoring without activation */
+        post: operations["submitAgentManagerRegistryAction"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4662,6 +4713,19 @@ export interface components {
             /** Format: int64 */
             version?: number;
         };
+        ControllersAgentManagerRegistryReceiptsResponse: {
+            items: components["schemas"]["DomainAgentManagerRegistryReceipt"][];
+            nextAfterId?: string;
+        };
+        ControllersAgentManagerRegistryRequest: {
+            action: components["schemas"]["DomainAgentManagerRegistryAction"];
+            idempotencyKey: string;
+            sourceGeneration: string;
+        };
+        ControllersAgentManagerRegistryResponse: {
+            created: boolean;
+            receipt: components["schemas"]["DomainAgentManagerRegistryReceipt"];
+        };
         ControllersRequestRereviewRequest: {
             /** @description Tracked pull request URL. Required when the session has multiple PRs. */
             pullRequestUrl?: string;
@@ -5046,6 +5110,44 @@ export interface components {
             /** Format: date-time */
             lastActivityAt: string;
             state: string;
+        };
+        DomainAgentManagerRegistryAction: {
+            /** @enum {string} */
+            action: "create" | "append_version";
+            definition: components["schemas"]["RegistryDefinition"];
+            description?: string;
+            entryId?: string;
+            /** Format: int64 */
+            expectedRevision?: number;
+            /** @enum {string} */
+            kind: "agent_type" | "skill";
+            name?: string;
+            reason: string;
+        };
+        DomainAgentManagerRegistryReceipt: {
+            action: components["schemas"]["DomainAgentManagerRegistryAction"];
+            /** @enum {string} */
+            classification: "technical" | "engagement" | "mission";
+            configurationHash: string;
+            contentHash: string;
+            contextHash: string;
+            contextId: string;
+            controllerId: string;
+            conversationContextHash: string;
+            /** Format: date-time */
+            createdAt: string;
+            engagementId?: string;
+            id: string;
+            /** Format: int64 */
+            metadataRevision: number;
+            nativeGeneration: string;
+            projectId: string;
+            requestHash: string;
+            requestId: string;
+            schemaVersion: number;
+            sessionId: string;
+            target: components["schemas"]["WorkerDefinitionRef"];
+            workerConfigurationHash: string;
         };
         DomainReviewerConfig: {
             agentConfig?: components["schemas"]["AgentConfig"];
@@ -13298,6 +13400,166 @@ export interface operations {
             };
         };
     };
+    listAgentManagerRegistryReceipts: {
+        parameters: {
+            query?: {
+                afterId?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControllersAgentManagerRegistryReceiptsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getAgentManagerRegistryReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+                requestId: string;
+                receiptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainAgentManagerRegistryReceipt"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
     getAgentManagerRequestResolution: {
         parameters: {
             query?: never;
@@ -15401,6 +15663,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentManagerProposalResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    submitAgentManagerRegistryAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session identifier, e.g. project-1. */
+                sessionId: string;
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ControllersAgentManagerRegistryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControllersAgentManagerRegistryResponse"];
                 };
             };
             /** @description Bad Request */

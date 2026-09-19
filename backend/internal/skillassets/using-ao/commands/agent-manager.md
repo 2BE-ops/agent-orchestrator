@@ -20,6 +20,9 @@ ao agent-manager resolve <project> <request> --file resolution.json
 ao agent-manager propose <session-id> <request> --file proposal-envelope.json
 ao agent-manager proposals <project> <request>
 ao agent-manager proposal <project> <request> <proposal>
+ao agent-manager registry-author <session-id> <request> --file authoring-envelope.json
+ao agent-manager registry-receipts <project> <request> --limit 20
+ao agent-manager registry-receipt <project> <request> <receipt>
 ao agent-manager contexts <project> <request>
 ao agent-manager context <project> <request> <context>
 ao agent-manager deliveries <project> <request>
@@ -132,6 +135,34 @@ after policy changes or native termination. The daemon recovers unassessed parse
 output after restart through the same deterministic service. Native protocol v3
 supplies feedback/history commands and bounded retry instructions, preserving the
 original v1/v2 bytes. Interrupted responses do not prove that persistence failed.
+
+`registry-author` submits one governed authoring envelope per call through the
+Manager session path, beside `propose`:
+
+```json
+{"sourceGeneration":"<current generation>","idempotencyKey":"author-1","action":{"action":"create","kind":"skill","name":"Binary Format Tests","reason":"Existing Skills lack binary format assertions","definition":{"skill":{"instructions":"...","capabilities":["binary-tests"]}}}}
+```
+
+`action` is `create` or `append_version` with `kind` `skill` or `agent_type`.
+Creation supplies `name` only; versioning supplies `entryId` plus the current
+`expectedRevision` from the entry's retained metadata. Registry identity is
+minted by the daemon; the envelope never carries an entry ID for creation. The
+action uses the same validation as human authoring, and governance must enable
+the matching `allowCreate*` flag with remaining quota. Only technical
+conversations may author reusable definitions; engagement or mission material
+must become a recommendation for review instead. Appending a version never
+activates it, and authoring never edits entry policy or ownership. One stable
+idempotency key per identical envelope; a changed envelope uses a new key, and
+changed bytes under a reused key conflict. Envelopes are limited to 288 KiB.
+The receipt seals request/context/conversation hashes, native attribution and
+the exact target version; retained refusals consume no quota. Prefer existing
+Types and Skills, then new versions, then a new Skill, and only then a new
+Type. `registry-receipts` pages a request's retained outcomes (limit 1–100,
+continue with `nextAfterId`); `registry-receipt` reads one exact receipt.
+Manager-authored definitions appear immediately in the normal registry listing
+with manager origin and are manually usable subject to their entry policy.
+Native protocol v4 supplies the authoring/history commands and instructions,
+preserving the original v1/v2/v3 bytes.
 
 `contexts` lists at most 32 immutable routing inputs; `context` reads exact bytes,
 per-item classification, pinned clearance, native generation, tool instructions
