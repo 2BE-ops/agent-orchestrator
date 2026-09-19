@@ -202,6 +202,14 @@ type AdaptiveOrchestratorPlanReceipt struct {
 	CreatedAt      time.Time
 }
 
+type AdaptiveProjectControl struct {
+	ProjectID string
+	State     string
+	Actor     string
+	Reason    string
+	UpdatedAt time.Time
+}
+
 type AdaptiveProjectGoal struct {
 	ProjectID      string
 	CurrentVersion int64
@@ -500,6 +508,21 @@ type AdaptiveTaskMessageDelivery struct {
 type AdaptiveTaskMessageDispatchCursor struct {
 	ID            int64
 	AfterSequence int64
+}
+
+type AdaptiveTaskNeedsHuman struct {
+	ID          string
+	TaskID      string
+	ProjectID   string
+	ReasonCode  string
+	Detail      string
+	Actor       string
+	Snapshot    string
+	ContentHash string
+	CreatedAt   time.Time
+	ResolvedAt  sql.NullTime
+	Resolution  sql.NullString
+	ResolvedBy  sql.NullString
 }
 
 type AdaptiveTaskResult struct {

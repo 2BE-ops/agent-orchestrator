@@ -24,6 +24,26 @@ func validateAdaptiveTaskGraph(ctx context.Context, q *gen.Queries, projectID, t
 		return fmt.Errorf("%w: project task limit is 1000", ports.ErrTaskInvalid)
 	}
 	parents[taskID] = definition.ParentID
+	edges, err := q.AdaptiveTaskGraphEdges(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	dependencies := make(map[string][]string, len(parents))
+	for _, edge := range edges {
+		if edge.TaskID != taskID {
+			dependencies[edge.TaskID] = append(dependencies[edge.TaskID], edge.DependencyID)
+		}
+	}
+	dependencies[taskID] = definition.Dependencies
+	return validateTaskGraphMaps(parents, dependencies)
+}
+
+// validateTaskGraphMaps checks the complete parent/dependency overlay: every
+// parent belongs to the same project map, the hierarchy stays acyclic within
+// eight levels, dependencies name other tasks, and the dependency graph has
+// no cycle. The write path and the dry-run simulation share it, so a
+// rehearsed plan faces exactly the validation execution applies.
+func validateTaskGraphMaps(parents map[string]string, dependencies map[string][]string) error {
 	for id := range parents {
 		seen := map[string]bool{}
 		for ancestor := id; ancestor != ""; ancestor = parents[ancestor] {
@@ -39,22 +59,13 @@ func validateAdaptiveTaskGraph(ctx context.Context, q *gen.Queries, projectID, t
 			}
 		}
 	}
-	edges, err := q.AdaptiveTaskGraphEdges(ctx, projectID)
-	if err != nil {
-		return err
-	}
-	dependencies := make(map[string][]string, len(parents))
-	for _, edge := range edges {
-		if edge.TaskID != taskID {
-			dependencies[edge.TaskID] = append(dependencies[edge.TaskID], edge.DependencyID)
+	for id, deps := range dependencies {
+		for _, dependency := range deps {
+			if _, exists := parents[dependency]; !exists || dependency == id {
+				return fmt.Errorf("%w: dependencies must name other tasks in the same project", ports.ErrTaskInvalid)
+			}
 		}
 	}
-	for _, dependency := range definition.Dependencies {
-		if _, exists := parents[dependency]; !exists || dependency == taskID {
-			return fmt.Errorf("%w: dependencies must name other tasks in the same project", ports.ErrTaskInvalid)
-		}
-	}
-	dependencies[taskID] = definition.Dependencies
 	color := map[string]int{}
 	var visit func(string) bool
 	visit = func(id string) bool {

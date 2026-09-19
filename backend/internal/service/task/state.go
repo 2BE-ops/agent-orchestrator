@@ -11,9 +11,10 @@ import (
 // State is a read projection. It is never stored on a session or used instead of
 // transactional admission, and expiry never means that a worker has died.
 type State struct {
-	Phase                  string `json:"phase" enum:"planned,blocked,ready,leased,working,failed,completed,cancelling,cancelled"`
+	Phase                  string `json:"phase" enum:"planned,blocked,ready,leased,working,failed,completed,needs-human,cancelling,cancelled"`
 	Reason                 string `json:"reason"`
 	CancelledBy            string `json:"cancelledBy,omitempty"`
+	NeedsHumanTaskID       string `json:"needsHumanTaskId,omitempty"`
 	RequiresReconciliation bool   `json:"requiresReconciliation"`
 }
 
@@ -54,6 +55,18 @@ func (m *Manager) state(ctx context.Context, view View) (State, error) {
 			phase, reason = "cancelling", "Cancellation requested; worker ownership is still reserved"
 		}
 		return State{Phase: phase, Reason: reason, CancelledBy: cancelledBy, RequiresReconciliation: view.Lease != nil}, nil
+	}
+	// Needs Human blocks the affected task and its descendants; a retained
+	// lease still names reconciliation, and unrelated branches stay schedulable.
+	if pending, ok, err := m.store.GetPendingTaskNeedsHuman(ctx, view.Task.ID); err != nil {
+		return State{}, err
+	} else if ok {
+		return State{Phase: "needs-human", Reason: pending.ReasonCode + ": " + pending.Detail, NeedsHumanTaskID: pending.TaskID, RequiresReconciliation: view.Lease != nil}, nil
+	}
+	if ancestor, err := m.store.NeedsHumanTaskAncestor(ctx, view.Task.ID); err != nil {
+		return State{}, err
+	} else if ancestor != "" {
+		return State{Phase: "blocked", Reason: "An ancestor waits for human input before admission", NeedsHumanTaskID: ancestor}, nil
 	}
 	if view.Lease != nil {
 		state := State{Phase: "leased", Reason: "Exclusive task attempt is reserved", RequiresReconciliation: view.Lease.NeedsReconciliation(time.Now().UTC())}

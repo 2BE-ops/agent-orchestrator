@@ -2,6 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
@@ -31,9 +34,21 @@ func schedulerWorkerCap(ctx context.Context, q *gen.Queries) (int, error) {
 // worker capacity. Running under the store's single-writer lock, the count and
 // the insert cannot interleave with another spawn, and the count derives from
 // durable session state, so restarts and worker termination keep it exact.
-func admitSessionByKind(ctx context.Context, q *gen.Queries, kind domain.SessionKind) error {
-	if kind != domain.KindWorker {
+// A project whose control state fences admissions refuses worker creation in
+// the same transaction, so no launch caller can slip past a pause or stop.
+func admitSessionByKind(ctx context.Context, q *gen.Queries, rec domain.SessionRecord) error {
+	if rec.Kind != domain.KindWorker {
 		return nil
+	}
+	if rec.ProjectID != "" {
+		control, err := q.GetProjectControl(ctx, string(rec.ProjectID))
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		// An absent control row is the durable running default.
+		if err == nil && domain.ProjectControlState(control.State) != domain.ProjectRunning {
+			return fmt.Errorf("%w: project is %s", ports.ErrProjectAdmissionsFenced, control.State)
+		}
 	}
 	limit, err := schedulerWorkerCap(ctx, q)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
@@ -128,4 +129,35 @@ func requireTaskRunIntent(ctx context.Context, q *gen.Queries, id string) error 
 		return nil
 	}
 	return err
+}
+
+// requireTaskNeedsHumanClear fences new attempts behind a pending request on
+// the task or one of its ancestors. Manager assessment may still observe a
+// needs-human task; only admission is fenced.
+func requireTaskNeedsHumanClear(ctx context.Context, q *gen.Queries, id string) error {
+	_, err := q.NeedsHumanTaskAncestor(ctx, id)
+	if err == nil {
+		return ports.ErrTaskNeedsHumanFenced
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	return err
+}
+
+// requireProjectAdmissionsOpen fences new attempts while a project control
+// state other than running holds. Idempotent dispatch replays bypass this:
+// only genuinely new admissions respect the fence.
+func requireProjectAdmissionsOpen(ctx context.Context, q *gen.Queries, projectID string) error {
+	control, err := q.GetProjectControl(ctx, projectID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if domain.ProjectControlState(control.State) != domain.ProjectRunning {
+		return fmt.Errorf("%w: project is %s", ports.ErrProjectAdmissionsFenced, control.State)
+	}
+	return nil
 }

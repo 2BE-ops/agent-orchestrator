@@ -1008,6 +1008,8 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 			return domain.SessionRecord{}, 0, 0, apierr.TooManyRequests("SCHEDULER_WORKER_LIMIT", "The daemon-wide concurrent worker limit is reached; stop a worker or raise the cap in settings")
 		case errors.Is(err, ports.ErrSchedulerAgentTypeLimit):
 			return domain.SessionRecord{}, 0, 0, apierr.TooManyRequests("SCHEDULER_AGENT_TYPE_LIMIT", "This Agent Type reached its maxParallelWorkers limit; launch is refused until a worker stops")
+		case errors.Is(err, ports.ErrProjectAdmissionsFenced):
+			return domain.SessionRecord{}, 0, 0, apierr.TooManyRequests("PROJECT_ADMISSIONS_FENCED", "The project's control state fences new worker launches; resume or inspect the project control")
 		}
 		return domain.SessionRecord{}, 0, 0, wrapSpawnStageEarly(ErrSpawnCreate, err)
 	}

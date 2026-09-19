@@ -40,7 +40,9 @@ INSERT INTO sessions(id,project_id,num,activity_last_at,created_at,updated_at) V
 	if _, err := s.ReviseAcceptanceCriteria(ctx, "migration-task", criteria, mutation); err != nil {
 		t.Fatal(err)
 	}
-	upTo(t, db, 167)
+	// Reservation paths carry the current admission fences, so fixture
+	// seeding runs against the fully migrated schema.
+	upTo(t, db, 182)
 	if err := s.SetTaskMessageDispatchCursor(ctx, 19); err != nil {
 		t.Fatal(err)
 	}

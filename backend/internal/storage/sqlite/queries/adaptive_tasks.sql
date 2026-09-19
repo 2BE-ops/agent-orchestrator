@@ -10,6 +10,9 @@ SELECT id FROM adaptive_tasks WHERE project_id=? AND id > ? ORDER BY id LIMIT ?;
 -- name: AdaptiveTaskGraphNodes :many
 SELECT id,parent_id FROM adaptive_tasks WHERE project_id=?;
 
+-- name: AdaptiveTaskGraphState :many
+SELECT id,parent_id,revision FROM adaptive_tasks WHERE project_id=?;
+
 -- name: AdaptiveTaskGraphEdges :many
 SELECT task_id,dependency_id FROM adaptive_task_dependencies WHERE project_id=?;
 

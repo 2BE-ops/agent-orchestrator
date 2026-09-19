@@ -101,6 +101,39 @@ func (q *Queries) AdaptiveTaskGraphNodes(ctx context.Context, projectID string) 
 	return items, nil
 }
 
+const adaptiveTaskGraphState = `-- name: AdaptiveTaskGraphState :many
+SELECT id,parent_id,revision FROM adaptive_tasks WHERE project_id=?
+`
+
+type AdaptiveTaskGraphStateRow struct {
+	ID       string
+	ParentID sql.NullString
+	Revision int64
+}
+
+func (q *Queries) AdaptiveTaskGraphState(ctx context.Context, projectID string) ([]AdaptiveTaskGraphStateRow, error) {
+	rows, err := q.db.QueryContext(ctx, adaptiveTaskGraphState, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AdaptiveTaskGraphStateRow{}
+	for rows.Next() {
+		var i AdaptiveTaskGraphStateRow
+		if err := rows.Scan(&i.ID, &i.ParentID, &i.Revision); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const clearAdaptiveTaskDependencies = `-- name: ClearAdaptiveTaskDependencies :exec
 DELETE FROM adaptive_task_dependencies WHERE task_id=?
 `

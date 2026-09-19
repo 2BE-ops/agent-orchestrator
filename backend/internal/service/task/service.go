@@ -26,6 +26,7 @@ type Store interface {
 	ports.TaskEvaluationStore
 	ports.TaskReviewStore
 	ports.TaskPerformanceStore
+	ports.TaskNeedsHumanStore
 	GetReviewRun(context.Context, string) (domain.ReviewRun, bool, error)
 	GetEffectiveWorkerConfiguration(context.Context, domain.SessionID) (domain.WorkerConfiguration, int64, bool, error)
 	GetSession(context.Context, domain.SessionID) (domain.SessionRecord, bool, error)
