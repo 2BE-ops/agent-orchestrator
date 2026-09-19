@@ -67,6 +67,16 @@ beforeEach(() => {
 });
 
 describe("useWorkspaceQuery", () => {
+	it("retains a dedicated native Agent Manager role in daemon session reads", async () => {
+		respondWith({
+			projects: { data: { projects: [{ id: "p1", name: "Project", path: "/tmp/project" }] } },
+			sessions: { data: { sessions: [{ id: "manager", projectId: "p1", kind: "agent_manager", harness: "codex", status: "working", mode: "chat", activity: { state: "active", lastActivityAt: "2026-01-01T00:00:00Z" }, updatedAt: "2026-01-01T00:00:00Z", prs: [] }] } },
+		});
+		const { result } = renderHook(() => useWorkspaceQuery(), { wrapper });
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+		expect(result.current.data?.[0].sessions[0]).toMatchObject({ id: "manager", kind: "agent_manager", mode: "chat" });
+	});
+
 	it.each(["checking", "unavailable"] as const)("does not expose unverified activity while %s", async (statusReadiness) => {
 		respondWith({
 			projects: { data: { projects: [{ id: "p1", name: "Project", path: "/tmp/project" }] } },

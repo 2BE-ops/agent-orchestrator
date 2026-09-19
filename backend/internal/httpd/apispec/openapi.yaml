@@ -3502,6 +3502,188 @@ paths:
       summary: Inspect an exact retained Manager configuration
       tags:
       - agent-managers
+  /api/v1/projects/{id}/agent-manager/controller:
+    get:
+      operationId: getCurrentAgentManagerController
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManagerCurrentControllerResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect reserved ownership without inferring native liveness
+      tags:
+      - agent-managers
+  /api/v1/projects/{id}/agent-manager/controllers:
+    post:
+      operationId: startAgentManagerController
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentManagerStartRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManagerStartResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Admit a configured native Manager once or inspect its exact retry
+      tags:
+      - agent-managers
+  /api/v1/projects/{id}/agent-manager/controllers/{controllerId}:
+    get:
+      operationId: getAgentManagerController
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: path
+        name: controllerId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManagerControllerResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect retained admission and native dispatch facts
+      tags:
+      - agent-managers
   /api/v1/projects/{id}/agent-manager/inbox:
     get:
       operationId: listAgentManagerInbox
@@ -12907,6 +13089,79 @@ components:
       - expectedRevision
       - reason
       type: object
+    AgentManagerController:
+      properties:
+        actor:
+          $ref: '#/components/schemas/AdaptiveActor'
+        configurationVersion:
+          format: int64
+          type: integer
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        projectId:
+          type: string
+        reason:
+          type: string
+        releaseReason:
+          type: string
+        releasedAt:
+          format: date-time
+          type:
+          - "null"
+          - string
+      required:
+      - id
+      - projectId
+      - configurationVersion
+      - actor
+      - reason
+      - createdAt
+      type: object
+    AgentManagerControllerDispatch:
+      properties:
+        configurationHash:
+          type: string
+        controllerId:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        sessionId:
+          type: string
+      required:
+      - controllerId
+      - sessionId
+      - configurationHash
+      - createdAt
+      type:
+      - object
+      - "null"
+    AgentManagerControllerResponse:
+      properties:
+        controller:
+          $ref: '#/components/schemas/AgentManagerController'
+        dispatch:
+          $ref: '#/components/schemas/AgentManagerControllerDispatch'
+        pendingOperation:
+          $ref: '#/components/schemas/AgentManagerExecutionOperation'
+      required:
+      - controller
+      - dispatch
+      - pendingOperation
+      type: object
+    AgentManagerCurrentControllerResponse:
+      properties:
+        state:
+          anyOf:
+          - type: "null"
+          - $ref: '#/components/schemas/AgentManagerControllerResponse'
+            type: object
+      required:
+      - state
+      type: object
     AgentManagerDefinition:
       properties:
         agentTypeId:
@@ -12948,6 +13203,31 @@ components:
       - configurationVersion
       - reason
       type: object
+    AgentManagerExecutionOperation:
+      properties:
+        controllerId:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        kind:
+          enum:
+          - dispatch
+          - restore
+          type: string
+        sessionId:
+          type: string
+      required:
+      - id
+      - controllerId
+      - sessionId
+      - kind
+      - createdAt
+      type:
+      - object
+      - "null"
     AgentManagerPolicy:
       properties:
         allowCreateSkills:
@@ -13206,6 +13486,30 @@ components:
       required:
       - outcome
       - reason
+      type: object
+    AgentManagerStartRequest:
+      properties:
+        configurationVersion:
+          format: int64
+          type: integer
+        id:
+          type: string
+        reason:
+          type: string
+      required:
+      - id
+      - configurationVersion
+      - reason
+      type: object
+    AgentManagerStartResponse:
+      properties:
+        created:
+          type: boolean
+        state:
+          $ref: '#/components/schemas/AgentManagerControllerResponse'
+      required:
+      - state
+      - created
       type: object
     AgentModelInfo:
       properties:

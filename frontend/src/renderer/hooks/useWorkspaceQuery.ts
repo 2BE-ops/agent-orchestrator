@@ -20,6 +20,7 @@ import {
 	toProjectKind,
 	toSessionActivity,
 	toSessionStatus,
+	toSessionKind,
 	newestActiveOrchestrator,
 	attentionZone,
 	workerSessions,
@@ -99,7 +100,7 @@ function toWorkspaceSession(
 			}
 			: undefined,
 		autoReviewEnabled: session.autoReviewEnabled ?? false,
-		kind: session.kind === "orchestrator" ? "orchestrator" : session.kind === "worker" ? "worker" : undefined,
+		kind: toSessionKind(session.kind),
 		mode: session.mode === "chat" ? "chat" : "tui",
 		branch: session.branch || undefined,
 		status,
@@ -166,7 +167,7 @@ function toLocalWorkspaceSession(
 			permissions: session.reviewerConfig.permissions ?? undefined,
 		} : undefined,
 		autoReviewEnabled: session.autoReviewEnabled ?? false,
-		kind: session.kind === "orchestrator" ? "orchestrator" : session.kind === "worker" ? "worker" : undefined,
+		kind: toSessionKind(session.kind),
 		// Carried through verbatim: the session surface must render from
 		// the mode this session was created with, not from the current default.
 		mode: session.mode === "chat" ? "chat" : "tui",
@@ -293,7 +294,7 @@ function toCloudWorkspaceSession(
 		workspaceName: project.displayName,
 		title: session.displayName || session.id,
 		provider: toAgentProvider(session.harness),
-		kind: session.kind === "orchestrator" ? "orchestrator" : "worker",
+		kind: toSessionKind(session.kind) ?? "worker",
 		branch: session.branch || undefined,
 		status: toSessionStatus(session.status, session.isTerminated),
 		isTerminated: session.isTerminated,

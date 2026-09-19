@@ -719,6 +719,16 @@ do not infer that a failed connection permits another process. Current/historica
 controller reads expose admission, dispatch and pending-operation facts without
 claiming native liveness. API/daemon wiring and classified work delivery follow.
 
+Stage 14d2 binds that service to the daemon's shared session manager and exposes
+strict 16 KiB start, current-ownership and exact-controller HTTP/CLI operations.
+Start accepts only stable ID, governance version and reason; the controller adds
+the human actor. Exact retries remain inspection after policy disable. Responses
+retain explicit nulls for absent ownership/binding/pending operations; source-owner
+internals never enter the wire shape. Frontend session mapping preserves
+`agent_manager` in both summaries and details and excludes Managers from worker
+and orchestrator populations. Native work payloads/protocol delivery remain the
+next slice; this start operation alone makes no routing or worker-launch decision.
+
 Stage 14c1 adds the durable Manager inbox (0171). Routing requests reference exact
 task/criteria and governance versions plus hashes, without embedding task content.
 They are independent of a native controller's lifetime. Enqueue serializes with

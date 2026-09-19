@@ -76,6 +76,9 @@ var legacyActorlessSystemCLICommands = map[string]struct{}{
 
 var legacyActorlessUserCLICommands = map[string]struct{}{
 	"ao agent-manager":                    {},
+	"ao agent-manager start":              {},
+	"ao agent-manager current":            {},
+	"ao agent-manager controller":         {},
 	"ao agent-manager show":               {},
 	"ao agent-manager configure":          {},
 	"ao agent-manager configurations":     {},

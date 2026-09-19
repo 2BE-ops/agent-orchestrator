@@ -516,6 +516,10 @@ func Run() error {
 	}
 	sessionSvc.SetChatProviderPreserver(chatSvc.PreservesProviderOnRestart)
 	sessMgr = wiredSessMgr
+	managerSvc := managersvc.New(store)
+	if native, ok := sessMgr.(managersvc.NativeRuntime); ok {
+		managerSvc = managersvc.NewWithRuntime(store, native)
+	}
 	if configured, ok := sessMgr.(interface {
 		SetWorkerConfigurationResolver(ports.WorkerConfigurationResolver)
 	}); ok {
@@ -789,7 +793,7 @@ func Run() error {
 		Notifications:      notifier,
 		Registry:           registrySvc,
 		AdaptiveTasks:      tasksvc.New(store, tasksvc.WithArtifactCollector(taskverify.Artifacts{}), tasksvc.WithNativeReviews(registrySvc, reviewSvc)),
-		AgentManagers:      managersvc.New(store),
+		AgentManagers:      managerSvc,
 		ProjectKnowledge:   knowledgesvc.New(store),
 		NotificationStream: notificationHub,
 		Push:               pushRegistry,

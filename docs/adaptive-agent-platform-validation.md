@@ -4,6 +4,38 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 14d2 - native start API/CLI and Manager identity (2026-09-19)
+
+The daemon binds the dedicated start service to its existing session manager.
+Three new operations start under exact governance, inspect current reserved
+ownership and read an exact historical controller. CLI commands remain thin HTTP
+clients with stable caller-provided retry IDs and 16 KiB JSON bodies. Unknown
+authority/configuration fields, invalid bounds and missing native support cannot
+reserve ownership. Real SQLite HTTP tests verify derived human identity, native
+session role, scoped reads, exact retries after disabling governance and conflict
+envelopes. CLI tests preserve input bytes, path escaping, errors/request IDs and
+usage exit codes. Generated API schemas retain nullable ownership/dispatch/operation
+facts and omit internal owner details. New telemetry paths redact controller IDs.
+
+Frontend mappings now preserve `agent_manager` in summary/detail data, and worker
+population/orchestrator helpers exclude the dedicated role. All 146 affected
+frontend tests PASS (3 files, 3.63s). The first run exposed a test-fixture omission:
+the new fixture lacked activity and consumed a process-wide warning deduplication
+key; giving it valid activity fixed the fixture and the complete affected files.
+Frontend typecheck PASS. Focused HTTP/CLI PASS (0.572s/0.234s); added CLI error
+coverage PASS (0.223s). Full Manager service/envelope PASS (cached), router (1.447s),
+API spec (0.438s), specgen (15.522s), CLI (27.458s), telemetry (0.633s) and embedded
+skill assets (0.942s) PASS. Full HTTP controllers FAIL (16.916s) only at recorded
+Windows pairing-rename/file-URL-clone failures. Full daemon FAIL (4.558s) only at
+the recorded TestStabilizeWorkingDirectoryChdirsToDataDir temporary-directory
+cleanup failure. Backend build, API generation and pinned affected new-diff lint
+PASS (0 issues). Source/generated/nullable-wire and whitespace review PASS. Logs:
+`.cache/adaptive-tests/stage14d2-*`.
+
+Classified durable inbox delivery and generation-specific native tool instructions
+remain the next slice. This milestone does not claim automatic semantic routing,
+worker selection or a live provider demonstration.
+
 ## Stage 14d1 - dedicated native controller start service (2026-09-19)
 
 Manager service now accepts bounded stable admission IDs and exact governance

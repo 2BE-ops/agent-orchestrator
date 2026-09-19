@@ -1206,6 +1206,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/agent-manager/controller": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect reserved ownership without inferring native liveness */
+        get: operations["getCurrentAgentManagerController"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/agent-manager/controllers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Admit a configured native Manager once or inspect its exact retry */
+        post: operations["startAgentManagerController"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/agent-manager/controllers/{controllerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect retained admission and native dispatch facts */
+        get: operations["getAgentManagerController"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/agent-manager/inbox": {
         parameters: {
             query?: never;
@@ -3851,6 +3902,34 @@ export interface components {
             expectedRevision: number;
             reason: string;
         };
+        AgentManagerController: {
+            actor: components["schemas"]["AdaptiveActor"];
+            /** Format: int64 */
+            configurationVersion: number;
+            /** Format: date-time */
+            createdAt: string;
+            id: string;
+            projectId: string;
+            reason: string;
+            releaseReason?: string;
+            /** Format: date-time */
+            releasedAt?: null | string;
+        };
+        AgentManagerControllerDispatch: {
+            configurationHash: string;
+            controllerId: string;
+            /** Format: date-time */
+            createdAt: string;
+            sessionId: string;
+        } | null;
+        AgentManagerControllerResponse: {
+            controller: components["schemas"]["AgentManagerController"];
+            dispatch: components["schemas"]["AgentManagerControllerDispatch"];
+            pendingOperation: components["schemas"]["AgentManagerExecutionOperation"];
+        };
+        AgentManagerCurrentControllerResponse: {
+            state: null | components["schemas"]["AgentManagerControllerResponse"];
+        };
         AgentManagerDefinition: {
             agentTypeId: string;
             /** Format: int64 */
@@ -3868,6 +3947,15 @@ export interface components {
             /** Format: int64 */
             taskRevision: number;
         };
+        AgentManagerExecutionOperation: {
+            controllerId: string;
+            /** Format: date-time */
+            createdAt: string;
+            id: string;
+            /** @enum {string} */
+            kind: "dispatch" | "restore";
+            sessionId: string;
+        } | null;
         AgentManagerPolicy: {
             allowCreateSkills: boolean;
             allowCreateTypes: boolean;
@@ -3963,6 +4051,16 @@ export interface components {
             /** @enum {string} */
             outcome: "cancelled" | "superseded" | "needs_human";
             reason: string;
+        };
+        AgentManagerStartRequest: {
+            /** Format: int64 */
+            configurationVersion: number;
+            id: string;
+            reason: string;
+        };
+        AgentManagerStartResponse: {
+            created: boolean;
+            state: components["schemas"]["AgentManagerControllerResponse"];
         };
         AgentModelInfo: {
             defaultEffort?: string;
@@ -11626,6 +11724,242 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentManagerConfiguration"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getCurrentAgentManagerController: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentManagerCurrentControllerResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    startAgentManagerController: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentManagerStartRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentManagerStartResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getAgentManagerController: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+                controllerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentManagerControllerResponse"];
                 };
             };
             /** @description Bad Request */

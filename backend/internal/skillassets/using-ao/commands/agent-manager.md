@@ -8,6 +8,9 @@ ao agent-manager configurations <project> --limit 20
 ao agent-manager configuration <project> <version>
 ao agent-manager audit <project> --cursor 0 --limit 20
 ao agent-manager configure <project> --file manager.json
+ao agent-manager start <project> --file start.json
+ao agent-manager current <project>
+ao agent-manager controller <project> <controller-id>
 ao agent-manager inbox <project> --cursor 0 --limit 20
 ao agent-manager requests <project> --cursor 0 --limit 20
 ao agent-manager request <project> <request>
@@ -24,6 +27,25 @@ policy permissions. Its API JSON includes `definition`, `expectedRevision` and
 `reason`; origin/actor fields are not accepted. Use revision 0 only for initial
 configuration, then the current configuration's `number`. A stale edit conflicts.
 Configuration edits do not launch a controller or alter running configuration.
+
+`start` is an explicit user-directed native launch under that governance. The
+16 KiB JSON body contains only `id`, `configurationVersion` (1-1000), and `reason`:
+
+```json
+{"id":"manager-start-1","configurationVersion":1,"reason":"Start the configured project Manager"}
+```
+
+Retain that stable ID for retries. Only a new admission may call the native
+engine; an exact retry inspects retained state even after a failed connection or
+an unseeded crash. Changed fields conflict. `current` returns `state: null` when
+there is no reserved controller. `controller` inspects an exact admission after
+policy changes or termination. The response includes the native session binding
+and any unresolved operation; absence of an operation is not a liveness claim.
+Do not create another start ID to work around uncertain native ownership. The
+configured Type/version supplies native TUI/Chat mode, instructions and Skills;
+the start body cannot override role, actor or configuration. The dedicated native
+role is `agent_manager`, separate from workers and the Orchestrator. Starting a
+controller does not itself select or launch a task worker.
 
 The definition requires schema 1, `enabled`, an exact `agentTypeId` and positive
 `agentTypeVersion`, and explicit `policy`. Policy has `optimization` (quality,

@@ -25,6 +25,9 @@ const captureMock = vi.mocked(captureRendererEvent);
 const sentryCaptureMock = vi.mocked(captureApiErrorToSentry);
 
 it("redacts Manager project, configuration and request identities from telemetry routes", () => {
+	expect(normalizeApiOperation("POST", "/api/v1/projects/private-project/agent-manager/controllers")).toBe("POST /api/v1/projects/:id/agent-manager/controllers");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/controller")).toBe("GET /api/v1/projects/:id/agent-manager/controller");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/controllers/private-controller")).toBe("GET /api/v1/projects/:id/agent-manager/controllers/:id");
 	expect(normalizeApiOperation("PUT", "/api/v1/projects/private-project/agent-manager")).toBe("PUT /api/v1/projects/:id/agent-manager");
 	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/configurations")).toBe("GET /api/v1/projects/:id/agent-manager/configurations");
 	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/configurations/42")).toBe("GET /api/v1/projects/:id/agent-manager/configurations/:id");

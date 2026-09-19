@@ -27,6 +27,28 @@ import (
 // AgentManagerConfigureRequest changes desired policy at an expected revision.
 type AgentManagerConfigureRequest managersvc.ConfigureInput
 
+// AgentManagerStartRequest identifies exact, retryable native admission.
+type AgentManagerStartRequest managersvc.ControllerStartInput
+
+// AgentManagerControllerResponse reports admission and native-operation facts.
+type AgentManagerControllerResponse managersvc.ControllerState
+
+// AgentManagerStartResponse acknowledges admission; retries only inspect state.
+type AgentManagerStartResponse struct {
+	State   AgentManagerControllerResponse `json:"state"`
+	Created bool                           `json:"created"`
+}
+
+// AgentManagerCurrentControllerResponse distinguishes absent reserved ownership.
+type AgentManagerCurrentControllerResponse struct {
+	State *AgentManagerControllerResponse `json:"state"`
+}
+
+// AgentManagerControllerIDParam identifies retained project controller admission.
+type AgentManagerControllerIDParam struct {
+	ControllerID string `path:"controllerId"`
+}
+
 // AgentManagerEnqueueRequest pins retryable routing intent without actor fields.
 type AgentManagerEnqueueRequest managersvc.EnqueueInput
 

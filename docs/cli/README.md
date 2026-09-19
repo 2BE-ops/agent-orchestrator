@@ -403,6 +403,14 @@ a running controller's pins. `show`, `configurations`, `configuration <project>
 <version>` and `audit` inspect the current policy and immutable history as JSON.
 History/audit accept `--cursor` and `--limit` (1–100).
 
+`start <project> --file start.json` explicitly starts the configured native Manager
+with a stable `id`, exact `configurationVersion` and `reason`. An exact retry reads
+retained admission and never authorizes another native launch. `current <project>`
+reports reserved ownership (or null); `controller <project> <controller-id>` reads
+an exact retained admission and session binding. A pending native operation requires
+reconciliation, not another start ID. Native mode and configuration come from the
+pinned Type; starting the controller does not itself launch task workers.
+
 The request contains `definition`, `expectedRevision` (0 only initially) and a
 reason. The definition pins an exact Agent Type version and carries explicit,
 bounded creation/inbox/retry policy. Creation is opt-in; entry-level ownership

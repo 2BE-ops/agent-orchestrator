@@ -11,6 +11,9 @@ import {
 	toAgentProvider,
 	toSessionActivity,
 	toSessionStatus,
+	toSessionKind,
+	workerSessions,
+	isOrchestratorSession,
 	openPRs,
 	mergedPRCount,
 	primaryPR,
@@ -45,6 +48,18 @@ function sessionWith(overrides: Partial<WorkspaceSession>): WorkspaceSession {
 		...overrides,
 	};
 }
+
+describe("Manager session identity", () => {
+	it("preserves the native Manager role and excludes it from worker and orchestrator populations", () => {
+		const manager = sessionWith({ id: "project-orchestrator", kind: "agent_manager" });
+		const worker = sessionWith({ id: "worker", kind: "worker" });
+		expect(toSessionKind("agent_manager")).toBe("agent_manager");
+		expect(toSessionKind("unknown")).toBeUndefined();
+		expect(isOrchestratorSession(manager)).toBe(false);
+		expect(newestActiveOrchestrator([manager])).toBeUndefined();
+		expect(workerSessions([manager, worker])).toEqual([worker]);
+	});
+});
 
 const pr = (overrides: Partial<PullRequestFacts> & { number: number; state: PRState }): PullRequestFacts => ({
 	url: `https://example.com/pr/${overrides.number}`,

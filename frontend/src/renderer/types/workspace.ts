@@ -26,7 +26,11 @@ export type ChangedFile = {
 	staged?: boolean;
 };
 
-export type SessionKind = "worker" | "orchestrator";
+export type SessionKind = "worker" | "orchestrator" | "agent_manager";
+
+export function toSessionKind(kind?: string): SessionKind | undefined {
+	return kind === "worker" || kind === "orchestrator" || kind === "agent_manager" ? kind : undefined;
+}
 
 /** Lifecycle state of a single pull request, mirrors the daemon's enum. */
 export type PRState = "open" | "draft" | "merged" | "closed";
@@ -228,7 +232,7 @@ export function primaryPR(session: WorkspaceSession): PullRequestFacts | undefin
 }
 
 export function isOrchestratorSession(session: Pick<WorkspaceSession, "id" | "kind">): boolean {
-	return session.kind === "orchestrator" || session.id.endsWith("-orchestrator");
+	return session.kind !== "agent_manager" && (session.kind === "orchestrator" || session.id.endsWith("-orchestrator"));
 }
 
 /**
@@ -295,7 +299,7 @@ function validTimestamp(value?: string): number | undefined {
 }
 
 export function workerSessions(sessions: WorkspaceSession[]): WorkspaceSession[] {
-	return sessions.filter((s) => !isOrchestratorSession(s));
+	return sessions.filter((s) => s.kind !== "agent_manager" && !isOrchestratorSession(s));
 }
 
 /** Worker sessions ordered by session update time, newest first. */
