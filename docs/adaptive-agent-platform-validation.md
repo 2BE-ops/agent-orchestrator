@@ -4,6 +4,84 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 21 - Task graph and Agent Manager dashboard (2026-09-19)
+
+Desktop read surfaces over the durable adaptive APIs, following the
+stage-06/07 registry-UI patterns (typed-client lib module, TanStack Query,
+inline i18n defaults, loading/error/empty states, cursor pagination).
+
+### What was built
+
+- Contract repair: `GET /projects/{id}/agent-manager/routing-outcomes` and
+  `GET /projects/{id}/orchestrator/planning-outcomes` parse and strictly
+  validate `after`/`afterId` + `limit` on the wire, but the generated spec
+  declared no query container (`query?: never`), so the typed client could
+  not page them. Added `OutcomeSequencePageQuery` and `OutcomeIDPageQuery`
+  DTOs in `controllers/dto.go`, registered both operations in the specgen
+  registry, and regenerated `openapi.yaml` + `frontend/src/api/schema.ts`
+  together.
+- `frontend/src/renderer/lib/adaptive-api.ts`: typed read wrappers for
+  project tasks, task detail, task attempts, the Manager controller state,
+  Manager configurations, routing outcomes (sequence paging) and project
+  active sessions, plus a worker-kind client-side filter for the shared
+  sessions list API.
+- `TaskGraphView` (`/projects/{projectId}/tasks`): the project DAG as a
+  deterministic layered layout - coordinates derive purely from the task
+  rows (longest-path depth, alphabetical columns), so no DOM measurement and
+  identical rendering on reload. Nodes are real HTML buttons carrying title,
+  phase, priority and screen-reader facts; the SVG edge layer distinguishes
+  parent edges from dependency edges (dashed). A Graph/List toggle provides
+  the accessible list view with the same facts, phase filter and search apply
+  to both, pages load through the task cursor, and the detail panel shows the
+  definition, derived state (including the needs-human origin task and lease
+  heartbeat/expiry/release facts), frozen acceptance criteria, structure
+  navigation (parent, dependencies, dependents) and attempt history with
+  dispatch-session links.
+- `AgentManagerDashboard` (`/projects/{projectId}/manager`): controller
+  status (honest no-controller empty state, admitted/released facts,
+  dispatch session link, pending operation), the active governance
+  configuration (controller Type+version, creation-policy badges, newest
+  version derived from the oldest-first page order), the current worker
+  population (active worker-kind sessions only, with harness/model/status
+  and session links), and sealed routing decisions pairing accepted/rejected
+  outcomes and the Manager's reason with each routed task's derived fate and
+  attempt count, paged by decision sequence.
+- Navigation: board entry buttons (Task graph, Agent Manager) in
+  `ProjectBoardActions`, rendered both in the in-panel board row and the
+  Windows ShellTopbar, suppressed for standalone workspaces; routes are
+  file-registered (`routeTree.gen.ts` regenerated through the vite router
+  plugin).
+
+### Findings
+
+- The two stage-18 attribution endpoints are not the only ones with
+  undeclared query parameters: `routing-summary`/`planning-summary` accept
+  `from`/`to` windows the spec also omits. Deferred to the stage-22 metrics
+  surfaces that consume them; the outcomes endpoints fixed here are what the
+  dashboard pages through.
+- i18next's `count` option triggers plural-suffix key lookup, which bypasses
+  inline `defaultValue` strings; interpolation uses a neutral `total`
+  variable instead.
+- Configurations page oldest-first by version number; the dashboard's active
+  governance is the last item of the loaded pages.
+
+### Test evidence
+
+| Suite | Result |
+| --- | --- |
+| `npx vitest run src/renderer/components/TaskGraphView.test.tsx src/renderer/components/AgentManagerDashboard.test.tsx` (16 new tests) | PASS |
+| `npx vitest run` ShellTopbar + SessionsBoard (48) + i18n renderer-coverage + router + api-client | PASS (131 tests) |
+| `npm run typecheck` (frontend) | PASS |
+| `go test ./internal/httpd/apispec/... ./internal/httpd/... ./internal/cli/...` | PASS except the two recorded controllers Windows baselines (`TestBridgeStatusConcurrentSecurePairing`, `TestProjectsAPI_Clone`) |
+| Full renderer suite (`npx vitest run`, twice, deterministic) | 310/333 files pass, 4767 pass / 165 fail / 8 skip. All 17 failing suites and the 6 load-failing landing suites match the recorded Windows/macOS baseline classes (mac differential/blockmap/DMG/artifact verification, main-process socket/file/telemetry behaviors, landing dependencies, NewTaskDialog). NewTaskDialog (12/12) was re-run at clean HEAD with stage-21 changes stashed: identical 12/12 failure, confirming pre-existing; none of the stage-21-touched suites fail. Desktop running-app validation remains stage 25 |
+
+### Remainder
+
+- Stage 22: performance/knowledge/audit/control-center views, full
+  navigation polish, and the summary-window query contract repair.
+- Stage 25: real Electron validation of the graph/dashboard against a live
+  daemon with seeded task intent and Manager decisions.
+
 ## Stage 20 - Dry-run, Needs Human and project controls (2026-09-19)
 
 Commits `f03ab00cd` (domain/storage/fencing) and `52ba632db`
