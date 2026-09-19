@@ -167,40 +167,52 @@ func (s *Store) CreateAdaptiveTask(ctx context.Context, id string, projectID dom
 	}
 	defer s.writeMu.Unlock()
 	now := time.Now().UTC()
-	result := domain.AdaptiveTask{ID: id, ProjectID: projectID, Revision: 1, CreatedBy: mutation.Actor, CreatedAt: now, UpdatedAt: now}
+	var result domain.AdaptiveTask
 	err := s.inTx(ctx, "create adaptive task", func(q *gen.Queries) error {
-		if err := validateTaskActor(ctx, q, string(projectID), mutation.Actor); err != nil {
-			return err
-		}
-		if err := validateAdaptiveTaskGraph(ctx, q, string(projectID), id, definition); err != nil {
-			return err
-		}
-		actor, err := json.Marshal(mutation.Actor)
-		if err != nil {
-			return err
-		}
-		if err := q.InsertAdaptiveTask(ctx, gen.InsertAdaptiveTaskParams{ID: id, ProjectID: string(projectID), ParentID: sql.NullString{String: definition.ParentID, Valid: definition.ParentID != ""}, CreatedBy: string(actor), CreatedAt: now, UpdatedAt: now}); err != nil {
-			if isSQLiteUnique(err) {
-				return ports.ErrTaskConflict
-			}
-			return err
-		}
-		criteriaVersion := int64(0)
-		if criteria != nil {
-			criteriaVersion = 1
-			if err := insertTaskCriteria(ctx, q, id, 1, *criteria, mutation, now); err != nil {
-				return err
-			}
-		}
-		if _, err := insertTaskRevision(ctx, q, id, 1, criteriaVersion, definition, mutation, now); err != nil {
-			return err
-		}
-		if err := replaceTaskDependencies(ctx, q, string(projectID), id, definition.Dependencies); err != nil {
-			return err
-		}
-		return insertTaskAudit(ctx, q, id, 1, "created", mutation, now)
+		var err error
+		result, err = createAdaptiveTaskTx(ctx, q, id, projectID, definition, criteria, mutation, now)
+		return err
 	})
 	return result, err
+}
+
+// createAdaptiveTaskTx creates identity, graph, criteria and first revision
+// inside an existing transaction so composite actions can commit atomically.
+func createAdaptiveTaskTx(ctx context.Context, q *gen.Queries, id string, projectID domain.ProjectID, definition domain.TaskDefinition, criteria *domain.AcceptanceCriteria, mutation domain.TaskMutation, now time.Time) (domain.AdaptiveTask, error) {
+	result := domain.AdaptiveTask{ID: id, ProjectID: projectID, Revision: 1, CreatedBy: mutation.Actor, CreatedAt: now, UpdatedAt: now}
+	if err := validateTaskActor(ctx, q, string(projectID), mutation.Actor); err != nil {
+		return domain.AdaptiveTask{}, err
+	}
+	if err := validateAdaptiveTaskGraph(ctx, q, string(projectID), id, definition); err != nil {
+		return domain.AdaptiveTask{}, err
+	}
+	actor, err := json.Marshal(mutation.Actor)
+	if err != nil {
+		return domain.AdaptiveTask{}, err
+	}
+	if err := q.InsertAdaptiveTask(ctx, gen.InsertAdaptiveTaskParams{ID: id, ProjectID: string(projectID), ParentID: sql.NullString{String: definition.ParentID, Valid: definition.ParentID != ""}, CreatedBy: string(actor), CreatedAt: now, UpdatedAt: now}); err != nil {
+		if isSQLiteUnique(err) {
+			return domain.AdaptiveTask{}, ports.ErrTaskConflict
+		}
+		return domain.AdaptiveTask{}, err
+	}
+	criteriaVersion := int64(0)
+	if criteria != nil {
+		criteriaVersion = 1
+		if err := insertTaskCriteria(ctx, q, id, 1, *criteria, mutation, now); err != nil {
+			return domain.AdaptiveTask{}, err
+		}
+	}
+	if _, err := insertTaskRevision(ctx, q, id, 1, criteriaVersion, definition, mutation, now); err != nil {
+		return domain.AdaptiveTask{}, err
+	}
+	if err := replaceTaskDependencies(ctx, q, string(projectID), id, definition.Dependencies); err != nil {
+		return domain.AdaptiveTask{}, err
+	}
+	if err := insertTaskAudit(ctx, q, id, 1, "created", mutation, now); err != nil {
+		return domain.AdaptiveTask{}, err
+	}
+	return result, nil
 }
 
 // ReviseAdaptiveTask appends and activates a planning revision without changing old criteria.
@@ -233,56 +245,63 @@ func (s *Store) reviseAdaptiveTask(ctx context.Context, id string, definition *d
 	defer s.writeMu.Unlock()
 	var result domain.TaskRevision
 	err := s.inTx(ctx, "revise adaptive task", func(q *gen.Queries) error {
-		row, err := q.GetAdaptiveTask(ctx, id)
-		if err != nil {
-			return taskReadError(err)
-		}
-		if row.Revision != mutation.ExpectedRevision {
-			return ports.ErrTaskConflict
-		}
-		if err := validateTaskActor(ctx, q, row.ProjectID, mutation.Actor); err != nil {
-			return err
-		}
-		current, err := q.GetAdaptiveTaskRevision(ctx, gen.GetAdaptiveTaskRevisionParams{TaskID: id, Number: row.Revision})
-		if err != nil {
-			return err
-		}
-		previous, err := taskRevisionFromRow(current)
-		if err != nil {
-			return err
-		}
-		if definition == nil {
-			definition = &previous.Definition
-		}
-		if err := validateAdaptiveTaskGraph(ctx, q, row.ProjectID, id, *definition); err != nil {
-			return err
-		}
-		now := time.Now().UTC()
-		criteriaVersion, action := previous.CriteriaVersion, "revised"
-		if criteria != nil {
-			criteriaVersion++
-			action = "criteria_revised"
-			if err := insertTaskCriteria(ctx, q, id, criteriaVersion, *criteria, mutation, now); err != nil {
-				return err
-			}
-		}
-		result, err = insertTaskRevision(ctx, q, id, row.Revision+1, criteriaVersion, *definition, mutation, now)
-		if err != nil {
-			return err
-		}
-		if err := replaceTaskDependencies(ctx, q, row.ProjectID, id, definition.Dependencies); err != nil {
-			return err
-		}
-		changed, err := q.ActivateAdaptiveTaskRevision(ctx, gen.ActivateAdaptiveTaskRevisionParams{ID: id, Revision: result.Number, Revision_2: row.Revision, ParentID: sql.NullString{String: definition.ParentID, Valid: definition.ParentID != ""}, UpdatedAt: now})
-		if err != nil {
-			return err
-		}
-		if changed != 1 {
-			return ports.ErrTaskConflict
-		}
-		return insertTaskAudit(ctx, q, id, result.Number, action, mutation, now)
+		var err error
+		result, err = reviseAdaptiveTaskTx(ctx, q, id, definition, criteria, mutation, time.Now().UTC())
+		return err
 	})
 	return result, err
+}
+
+// reviseAdaptiveTaskTx appends and activates a revision inside an existing
+// transaction so composite actions can commit atomically.
+func reviseAdaptiveTaskTx(ctx context.Context, q *gen.Queries, id string, definition *domain.TaskDefinition, criteria *domain.AcceptanceCriteria, mutation domain.TaskMutation, now time.Time) (domain.TaskRevision, error) {
+	row, err := q.GetAdaptiveTask(ctx, id)
+	if err != nil {
+		return domain.TaskRevision{}, taskReadError(err)
+	}
+	if row.Revision != mutation.ExpectedRevision {
+		return domain.TaskRevision{}, ports.ErrTaskConflict
+	}
+	if err := validateTaskActor(ctx, q, row.ProjectID, mutation.Actor); err != nil {
+		return domain.TaskRevision{}, err
+	}
+	current, err := q.GetAdaptiveTaskRevision(ctx, gen.GetAdaptiveTaskRevisionParams{TaskID: id, Number: row.Revision})
+	if err != nil {
+		return domain.TaskRevision{}, err
+	}
+	previous, err := taskRevisionFromRow(current)
+	if err != nil {
+		return domain.TaskRevision{}, err
+	}
+	if definition == nil {
+		definition = &previous.Definition
+	}
+	if err := validateAdaptiveTaskGraph(ctx, q, row.ProjectID, id, *definition); err != nil {
+		return domain.TaskRevision{}, err
+	}
+	criteriaVersion, action := previous.CriteriaVersion, "revised"
+	if criteria != nil {
+		criteriaVersion++
+		action = "criteria_revised"
+		if err := insertTaskCriteria(ctx, q, id, criteriaVersion, *criteria, mutation, now); err != nil {
+			return domain.TaskRevision{}, err
+		}
+	}
+	result, err := insertTaskRevision(ctx, q, id, row.Revision+1, criteriaVersion, *definition, mutation, now)
+	if err != nil {
+		return domain.TaskRevision{}, err
+	}
+	if err := replaceTaskDependencies(ctx, q, row.ProjectID, id, definition.Dependencies); err != nil {
+		return domain.TaskRevision{}, err
+	}
+	changed, err := q.ActivateAdaptiveTaskRevision(ctx, gen.ActivateAdaptiveTaskRevisionParams{ID: id, Revision: result.Number, Revision_2: row.Revision, ParentID: sql.NullString{String: definition.ParentID, Valid: definition.ParentID != ""}, UpdatedAt: now})
+	if err != nil {
+		return domain.TaskRevision{}, err
+	}
+	if changed != 1 {
+		return domain.TaskRevision{}, ports.ErrTaskConflict
+	}
+	return result, insertTaskAudit(ctx, q, id, result.Number, action, mutation, now)
 }
 
 // GetAdaptiveTask returns a stable task identity and its active revision pointer.

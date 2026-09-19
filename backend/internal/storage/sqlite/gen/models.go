@@ -174,6 +174,44 @@ type AdaptiveAgentManagerRequestResolution struct {
 	CreatedAt time.Time
 }
 
+type AdaptiveOrchestratorPlanReceipt struct {
+	ID             string
+	ProjectID      string
+	SessionID      string
+	IdempotencyKey string
+	ActionKind     string
+	RequestHash    string
+	Outcome        string
+	CreatedAt      time.Time
+}
+
+type AdaptiveProjectGoal struct {
+	ProjectID      string
+	CurrentVersion int64
+	UpdatedAt      time.Time
+}
+
+type AdaptiveProjectGoalCompletion struct {
+	ID          string
+	ProjectID   string
+	GoalVersion int64
+	Summary     string
+	Evidence    string
+	Actor       string
+	Reason      string
+	CreatedAt   time.Time
+}
+
+type AdaptiveProjectGoalVersion struct {
+	ProjectID   string
+	Number      int64
+	Goal        string
+	Actor       string
+	Reason      string
+	ContentHash string
+	CreatedAt   time.Time
+}
+
 type AdaptiveProviderBinding struct {
 	ID        string
 	Name      string
