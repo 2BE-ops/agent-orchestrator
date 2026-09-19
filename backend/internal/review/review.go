@@ -201,6 +201,10 @@ func (e *Engine) Trigger(ctx stdctx.Context, workerID domain.SessionID, override
 
 // TriggerWithSource starts a review and records who initiated the pass.
 func (e *Engine) TriggerWithSource(ctx stdctx.Context, workerID domain.SessionID, override domain.ReviewerHarness, overrideConfig domain.AgentConfig, source domain.ReviewTriggerSource) (TriggerResult, error) {
+	return e.triggerWithTask(ctx, workerID, override, overrideConfig, source, nil)
+}
+
+func (e *Engine) triggerWithTask(ctx stdctx.Context, workerID domain.SessionID, override domain.ReviewerHarness, overrideConfig domain.AgentConfig, source domain.ReviewTriggerSource, taskContext *domain.TaskReviewContext) (TriggerResult, error) {
 	if workerID == "" {
 		return TriggerResult{}, fmt.Errorf("%w: worker session id is required", ErrInvalid)
 	}
@@ -248,6 +252,16 @@ func (e *Engine) TriggerWithSource(ctx stdctx.Context, workerID domain.SessionID
 	if err != nil {
 		return TriggerResult{}, err
 	}
+	if err := taskReviewScopeAvailable(runs, taskContext); err != nil {
+		return TriggerResult{}, err
+	}
+	if taskContext != nil {
+		for _, run := range reviewRunsForTaskScope(runs, taskContext) {
+			if run.Status == domain.ReviewRunRunning {
+				return TriggerResult{Run: run, Runs: runs, Created: false, SkipReason: "task_review_in_progress"}, nil
+			}
+		}
+	}
 
 	if err := overrideConfig.Validate(); err != nil {
 		return TriggerResult{}, fmt.Errorf("%w: reviewer config: %w", ErrInvalid, err)
@@ -275,6 +289,21 @@ func (e *Engine) TriggerWithSource(ctx stdctx.Context, workerID domain.SessionID
 		config = mergeReviewerAgentConfig(config, overrideConfig)
 		hasConfigOverride = config != resolvedConfig
 	}
+	forceFresh := taskContext != nil || latestReviewHasTaskScope(runs, harness)
+	if taskContext != nil {
+		config = taskContext.Reviewer.Effective.Config
+		hasConfigOverride = false
+		filtered := make([]domain.PullRequest, 0, len(prs))
+		for _, pr := range prs {
+			if pr.HeadSHA == taskContext.TargetCommit {
+				filtered = append(filtered, pr)
+			}
+		}
+		prs = filtered
+		if len(prs) == 0 || len(prs) > 16 {
+			return TriggerResult{}, fmt.Errorf("%w: task review requires 1 to 16 PRs at the exact target commit", ErrInvalid)
+		}
+	}
 	reviewRows, err := e.store.ListReviewsBySession(ctx, workerID)
 	if err != nil {
 		return TriggerResult{}, err
@@ -294,6 +323,7 @@ func (e *Engine) TriggerWithSource(ctx stdctx.Context, workerID domain.SessionID
 			return TriggerResult{}, err
 		}
 	}
+	runs = reviewRunsForTaskScope(runs, taskContext)
 	hadRunningReviewer := reviewRunsContainRunningForHarness(runs, harness)
 	reviews := Plan(prs, runs)
 	if source == domain.ReviewTriggerAuto {
@@ -368,9 +398,12 @@ func (e *Engine) TriggerWithSource(ctx stdctx.Context, workerID domain.SessionID
 			// trigger-time value also makes a running pass truthful in the API.
 			AutoInjectReview: worker.AutoInjectReview,
 		}
-		if err := e.store.InsertReviewRun(ctx, run); err != nil {
+		if taskContext != nil {
+			run.TaskScope = taskContext.ScopeHash()
+		}
+		if err := e.insertReviewWithTask(ctx, run, taskContext); err != nil {
 			if errors.Is(err, domain.ErrDuplicateReviewRun) {
-				if existing, ok, getErr := e.store.GetReviewRunBySessionPRSHAAndHarness(ctx, workerID, reviewState.PRURL, reviewState.TargetSHA, harness); getErr != nil {
+				if existing, ok, getErr := e.existingReviewWithTask(ctx, workerID, reviewState.PRURL, reviewState.TargetSHA, harness, taskContext); getErr != nil {
 					return TriggerResult{}, getErr
 				} else if ok {
 					reviews = replaceReviewLatestRun(reviews, reviewState.PRURL, reviewState.TargetSHA, existing)
@@ -386,8 +419,8 @@ func (e *Engine) TriggerWithSource(ctx stdctx.Context, workerID domain.SessionID
 		return TriggerResult{Run: firstReusableRun(reviews), ReviewerHandleID: reviewRow.ReviewerHandleID, Created: false, Reviews: reviews, Runs: runs}, nil
 	}
 
-	failRuns := func(start int, err error) error {
-		for _, run := range created[start:] {
+	failRuns := func(err error) error {
+		for _, run := range created {
 			if _, updateErr := e.store.UpdateReviewRunResult(ctx, run.ID, domain.ReviewRunFailed, domain.VerdictNone, err.Error(), "", run.AutoInjectReview); updateErr != nil {
 				return updateErr
 			}
@@ -402,15 +435,15 @@ func (e *Engine) TriggerWithSource(ctx stdctx.Context, workerID domain.SessionID
 	previousHandleID := reviewRow.ReviewerHandleID
 	previousAgentSessionID := reviewRow.AgentSessionID
 	launchAgentSessionID := reviewRow.AgentSessionID
-	if hasConfigOverride {
+	if hasConfigOverride || forceFresh {
 		launchAgentSessionID = ""
 	}
 	persistedAgentSessionID := launchAgentSessionID
 	handleID := ""
-	if !hasConfigOverride && reviewRow.ReviewerHandleID != "" && reviewerPaneReusable(reviewRow, hadRunningReviewer) {
+	if !hasConfigOverride && !forceFresh && reviewRow.ReviewerHandleID != "" && reviewerPaneReusable(reviewRow, hadRunningReviewer) {
 		alive, err := e.launcher.Alive(ctx, reviewRow.ReviewerHandleID)
 		if err != nil {
-			return TriggerResult{}, failRuns(0, err)
+			return TriggerResult{}, failRuns(err)
 		}
 		if alive {
 			handleID = reviewRow.ReviewerHandleID
@@ -420,16 +453,22 @@ func (e *Engine) TriggerWithSource(ctx stdctx.Context, workerID domain.SessionID
 		// Each pass gets a fresh reviewer process on the same stable terminal
 		// handle when there is no resumable live agent session to notify.
 		if err := e.launcher.Preflight(ctx, harness, worker.Metadata.WorkspacePath); err != nil {
-			return TriggerResult{}, failRuns(0, fmt.Errorf("reviewer preflight: %w", err))
+			return TriggerResult{}, failRuns(fmt.Errorf("reviewer preflight: %w", err))
 		}
 		launchID := e.newID()
+		if taskContext != nil {
+			launchID = taskContext.LaunchID
+		}
 		reviewRow, err = e.upsertReview(ctx, worker, harness, reviewRow.ReviewerHandleID, launchAgentSessionID, launchID, "", now)
 		if err != nil {
-			return TriggerResult{}, failRuns(0, err)
+			return TriggerResult{}, failRuns(err)
 		}
-		launch, err := e.launcher.Spawn(ctx, reviewLaunchSpec(worker, harness, config, launchRun, queue, 0, launchAgentSessionID, launchID))
+		launch, err := e.launcher.Spawn(ctx, reviewLaunchSpec(worker, harness, config, launchRun, queue, 0, launchAgentSessionID, launchID, taskContext))
 		if err != nil {
-			return TriggerResult{}, failRuns(0, fmt.Errorf("launch reviewer: %w", err))
+			if taskContext != nil && errors.Is(err, ErrTaskReviewLaunchUncertain) {
+				return TriggerResult{}, err
+			}
+			return TriggerResult{}, failRuns(fmt.Errorf("launch reviewer: %w", err))
 		}
 		handleID = launch.HandleID
 		if launch.LaunchID != "" {
@@ -439,8 +478,8 @@ func (e *Engine) TriggerWithSource(ctx stdctx.Context, workerID domain.SessionID
 			persistedAgentSessionID = launch.AgentSessionID
 		}
 	} else {
-		if err := e.launcher.Notify(ctx, handleID, reviewLaunchSpec(worker, harness, config, launchRun, queue, 0, reviewRow.AgentSessionID, reviewRow.ReviewerLaunchID)); err != nil {
-			return TriggerResult{}, failRuns(0, fmt.Errorf("notify reviewer: %w", err))
+		if err := e.launcher.Notify(ctx, handleID, reviewLaunchSpec(worker, harness, config, launchRun, queue, 0, reviewRow.AgentSessionID, reviewRow.ReviewerLaunchID, taskContext)); err != nil {
+			return TriggerResult{}, failRuns(fmt.Errorf("notify reviewer: %w", err))
 		}
 	}
 	for _, stale := range pendingSupersedes {
@@ -448,15 +487,15 @@ func (e *Engine) TriggerWithSource(ctx stdctx.Context, workerID domain.SessionID
 			if handleID != "" {
 				_ = e.launcher.Destroy(ctx, handleID)
 			}
-			return TriggerResult{}, failRuns(0, err)
+			return TriggerResult{}, failRuns(err)
 		}
 	}
-	if hasConfigOverride && persistedAgentSessionID == "" && reviewRow.ID != "" {
+	if (hasConfigOverride || forceFresh) && persistedAgentSessionID == "" && reviewRow.ID != "" {
 		if _, err := e.store.UpdateReviewAgentSessionID(ctx, reviewRow.ID, ""); err != nil {
 			if handleID != "" {
 				_ = e.launcher.Destroy(ctx, handleID)
 			}
-			return TriggerResult{}, failRuns(0, err)
+			return TriggerResult{}, failRuns(err)
 		}
 	}
 	reviewRow, err = e.upsertReview(ctx, worker, harness, handleID, persistedAgentSessionID, reviewRow.ReviewerLaunchID, "", now)
@@ -466,21 +505,36 @@ func (e *Engine) TriggerWithSource(ctx stdctx.Context, workerID domain.SessionID
 		}
 		return TriggerResult{}, err
 	}
-	if hasConfigOverride && previousHandleID != "" && previousHandleID != handleID {
+	if (hasConfigOverride || forceFresh) && previousHandleID != "" && previousHandleID != handleID {
 		if err := e.launcher.Destroy(ctx, previousHandleID); err != nil {
 			if _, rollbackErr := e.upsertReview(ctx, worker, harness, previousHandleID, previousAgentSessionID, "", "", now); rollbackErr != nil {
-				return TriggerResult{}, failRuns(0, fmt.Errorf("destroy previous reviewer: %w; rollback review row: %w", err, rollbackErr))
+				return TriggerResult{}, failRuns(fmt.Errorf("destroy previous reviewer: %w; rollback review row: %w", err, rollbackErr))
 			}
 			if handleID != "" {
 				if destroyNewErr := e.launcher.Destroy(ctx, handleID); destroyNewErr != nil {
-					return TriggerResult{}, failRuns(0, fmt.Errorf("destroy previous reviewer: %w; cleanup replacement reviewer: %w", err, destroyNewErr))
+					return TriggerResult{}, failRuns(fmt.Errorf("destroy previous reviewer: %w; cleanup replacement reviewer: %w", err, destroyNewErr))
 				}
 			}
-			return TriggerResult{}, failRuns(0, fmt.Errorf("destroy previous reviewer: %w", err))
+			return TriggerResult{}, failRuns(fmt.Errorf("destroy previous reviewer: %w", err))
 		}
 	}
 	for i := range created {
 		created[i].ReviewID = reviewRow.ID
+	}
+	if taskContext != nil {
+		taskStore, ok := e.store.(ports.TaskReviewStore)
+		if !ok {
+			return TriggerResult{}, fmt.Errorf("%w: task review storage is unavailable", ErrInvalid)
+		}
+		for _, run := range created {
+			started, err := taskStore.MarkTaskReviewStarted(ctx, run.ID, taskContext.LaunchID)
+			if err != nil {
+				return TriggerResult{}, err
+			}
+			if !started {
+				return TriggerResult{}, fmt.Errorf("%w: task review native launch requires reconciliation", ErrInvalid)
+			}
+		}
 	}
 	triggerRuns := append([]domain.ReviewRun{}, created...)
 	triggerRuns = append(triggerRuns, runs...)
@@ -653,18 +707,23 @@ func (e *Engine) restoreReviewerLocked(
 	harness domain.ReviewerHarness,
 	config domain.AgentConfig,
 ) (RestoreReviewerResult, error) {
+	runs, err := e.store.ListReviewRunsBySession(ctx, workerID)
+	if err != nil {
+		return RestoreReviewerResult{}, err
+	}
 	reviewRows, err := e.store.ListReviewsBySession(ctx, workerID)
 	if err != nil {
 		return RestoreReviewerResult{}, err
+	}
+	for _, row := range reviewRows {
+		if latestReviewHasTaskScope(runs, row.Harness) {
+			return RestoreReviewerResult{}, fmt.Errorf("%w: pinned task reviewer needs native-context reconciliation before restore", ErrInvalid)
+		}
 	}
 	if err := e.destroyOtherReviewerHandles(ctx, workerID, harness, reviewRows); err != nil {
 		return RestoreReviewerResult{}, err
 	}
 	reviewRow, hasReview, err := e.store.GetReviewBySessionAndHarness(ctx, workerID, harness)
-	if err != nil {
-		return RestoreReviewerResult{}, err
-	}
-	runs, err := e.store.ListReviewRunsBySession(ctx, workerID)
 	if err != nil {
 		return RestoreReviewerResult{}, err
 	}
@@ -840,8 +899,10 @@ func reviewLaunchSpec(
 	index int,
 	agentSessionID string,
 	launchID string,
+	taskContext *domain.TaskReviewContext,
 ) LaunchSpec {
 	return LaunchSpec{
+		TaskContext:     taskContext,
 		RunID:           run.ID,
 		BatchID:         run.BatchID,
 		ReviewSessionID: run.ReviewID,

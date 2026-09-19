@@ -36,6 +36,9 @@ var _ ports.Reviewer = (*Reviewer)(nil)
 var _ ports.ReviewerCanceller = (*Reviewer)(nil)
 var _ ports.ReviewerRestorer = (*Reviewer)(nil)
 
+// SupportsTaskContext declares that both sealed prompt files reach native Claude.
+func (*Reviewer) SupportsTaskContext() bool { return true }
+
 // reviewerAllowedTools is the read-only tool allowlist the reviewer launches
 // with. The reviewer runs headless (no human to approve prompts) but must stay
 // read-only, so instead of bypassPermissions — which skips the permission

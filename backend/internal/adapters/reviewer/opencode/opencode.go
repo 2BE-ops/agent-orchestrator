@@ -34,6 +34,9 @@ var _ ports.Reviewer = (*Reviewer)(nil)
 var _ ports.ReviewerCanceller = (*Reviewer)(nil)
 var _ ports.ReviewerRestorer = (*Reviewer)(nil)
 
+// SupportsTaskContext declares consumption within the allowed task prompt root.
+func (*Reviewer) SupportsTaskContext() bool { return true }
+
 // ReviewCommand launches the reviewer with an inline permission policy that
 // permits inspection and the two reporting commands while denying edits and
 // every other tool. Production launches provide the system role through an

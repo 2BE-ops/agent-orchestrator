@@ -4,6 +4,48 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 13c3c — native task review engine and payload delivery (2026-09-19)
+
+The existing review engine accepts sealed task context, filters exact PR heads
+and effective review scope, persists before launch, and records the native launch
+witness only after the matching handle/launch ID is saved. Repeated active or
+approved scopes do not spawn again; another running scope cannot be preempted.
+Runtime-creation/initial-delivery uncertainty keeps the running reservation,
+including across a new engine instance. Known preflight/spawn refusal retains a
+failed pass without a launch witness. No reviewer configuration is inferred from
+an implementing worker or a generic approval.
+
+Native launch materializes pinned Type/Skill instructions and resources through
+the shared worker resource boundary. Context/task/system files are immutable and
+isolated per pass under AO data. Skills lie inside that pass's allowed prompt
+directory (including OpenCode's external-file permission boundary). The native
+conversation identity includes the launch ID; previous Type history cannot be
+inherited or notified in place. Claude, Codex and OpenCode explicitly advertise
+prompt-context consumption. Unsupported adapters, Chat settings, provider
+bindings/native options and incompatible permissions fail before runtime effects;
+these are reported compatibility limits, not silently dropped configuration.
+
+Six new engine/invocation tests cover durable-before-spawn ordering, exact
+configuration and files, immutable-byte checks, denied unsupported inputs,
+scope retries, non-preemption, known failures and uncertain launch/restart.
+Focused trigger/restore/task-review tests PASS (0.933s); worker configuration,
+resource and context tests PASS (1.380s). Final review-service PASS (0.085s),
+OpenCode and ports PASS; backend build and pinned review/reviewer/ports/manager
+lint PASS (0 issues). Complete staged diff inspected; whitespace check PASS.
+No wire DTO changed, so API/type generation was not needed in this slice.
+
+Full review engine retains its Node-shim PATH failure (1.889s final run); full
+session manager retains the eight recorded Windows failures (39.452s). The full
+reviewer-adapter sweep additionally exposes existing command-path test failures:
+agy/devin/droid/kimi use POSIX absolute-binary fixtures on Windows; Claude restore
+cannot resolve its test command; Codex effort's test binary is absent from PATH;
+Cursor expects POSIX modes and a different source-auth path. Their command and
+restore implementations are unchanged by this slice. These suites are **FAIL**,
+not claimed passed; resolve/validate them in stage 24. Logs: ignored
+`*stage13c3c*`. Shared service/API/CLI and generation-checked submissions are next.
+Pinned native reviewer restore currently refuses generic configuration substitution;
+retained native-context reconciliation remains stage 23, not a completed recovery claim.
+
 ## Stage 13c3b — retained native review provenance (2026-09-19)
 
 Migration 0167 adds an effective scope to existing review runs and an immutable

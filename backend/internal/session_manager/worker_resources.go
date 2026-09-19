@@ -16,6 +16,12 @@ import (
 // workerSnapshotPrompt materializes only sealed inert resources beneath the AO
 // data root. Native user skill folders and repository files are never modified.
 func (m *Manager) workerSnapshotPrompt(ctx context.Context, id domain.SessionID, snapshot domain.WorkerConfiguration) (string, error) {
+	return MaterializeWorkerSnapshot(ctx, m.dataDir, id, snapshot)
+}
+
+// MaterializeWorkerSnapshot renders sealed Type/Skill content under an AO-owned
+// root. Reviewers share this boundary without creating implementation sessions.
+func MaterializeWorkerSnapshot(ctx context.Context, dataDir string, id domain.SessionID, snapshot domain.WorkerConfiguration) (string, error) {
 	if err := snapshot.Validate(); err != nil {
 		return "", err
 	}
@@ -28,7 +34,7 @@ func (m *Manager) workerSnapshotPrompt(ctx context.Context, id domain.SessionID,
 	if len(snapshot.Skills) == 0 {
 		return prompt.String(), nil
 	}
-	root, err := os.OpenRoot(m.dataDir)
+	root, err := os.OpenRoot(dataDir)
 	if err != nil {
 		return "", err
 	}
@@ -57,13 +63,19 @@ func (m *Manager) workerSnapshotPrompt(ctx context.Context, id domain.SessionID,
 				return "", err
 			}
 		}
-		path := filepath.ToSlash(filepath.Join(m.dataDir, folder, "SKILL.md"))
+		path := filepath.ToSlash(filepath.Join(dataDir, folder, "SKILL.md"))
 		fmt.Fprintf(&prompt, "\n\n## Skill %d: %s (v%d)\nRead and apply `%s`. Resolve its resource paths relative to that file. Skills apply in this recorded order; their requirements do not grant additional permissions.\n", index+1, skill.Reference.Name, skill.Reference.Version, path)
 	}
 	return prompt.String(), nil
 }
 
 func writeWorkerResource(root *os.Root, path, content string) error {
+	return WriteSnapshotResource(root, path, content)
+}
+
+// WriteSnapshotResource creates inert content or verifies an identical retained
+// file, refusing path escapes, symlinks, non-files and changed historical bytes.
+func WriteSnapshotResource(root *os.Root, path, content string) error {
 	if !filepath.IsLocal(path) {
 		return fmt.Errorf("worker resource escapes data root")
 	}

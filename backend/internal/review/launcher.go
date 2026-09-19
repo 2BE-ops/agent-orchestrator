@@ -62,6 +62,7 @@ type Launcher interface {
 
 // LaunchSpec is the engine's request to (re)launch a reviewer for one pass.
 type LaunchSpec struct {
+	TaskContext          *domain.TaskReviewContext
 	RunID                string
 	BatchID              string
 	ReviewSessionID      string
@@ -274,6 +275,9 @@ func (l *agentLauncher) prepareInvocation(ctx context.Context, spec LaunchSpec) 
 		return ports.ReviewInvocation{}, err
 	}
 	inv := l.invocation(spec)
+	if spec.TaskContext != nil {
+		return l.prepareTaskInvocation(ctx, spec, inv)
+	}
 	if strings.TrimSpace(l.dataDir) == "" {
 		return ports.ReviewInvocation{}, fmt.Errorf("reviewer prompt data directory is required")
 	}
@@ -393,6 +397,9 @@ func (l *agentLauncher) Spawn(ctx context.Context, spec LaunchSpec) (LaunchResul
 }
 
 func (l *agentLauncher) RestoreTerminal(ctx context.Context, spec LaunchSpec) (LaunchResult, error) {
+	if spec.TaskContext != nil {
+		return LaunchResult{}, fmt.Errorf("task review restore requires reconciliation of its retained native launch")
+	}
 	inv, err := l.prepareIdleInvocation(spec)
 	if err != nil {
 		return LaunchResult{}, err
@@ -455,13 +462,22 @@ func (l *agentLauncher) launchReviewerTerminalWithMode(ctx context.Context, spec
 		Env:           l.runtimeEnv(ctx, spec, cmd.Argv, cmd.Env),
 	})
 	if err != nil {
+		if spec.TaskContext != nil {
+			return LaunchResult{}, fmt.Errorf("%w: %w", ErrTaskReviewLaunchUncertain, err)
+		}
 		return LaunchResult{}, fmt.Errorf("reviewer runtime: %w", err)
 	}
 	if cmd.InitialMessage != "" {
 		if err := l.waitForPromptReadiness(ctx, reviewer, handle); err != nil {
+			if spec.TaskContext != nil {
+				return LaunchResult{}, fmt.Errorf("%w: %w", ErrTaskReviewLaunchUncertain, err)
+			}
 			return LaunchResult{}, fmt.Errorf("reviewer prompt readiness: %w", err)
 		}
 		if err := l.runtime.SendMessage(ctx, handle, cmd.InitialMessage); err != nil {
+			if spec.TaskContext != nil {
+				return LaunchResult{}, fmt.Errorf("%w: %w", ErrTaskReviewLaunchUncertain, err)
+			}
 			return LaunchResult{}, fmt.Errorf("reviewer initial message: %w", err)
 		}
 	}
@@ -617,6 +633,9 @@ func prependPathDir(dir, path string) string {
 }
 
 func (l *agentLauncher) Notify(ctx context.Context, handleID string, spec LaunchSpec) error {
+	if spec.TaskContext != nil {
+		return fmt.Errorf("task review requires a fresh native launch with its pinned configuration")
+	}
 	reviewer, ok := l.reviewers.Reviewer(spec.Harness)
 	if !ok {
 		return fmt.Errorf("no reviewer adapter for harness %q", spec.Harness)

@@ -1,6 +1,7 @@
 package review
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -38,6 +39,13 @@ Do these steps in order:
 
 Only if step 1 genuinely fails on the provider for a PR, still include that run in step 2 with an empty githubReviewId so the result is recorded.`,
 		spec.WorkerID, queueText, spec.WorkerID)
+	if spec.TaskContext != nil {
+		frozen := spec.TaskContext
+		criteria, _ := json.Marshal(frozen.Criteria)
+		generation, _ := json.Marshal(frozen.LaunchID)
+		prompt = strings.ReplaceAll(prompt, `"runId": "<run-id>",`, `"runId": "<run-id>", "sourceGeneration": `+string(generation)+`, `)
+		prompt += fmt.Sprintf("\n\n## Frozen task acceptance\nTask %s, attempt %s, result %s, criteria version %d (hash %s).\nAssess every review requirement below against exactly commit %s. Report blocking findings explicitly. Review is qualitative; do not present worker-reported tests as independent test evidence.\n\n%s\n", frozen.TaskID, frozen.AttemptID, frozen.ResultID, frozen.CriteriaVersion, frozen.CriteriaHash, frozen.TargetCommit, criteria)
+	}
 	return prompt, systemPrompt
 }
 
