@@ -16,10 +16,10 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite/sqlitetest"
 )
 
-func managerControllerFixture(t *testing.T, s *sqlite.Store) (domain.AgentManagerControllerReservation, domain.SessionRecord, domain.WorkerConfiguration) {
+func managerControllerFixture(t *testing.T, s *sqlite.Store, clearance ...domain.ContextClass) (domain.AgentManagerControllerReservation, domain.SessionRecord, domain.WorkerConfiguration) {
 	t.Helper()
 	seedProject(t, s, "project")
-	rec, snapshot := workerSnapshot(t, s)
+	rec, snapshot := workerSnapshot(t, s, clearance...)
 	rec.ProjectID, rec.Kind = "project", domain.KindAgentManager
 	snapshot.Selection.Version = 1
 	snapshot.ContentHash = snapshot.Hash()

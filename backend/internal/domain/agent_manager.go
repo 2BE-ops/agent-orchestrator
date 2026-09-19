@@ -42,7 +42,11 @@ func (d AgentManagerDefinition) Validate() error {
 	if d.SchemaVersion != 1 || !registryText(d.AgentTypeID, 200, true) || strings.IndexFunc(d.AgentTypeID, unicode.IsControl) >= 0 || d.AgentTypeVersion < 1 {
 		return fmt.Errorf("manager configuration requires schema 1 and an exact Agent Type version")
 	}
-	p := d.Policy
+	return d.Policy.Validate()
+}
+
+// Validate bounds both sealed and live governance consistently.
+func (p AgentManagerPolicy) Validate() error {
 	switch p.Optimization {
 	case "quality", "balanced", "speed", "usage":
 	default:

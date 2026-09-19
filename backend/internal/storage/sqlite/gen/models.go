@@ -39,6 +39,23 @@ type AdaptiveAgentManagerConfiguration struct {
 	CreatedAt        time.Time
 }
 
+type AdaptiveAgentManagerContext struct {
+	Sequence            int64
+	ID                  string
+	RequestID           string
+	Number              int64
+	ControllerID        string
+	SessionID           string
+	NativeGeneration    string
+	SourceOwner         string
+	Classification      string
+	EngagementID        string
+	PreviousContextHash string
+	Snapshot            string
+	ContentHash         string
+	CreatedAt           time.Time
+}
+
 type AdaptiveAgentManagerController struct {
 	ID                   string
 	ProjectID            string

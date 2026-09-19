@@ -4,6 +4,32 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 14e1 - classified Manager input and conversation boundary (2026-09-19)
+
+Migration 0174 adds immutable, bounded Manager context artifacts with exact task
+and criteria bytes, pinned Type clearance, native generation and conversation
+hash links. A shared transaction guard checks current governance/task intent,
+confirmed generation, retained controller ownership and original configuration.
+The chain preserves cumulative sensitivity and the first engagement binding
+across requests and native generation replacement. Caller enqueue reasons are
+excluded because they have no classification authority. No transport receipt or
+automatic proposal application is claimed by this persistence slice.
+
+All nine clearance/material combinations are tested while the live Type changes
+to the opposite clearance. Tests cover foreign engagement at all three classes,
+legal upward technical input, cumulative mission sensitivity, TUI/Chat replacement
+generations, stale/unknown/terminated owners, pending restore, task/policy changes,
+exact concurrent retries, bounded versions, restart, immutable SQL and atomic
+audit/CDC rollback. Migration up/down/up preserves inbox hashes and CDC, refuses
+history loss and passes integrity/FK checks. Focused domain/SQLite/store PASS
+(0.530s/1.582s/2.850s), focused HTTP integration PASS (2.488s). Full domain
+(1.180s), ports (0.497s), SQLite (39.600s), helpers (1.822s), store (23.661s) and
+Manager service (1.397s) PASS. Backend build, sqlc and pinned affected new-diff
+lint PASS (0 issues). Initial restart fixture mistakenly used clone-only test
+opening; corrected to real sqlite.Open. Initial lint found capitalized error
+strings; corrected. Source/generated/whitespace inspection PASS. Logs:
+`.cache/adaptive-tests/stage14e1-*`.
+
 ## Stage 14d2 - native start API/CLI and Manager identity (2026-09-19)
 
 The daemon binds the dedicated start service to its existing session manager.

@@ -74,72 +74,9 @@ func (s *Store) SubmitAgentManagerProposal(ctx context.Context, input domain.Age
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		if _, err := q.GetAgentManagerRequestResolution(ctx, request.ID); err == nil {
-			return ports.ErrAgentManagerFenced
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		configuration, err := enabledManagerConfiguration(ctx, q, input.ProjectID)
+		configuration, controller, snapshot, err := managerRequestNativeOwner(ctx, q, request, input.SessionID, input.SourceOwner, input.Now)
 		if err != nil {
 			return err
-		}
-		if configuration.Number != request.ConfigurationVersion || configuration.ContentHash != request.ConfigurationHash {
-			return ports.ErrAgentManagerFenced
-		}
-		task, err := q.GetAdaptiveTask(ctx, request.TaskID)
-		if err != nil {
-			return err
-		}
-		if task.Revision != request.TaskRevision {
-			return ports.ErrAgentManagerFenced
-		}
-		if err := requireTaskRunIntent(ctx, q, task.ID); err != nil {
-			return err
-		}
-		dispatch, err := q.GetAgentManagerDispatchBySession(ctx, string(input.SessionID))
-		if err != nil {
-			return agentManagerReadError(err)
-		}
-		controller, err := q.GetAgentManagerController(ctx, dispatch.ControllerID)
-		if err != nil {
-			return err
-		}
-		if controller.ProjectID != requestRow.ProjectID || controller.ConfigurationVersion != request.ConfigurationVersion || controller.ReleasedAt.Valid {
-			return ports.ErrAgentManagerFenced
-		}
-		if _, err := q.PendingAgentManagerControllerExecution(ctx, controller.ID); err == nil {
-			return ports.ErrAgentManagerFenced
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		row, err := q.GetSession(ctx, input.SessionID)
-		if err != nil {
-			return err
-		}
-		rec := rowToRecord(row)
-		if rec.Kind != domain.KindAgentManager || rec.ProjectID != input.ProjectID || rec.ControllerOwner() != input.SourceOwner || rec.IsTerminated {
-			return ports.ErrAgentManagerFenced
-		}
-		connectedAt, err := q.AgentManagerConnectedGeneration(ctx, gen.AgentManagerConnectedGenerationParams{ControllerID: controller.ID, SessionID: string(input.SessionID), Mode: string(input.SourceOwner.Mode), Harness: string(input.SourceOwner.Harness), Generation: generation})
-		if errors.Is(err, sql.ErrNoRows) {
-			return ports.ErrAgentManagerFenced
-		}
-		if err != nil {
-			return err
-		}
-		if input.Now.Before(request.CreatedAt) || input.Now.Before(connectedAt) {
-			return ports.ErrAgentManagerInvalid
-		}
-		snapshotRow, err := q.GetWorkerConfiguration(ctx, string(input.SessionID))
-		if err != nil {
-			return err
-		}
-		snapshot, err := workerConfigurationFromRow(snapshotRow)
-		if err != nil {
-			return err
-		}
-		if snapshot.ContentHash != dispatch.ConfigurationHash || snapshot.AgentType.ID != configuration.ControllerType.ID || snapshot.AgentType.Version != configuration.ControllerType.Version || snapshot.AgentType.ContentHash != configuration.ControllerType.ContentHash {
-			return ports.ErrAgentManagerFenced
 		}
 		history, err := q.ListAgentManagerProposals(ctx, request.ID)
 		if err != nil {
@@ -163,7 +100,7 @@ func (s *Store) SubmitAgentManagerProposal(ctx context.Context, input domain.Age
 			}
 		}
 		definition, parseErr := domain.ParseAgentManagerProposal(input.Raw)
-		proposal = domain.AgentManagerProposal{ID: input.ID, RequestID: request.ID, Number: int64(len(history) + 1), ControllerID: controller.ID, SessionID: rec.ID, NativeGeneration: generation, ConfigurationHash: snapshot.ContentHash, RequestHash: request.ContentHash, Raw: input.Raw, Definition: definition, CreatedAt: input.Now}
+		proposal = domain.AgentManagerProposal{ID: input.ID, RequestID: request.ID, Number: int64(len(history) + 1), ControllerID: controller.ID, SessionID: input.SessionID, NativeGeneration: generation, ConfigurationHash: snapshot.ContentHash, RequestHash: request.ContentHash, Raw: input.Raw, Definition: definition, CreatedAt: input.Now}
 		if parseErr != nil {
 			proposal.ValidationError = parseErr.Error()
 		}
@@ -179,10 +116,10 @@ func (s *Store) SubmitAgentManagerProposal(ctx context.Context, input domain.Age
 		if err != nil {
 			return err
 		}
-		if err := q.InsertAgentManagerProposal(ctx, gen.InsertAgentManagerProposalParams{ID: proposal.ID, RequestID: request.ID, Number: proposal.Number, IdempotencyKey: input.IdempotencyKey, ControllerID: controller.ID, SessionID: string(rec.ID), SourceOwner: string(owner), Snapshot: string(encoded), ContentHash: proposal.ContentHash, CreatedAt: input.Now}); err != nil {
+		if err := q.InsertAgentManagerProposal(ctx, gen.InsertAgentManagerProposalParams{ID: proposal.ID, RequestID: request.ID, Number: proposal.Number, IdempotencyKey: input.IdempotencyKey, ControllerID: controller.ID, SessionID: string(input.SessionID), SourceOwner: string(owner), Snapshot: string(encoded), ContentHash: proposal.ContentHash, CreatedAt: input.Now}); err != nil {
 			return err
 		}
-		actor := domain.AdaptiveActor{Kind: "AGENT_MANAGER", ID: controller.ID, SessionID: rec.ID}
+		actor := domain.AdaptiveActor{Kind: "AGENT_MANAGER", ID: controller.ID, SessionID: input.SessionID}
 		if err := insertManagerInboxAudit(ctx, q, request, "proposal_received", actor, "Retained native Manager proposal "+proposal.ID, input.Now); err != nil {
 			return err
 		}

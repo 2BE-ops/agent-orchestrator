@@ -18,10 +18,10 @@ import (
 
 const managerSelectionProposal = `{"schemaVersion":1,"action":"select_existing","agentTypeId":"unvalidated-type","agentTypeVersion":1,"rationale":"Native semantic selection, awaiting deterministic validation","candidates":[]}`
 
-func managerProposalFixture(t *testing.T, s *sqlite.Store, mode domain.SessionMode) domain.AgentManagerProposalSubmission {
+func managerProposalFixture(t *testing.T, s *sqlite.Store, mode domain.SessionMode, clearance ...domain.ContextClass) domain.AgentManagerProposalSubmission {
 	t.Helper()
 	ctx := context.Background()
-	reservation, seed, snapshot := managerControllerFixture(t, s)
+	reservation, seed, snapshot := managerControllerFixture(t, s, clearance...)
 	if mode == domain.SessionModeChat {
 		seed.Mode, snapshot.Effective.SessionMode = mode, mode
 		snapshot.ContentHash = snapshot.Hash()
@@ -239,6 +239,14 @@ func TestAgentManagerProposalFencesStaleOwnersAndMutableIntent(t *testing.T) {
 			input.Now = time.Now().UTC()
 			if _, _, err := s.SubmitAgentManagerProposal(ctx, input); err == nil {
 				t.Fatal("unsafe native submission accepted")
+			}
+			seal := domain.AgentManagerContextSeal{ID: "fenced-context", ProjectID: input.ProjectID, RequestID: input.RequestID, SessionID: input.SessionID, SourceOwner: input.SourceOwner, Now: input.Now}
+			if _, _, err := s.SealAgentManagerContext(ctx, seal); err == nil {
+				t.Fatal("unsafe native context accepted")
+			}
+			contexts, err := s.ListAgentManagerContexts(ctx, "project", input.RequestID)
+			if err != nil || len(contexts) != 0 {
+				t.Fatalf("fenced input left partial state: %+v %v", contexts, err)
 			}
 			items, err := s.ListAgentManagerProposals(ctx, "project", input.RequestID)
 			if err != nil || len(items) != 0 {

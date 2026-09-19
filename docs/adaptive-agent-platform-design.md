@@ -729,6 +729,28 @@ internals never enter the wire shape. Frontend session mapping preserves
 and orchestrator populations. Native work payloads/protocol delivery remain the
 next slice; this start operation alone makes no routing or worker-launch decision.
 
+Stage 14e1 seals classified Manager inputs before transport (0174). The store
+loads exact task/criteria definitions and governance under the shared native-owner
+transaction guard; request reasons and arbitrary caller material never enter this
+payload. Clearance comes from the original session's exact Type version, even
+when another version is activated. Each immutable, inspectable context records
+per-item classes, native generation, exact rendered input, hashes and a link to
+the preceding context for this controller. There are at most 32 input versions
+per request and 10,000 per controller; no time-based reset bypasses those bounds.
+
+A persistent Manager conversation is itself a compartment. The first scoped
+routing input binds its project-local engagement; subsequent differently scoped
+requests are refused, even at mission clearance. Unscoped technical material may
+flow up. Aggregate sensitivity never decreases across the linked conversation,
+and later unscoped input retains an existing engagement binding. Replacement
+native generations inherit this boundary. New, confirmed-released controllers
+may start another conversation; a probe failure never clears the old boundary.
+The retained chain is the binding, avoiding a mutable duplicate of that authority.
+SQL guards prevent chain forks, sensitivity downgrade, scope stripping and loss
+of retained history. Sealing and audit/CDC are atomic. Exact retries inspect old
+bytes after task or policy changes; they authorize no native effect. Transport
+acknowledgements and proposal-to-input attribution remain subsequent slices.
+
 Stage 14c1 adds the durable Manager inbox (0171). Routing requests reference exact
 task/criteria and governance versions plus hashes, without embedding task content.
 They are independent of a native controller's lifetime. Enqueue serializes with
