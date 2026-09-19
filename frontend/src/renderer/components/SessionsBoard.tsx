@@ -150,7 +150,7 @@ export function SessionsBoard({ projectId }: SessionsBoardProps) {
 
 	const actions = projectId ? (
 		<>
-			<ProjectBoardActions actions={projectActions} placement="header" quiet={showProjectEmpty} />
+			<ProjectBoardActions actions={projectActions} adaptiveProjectId={projectId} placement="header" quiet={showProjectEmpty} />
 			{boardOwnsNotificationCenter ? (
 				<>
 					<NotificationCenter />

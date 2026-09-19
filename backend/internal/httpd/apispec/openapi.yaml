@@ -4820,6 +4820,19 @@ paths:
         schema:
           description: Project identifier (registry key).
           type: string
+      - in: query
+        name: after
+        schema:
+          format: int64
+          minimum: 0
+          type: integer
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
       responses:
         "200":
           content:
@@ -6296,6 +6309,17 @@ paths:
         schema:
           description: Project identifier (registry key).
           type: string
+      - in: query
+        name: afterId
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
       responses:
         "200":
           content:

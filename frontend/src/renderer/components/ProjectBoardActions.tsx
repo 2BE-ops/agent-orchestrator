@@ -1,6 +1,7 @@
 import { type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { Network, Plus, Bot } from "lucide-react";
 import type { ProjectOrchestratorAction } from "../hooks/useProjectOrchestratorAction";
 import { getAgentActivityView } from "../lib/session-presentation";
 import { TopbarActionError, TopbarButton } from "./TopbarButton";
@@ -8,13 +9,16 @@ import { OrchestratorActivityIndicator } from "./OrchestratorActivityIndicator";
 import { OrchestratorIcon } from "./icons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
-export function ProjectBoardActions({ actions, placement, quiet = false, style }: {
+export function ProjectBoardActions({ actions, placement, quiet = false, style, adaptiveProjectId }: {
 	actions: ProjectOrchestratorAction;
 	placement: "header" | "empty";
 	quiet?: boolean;
 	style?: CSSProperties;
+	/** Project id enabling the task-graph and Manager dashboard entries. */
+	adaptiveProjectId?: string;
 }) {
 	const { t } = useTranslation();
+	const navigate = useNavigate();
 	const { orchestrator, isSpawning, isProjectRestarting, isProvisioning, spawnError, canCreateAsTui,
 		openNewTask, openOrchestrator } = actions;
 	const header = placement === "header";
@@ -73,8 +77,46 @@ export function ProjectBoardActions({ actions, placement, quiet = false, style }
 			{canCreateAsTui ? <TopbarButton disabled={busy} onClick={() => openOrchestrator("tui")} style={style}>{t("newTask.createAsTui")}</TopbarButton> : null}
 		</div>
 	) : null;
-	return header ? <>{feedback}{newTaskButton}{orchestratorButton}</> : <>
-		<div className="mt-5 flex items-center gap-2">{orchestratorButton}{newTaskButton}</div>
+	const adaptiveNav = adaptiveProjectId ? (
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<span className="inline-flex" style={style}>
+					<TopbarButton
+						aria-label={t("shell.taskGraph", "Task graph")}
+						className={header ? "topbar-control--labeled" : undefined}
+						data-priority={header ? "secondary" : undefined}
+						onClick={() => void navigate({ to: "/projects/$projectId/tasks", params: { projectId: adaptiveProjectId } })}
+						variant={quiet ? "secondary" : "primary"}
+					>
+						<Network className="size-icon-md" aria-hidden="true" />
+						<span data-compact-label={header ? "" : undefined}>{t("shell.taskGraph", "Task graph")}</span>
+					</TopbarButton>
+				</span>
+			</TooltipTrigger>
+			<TooltipContent side="bottom">{t("shell.taskGraphDescription", "Task dependency graph and list")}</TooltipContent>
+		</Tooltip>
+	) : null;
+	const managerNav = adaptiveProjectId ? (
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<span className="inline-flex" style={style}>
+					<TopbarButton
+						aria-label={t("shell.managerDashboard", "Agent Manager")}
+						className={header ? "topbar-control--labeled" : undefined}
+						data-priority={header ? "secondary" : undefined}
+						onClick={() => void navigate({ to: "/projects/$projectId/manager", params: { projectId: adaptiveProjectId } })}
+						variant={quiet ? "secondary" : "primary"}
+					>
+						<Bot className="size-icon-md" aria-hidden="true" />
+						<span data-compact-label={header ? "" : undefined}>{t("shell.managerDashboard", "Agent Manager")}</span>
+					</TopbarButton>
+				</span>
+			</TooltipTrigger>
+			<TooltipContent side="bottom">{t("shell.managerDashboardDescription", "Routing decisions and worker population")}</TooltipContent>
+		</Tooltip>
+	) : null;
+	return header ? <>{feedback}{adaptiveNav}{managerNav}{newTaskButton}{orchestratorButton}</> : <>
+		<div className="mt-5 flex flex-wrap items-center gap-2">{orchestratorButton}{newTaskButton}{adaptiveNav}{managerNav}</div>
 		{feedback}
 	</>;
 }

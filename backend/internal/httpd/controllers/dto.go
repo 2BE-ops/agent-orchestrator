@@ -320,6 +320,20 @@ type AdaptiveTaskListQuery struct {
 	Limit  int    `query:"limit" minimum:"1" maximum:"100" default:"20"`
 }
 
+// OutcomeSequencePageQuery bounds sequence-keyed attribution pages (the
+// routing-outcome family keys pages on the decision arrival sequence).
+type OutcomeSequencePageQuery struct {
+	After int64 `query:"after" minimum:"0"`
+	Limit int   `query:"limit" minimum:"1" maximum:"100" default:"20"`
+}
+
+// OutcomeIDPageQuery bounds id-keyset attribution pages (the planning-outcome
+// family keys pages on the public receipt cursor).
+type OutcomeIDPageQuery struct {
+	AfterID string `query:"afterId"`
+	Limit   int    `query:"limit" minimum:"1" maximum:"100" default:"20"`
+}
+
 // AdaptiveTaskCreateRequest contains authorable fields, never actor identity.
 type AdaptiveTaskCreateRequest tasksvc.CreateInput
 

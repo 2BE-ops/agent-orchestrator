@@ -14859,7 +14859,10 @@ export interface operations {
     };
     listAgentManagerRoutingOutcomes: {
         parameters: {
-            query?: never;
+            query?: {
+                after?: number;
+                limit?: number;
+            };
             header?: never;
             path: {
                 /** @description Project identifier (registry key). */
@@ -16734,7 +16737,10 @@ export interface operations {
     };
     listOrchestratorPlanningOutcomes: {
         parameters: {
-            query?: never;
+            query?: {
+                afterId?: string;
+                limit?: number;
+            };
             header?: never;
             path: {
                 /** @description Project identifier (registry key). */
