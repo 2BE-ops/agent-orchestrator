@@ -4,6 +4,37 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 15d - governed Manager registry authoring storage (2026-09-19)
+
+Migration 0178 adds Manager registry authoring actions. The native controller may
+create a registry entry (first version) or append a version to an existing entry
+through the same identity/pin/revision/audit writes as manual authoring, inside
+one transaction with the sealed receipt. Submissions are idempotent per
+(request, idempotency key): replay returns the original receipt and any changed
+payload is a conflict. Each request retains at most 64 actions and per-kind
+creation/version policy quotas cannot be reset by disabling entries. Only
+technical conversation classification may author reusable definitions; engagement
+and mission conversations are fenced at submission, inside the insert trigger and
+again on read-back. Receipts embed request/configuration/context/conversation
+hashes, controller/session/generation and a self-hash, and are validated on every
+read. SQL triggers block mutation/retention loss; Down refuses to drop retained
+history. The list page bound is 1-100 (the prior shared 1-200 helper was widened;
+the store tests pin 100 as valid and 101 as refusal).
+
+A stray uncommitted `0179_context_classification.sql` draft (column-based
+classification duplicating shipped 0173's JSON design, referenced by no query or
+generated code) was deleted before the first commit rather than burning a
+migration number on unused schema; 0178's fencing uses 0173's JSON fields.
+
+`go build ./...` PASS; `go vet` on storage/domain/ports PASS (full-tree vet still
+blocked by the recorded Windows `syscall.Kill` baseline); full SQLite suite PASS
+(32.0s), SQLite/store PASS (21.9s), domain PASS; focused Manager registry store
+tests PASS (1.96s) including the previously failing 1-100 page-bound case; sqlc
+regeneration produced no diff; pinned golangci-lint v2.12.2 on
+storage/domain/ports PASS (0 issues) after fixing ten capitalized error strings
+and five `copy` builtin shadows in the new files. Race run remains NOT RUN
+(Windows GCC baseline). Service/native-tool/API wiring continues next.
+
 ## Stage 15c - automatic assessment, feedback and decision recovery (2026-09-19)
 
 Native proposals run through the existing registry assessor and atomic decision

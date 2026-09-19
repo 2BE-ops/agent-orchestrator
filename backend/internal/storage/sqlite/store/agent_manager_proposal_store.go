@@ -78,37 +78,9 @@ func (s *Store) SubmitAgentManagerProposal(ctx context.Context, input domain.Age
 		if err != nil {
 			return err
 		}
-		delivery, err := q.LatestAgentManagerRequestDelivery(ctx, request.ID)
-		if errors.Is(err, sql.ErrNoRows) {
-			return ports.ErrAgentManagerFenced
-		}
+		sealed, conversation, err := managerReceivedContext(ctx, q, request, controller.ID, input.SessionID, generation, snapshot.ContentHash, input.Now)
 		if err != nil {
 			return err
-		}
-		if delivery.State == "not_sent" || delivery.ControllerID != controller.ID || delivery.SessionID != string(input.SessionID) {
-			return ports.ErrAgentManagerFenced
-		}
-		contextRow, err := q.GetAgentManagerContext(ctx, delivery.ContextID)
-		if err != nil {
-			return err
-		}
-		sealed, err := managerContextFromRow(contextRow)
-		if err != nil {
-			return err
-		}
-		if sealed.NativeGeneration != generation || sealed.ConfigurationHash != snapshot.ContentHash || sealed.RequestHash != request.ContentHash || input.Now.Before(sealed.CreatedAt) {
-			return ports.ErrAgentManagerFenced
-		}
-		conversationRow, err := q.LatestAgentManagerContext(ctx, controller.ID)
-		if err != nil {
-			return err
-		}
-		conversation, err := managerContextFromRow(conversationRow)
-		if err != nil {
-			return err
-		}
-		if input.Now.Before(conversation.CreatedAt) {
-			return ports.ErrAgentManagerInvalid
 		}
 		history, err := q.ListAgentManagerProposals(ctx, request.ID)
 		if err != nil {

@@ -89,3 +89,41 @@ func managerRequestNativeOwner(ctx context.Context, q *gen.Queries, request doma
 
 	return configuration, controller, snapshot, nil
 }
+
+// managerReceivedContext ties incoming native actions to an actual delivery and
+// preserves the cumulative conversation class, including across generations.
+func managerReceivedContext(ctx context.Context, q *gen.Queries, request domain.AgentManagerRequest, controllerID string, sessionID domain.SessionID, generation, configurationHash string, now time.Time) (domain.AgentManagerContext, domain.AgentManagerContext, error) {
+	delivery, err := q.LatestAgentManagerRequestDelivery(ctx, request.ID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.AgentManagerContext{}, domain.AgentManagerContext{}, ports.ErrAgentManagerFenced
+	}
+	if err != nil {
+		return domain.AgentManagerContext{}, domain.AgentManagerContext{}, err
+	}
+	if delivery.State == "not_sent" || delivery.ControllerID != controllerID || delivery.SessionID != string(sessionID) {
+		return domain.AgentManagerContext{}, domain.AgentManagerContext{}, ports.ErrAgentManagerFenced
+	}
+	contextRow, err := q.GetAgentManagerContext(ctx, delivery.ContextID)
+	if err != nil {
+		return domain.AgentManagerContext{}, domain.AgentManagerContext{}, err
+	}
+	sealed, err := managerContextFromRow(contextRow)
+	if err != nil {
+		return domain.AgentManagerContext{}, domain.AgentManagerContext{}, err
+	}
+	if sealed.NativeGeneration != generation || sealed.ConfigurationHash != configurationHash || sealed.RequestHash != request.ContentHash || now.Before(sealed.CreatedAt) {
+		return domain.AgentManagerContext{}, domain.AgentManagerContext{}, ports.ErrAgentManagerFenced
+	}
+	conversationRow, err := q.LatestAgentManagerContext(ctx, controllerID)
+	if err != nil {
+		return domain.AgentManagerContext{}, domain.AgentManagerContext{}, err
+	}
+	conversation, err := managerContextFromRow(conversationRow)
+	if err != nil {
+		return domain.AgentManagerContext{}, domain.AgentManagerContext{}, err
+	}
+	if now.Before(conversation.CreatedAt) {
+		return domain.AgentManagerContext{}, domain.AgentManagerContext{}, ports.ErrAgentManagerInvalid
+	}
+	return sealed, conversation, nil
+}

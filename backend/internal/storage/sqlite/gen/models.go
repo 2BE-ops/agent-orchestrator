@@ -138,6 +138,21 @@ type AdaptiveAgentManagerProposal struct {
 	CreatedAt      time.Time
 }
 
+type AdaptiveAgentManagerRegistryAction struct {
+	ID             string
+	ProjectID      string
+	RequestID      string
+	IdempotencyKey string
+	Action         string
+	Kind           string
+	EntryID        string
+	Version        int64
+	SourceOwner    string
+	Snapshot       string
+	ContentHash    string
+	CreatedAt      time.Time
+}
+
 type AdaptiveAgentManagerRequest struct {
 	Sequence             int64
 	ID                   string

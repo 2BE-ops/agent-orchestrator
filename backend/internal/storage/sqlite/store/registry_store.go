@@ -66,31 +66,11 @@ func (s *Store) CreateRegistryEntries(ctx context.Context, inputs []domain.Regis
 	err := s.inTx(ctx, "create registry entries", func(q *gen.Queries) error {
 		createdSkills := make(map[string]bool)
 		for i, input := range inputs {
-			metadata := input.Metadata
-			if err := q.CreateRegistryEntry(ctx, gen.CreateRegistryEntryParams{
-				ID: input.ID, Kind: string(input.Kind), Name: metadata.Name, Description: metadata.Description,
-				Origin: string(mutation.Actor.Origin), CreatedBy: mutation.Actor.ID, Enabled: boolInt(metadata.Enabled),
-				ManagerCanSelect: boolInt(metadata.Policy.ManagerCanSelect), ManagerCanModify: boolInt(metadata.Policy.ManagerCanModify),
-				ManagerCanVersion: boolInt(metadata.Policy.ManagerCanVersion), CreatedAt: now, UpdatedAt: now,
-			}); err != nil {
-				if isSQLiteUnique(err) {
-					return ports.ErrRegistryConflict
-				}
-				return err
-			}
-			if err := insertRegistryVersion(ctx, q, domain.RegistryVersion{
-				EntryID: input.ID, Number: 1, Definition: input.Definition, ContentHash: hashes[i], Actor: mutation.Actor, Reason: mutation.Reason, CreatedAt: now,
-			}, input.Kind, contents[i], createdSkills); err != nil {
-				return err
-			}
-			if err := insertRegistryAudit(ctx, q, input.ID, 1, 1, "created", mutation, now); err != nil {
-				return err
-			}
-			row, err := q.GetRegistryEntry(ctx, input.ID)
+			entry, err := createRegistryEntry(ctx, q, input, mutation, contents[i], hashes[i], createdSkills, now)
 			if err != nil {
 				return err
 			}
-			result = append(result, registryEntryFromGen(row))
+			result = append(result, entry)
 			if input.Kind == domain.RegistrySkill {
 				createdSkills[input.ID] = true
 			}
@@ -101,6 +81,36 @@ func (s *Store) CreateRegistryEntries(ctx context.Context, inputs []domain.Regis
 		return nil, err
 	}
 	return result, nil
+}
+
+// createRegistryEntry shares identity, pin, version and audit persistence with
+// governed native actions already inside the store's write transaction.
+func createRegistryEntry(ctx context.Context, q *gen.Queries, input domain.RegistryCreate, mutation domain.RegistryMutation, content []byte, hash string, createdSkills map[string]bool, now time.Time) (domain.RegistryEntry, error) {
+	metadata := input.Metadata
+	if err := q.CreateRegistryEntry(ctx, gen.CreateRegistryEntryParams{
+		ID: input.ID, Kind: string(input.Kind), Name: metadata.Name, Description: metadata.Description,
+		Origin: string(mutation.Actor.Origin), CreatedBy: mutation.Actor.ID, Enabled: boolInt(metadata.Enabled),
+		ManagerCanSelect: boolInt(metadata.Policy.ManagerCanSelect), ManagerCanModify: boolInt(metadata.Policy.ManagerCanModify),
+		ManagerCanVersion: boolInt(metadata.Policy.ManagerCanVersion), CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		if isSQLiteUnique(err) {
+			return domain.RegistryEntry{}, ports.ErrRegistryConflict
+		}
+		return domain.RegistryEntry{}, err
+	}
+	if err := insertRegistryVersion(ctx, q, domain.RegistryVersion{
+		EntryID: input.ID, Number: 1, Definition: input.Definition, ContentHash: hash, Actor: mutation.Actor, Reason: mutation.Reason, CreatedAt: now,
+	}, input.Kind, content, createdSkills); err != nil {
+		return domain.RegistryEntry{}, err
+	}
+	if err := insertRegistryAudit(ctx, q, input.ID, 1, 1, "created", mutation, now); err != nil {
+		return domain.RegistryEntry{}, err
+	}
+	row, err := q.GetRegistryEntry(ctx, input.ID)
+	if err != nil {
+		return domain.RegistryEntry{}, err
+	}
+	return registryEntryFromGen(row), nil
 }
 
 // GetRegistryEntry reads metadata without resolving a floating version.
@@ -172,34 +182,44 @@ func (s *Store) AppendRegistryVersion(ctx context.Context, id string, definition
 	defer s.writeMu.Unlock()
 	var result domain.RegistryVersion
 	err := s.inTx(ctx, "append registry version", func(q *gen.Queries) error {
-		entry, err := registryMutationEntry(ctx, q, id, mutation)
-		if err != nil {
-			return err
-		}
-		if mutation.Actor.Origin == domain.RegistryManager && !entry.Metadata.Policy.ManagerCanVersion {
-			return ports.ErrRegistryForbidden
-		}
-		content, hash, err := definition.MarshalContent(entry.Kind)
-		if err != nil {
-			return err
-		}
-		number, err := q.NextRegistryVersion(ctx, id)
-		if err != nil {
-			return err
-		}
-		now := time.Now().UTC()
-		result = domain.RegistryVersion{EntryID: id, Number: number, ParentVersion: entry.ActiveVersion,
-			Definition: definition.NormalizeLists(), ContentHash: hash, Actor: mutation.Actor, Reason: mutation.Reason, CreatedAt: now}
-		if err := insertRegistryVersion(ctx, q, result, entry.Kind, content, nil); err != nil {
-			return err
-		}
-		count, err := q.AdvanceRegistryRevision(ctx, gen.AdvanceRegistryRevisionParams{ID: id, Revision: entry.Revision, UpdatedAt: now})
-		if err := registryCAS(count, err); err != nil {
-			return err
-		}
-		return insertRegistryAudit(ctx, q, id, entry.Revision+1, number, "version_created", mutation, now)
+		var err error
+		result, err = appendRegistryVersion(ctx, q, id, definition, mutation, time.Now().UTC())
+		return err
 	})
 	if err != nil {
+		return domain.RegistryVersion{}, err
+	}
+	return result, nil
+}
+
+// appendRegistryVersion retains the shared ownership, pin, revision and audit
+// rules when a governed native action owns the enclosing write transaction.
+func appendRegistryVersion(ctx context.Context, q *gen.Queries, id string, definition domain.RegistryDefinition, mutation domain.RegistryMutation, now time.Time) (domain.RegistryVersion, error) {
+	entry, err := registryMutationEntry(ctx, q, id, mutation)
+	if err != nil {
+		return domain.RegistryVersion{}, err
+	}
+	if mutation.Actor.Origin == domain.RegistryManager && !entry.Metadata.Policy.ManagerCanVersion {
+		return domain.RegistryVersion{}, ports.ErrRegistryForbidden
+	}
+	content, hash, err := definition.MarshalContent(entry.Kind)
+	if err != nil {
+		return domain.RegistryVersion{}, err
+	}
+	number, err := q.NextRegistryVersion(ctx, id)
+	if err != nil {
+		return domain.RegistryVersion{}, err
+	}
+	result := domain.RegistryVersion{EntryID: id, Number: number, ParentVersion: entry.ActiveVersion,
+		Definition: definition.NormalizeLists(), ContentHash: hash, Actor: mutation.Actor, Reason: mutation.Reason, CreatedAt: now}
+	if err := insertRegistryVersion(ctx, q, result, entry.Kind, content, nil); err != nil {
+		return domain.RegistryVersion{}, err
+	}
+	count, err := q.AdvanceRegistryRevision(ctx, gen.AdvanceRegistryRevisionParams{ID: id, Revision: entry.Revision, UpdatedAt: now})
+	if err := registryCAS(count, err); err != nil {
+		return domain.RegistryVersion{}, err
+	}
+	if err := insertRegistryAudit(ctx, q, id, entry.Revision+1, number, "version_created", mutation, now); err != nil {
 		return domain.RegistryVersion{}, err
 	}
 	return result, nil
