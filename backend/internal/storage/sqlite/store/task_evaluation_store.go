@@ -130,13 +130,17 @@ func (s *Store) EvaluateTaskResult(ctx context.Context, input domain.TaskEvaluat
 			return err
 		}
 		now := time.Now().UTC()
-		decisions, outcome, reason := domain.EvaluateTaskCriteria(criteria.Definition, result.Definition.ClaimedCommit, checks, truncated, now)
+		observations, err := collectTaskObservations(ctx, q, result, attempt.CreatedAt, now)
+		if err != nil {
+			return err
+		}
+		decisions, outcome, reason := domain.EvaluateTaskEvidence(criteria.Definition, result.Definition.ClaimedCommit, checks, truncated, &observations, now)
 		attribution := domain.TaskEvaluationAttribution{AgentType: configuration.AgentType, Skills: []domain.WorkerDefinitionRef{}, Harness: configuration.Effective.Harness, Mode: configuration.Effective.SessionMode, Model: configuration.Effective.Config.Model, Category: revision.Definition.Category, AttemptNumber: attempt.Number, ResultNumber: result.Number, ConfigurationHash: result.ConfigurationHash, ConfigurationSequence: result.ConfigurationSequence}
 		for _, skill := range configuration.Skills {
 			attribution.Skills = append(attribution.Skills, skill.Reference)
 		}
 		evaluation = domain.TaskEvaluation{ID: input.ID, ProjectID: domain.ProjectID(task.ProjectID), TaskID: result.TaskID, AttemptID: result.AttemptID, ResultID: result.ID, Number: latest.Number + 1, TaskRevision: result.TaskRevision, CriteriaVersion: result.CriteriaVersion, ContextHash: result.ContextHash, Attribution: attribution, Actor: input.Mutation.Actor, Reason: input.Mutation.Reason, CreatedAt: now,
-			Definition: domain.TaskEvaluationDefinition{SchemaVersion: 1, TargetCommit: result.Definition.ClaimedCommit, CriteriaHash: criteria.ContentHash, ResultHash: result.ContentHash, Checks: checks, ChecksTruncated: truncated, Criteria: decisions, Outcome: outcome, Reason: reason}}
+			Definition: domain.TaskEvaluationDefinition{SchemaVersion: 1, TargetCommit: result.Definition.ClaimedCommit, CriteriaHash: criteria.ContentHash, ResultHash: result.ContentHash, Checks: checks, ChecksTruncated: truncated, Criteria: decisions, Outcome: outcome, Reason: reason, Observations: &observations}}
 		if err := evaluation.Definition.Validate(); err != nil {
 			return err
 		}

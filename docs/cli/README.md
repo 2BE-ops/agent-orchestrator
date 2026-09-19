@@ -144,8 +144,18 @@ CI criteria use `evidenceKind: "ci"` and one or more exact `checkNames`. Only
 successful checks observed in the retained PR snapshot at the result's exact full
 commit can pass. Missing, pending, cancelled, skipped, mismatched, or truncated
 evidence is inconclusive. Worker-reported tests cannot satisfy these criteria.
-Other criterion kinds remain inconclusive until their independent collectors are
-available. Assessment reads do not refresh SCM data or change leases or planning.
+`mergeability` criteria require a non-draft PR observed at the exact result commit
+with a known mergeable state. An observed conflict or closed unmerged PR fails;
+unknown, stale or truncated observations cannot pass. Other criterion kinds remain
+inconclusive until their independent collectors are available. Assessment reads do
+not refresh SCM data or change leases or planning.
+
+Assessments also retain up to 16 PR observations, 32 latest review-run references
+at the target commit, and worker activity/termination/lease facts. Review previews
+are capped at 4 KiB with a preview hash, original byte count and truncation flag.
+Review verdicts are qualitative evidence; a generic approval cannot satisfy frozen
+task criteria. Reservation elapsed time includes waiting and is explicitly marked
+ongoing until lease release. Termination alone does not identify a worker crash.
 
 `ao task send-message <session-id> --file <path|->` persists structured coordination.
 Its request contains `sourceGeneration`, a stable `idempotencyKey`, and a

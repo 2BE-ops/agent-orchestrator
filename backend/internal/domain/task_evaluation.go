@@ -39,6 +39,7 @@ type TaskEvaluationDefinition struct {
 	Criteria        []TaskCriterionEvaluation `json:"criteria"`
 	Outcome         string                    `json:"outcome" enum:"passed,failed,inconclusive"`
 	Reason          string                    `json:"reason"`
+	Observations    *TaskObservationEvidence  `json:"observations,omitempty"`
 }
 
 // TaskEvaluationAttribution pins the worker configuration at result submission.
@@ -96,12 +97,21 @@ func (e TaskEvaluation) Hash() string {
 // Check membership must belong to the retained complete SCM snapshot. Its time
 // is provenance, not an assertion that an unchanged check was just fetched.
 func EvaluateTaskCriteria(criteria AcceptanceCriteria, target string, checks []TaskCICheckEvidence, truncated bool, now time.Time) ([]TaskCriterionEvaluation, string, string) {
+	return EvaluateTaskEvidence(criteria, target, checks, truncated, nil, now)
+}
+
+// EvaluateTaskEvidence adds collected PR facts without treating reviewer prose
+// or worker lifecycle observations as proof of acceptance.
+func EvaluateTaskEvidence(criteria AcceptanceCriteria, target string, checks []TaskCICheckEvidence, truncated bool, observations *TaskObservationEvidence, now time.Time) ([]TaskCriterionEvaluation, string, string) {
 	decisions := make([]TaskCriterionEvaluation, 0, len(criteria.Criteria))
 	outcome := "passed"
 	for _, criterion := range criteria.Criteria {
 		decision := TaskCriterionEvaluation{CriterionID: criterion.ID, Outcome: "inconclusive", Reason: "Independent evidence has not been collected for this criterion"}
 		if criterion.EvidenceKind == "ci" && validEvaluationCommit(target) {
 			decision.Outcome, decision.Reason = evaluateCICriterion(criterion, target, checks, now)
+		}
+		if criterion.EvidenceKind == "mergeability" && validEvaluationCommit(target) {
+			decision.Outcome, decision.Reason = evaluateTaskMergeability(target, observations, now)
 		}
 		if decision.Outcome == "failed" {
 			outcome = "failed"
@@ -185,6 +195,11 @@ func (d TaskEvaluationDefinition) Validate() error {
 	for _, check := range d.Checks {
 		if !resultText(check.PRURL, 2000, true) || !resultText(check.URL, 2000, false) || !resultText(check.Name, 300, true) || len(check.HeadCommit) > 64 || len(check.TargetCommit) > 64 || len(check.Status) > 100 || len(check.Conclusion) > 100 {
 			return fmt.Errorf("invalid collected CI evidence")
+		}
+	}
+	if d.Observations != nil {
+		if err := d.Observations.Validate(); err != nil {
+			return err
 		}
 	}
 	content, _, err := TaskContent(d)

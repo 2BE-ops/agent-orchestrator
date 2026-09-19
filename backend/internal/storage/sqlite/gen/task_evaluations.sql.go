@@ -73,6 +73,119 @@ func (q *Queries) CollectTaskCIChecks(ctx context.Context, arg CollectTaskCIChec
 	return items, nil
 }
 
+const collectTaskPRFacts = `-- name: CollectTaskPRFacts :many
+SELECT url,head_sha,mergeability,is_merged,is_closed,is_draft,observed_at
+FROM pr WHERE session_id=? ORDER BY url LIMIT 17
+`
+
+type CollectTaskPRFactsRow struct {
+	URL          string
+	HeadSha      string
+	Mergeability domain.Mergeability
+	IsMerged     int64
+	IsClosed     int64
+	IsDraft      int64
+	ObservedAt   sql.NullTime
+}
+
+func (q *Queries) CollectTaskPRFacts(ctx context.Context, sessionID domain.SessionID) ([]CollectTaskPRFactsRow, error) {
+	rows, err := q.db.QueryContext(ctx, collectTaskPRFacts, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CollectTaskPRFactsRow{}
+	for rows.Next() {
+		var i CollectTaskPRFactsRow
+		if err := rows.Scan(
+			&i.URL,
+			&i.HeadSha,
+			&i.Mergeability,
+			&i.IsMerged,
+			&i.IsClosed,
+			&i.IsDraft,
+			&i.ObservedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const collectTaskReviewFacts = `-- name: CollectTaskReviewFacts :many
+SELECT r.id,r.review_id,r.pr_url,r.target_sha,r.harness,r.status,r.verdict,
+CAST(substr(r.body,1,4096) AS TEXT) AS body_preview,
+CAST(length(CAST(r.body AS BLOB)) AS INTEGER) AS body_bytes,r.created_at
+FROM review_run r
+WHERE r.session_id=?1 AND r.target_sha=?2
+AND NOT EXISTS (SELECT 1 FROM review_run newer
+ WHERE newer.session_id=r.session_id AND newer.pr_url=r.pr_url
+ AND newer.target_sha=r.target_sha AND newer.harness=r.harness
+ AND (newer.created_at>r.created_at OR (newer.created_at=r.created_at AND newer.id>r.id)))
+ORDER BY r.pr_url,r.harness,r.id LIMIT 33
+`
+
+type CollectTaskReviewFactsParams struct {
+	SessionID    domain.SessionID
+	TargetCommit string
+}
+
+type CollectTaskReviewFactsRow struct {
+	ID          string
+	ReviewID    string
+	PRURL       string
+	TargetSha   string
+	Harness     domain.ReviewerHarness
+	Status      domain.ReviewRunStatus
+	Verdict     domain.ReviewVerdict
+	BodyPreview string
+	BodyBytes   int64
+	CreatedAt   time.Time
+}
+
+// Latest pass per PR and harness at this exact commit, including incomplete
+// passes. An older approval cannot hide a newer running or failed review.
+func (q *Queries) CollectTaskReviewFacts(ctx context.Context, arg CollectTaskReviewFactsParams) ([]CollectTaskReviewFactsRow, error) {
+	rows, err := q.db.QueryContext(ctx, collectTaskReviewFacts, arg.SessionID, arg.TargetCommit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CollectTaskReviewFactsRow{}
+	for rows.Next() {
+		var i CollectTaskReviewFactsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ReviewID,
+			&i.PRURL,
+			&i.TargetSha,
+			&i.Harness,
+			&i.Status,
+			&i.Verdict,
+			&i.BodyPreview,
+			&i.BodyBytes,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTaskEvaluation = `-- name: GetTaskEvaluation :one
 SELECT id, project_id, task_id, attempt_id, result_id, number, task_revision, criteria_version, idempotency_key, request_hash, snapshot, content_hash, created_at FROM adaptive_task_evaluations WHERE id=?
 `

@@ -3321,7 +3321,7 @@ export interface components {
             checkNames?: string[];
             command?: string[];
             /** @enum {string} */
-            evidenceKind: "test" | "build" | "lint" | "ci" | "review" | "artifact" | "manual";
+            evidenceKind: "test" | "build" | "lint" | "ci" | "mergeability" | "review" | "artifact" | "manual";
             id: string;
             requirement: string;
         };
@@ -5768,6 +5768,7 @@ export interface components {
             checksTruncated: boolean;
             criteria: components["schemas"]["TaskCriterionEvaluation"][];
             criteriaHash: string;
+            observations?: components["schemas"]["TaskObservationEvidence"];
             /** @enum {string} */
             outcome: "passed" | "failed" | "inconclusive";
             reason: string;
@@ -5897,6 +5898,23 @@ export interface components {
             items: components["schemas"]["TaskMessage"][];
             nextCursor?: string;
         };
+        TaskObservationEvidence: {
+            prs: components["schemas"]["TaskPREvidence"][];
+            prsTruncated: boolean;
+            reviews: components["schemas"]["TaskReviewEvidence"][];
+            reviewsTruncated: boolean;
+            worker: components["schemas"]["TaskWorkerEvidence"];
+        };
+        TaskPREvidence: {
+            closed: boolean;
+            draft: boolean;
+            headCommit: string;
+            mergeability: string;
+            merged: boolean;
+            /** Format: date-time */
+            observedAt: string;
+            url: string;
+        };
         TaskResult: {
             attemptId: string;
             configurationHash: string;
@@ -5949,6 +5967,22 @@ export interface components {
             items: components["schemas"]["TaskResult"][];
             nextCursor?: string;
         };
+        TaskReviewEvidence: {
+            /** Format: int64 */
+            bodyBytes: number;
+            bodyPreview: string;
+            bodyPreviewHash: string;
+            bodyTruncated: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            harness: string;
+            prUrl: string;
+            reviewId: string;
+            runId: string;
+            status: string;
+            targetCommit: string;
+            verdict: string;
+        };
         TaskRevision: {
             actor: components["schemas"]["AdaptiveActor"];
             contentHash: string;
@@ -5980,6 +6014,27 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             sessionId: string;
+        };
+        TaskWorkerEvidence: {
+            activity: string;
+            /** Format: date-time */
+            activityAt: string;
+            /** Format: date-time */
+            attemptCreatedAt: string;
+            /** Format: date-time */
+            leaseExpiresAt: string;
+            /** Format: date-time */
+            leaseHeartbeatAt: string;
+            leaseReleaseReason?: string;
+            /** Format: date-time */
+            leaseReleasedAt?: null | string;
+            /** Format: int64 */
+            reservationElapsedMs: number;
+            reservationOngoing: boolean;
+            sessionId: string;
+            /** Format: int64 */
+            sessionRevision: number;
+            terminated: boolean;
         };
         TrackerIntakeConfig: {
             assignee?: string;

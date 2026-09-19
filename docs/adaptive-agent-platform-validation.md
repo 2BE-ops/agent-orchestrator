@@ -4,6 +4,35 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 13c1 — PR, review and lifecycle observations (2026-09-19)
+
+Evaluations now snapshot up to 16 independently observed PR records, 32 latest
+review runs per PR/harness at the exact result commit, and session/lease facts in
+the evaluation transaction. SQL bounds loaded review text before a 4 KiB UTF-8
+preview is retained with its hash, original byte count and truncation flag.
+Review prose remains qualitative: generic approval cannot satisfy task criteria,
+and harness does not imply an Agent Type. Reservation time is ongoing until lease
+release; termination is not labeled a crash. Optional new snapshot fields preserve
+old hashes. No schema migration or native process change is needed for this slice.
+
+Frozen `mergeability` criteria pass only with observed, non-draft, mergeable PRs at
+the exact result commit. Conflicts/closed-unmerged facts fail; stale, unknown or
+truncated collections do not pass. Two domain tests and three real-SQLite store
+tests cover the verdict matrix, old hashes, superseding review runs, Unicode and
+collection bounds, release facts, immutable history/retry and reopened SQLite.
+The HTTP assessment test verifies lifecycle evidence reaches the API.
+
+Focused store/controller PASS (1.204s/0.500s). Full domain, SQLite (32.637s),
+store, review service, task service and SCM suites PASS; final full store
+(18.328s), HTTP router/spec suites PASS. sqlc/API generation, backend build,
+frontend typecheck and pinned affected-package lint PASS (0 issues). Full review
+engine suite has one Windows failure in the unchanged launcher test
+`TestLauncherSpawnPrependsNodeRuntimeForNodeShimReviewer`: actual PATH lacks the
+expected Node shim directory. Keep this exact gap for stage 24; it is not a local
+pass. Initial fixture field/method compile errors were corrected before final
+checks. Logs: ignored `*stage13c1*`. Independent reviewer Type/criteria provenance,
+local verification, usage/performance and derived completion remain stage 13 work.
+
 ## Stage 13b — evaluation service, API and CLI (2026-09-19)
 
 Three scoped task/attempt routes expose collection, paged history and exact

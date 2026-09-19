@@ -473,6 +473,16 @@ transactional result/version/actor guards. The public request contains no verdic
 evidence, criteria or actor fields; exact retries acknowledge the retained snapshot.
 HTTP/CLI collection reads stored facts, without refreshing SCM or starting workers.
 
+Evaluation observations additionally retain bounded PR metadata, latest existing
+review runs per PR/harness at the target commit, and worker/lease facts under the
+same transaction. Reviewer prose is limited in SQL before loading and then to a
+4 KiB UTF-8 preview, with preview hash/original length. No reviewer Type identity
+is inferred from a harness, and generic qualitative approval does not satisfy
+task-specific criteria. Frozen mergeability criteria use exact observed PR heads;
+unknown/draft/stale/truncated facts never pass. Reservation time is labeled as
+ongoing until release, not billed execution time or proof of a crash. These fields
+are optional on old snapshots to preserve historical hashes.
+
 Manager selection first filters permitted, enabled, compatible types, then
 considers existing Skills before proposing evolution or new types. Persist
 candidates, rejection reasons, selected versions, policy preference, and rationale.

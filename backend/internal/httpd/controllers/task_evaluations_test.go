@@ -24,6 +24,9 @@ func TestTaskEvaluationsAPICollectsEvidenceAndRetainsScopedHistory(t *testing.T)
 	if err := json.Unmarshal(w.Body.Bytes(), &first); err != nil || !first.Created || first.Evaluation.Definition.Outcome != "inconclusive" || first.Evaluation.ResultID != result.Result.ID || first.Evaluation.ContextHash != result.Result.ContextHash || first.Evaluation.Attribution.ConfigurationHash != result.Result.ConfigurationHash || first.Evaluation.Actor.Kind != "USER" {
 		t.Fatalf("worker claim became verified evidence or lost attribution: %+v %v", first, err)
 	}
+	if first.Evaluation.Definition.Observations == nil || first.Evaluation.Definition.Observations.Worker.SessionID != worker || !first.Evaluation.Definition.Observations.Worker.ReservationOngoing {
+		t.Fatalf("HTTP lost observed lifecycle attribution: %+v", first.Evaluation.Definition)
+	}
 	w = registryRequest(t, router, http.MethodPost, base, input, http.StatusOK)
 	var retry controllers.TaskEvaluateResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &retry); err != nil || retry.Created || retry.Evaluation.ContentHash != first.Evaluation.ContentHash {

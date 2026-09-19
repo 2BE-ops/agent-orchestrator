@@ -10978,6 +10978,7 @@ components:
           - build
           - lint
           - ci
+          - mergeability
           - review
           - artifact
           - manual
@@ -17505,6 +17506,8 @@ components:
           type: array
         criteriaHash:
           type: string
+        observations:
+          $ref: '#/components/schemas/TaskObservationEvidence'
         outcome:
           enum:
           - passed
@@ -17862,6 +17865,55 @@ components:
       required:
       - items
       type: object
+    TaskObservationEvidence:
+      properties:
+        prs:
+          items:
+            $ref: '#/components/schemas/TaskPREvidence'
+          type: array
+        prsTruncated:
+          type: boolean
+        reviews:
+          items:
+            $ref: '#/components/schemas/TaskReviewEvidence'
+          type: array
+        reviewsTruncated:
+          type: boolean
+        worker:
+          $ref: '#/components/schemas/TaskWorkerEvidence'
+      required:
+      - prs
+      - prsTruncated
+      - reviews
+      - reviewsTruncated
+      - worker
+      type: object
+    TaskPREvidence:
+      properties:
+        closed:
+          type: boolean
+        draft:
+          type: boolean
+        headCommit:
+          type: string
+        mergeability:
+          type: string
+        merged:
+          type: boolean
+        observedAt:
+          format: date-time
+          type: string
+        url:
+          type: string
+      required:
+      - url
+      - headCommit
+      - mergeability
+      - merged
+      - closed
+      - draft
+      - observedAt
+      type: object
     TaskResult:
       properties:
         attemptId:
@@ -18029,6 +18081,48 @@ components:
       required:
       - items
       type: object
+    TaskReviewEvidence:
+      properties:
+        bodyBytes:
+          format: int64
+          type: integer
+        bodyPreview:
+          type: string
+        bodyPreviewHash:
+          type: string
+        bodyTruncated:
+          type: boolean
+        createdAt:
+          format: date-time
+          type: string
+        harness:
+          type: string
+        prUrl:
+          type: string
+        reviewId:
+          type: string
+        runId:
+          type: string
+        status:
+          type: string
+        targetCommit:
+          type: string
+        verdict:
+          type: string
+      required:
+      - runId
+      - reviewId
+      - prUrl
+      - targetCommit
+      - harness
+      - status
+      - verdict
+      - bodyPreviewHash
+      - bodyPreview
+      - bodyBytes
+      - bodyTruncated
+      - createdAt
+      type: object
     TaskRevision:
       properties:
         actor:
@@ -18112,6 +18206,53 @@ components:
       - sessionId
       - configurationHash
       - createdAt
+      type: object
+    TaskWorkerEvidence:
+      properties:
+        activity:
+          type: string
+        activityAt:
+          format: date-time
+          type: string
+        attemptCreatedAt:
+          format: date-time
+          type: string
+        leaseExpiresAt:
+          format: date-time
+          type: string
+        leaseHeartbeatAt:
+          format: date-time
+          type: string
+        leaseReleaseReason:
+          type: string
+        leaseReleasedAt:
+          format: date-time
+          type:
+          - "null"
+          - string
+        reservationElapsedMs:
+          format: int64
+          type: integer
+        reservationOngoing:
+          type: boolean
+        sessionId:
+          type: string
+        sessionRevision:
+          format: int64
+          type: integer
+        terminated:
+          type: boolean
+      required:
+      - sessionId
+      - sessionRevision
+      - activity
+      - activityAt
+      - terminated
+      - attemptCreatedAt
+      - leaseHeartbeatAt
+      - leaseExpiresAt
+      - reservationElapsedMs
+      - reservationOngoing
       type: object
     TrackerIntakeConfig:
       properties:
