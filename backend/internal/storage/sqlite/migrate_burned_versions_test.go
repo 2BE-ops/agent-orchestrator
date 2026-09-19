@@ -175,6 +175,7 @@ var shippedMigrations = map[int64]string{
 	168: "0168_agent_manager_session_kind.sql",
 	169: "0169_agent_manager_governance.sql",
 	170: "0170_agent_manager_controllers.sql",
+	171: "0171_agent_manager_inbox.sql",
 }
 
 // burnedVersion reports version numbers that must never be (re)used: they

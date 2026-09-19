@@ -678,6 +678,23 @@ orchestrator project rules. Ordinary session restoration performs no extra Manag
 storage reads. Reopened-database tests cover both native modes and exact retained
 resources. Production start, inbox and structured tools remain subsequent work.
 
+Stage 14c1 adds the durable Manager inbox (0171). Routing requests reference exact
+task/criteria and governance versions plus hashes, without embedding task content.
+They are independent of a native controller's lifetime. Enqueue serializes with
+planning and policy changes, checks cancellation ancestors and frozen criteria,
+allows one pending request per task, and enforces the current per-project queue
+limit plus a 10000-request retained-history bound. Exact-ID retries return their
+original records after restart, revision changes or terminal resolution.
+
+Only trusted user/orchestrator/system planning context can enqueue or close this
+intent; worker/Manager declarations cannot provide that authority. Terminal
+cancelled, superseded and Needs Human receipts are immutable and release only
+inbox capacity, never leases or native ownership. A validated selection/application
+transaction remains separate subsequent work. Requests and receipts share their
+business transaction with audit/CDC, expose bounded project-scoped history, and
+refuse history-losing downgrade. Manager context delivery must subsequently pass
+through the classified Context Builder before native tools receive content.
+
 Metrics retain denominators and time windows: attempted/completed, first-pass
 completion, revisions, CI failures, review findings, retries, duration and usage
 when measured. Attribute to all pinned Skills without claiming causality.

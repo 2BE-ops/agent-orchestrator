@@ -74,6 +74,27 @@ type AdaptiveAgentManagerExecutionResolution struct {
 	CreatedAt     time.Time
 }
 
+type AdaptiveAgentManagerRequest struct {
+	Sequence             int64
+	ID                   string
+	ProjectID            string
+	TaskID               string
+	TaskRevision         int64
+	CriteriaVersion      int64
+	ConfigurationVersion int64
+	Snapshot             string
+	ContentHash          string
+	CreatedAt            time.Time
+}
+
+type AdaptiveAgentManagerRequestResolution struct {
+	RequestID string
+	Outcome   string
+	Actor     string
+	Reason    string
+	CreatedAt time.Time
+}
+
 type AdaptiveProviderBinding struct {
 	ID        string
 	Name      string

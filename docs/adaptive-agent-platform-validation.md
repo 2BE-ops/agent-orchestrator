@@ -4,6 +4,33 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 14c1 — durable Manager inbox (2026-09-19)
+
+Migration 0171 retains immutable routing requests with exact task, criteria and
+policy references/hashes. Enqueue checks planning authority, current revisions,
+frozen criteria, project isolation, cancellation ancestry and current queue limits
+in one transaction. One pending request per task also has a SQL guard. Terminal
+cancelled/superseded/Needs Human receipts release only inbox capacity. Audit and
+trigger-owned CDC commit atomically; no native transport or worker launch occurs.
+
+Focused domain/SQLite/store tests PASS (0.536s/1.143s/0.740s). Tests cover eight
+competing distinct submissions against capacity one, eight exact retries with one
+creation, bounded history pages, task/policy changes plus reopen, preserved hashes,
+worker/Manager and invalid orchestrator authority, cross-project reads/writes,
+unfrozen criteria, cancellation, audit-failure rollback with zero partial CDC,
+terminal idempotency and raw-SQL immutable/pending guards. Upgrade/down/up preserves
+task/policy/CDC; downgrade over inbox history refuses atomically with integrity and
+foreign keys intact. Initial test compilation used a nonexistent task edit method;
+corrected to the existing ReviseAdaptiveTask boundary before these passes.
+
+Full domain (1.278s), ports, SQLite (39.239s), SQLite helpers, store (23.539s),
+Manager service and registry service PASS. An initial full run caught the missing
+shipped-migration ledger entry; added 0171 and reran the complete affected suites.
+Pinned affected-package lint PASS (0 issues) after comment/error-style fixes.
+sqlc and backend build PASS. Complete source/generated diff and whitespace review
+PASS. Logs: `.cache/adaptive-tests/stage14c1-*`. API/CLI, native proposals and live
+inbox delivery remain subsequent stage-14 work.
+
 ## Stage 14b2 — existing native Manager engines (2026-09-19)
 
 Dedicated internal admission now drives the existing TUI/Chat launch and restore
