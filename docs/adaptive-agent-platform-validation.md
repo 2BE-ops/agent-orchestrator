@@ -4,6 +4,30 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 13b — evaluation service, API and CLI (2026-09-19)
+
+Three scoped task/attempt routes expose collection, paged history and exact
+assessment inspection through the shared task service. The strict 8 KiB request
+contains only a result ID, expected version, retry key and reason. Callers cannot
+supply evidence, verdicts, criteria or actor identity. HTTP-only `ao task evaluate`,
+`evaluations` and `evaluation` commands preserve daemon error codes/request IDs.
+Generated OpenAPI/TypeScript contracts, command docs and telemetry path redaction
+are updated. Shared pagination also retains the existing result commands.
+
+Two real-SQLite HTTP tests, service failure/authority test, CLI usage/error test
+and three CLI route cases PASS. They cover exact retries, stale versions/results,
+cross-task/attempt rejection, history, audit, malformed/forged/oversized bodies,
+no ownership/planning mutation, and no conversion of worker claims into success.
+Focused task/CLI/controller run PASS (0.681s/0.815s/0.529s). Full task, CLI,
+HTTP router/spec/envelope, telemetry and skillassets suites PASS; the full
+controller suite retains exactly the recorded Windows mobile-pairing rename and
+file-URL clone failures. Final full CLI rerun PASS (20.374s), pinned affected-package
+lint PASS (0 issues), backend build PASS, API generation PASS, frontend typecheck
+PASS, and all 39 API-client tests PASS. Initial test field-name and linter
+preallocation findings were corrected before final validation. Logs: ignored
+`*stage13b*`. Independent command/artifact/review evidence, derived completion and
+performance denominators remain stage 13 work; desktop inspection remains 21/22/25.
+
 ## Stage 13a — immutable CI evaluation evidence (2026-09-19)
 
 Migration 0165 retains at most 64 immutable assessments per attempt, with exact

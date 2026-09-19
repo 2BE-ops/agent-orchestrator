@@ -130,6 +130,23 @@ and knowledge is not automatically accepted. `ao task results <task-id>
 <result-id>` reads an exact submission. Malformed submissions leave native output
 and previous results intact.
 
+`ao task evaluate <task-id> <attempt-id> --file <path|->` collects an immutable
+assessment of stored independent evidence. Its JSON request contains `resultId`,
+`expectedVersion` (zero initially), a stable `idempotencyKey`, and `reason`, with an
+8 KiB limit. Criteria, evidence, author identity and verdict are derived by the
+daemon. An exact retry returns the original snapshot; a fresh assessment requires
+a new key, the latest evaluation number, and the attempt's latest result.
+`ao task evaluations <task-id> <attempt-id>` pages up to 64 assessments per attempt;
+`ao task evaluation <task-id> <attempt-id> <evaluation-id>` inspects exact evidence,
+source timestamps, frozen criteria, and Type/Skill/model/configuration attribution.
+
+CI criteria use `evidenceKind: "ci"` and one or more exact `checkNames`. Only
+successful checks observed in the retained PR snapshot at the result's exact full
+commit can pass. Missing, pending, cancelled, skipped, mismatched, or truncated
+evidence is inconclusive. Worker-reported tests cannot satisfy these criteria.
+Other criterion kinds remain inconclusive until their independent collectors are
+available. Assessment reads do not refresh SCM data or change leases or planning.
+
 `ao task send-message <session-id> --file <path|->` persists structured coordination.
 Its request contains `sourceGeneration`, a stable `idempotencyKey`, and a
 `definition` with `schemaVersion: 1`, `kind`, `targetTaskId`, `subject`, `body` and

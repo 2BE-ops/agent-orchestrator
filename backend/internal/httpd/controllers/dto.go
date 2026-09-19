@@ -93,6 +93,23 @@ type TaskMessagesResponse struct {
 	NextCursor string               `json:"nextCursor,omitempty"`
 }
 
+// TaskEvaluationIDParam identifies an immutable independent assessment.
+type TaskEvaluationIDParam struct {
+	EvaluationID string `path:"evaluationId"`
+}
+
+// TaskEvaluateRequest selects a result and retry identity, never a verdict.
+type TaskEvaluateRequest tasksvc.EvaluationInput
+
+// TaskEvaluateResponse retains independently collected facts and attribution.
+type TaskEvaluateResponse tasksvc.EvaluationReceipt
+
+// TaskEvaluationsResponse pages historical assessment snapshots.
+type TaskEvaluationsResponse struct {
+	Items      []domain.TaskEvaluation `json:"items"`
+	NextCursor string                  `json:"nextCursor,omitempty"`
+}
+
 // TaskResultIDParam identifies one immutable worker submission.
 type TaskResultIDParam struct {
 	ResultID string `path:"resultId"`

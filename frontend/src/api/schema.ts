@@ -3078,6 +3078,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tasks/{taskId}/attempts/{attemptId}/evaluations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect immutable evaluation history */
+        get: operations["listTaskEvaluations"];
+        put?: never;
+        /** Collect stored independent evidence for an exact worker result */
+        post: operations["evaluateTaskResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{taskId}/attempts/{attemptId}/evaluations/{evaluationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect exact evaluation evidence and worker attribution */
+        get: operations["getTaskEvaluation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tasks/{taskId}/attempts/{attemptId}/results": {
         parameters: {
             query?: never;
@@ -5629,6 +5664,19 @@ export interface components {
             sequence: number;
             taskId: string;
         };
+        TaskCICheckEvidence: {
+            conclusion: string;
+            headCommit: string;
+            name: string;
+            /** Format: date-time */
+            observedAt: string;
+            prUrl: string;
+            /** Format: date-time */
+            snapshotAt: string;
+            status: string;
+            targetCommit: string;
+            url: string;
+        };
         TaskContextSnapshot: {
             attemptId: string;
             basePrompt: string;
@@ -5650,6 +5698,12 @@ export interface components {
             task: components["schemas"]["TaskRevisionRef"];
             totalBytes: number;
         };
+        TaskCriterionEvaluation: {
+            criterionId: string;
+            /** @enum {string} */
+            outcome: "passed" | "failed" | "inconclusive";
+            reason: string;
+        };
         TaskDefinition: {
             brief: string;
             category: string;
@@ -5661,6 +5715,69 @@ export interface components {
             requestedWorker?: components["schemas"]["WorkerSelection"];
             requiredCapabilities: string[] | null;
             title: string;
+        };
+        TaskEvaluateRequest: {
+            /** Format: int64 */
+            expectedVersion: number;
+            idempotencyKey: string;
+            reason: string;
+            resultId: string;
+        };
+        TaskEvaluateResponse: {
+            created: boolean;
+            evaluation: components["schemas"]["TaskEvaluation"];
+        };
+        TaskEvaluation: {
+            actor: components["schemas"]["AdaptiveActor"];
+            attemptId: string;
+            attribution: components["schemas"]["TaskEvaluationAttribution"];
+            contentHash: string;
+            contextHash: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            criteriaVersion: number;
+            definition: components["schemas"]["TaskEvaluationDefinition"];
+            id: string;
+            /** Format: int64 */
+            number: number;
+            projectId: string;
+            reason: string;
+            resultId: string;
+            taskId: string;
+            /** Format: int64 */
+            taskRevision: number;
+        };
+        TaskEvaluationAttribution: {
+            agentType: components["schemas"]["WorkerDefinitionRef"];
+            /** Format: int64 */
+            attemptNumber: number;
+            category: string;
+            configurationHash: string;
+            /** Format: int64 */
+            configurationSequence: number;
+            harness: string;
+            mode: string;
+            model: string;
+            /** Format: int64 */
+            resultNumber: number;
+            skills: components["schemas"]["WorkerDefinitionRef"][];
+        };
+        TaskEvaluationDefinition: {
+            checks: components["schemas"]["TaskCICheckEvidence"][];
+            checksTruncated: boolean;
+            criteria: components["schemas"]["TaskCriterionEvaluation"][];
+            criteriaHash: string;
+            /** @enum {string} */
+            outcome: "passed" | "failed" | "inconclusive";
+            reason: string;
+            resultHash: string;
+            schemaVersion: number;
+            targetCommit: string;
+        };
+        TaskEvaluationsResponse: {
+            items: components["schemas"]["TaskEvaluation"][];
+            nextCursor?: string;
         };
         TaskExecutionOperation: {
             /** Format: date-time */
@@ -18780,6 +18897,245 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskContextSnapshot"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listTaskEvaluations: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                taskId: string;
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskEvaluationsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    evaluateTaskResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskEvaluateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskEvaluateResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getTaskEvaluation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+                attemptId: string;
+                evaluationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskEvaluation"];
                 };
             };
             /** @description Bad Request */

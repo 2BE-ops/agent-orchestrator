@@ -467,6 +467,12 @@ incomplete collections cannot pass. New criterion fields use omitempty so prior
 criteria and context hashes remain stable. Remaining evidence kinds are initially
 inconclusive rather than accepted from a worker's claims.
 
+The shared task service exposes strict evaluation requests and scoped historical
+reads. URL task/attempt scope is checked before collection, and the store repeats
+transactional result/version/actor guards. The public request contains no verdict,
+evidence, criteria or actor fields; exact retries acknowledge the retained snapshot.
+HTTP/CLI collection reads stored facts, without refreshing SCM or starting workers.
+
 Manager selection first filters permitted, enabled, compatible types, then
 considers existing Skills before proposing evolution or new types. Persist
 candidates, rejection reasons, selected versions, policy preference, and rationale.

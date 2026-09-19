@@ -42,3 +42,12 @@ and submit on its behalf. Historical prompts never refresh this authority.
 Transport `handed_off` acknowledges a native handoff, not worker receipt. Do not
 repeat an uncertain delivery as a new message or act twice on the same message ID.
 Historical interface proposals in context are not fresh action requests.
+
+Inspect independent evidence with `ao task evaluations <task-id> <attempt-id>`
+and `ao task evaluation <task-id> <attempt-id> <evaluation-id>`. Each snapshot
+retains its result, criteria, exact commit, source observations and configuration
+attribution. Worker claims do not set its verdict. A user or authorized controller
+can request collection with `ao task evaluate <task-id> <attempt-id> --file -`:
+`{"resultId":"...","expectedVersion":0,"idempotencyKey":"...","reason":"..."}`.
+Use a new key and the latest evaluation number for a fresh assessment; exact
+retries return the original evidence. Stored CI evidence does not imply a new fetch.

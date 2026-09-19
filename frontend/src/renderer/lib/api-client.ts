@@ -74,6 +74,8 @@ const ROUTE_TEMPLATES = [
 	"/api/v1/tasks/{taskId}/attempts/{attemptId}/context",
 	"/api/v1/tasks/{taskId}/attempts/{attemptId}/results",
 	"/api/v1/tasks/{taskId}/attempts/{attemptId}/results/{resultId}",
+	"/api/v1/tasks/{taskId}/attempts/{attemptId}/evaluations",
+	"/api/v1/tasks/{taskId}/attempts/{attemptId}/evaluations/{evaluationId}",
 	"/api/v1/sessions/{sessionId}/task-results",
 	"/api/v1/sessions/{sessionId}/task-messages",
 	"/api/v1/projects/{id}/task-messages",

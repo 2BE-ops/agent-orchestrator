@@ -35,6 +35,8 @@ it("redacts task and project identities from task telemetry routes", () => {
 	expect(normalizeApiOperation("POST", "/api/v1/sessions/private-worker/task-messages")).toBe("POST /api/v1/sessions/:id/task-messages");
 	expect(normalizeApiOperation("GET", "/api/v1/tasks/private-task/attempts/private-attempt/results/private-result")).toBe("GET /api/v1/tasks/:id/attempts/:id/results/:id");
 	expect(normalizeApiOperation("POST", "/api/v1/sessions/private-worker/task-results")).toBe("POST /api/v1/sessions/:id/task-results");
+	expect(normalizeApiOperation("POST", "/api/v1/tasks/private-task/attempts/private-attempt/evaluations")).toBe("POST /api/v1/tasks/:id/attempts/:id/evaluations");
+	expect(normalizeApiOperation("GET", "/api/v1/tasks/private-task/attempts/private-attempt/evaluations/private-evaluation")).toBe("GET /api/v1/tasks/:id/attempts/:id/evaluations/:id");
 	expect(normalizeApiOperation("GET", "/api/v1/tasks/private-task/attempts/private-attempt/context")).toBe("GET /api/v1/tasks/:id/attempts/:id/context");
 	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/tasks")).toBe("GET /api/v1/projects/:id/tasks");
 	expect(normalizeApiOperation("GET", "/api/v1/tasks/private-task/criteria/12")).toBe("GET /api/v1/tasks/:id/criteria/:id");

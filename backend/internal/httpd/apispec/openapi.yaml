@@ -9984,6 +9984,207 @@ paths:
       summary: Inspect exact sealed worker input and provenance
       tags:
       - tasks
+  /api/v1/tasks/{taskId}/attempts/{attemptId}/evaluations:
+    get:
+      operationId: listTaskEvaluations
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: attemptId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskEvaluationsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect immutable evaluation history
+      tags:
+      - tasks
+    post:
+      operationId: evaluateTaskResult
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: attemptId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskEvaluateRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskEvaluateResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Collect stored independent evidence for an exact worker result
+      tags:
+      - tasks
+  /api/v1/tasks/{taskId}/attempts/{attemptId}/evaluations/{evaluationId}:
+    get:
+      operationId: getTaskEvaluation
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: attemptId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: evaluationId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskEvaluation'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect exact evaluation evidence and worker attribution
+      tags:
+      - tasks
   /api/v1/tasks/{taskId}/attempts/{attemptId}/results:
     get:
       operationId: listTaskResults
@@ -17021,6 +17222,39 @@ components:
       - reason
       - createdAt
       type: object
+    TaskCICheckEvidence:
+      properties:
+        conclusion:
+          type: string
+        headCommit:
+          type: string
+        name:
+          type: string
+        observedAt:
+          format: date-time
+          type: string
+        prUrl:
+          type: string
+        snapshotAt:
+          format: date-time
+          type: string
+        status:
+          type: string
+        targetCommit:
+          type: string
+        url:
+          type: string
+      required:
+      - prUrl
+      - url
+      - headCommit
+      - name
+      - targetCommit
+      - status
+      - conclusion
+      - observedAt
+      - snapshotAt
+      type: object
     TaskContextSnapshot:
       properties:
         attemptId:
@@ -17080,6 +17314,23 @@ components:
       - createdAt
       - contentHash
       type: object
+    TaskCriterionEvaluation:
+      properties:
+        criterionId:
+          type: string
+        outcome:
+          enum:
+          - passed
+          - failed
+          - inconclusive
+          type: string
+        reason:
+          type: string
+      required:
+      - criterionId
+      - outcome
+      - reason
+      type: object
     TaskDefinition:
       properties:
         brief:
@@ -17120,6 +17371,175 @@ components:
       - dependencies
       - requiredCapabilities
       - maxAttempts
+      type: object
+    TaskEvaluateRequest:
+      properties:
+        expectedVersion:
+          format: int64
+          type: integer
+        idempotencyKey:
+          type: string
+        reason:
+          type: string
+        resultId:
+          type: string
+      required:
+      - resultId
+      - expectedVersion
+      - idempotencyKey
+      - reason
+      type: object
+    TaskEvaluateResponse:
+      properties:
+        created:
+          type: boolean
+        evaluation:
+          $ref: '#/components/schemas/TaskEvaluation'
+      required:
+      - evaluation
+      - created
+      type: object
+    TaskEvaluation:
+      properties:
+        actor:
+          $ref: '#/components/schemas/AdaptiveActor'
+        attemptId:
+          type: string
+        attribution:
+          $ref: '#/components/schemas/TaskEvaluationAttribution'
+        contentHash:
+          type: string
+        contextHash:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        criteriaVersion:
+          format: int64
+          type: integer
+        definition:
+          $ref: '#/components/schemas/TaskEvaluationDefinition'
+        id:
+          type: string
+        number:
+          format: int64
+          type: integer
+        projectId:
+          type: string
+        reason:
+          type: string
+        resultId:
+          type: string
+        taskId:
+          type: string
+        taskRevision:
+          format: int64
+          type: integer
+      required:
+      - id
+      - projectId
+      - taskId
+      - attemptId
+      - resultId
+      - number
+      - taskRevision
+      - criteriaVersion
+      - contextHash
+      - attribution
+      - definition
+      - actor
+      - reason
+      - contentHash
+      - createdAt
+      type: object
+    TaskEvaluationAttribution:
+      properties:
+        agentType:
+          $ref: '#/components/schemas/WorkerDefinitionRef'
+        attemptNumber:
+          format: int64
+          type: integer
+        category:
+          type: string
+        configurationHash:
+          type: string
+        configurationSequence:
+          format: int64
+          type: integer
+        harness:
+          type: string
+        mode:
+          type: string
+        model:
+          type: string
+        resultNumber:
+          format: int64
+          type: integer
+        skills:
+          items:
+            $ref: '#/components/schemas/WorkerDefinitionRef'
+          type: array
+      required:
+      - agentType
+      - skills
+      - harness
+      - mode
+      - model
+      - category
+      - attemptNumber
+      - resultNumber
+      - configurationHash
+      - configurationSequence
+      type: object
+    TaskEvaluationDefinition:
+      properties:
+        checks:
+          items:
+            $ref: '#/components/schemas/TaskCICheckEvidence'
+          type: array
+        checksTruncated:
+          type: boolean
+        criteria:
+          items:
+            $ref: '#/components/schemas/TaskCriterionEvaluation'
+          type: array
+        criteriaHash:
+          type: string
+        outcome:
+          enum:
+          - passed
+          - failed
+          - inconclusive
+          type: string
+        reason:
+          type: string
+        resultHash:
+          type: string
+        schemaVersion:
+          type: integer
+        targetCommit:
+          type: string
+      required:
+      - schemaVersion
+      - targetCommit
+      - criteriaHash
+      - resultHash
+      - checks
+      - checksTruncated
+      - criteria
+      - outcome
+      - reason
+      type: object
+    TaskEvaluationsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TaskEvaluation'
+          type: array
+        nextCursor:
+          type: string
+      required:
+      - items
       type: object
     TaskExecutionOperation:
       properties:
