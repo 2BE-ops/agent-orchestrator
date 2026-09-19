@@ -68,6 +68,31 @@ type AdaptiveTaskAttemptParam struct {
 	AttemptID string `path:"attemptId"`
 }
 
+// TaskMessageIDParam identifies immutable project coordination.
+type TaskMessageIDParam struct {
+	MessageID string `path:"messageId"`
+}
+
+// TaskMessageFilterQuery optionally selects messages sent or received by a task.
+type TaskMessageFilterQuery struct {
+	TaskID string `query:"taskId" required:"false"`
+}
+
+// TaskMessageSubmitRequest supplies generation-fenced, bounded coordination.
+type TaskMessageSubmitRequest tasksvc.MessageInput
+
+// TaskMessageSubmitResponse acknowledges storage before native delivery.
+type TaskMessageSubmitResponse tasksvc.MessageReceipt
+
+// TaskMessageResponse exposes content and observed transport history separately.
+type TaskMessageResponse tasksvc.MessageView
+
+// TaskMessagesResponse pages the shared project message timeline.
+type TaskMessagesResponse struct {
+	Items      []domain.TaskMessage `json:"items"`
+	NextCursor string               `json:"nextCursor,omitempty"`
+}
+
 // TaskResultIDParam identifies one immutable worker submission.
 type TaskResultIDParam struct {
 	ResultID string `path:"resultId"`

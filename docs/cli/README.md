@@ -125,6 +125,28 @@ and knowledge is not automatically accepted. `ao task results <task-id>
 <result-id>` reads an exact submission. Malformed submissions leave native output
 and previous results intact.
 
+`ao task send-message <session-id> --file <path|->` persists structured coordination.
+Its request contains `sourceGeneration`, a stable `idempotencyKey`, and a
+`definition` with `schemaVersion: 1`, `kind`, `targetTaskId`, `subject`, `body` and
+`correlationId`. Supported kinds are `finding`, `question`, `answer`, `blocker`,
+`handoff`, `interface_contract`, `review_request` and `dependency_update`. A target
+must be another task in the same project. It need not have a worker yet. Replies
+include `replyToId` and retain the original thread and task pair; an answer must
+reply to a question. An optional `resultId` must belong to the sending attempt.
+An `interface_contract` includes an `interface` object with `name`, `contract` and
+workspace-relative `files`. All content remains attributed worker claims.
+
+Message requests are capped at 64 KiB, definitions at 32 KiB, history at 256 messages
+per attempt and 10,000 per project. Exact retries return the same stored message.
+`ao task messages <project> [--task <task-id>] [--cursor <sequence>] [--limit <n>]`
+reads the shared timeline; the task filter includes both sent and received messages.
+`ao task message <project> <message-id>` reads exact content and delivery history.
+An empty delivery history means no native send has been reserved. `dispatching`
+means reserved, `handed_off` means transport acceptance, `not_sent` means proven
+undelivered and `uncertain` requires reconciliation. These observations never mean
+the recipient has read the message or accepted a proposed interface. Only proven
+undelivered messages permit another automatic send, with at most four attempts.
+
 `ao task` (alias `ao tasks`) authors work independently of worker sessions and
 returns JSON. `create <project> --file <path>` accepts the task API body:
 

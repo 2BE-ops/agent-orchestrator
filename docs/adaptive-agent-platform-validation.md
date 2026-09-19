@@ -4,6 +4,35 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 12c2a — typed message API, timeline and CLI (2026-09-19)
+
+Three daemon routes provide strict 64 KiB submission and project-scoped timeline
+and detail reads, shared by worker/controller tools and UI. Optional task filtering
+includes both sent and received messages. Stable sequence cursors page immutable
+content; detail separates retained messages from delivery observations. Public
+delivery provenance exposes the target native generation while the internal
+controller owner stays off the wire. Result and message services share derivation
+of worker identity; storage independently rechecks ownership on commit.
+
+Two real SQLite HTTP tests exercise persistence before any send, duplicate retries,
+conflicting keys, task/project scope, paging, missing references, strict JSON and
+stale/forged authority. A service test covers TUI/Chat attribution and failure
+envelopes; two CLI tests cover usage/budgets/errors and exact filter encoding, with
+three additional HTTP-only command boundary cases. Focused tests PASS (CLI 1.178s,
+task 0.614s, controllers 0.646s, store 1.789s). Full CLI (27.430s), task, telemetry,
+domain, store (22.948s), router/spec/envelope PASS. Full controllers, including the
+final decoder rerun, retain only the two recorded Windows pairing/clone failures.
+Frontend client tests PASS (39); frontend typecheck, backend build, API generation
+and affected-package pinned lint PASS (0 issues). Semantic API comparison confirms
+zero changes to existing paths/schemas. Logs: ignored `*stage12c2a*`.
+
+Lint identified duplicate strict decoders; factored the shared result/message
+decoder while preserving each budget and error code, then reran focused output
+tests and full HTTP/lint. CLI docs distinguish persisted, reserved, transport
+accepted and uncertain outcomes. Native transport/reconciliation wiring and live
+recipient consumption remain the next slice; these HTTP tests do not establish
+delivery to a running provider or completion of stage 12.
+
 ## Stage 12c1 — typed messages and durable delivery reservations (2026-09-19)
 
 Migration 0163 persists eight typed message kinds with immutable source task,

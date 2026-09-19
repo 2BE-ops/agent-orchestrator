@@ -18,6 +18,7 @@ import (
 func messageDeliveryFromRow(row gen.AdaptiveTaskMessageDelivery) (domain.TaskMessageDelivery, error) {
 	d := domain.TaskMessageDelivery{ID: row.ID, MessageID: row.MessageID, Number: row.Number, TargetAttemptID: row.TargetAttemptID, SessionID: domain.SessionID(row.SessionID), DeliveryKey: row.DeliveryKey, State: row.State, Reason: row.Reason, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
 	err := json.Unmarshal([]byte(row.Owner), &d.Owner)
+	d.NativeGeneration = resultGeneration(d.Owner)
 	return d, err
 }
 
@@ -103,6 +104,7 @@ func (s *Store) BeginTaskMessageDelivery(ctx context.Context, messageID, deliver
 			return err
 		}
 		result = domain.TaskMessageDelivery{ID: deliveryID, MessageID: messageID, Number: int64(len(deliveries)) + 1, TargetAttemptID: lease.AttemptID, SessionID: rec.ID, Owner: rec.ControllerOwner(), DeliveryKey: "adaptive-message:" + messageID, State: "dispatching", Reason: "Reserved before native delivery", CreatedAt: now, UpdatedAt: now}
+		result.NativeGeneration = resultGeneration(result.Owner)
 		if err := q.InsertTaskMessageDelivery(ctx, gen.InsertTaskMessageDeliveryParams{ID: result.ID, MessageID: messageID, Number: result.Number, TargetAttemptID: result.TargetAttemptID, SessionID: string(rec.ID), Owner: string(owner), DeliveryKey: result.DeliveryKey, CreatedAt: now, UpdatedAt: now}); err != nil {
 			return err
 		}

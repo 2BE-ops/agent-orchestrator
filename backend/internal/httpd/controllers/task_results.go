@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -15,16 +16,8 @@ import (
 )
 
 func (c *AdaptiveTasksController) submitResult(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 512<<10)
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
 	var input TaskResultSubmitRequest
-	if err := decoder.Decode(&input); err != nil {
-		envelope.WriteError(w, r, apierr.Invalid("INVALID_RESULT_JSON", "Expected supported worker-result fields (maximum request 512 KiB)", nil))
-		return
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		envelope.WriteError(w, r, apierr.Invalid("INVALID_RESULT_JSON", "Expected exactly one worker-result object", nil))
+	if !decodeTaskOutput(w, r, &input, 512<<10, "INVALID_RESULT_JSON", "worker-result") {
 		return
 	}
 	receipt, err := c.Svc.SubmitResult(r.Context(), sessionID(r), tasksvc.ResultInput(input))
@@ -33,6 +26,23 @@ func (c *AdaptiveTasksController) submitResult(w http.ResponseWriter, r *http.Re
 		return
 	}
 	envelope.WriteJSON(w, http.StatusOK, TaskResultSubmitResponse(receipt))
+}
+
+// decodeTaskOutput shares strict single-object decoding while preserving each
+// worker protocol's body budget and public error code.
+func decodeTaskOutput(w http.ResponseWriter, r *http.Request, target any, limit int64, code, kind string) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		envelope.WriteError(w, r, apierr.Invalid(code, fmt.Sprintf("Expected supported %s fields (maximum request %d KiB)", kind, limit>>10), nil))
+		return false
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		envelope.WriteError(w, r, apierr.Invalid(code, "Expected exactly one "+kind+" object", nil))
+		return false
+	}
+	return true
 }
 
 func (c *AdaptiveTasksController) results(w http.ResponseWriter, r *http.Request) {

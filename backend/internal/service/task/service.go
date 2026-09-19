@@ -21,6 +21,7 @@ type Store interface {
 	ports.TaskExecutionStore
 	ports.TaskContextStore
 	ports.TaskResultStore
+	ports.TaskMessageStore
 	GetEffectiveWorkerConfiguration(context.Context, domain.SessionID) (domain.WorkerConfiguration, int64, bool, error)
 	GetSession(context.Context, domain.SessionID) (domain.SessionRecord, bool, error)
 	GetProject(context.Context, string) (domain.ProjectRecord, bool, error)

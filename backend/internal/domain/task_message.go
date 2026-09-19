@@ -111,17 +111,18 @@ func (s TaskMessageSubmission) Validate() error {
 // transport acknowledgement, not proof that an agent read or acted on the data.
 // Only proven not_sent attempts permit a new claim; uncertain work is retained.
 type TaskMessageDelivery struct {
-	ID              string                 `json:"id"`
-	MessageID       string                 `json:"messageId"`
-	Number          int64                  `json:"number"`
-	TargetAttemptID string                 `json:"targetAttemptId"`
-	SessionID       SessionID              `json:"sessionId"`
-	Owner           SessionControllerOwner `json:"owner"`
-	DeliveryKey     string                 `json:"deliveryKey"`
-	State           string                 `json:"state" enum:"dispatching,handed_off,not_sent,uncertain"`
-	Reason          string                 `json:"reason"`
-	CreatedAt       time.Time              `json:"createdAt"`
-	UpdatedAt       time.Time              `json:"updatedAt"`
+	ID               string                 `json:"id"`
+	MessageID        string                 `json:"messageId"`
+	Number           int64                  `json:"number"`
+	TargetAttemptID  string                 `json:"targetAttemptId"`
+	SessionID        SessionID              `json:"sessionId"`
+	Owner            SessionControllerOwner `json:"-"`
+	NativeGeneration string                 `json:"nativeGeneration"`
+	DeliveryKey      string                 `json:"deliveryKey"`
+	State            string                 `json:"state" enum:"dispatching,handed_off,not_sent,uncertain"`
+	Reason           string                 `json:"reason"`
+	CreatedAt        time.Time              `json:"createdAt"`
+	UpdatedAt        time.Time              `json:"updatedAt"`
 }
 
 // TaskMessageDeliveryResolution records one observed transport outcome.

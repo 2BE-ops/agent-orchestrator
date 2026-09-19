@@ -1189,6 +1189,40 @@ export interface paths {
         patch: operations["setProjectPermissions"];
         trace?: never;
     };
+    "/api/v1/projects/{id}/task-messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect the shared project coordination timeline */
+        get: operations["listTaskMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/task-messages/{messageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect immutable coordination and delivery observations */
+        get: operations["getTaskMessage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/tasks": {
         parameters: {
             query?: never;
@@ -2436,6 +2470,23 @@ export interface paths {
         put?: never;
         /** Switch a logical AO session to another agent harness */
         post: operations["switchSessionAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{sessionId}/task-messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Persist typed worker coordination before native delivery */
+        post: operations["submitTaskMessage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5659,6 +5710,74 @@ export interface components {
             /** Format: date-time */
             releasedAt?: null | string;
             taskId: string;
+        };
+        TaskMessage: {
+            attemptId: string;
+            configurationHash: string;
+            /** Format: int64 */
+            configurationSequence: number;
+            contentHash: string;
+            contextHash: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            criteriaVersion: number;
+            definition: components["schemas"]["TaskMessageDefinition"];
+            id: string;
+            nativeGeneration: string;
+            projectId: string;
+            /** Format: int64 */
+            sequence: number;
+            sessionId: string;
+            taskId: string;
+            /** Format: int64 */
+            taskRevision: number;
+        };
+        TaskMessageDefinition: {
+            body: string;
+            correlationId: string;
+            interface?: components["schemas"]["TaskInterfaceClaim"];
+            /** @enum {string} */
+            kind: "finding" | "question" | "answer" | "blocker" | "handoff" | "interface_contract" | "review_request" | "dependency_update";
+            replyToId?: string;
+            resultId?: string;
+            schemaVersion: number;
+            subject: string;
+            targetTaskId: string;
+        };
+        TaskMessageDelivery: {
+            /** Format: date-time */
+            createdAt: string;
+            deliveryKey: string;
+            id: string;
+            messageId: string;
+            nativeGeneration: string;
+            /** Format: int64 */
+            number: number;
+            reason: string;
+            sessionId: string;
+            /** @enum {string} */
+            state: "dispatching" | "handed_off" | "not_sent" | "uncertain";
+            targetAttemptId: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        TaskMessageResponse: {
+            deliveries: components["schemas"]["TaskMessageDelivery"][];
+            message: components["schemas"]["TaskMessage"];
+        };
+        TaskMessageSubmitRequest: {
+            definition: components["schemas"]["TaskMessageDefinition"];
+            idempotencyKey: string;
+            sourceGeneration: string;
+        };
+        TaskMessageSubmitResponse: {
+            created: boolean;
+            message: components["schemas"]["TaskMessage"];
+        };
+        TaskMessagesResponse: {
+            items: components["schemas"]["TaskMessage"][];
+            nextCursor?: string;
         };
         TaskResult: {
             attemptId: string;
@@ -10560,6 +10679,165 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listTaskMessages: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                taskId?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskMessagesResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getTaskMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskMessageResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15800,6 +16078,87 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    submitTaskMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session identifier, e.g. project-1. */
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskMessageSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskMessageSubmitResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

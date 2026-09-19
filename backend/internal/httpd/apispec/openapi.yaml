@@ -3431,6 +3431,141 @@ paths:
       summary: Remember project permissions for future sessions
       tags:
       - projects
+  /api/v1/projects/{id}/task-messages:
+    get:
+      operationId: listTaskMessages
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
+      - in: query
+        name: taskId
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskMessagesResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect the shared project coordination timeline
+      tags:
+      - tasks
+  /api/v1/projects/{id}/task-messages/{messageId}:
+    get:
+      operationId: getTaskMessage
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: path
+        name: messageId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskMessageResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect immutable coordination and delivery observations
+      tags:
+      - tasks
   /api/v1/projects/{id}/tasks:
     get:
       operationId: listAdaptiveTasks
@@ -7650,6 +7785,69 @@ paths:
       summary: Switch a logical AO session to another agent harness
       tags:
       - sessions
+  /api/v1/sessions/{sessionId}/task-messages:
+    post:
+      operationId: submitTaskMessage
+      parameters:
+      - description: Session identifier, e.g. project-1.
+        in: path
+        name: sessionId
+        required: true
+        schema:
+          description: Session identifier, e.g. project-1.
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskMessageSubmitRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskMessageSubmitResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Persist typed worker coordination before native delivery
+      tags:
+      - tasks
   /api/v1/sessions/{sessionId}/task-results:
     post:
       operationId: submitTaskResult
@@ -17056,6 +17254,188 @@ components:
       - taskId
       - heartbeatAt
       - expiresAt
+      type: object
+    TaskMessage:
+      properties:
+        attemptId:
+          type: string
+        configurationHash:
+          type: string
+        configurationSequence:
+          format: int64
+          type: integer
+        contentHash:
+          type: string
+        contextHash:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        criteriaVersion:
+          format: int64
+          type: integer
+        definition:
+          $ref: '#/components/schemas/TaskMessageDefinition'
+        id:
+          type: string
+        nativeGeneration:
+          type: string
+        projectId:
+          type: string
+        sequence:
+          format: int64
+          type: integer
+        sessionId:
+          type: string
+        taskId:
+          type: string
+        taskRevision:
+          format: int64
+          type: integer
+      required:
+      - id
+      - sequence
+      - projectId
+      - taskId
+      - attemptId
+      - sessionId
+      - nativeGeneration
+      - taskRevision
+      - criteriaVersion
+      - configurationHash
+      - configurationSequence
+      - contextHash
+      - definition
+      - contentHash
+      - createdAt
+      type: object
+    TaskMessageDefinition:
+      properties:
+        body:
+          type: string
+        correlationId:
+          type: string
+        interface:
+          $ref: '#/components/schemas/TaskInterfaceClaim'
+        kind:
+          enum:
+          - finding
+          - question
+          - answer
+          - blocker
+          - handoff
+          - interface_contract
+          - review_request
+          - dependency_update
+          type: string
+        replyToId:
+          type: string
+        resultId:
+          type: string
+        schemaVersion:
+          type: integer
+        subject:
+          type: string
+        targetTaskId:
+          type: string
+      required:
+      - schemaVersion
+      - kind
+      - targetTaskId
+      - subject
+      - body
+      - correlationId
+      type: object
+    TaskMessageDelivery:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        deliveryKey:
+          type: string
+        id:
+          type: string
+        messageId:
+          type: string
+        nativeGeneration:
+          type: string
+        number:
+          format: int64
+          type: integer
+        reason:
+          type: string
+        sessionId:
+          type: string
+        state:
+          enum:
+          - dispatching
+          - handed_off
+          - not_sent
+          - uncertain
+          type: string
+        targetAttemptId:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      required:
+      - id
+      - messageId
+      - number
+      - targetAttemptId
+      - sessionId
+      - nativeGeneration
+      - deliveryKey
+      - state
+      - reason
+      - createdAt
+      - updatedAt
+      type: object
+    TaskMessageResponse:
+      properties:
+        deliveries:
+          items:
+            $ref: '#/components/schemas/TaskMessageDelivery'
+          type: array
+        message:
+          $ref: '#/components/schemas/TaskMessage'
+      required:
+      - message
+      - deliveries
+      type: object
+    TaskMessageSubmitRequest:
+      properties:
+        definition:
+          $ref: '#/components/schemas/TaskMessageDefinition'
+        idempotencyKey:
+          type: string
+        sourceGeneration:
+          type: string
+      required:
+      - sourceGeneration
+      - idempotencyKey
+      - definition
+      type: object
+    TaskMessageSubmitResponse:
+      properties:
+        created:
+          type: boolean
+        message:
+          $ref: '#/components/schemas/TaskMessage'
+      required:
+      - message
+      - created
+      type: object
+    TaskMessagesResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TaskMessage'
+          type: array
+        nextCursor:
+          type: string
+      required:
+      - items
       type: object
     TaskResult:
       properties:

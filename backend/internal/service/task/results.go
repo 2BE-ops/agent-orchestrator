@@ -53,36 +53,11 @@ func (m *Manager) SubmitResult(ctx context.Context, sessionID domain.SessionID, 
 	if err := submission.Validate(); err != nil {
 		return receipt, apierr.Invalid("INVALID_TASK_RESULT", err.Error(), nil)
 	}
-	rec, found, err := m.store.GetSession(ctx, sessionID)
+	identity, err := m.workerSubmissionIdentity(ctx, sessionID, input.SourceGeneration)
 	if err != nil {
-		return receipt, err
+		return receipt, resultError(err)
 	}
-	if !found {
-		return receipt, resultError(ports.ErrTaskNotFound)
-	}
-	owner := rec.ControllerOwner()
-	generation := owner.RuntimeLaunchID
-	if owner.Mode == domain.SessionModeChat {
-		generation = owner.ControllerGeneration
-	}
-	if rec.Kind != domain.KindWorker || generation != input.SourceGeneration {
-		return receipt, resultError(ports.ErrTaskLeaseFenced)
-	}
-	dispatch, found, err := m.store.GetTaskWorkerDispatchBySession(ctx, sessionID)
-	if err != nil {
-		return receipt, err
-	}
-	if !found {
-		return receipt, resultError(ports.ErrTaskNotFound)
-	}
-	_, sequence, found, err := m.store.GetEffectiveWorkerConfiguration(ctx, sessionID)
-	if err != nil {
-		return receipt, err
-	}
-	if !found {
-		return receipt, resultError(ports.ErrTaskNotFound)
-	}
-	submission.AttemptID, submission.SourceOwner, submission.ExpectedActivation = dispatch.AttemptID, owner, sequence
+	submission.AttemptID, submission.SourceOwner, submission.ExpectedActivation = identity.attemptID, identity.owner, identity.activation
 	receipt.Result, receipt.Created, err = m.store.SubmitTaskResult(ctx, submission)
 	return receipt, resultError(err)
 }
