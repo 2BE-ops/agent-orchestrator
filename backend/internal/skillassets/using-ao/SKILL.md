@@ -19,6 +19,7 @@ trigger: "Using the ao CLI in an AO workspace: spawning workers, managing sessio
 | `agent-manager` | Inspect Manager governance, controllers, candidate compatibility, routing inputs, delivery and audit | Exact governance/history; human-directed configuration, native start and routing intent | [commands/agent-manager.md](commands/agent-manager.md) |
 | `knowledge` | Inspect versioned project knowledge | Finding accepted project facts and their provenance | [commands/task.md](commands/task.md) |
 | `orchestrator` | List orchestrator sessions | Viewing which sessions are orchestrators | [commands/orchestrator.md](commands/orchestrator.md) |
+| `evolution` | Run controlled version experiments and inspect recommendations | Comparing pinned Agent Type/Skill versions with comparable cohorts | [commands/evolution.md](commands/evolution.md) |
 | `review` | Submit a reviewer result for a worker's PR | Completing a code review loop | [commands/review.md](commands/review.md) |
 | `send` | Send a message to a running agent session | Correcting or directing a live agent | [commands/send.md](commands/send.md) |
 | `preview` | Start a session-owned app or open an exact URL/file | Running and showing the worker's relevant app, Markdown, HTML, PDF, or image | [commands/preview.md](commands/preview.md) |

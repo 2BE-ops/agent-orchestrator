@@ -249,7 +249,12 @@ func (c *OrchestratorController) planningSummary(w http.ResponseWriter, r *http.
 // parseAttributionWindow reads the strict from/to window shared by routing and
 // planning attribution summaries.
 func parseAttributionWindow(w http.ResponseWriter, r *http.Request) (time.Time, time.Time, bool) {
-	invalid := apierr.Invalid("INVALID_ATTRIBUTION_WINDOW", "Use one RFC3339 from and to with from before to", nil)
+	return parseStrictWindow(w, r, apierr.Invalid("INVALID_ATTRIBUTION_WINDOW", "Use one RFC3339 from and to with from before to", nil))
+}
+
+// parseStrictWindow is the shared strict from/to reader; each surface passes
+// its own envelope so callers see their own error vocabulary.
+func parseStrictWindow(w http.ResponseWriter, r *http.Request, invalid error) (time.Time, time.Time, bool) {
 	query := r.URL.Query()
 	for key, values := range query {
 		if (key != "from" && key != "to") || len(values) != 1 {
@@ -309,7 +314,12 @@ func parseNumberPage(w http.ResponseWriter, r *http.Request) (int64, int, bool) 
 
 // parseIDPage reads a strict id-keyset page shared by receipts and completions.
 func parseIDPage(w http.ResponseWriter, r *http.Request) (string, int, bool) {
-	invalid := apierr.Invalid("INVALID_ORCHESTRATOR_PAGE", "Use one bounded afterId and a limit from 1 to 100", nil)
+	return parseStrictIDPage(w, r, apierr.Invalid("INVALID_ORCHESTRATOR_PAGE", "Use one bounded afterId and a limit from 1 to 100", nil))
+}
+
+// parseStrictIDPage is the shared strict id-keyset reader; each surface passes
+// its own envelope so callers see their own error vocabulary.
+func parseStrictIDPage(w http.ResponseWriter, r *http.Request, invalid error) (string, int, bool) {
 	query := r.URL.Query()
 	for key, values := range query {
 		if (key != "afterId" && key != "limit") || len(values) != 1 || values[0] == "" && key == "limit" {

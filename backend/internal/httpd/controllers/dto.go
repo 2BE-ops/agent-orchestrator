@@ -3210,6 +3210,48 @@ type OrchestratorPlanningSummaryResponse struct {
 	Summary domain.OrchestratorPlanningSummary `json:"summary"`
 }
 
+// EvolutionExperimentResponse returns one sealed experiment with any conclusion.
+type EvolutionExperimentResponse struct {
+	Experiment domain.EvolutionExperiment `json:"experiment"`
+}
+
+// EvolutionExperimentsResponse pages sealed experiments by stable ID cursor.
+type EvolutionExperimentsResponse struct {
+	Items       []domain.EvolutionExperiment `json:"items"`
+	NextAfterID string                       `json:"nextAfterId,omitempty"`
+}
+
+// EvolutionEvidenceResponse returns both comparable cohorts for one window.
+type EvolutionEvidenceResponse struct {
+	Evidence domain.EvolutionEvidence `json:"evidence"`
+}
+
+// EvolutionDefinitionDiffResponse returns one complete version diff.
+type EvolutionDefinitionDiffResponse struct {
+	Diff domain.RegistryDefinitionDiff `json:"diff"`
+}
+
+// EvolutionRecommendationResponse returns one sealed recommendation.
+type EvolutionRecommendationResponse struct {
+	Recommendation domain.EvolutionRecommendation `json:"recommendation"`
+}
+
+// EvolutionRecommendationsResponse pages sealed recommendations.
+type EvolutionRecommendationsResponse struct {
+	Items       []domain.EvolutionRecommendation `json:"items"`
+	NextAfterID string                           `json:"nextAfterId,omitempty"`
+}
+
+// EvolutionExperimentIDParam selects one sealed experiment.
+type EvolutionExperimentIDParam struct {
+	ExperimentID string `path:"experimentId" description:"The sealed experiment id."`
+}
+
+// EvolutionRecommendationIDParam selects one sealed recommendation.
+type EvolutionRecommendationIDParam struct {
+	RecommendationID string `path:"recommendationId" description:"The sealed recommendation id."`
+}
+
 // OrchestratorReceiptIDParam selects one sealed planning receipt.
 type OrchestratorReceiptIDParam struct {
 	ReceiptID string `path:"receiptId" description:"The retained planning receipt id."`

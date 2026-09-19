@@ -18,6 +18,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/httpd/controllers"
 	"github.com/aoagents/agent-orchestrator/backend/internal/httpd/envelope"
+	evolutionsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/evolution"
 	importsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/importer"
 	projectsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/project"
 	registrysvc "github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
@@ -173,6 +174,12 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"ControllersOrchestratorPlanReceiptResponse":           "OrchestratorPlanReceiptResponse",
 	"ControllersProjectFeedbackResponse":                   "ProjectFeedbackResponse",
 	"ControllersManagerRoutingOutcomesResponse":            "ManagerRoutingOutcomesResponse",
+	"ControllersEvolutionExperimentResponse":               "EvolutionExperimentResponse",
+	"ControllersEvolutionExperimentsResponse":              "EvolutionExperimentsResponse",
+	"ControllersEvolutionEvidenceResponse":                 "EvolutionEvidenceResponse",
+	"ControllersEvolutionDefinitionDiffResponse":           "EvolutionDefinitionDiffResponse",
+	"ControllersEvolutionRecommendationResponse":           "EvolutionRecommendationResponse",
+	"ControllersEvolutionRecommendationsResponse":          "EvolutionRecommendationsResponse",
 	"ControllersManagerRoutingSummaryResponse":             "ManagerRoutingSummaryResponse",
 	"ControllersOrchestratorPlanningOutcomesResponse":      "OrchestratorPlanningOutcomesResponse",
 	"ControllersOrchestratorPlanningSummaryResponse":       "OrchestratorPlanningSummaryResponse",
@@ -780,6 +787,7 @@ func operations() []operation {
 	ops = append(ops, adaptiveTaskOperations()...)
 	ops = append(ops, orchestratorGoalOperations()...)
 	ops = append(ops, agentManagerOperations()...)
+	ops = append(ops, evolutionOperations()...)
 	ops = append(ops, projectKnowledgeOperations()...)
 	ops = append(ops, usageOperations()...)
 	ops = append(ops, pushOperations()...)
@@ -1799,6 +1807,31 @@ func agentManagerOperations() []operation {
 		{http.MethodPost, "/sessions/{sessionId}/agent-manager/requests/{requestId}/registry-actions", "submitAgentManagerRegistryAction", "Create or version registry definitions through governed native authoring without activation", controllers.AgentManagerRegistryRequest{}, controllers.AgentManagerRegistryResponse{}, []any{controllers.SessionIDParam{}, controllers.AgentManagerRequestIDParam{}}},
 	} {
 		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "agent-managers", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{http.StatusOK, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
+	}
+	return ops
+}
+
+func evolutionOperations() []operation {
+	ops := make([]operation, 0, 11)
+	for _, endpoint := range []struct {
+		method, path, id, summary string
+		request, response         any
+		status                    int
+		params                    []any
+	}{
+		{http.MethodPost, "/projects/{id}/experiments", "createEvolutionExperiment", "Seal one pinned control/candidate comparison", evolutionsvc.ExperimentInput{}, controllers.EvolutionExperimentResponse{}, http.StatusCreated, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/experiments", "listEvolutionExperiments", "Page sealed experiments by stable ID cursor", nil, controllers.EvolutionExperimentsResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/experiments/{experimentId}", "getEvolutionExperiment", "Inspect one sealed experiment with any conclusion", nil, controllers.EvolutionExperimentResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionExperimentIDParam{}}},
+		{http.MethodGet, "/projects/{id}/experiments/{experimentId}/evidence", "getEvolutionExperimentEvidence", "Derive both comparable cohorts for one admission window", nil, controllers.EvolutionEvidenceResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionExperimentIDParam{}}},
+		{http.MethodPost, "/projects/{id}/experiments/{experimentId}/conclude", "concludeEvolutionExperiment", "Seal the terminal decision with recomputed evidence and the policy path", evolutionsvc.ConclusionInput{}, controllers.EvolutionExperimentResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionExperimentIDParam{}}},
+		{http.MethodGet, "/projects/{id}/experiments/{experimentId}/diff", "getEvolutionExperimentDiff", "Read the immutable field diff between the pinned versions", nil, controllers.EvolutionDefinitionDiffResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionExperimentIDParam{}}},
+		{http.MethodPost, "/projects/{id}/recommendations", "createEvolutionRecommendation", "Persist one improvement proposal with a sealed proposed definition", evolutionsvc.RecommendationInput{}, controllers.EvolutionRecommendationResponse{}, http.StatusCreated, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/recommendations", "listEvolutionRecommendations", "Page sealed recommendations by stable ID cursor", nil, controllers.EvolutionRecommendationsResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/recommendations/{recommendationId}", "getEvolutionRecommendation", "Inspect one sealed recommendation with any decision", nil, controllers.EvolutionRecommendationResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionRecommendationIDParam{}}},
+		{http.MethodPost, "/projects/{id}/recommendations/{recommendationId}/decide", "decideEvolutionRecommendation", "Seal the one-time dismissal or adoption decision", evolutionsvc.DecisionInput{}, controllers.EvolutionRecommendationResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionRecommendationIDParam{}}},
+		{http.MethodGet, "/projects/{id}/recommendations/{recommendationId}/diff", "getEvolutionRecommendationDiff", "Read the inspectable diff from the sealed version to the proposal", nil, controllers.EvolutionDefinitionDiffResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionRecommendationIDParam{}}},
+	} {
+		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "evolution", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
 	}
 	return ops
 }

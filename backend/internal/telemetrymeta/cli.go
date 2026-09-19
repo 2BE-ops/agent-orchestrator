@@ -76,6 +76,7 @@ var legacyActorlessSystemCLICommands = map[string]struct{}{
 
 var legacyActorlessUserCLICommands = map[string]struct{}{
 	"ao agent-manager":                    {},
+	"ao evolution":                        {},
 	"ao agent-manager start":              {},
 	"ao agent-manager current":            {},
 	"ao agent-manager controller":         {},
@@ -103,6 +104,17 @@ var legacyActorlessUserCLICommands = map[string]struct{}{
 	"ao agent-manager decision":           {},
 	"ao agent-manager routing-outcomes":   {},
 	"ao agent-manager routing-summary":    {},
+	"ao evolution experiment-create":      {},
+	"ao evolution experiments":            {},
+	"ao evolution experiment":             {},
+	"ao evolution evidence":               {},
+	"ao evolution conclude":               {},
+	"ao evolution experiment-diff":        {},
+	"ao evolution recommend":              {},
+	"ao evolution recommendations":        {},
+	"ao evolution recommendation":         {},
+	"ao evolution decide":                 {},
+	"ao evolution recommendation-diff":    {},
 	"ao agent-manager candidates":         {},
 	"ao agent-manager candidate":          {},
 

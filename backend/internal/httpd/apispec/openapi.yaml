@@ -4969,6 +4969,388 @@ paths:
       summary: Replace a project's per-project config
       tags:
       - projects
+  /api/v1/projects/{id}/experiments:
+    get:
+      operationId: listEvolutionExperiments
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvolutionExperimentsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Page sealed experiments by stable ID cursor
+      tags:
+      - evolution
+    post:
+      operationId: createEvolutionExperiment
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvolutionExperimentInput'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvolutionExperimentResponse'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Seal one pinned control/candidate comparison
+      tags:
+      - evolution
+  /api/v1/projects/{id}/experiments/{experimentId}:
+    get:
+      operationId: getEvolutionExperiment
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - description: The sealed experiment id.
+        in: path
+        name: experimentId
+        required: true
+        schema:
+          description: The sealed experiment id.
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvolutionExperimentResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect one sealed experiment with any conclusion
+      tags:
+      - evolution
+  /api/v1/projects/{id}/experiments/{experimentId}/conclude:
+    post:
+      operationId: concludeEvolutionExperiment
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - description: The sealed experiment id.
+        in: path
+        name: experimentId
+        required: true
+        schema:
+          description: The sealed experiment id.
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvolutionConclusionInput'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvolutionExperimentResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Seal the terminal decision with recomputed evidence and the policy
+        path
+      tags:
+      - evolution
+  /api/v1/projects/{id}/experiments/{experimentId}/diff:
+    get:
+      operationId: getEvolutionExperimentDiff
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - description: The sealed experiment id.
+        in: path
+        name: experimentId
+        required: true
+        schema:
+          description: The sealed experiment id.
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvolutionDefinitionDiffResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Read the immutable field diff between the pinned versions
+      tags:
+      - evolution
+  /api/v1/projects/{id}/experiments/{experimentId}/evidence:
+    get:
+      operationId: getEvolutionExperimentEvidence
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - description: The sealed experiment id.
+        in: path
+        name: experimentId
+        required: true
+        schema:
+          description: The sealed experiment id.
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvolutionEvidenceResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Derive both comparable cohorts for one admission window
+      tags:
+      - evolution
   /api/v1/projects/{id}/goal:
     get:
       operationId: getProjectGoal
@@ -5881,6 +6263,323 @@ paths:
       summary: Remember project permissions for future sessions
       tags:
       - projects
+  /api/v1/projects/{id}/recommendations:
+    get:
+      operationId: listEvolutionRecommendations
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvolutionRecommendationsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Page sealed recommendations by stable ID cursor
+      tags:
+      - evolution
+    post:
+      operationId: createEvolutionRecommendation
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvolutionRecommendationInput'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvolutionRecommendationResponse'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Persist one improvement proposal with a sealed proposed definition
+      tags:
+      - evolution
+  /api/v1/projects/{id}/recommendations/{recommendationId}:
+    get:
+      operationId: getEvolutionRecommendation
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - description: The sealed recommendation id.
+        in: path
+        name: recommendationId
+        required: true
+        schema:
+          description: The sealed recommendation id.
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvolutionRecommendationResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect one sealed recommendation with any decision
+      tags:
+      - evolution
+  /api/v1/projects/{id}/recommendations/{recommendationId}/decide:
+    post:
+      operationId: decideEvolutionRecommendation
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - description: The sealed recommendation id.
+        in: path
+        name: recommendationId
+        required: true
+        schema:
+          description: The sealed recommendation id.
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvolutionDecisionInput'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvolutionRecommendationResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Seal the one-time dismissal or adoption decision
+      tags:
+      - evolution
+  /api/v1/projects/{id}/recommendations/{recommendationId}/diff:
+    get:
+      operationId: getEvolutionRecommendationDiff
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - description: The sealed recommendation id.
+        in: path
+        name: recommendationId
+        required: true
+        schema:
+          description: The sealed recommendation id.
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvolutionDefinitionDiffResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Read the inspectable diff from the sealed version to the proposal
+      tags:
+      - evolution
   /api/v1/projects/{id}/task-messages:
     get:
       operationId: listTaskMessages
@@ -17798,6 +18497,257 @@ components:
       - createdAt
       - contentHash
       type: object
+    DomainEvolutionCohort:
+      properties:
+        comparableAttempts:
+          format: int64
+          type: integer
+        metrics:
+          $ref: '#/components/schemas/DomainEvolutionCohortMetrics'
+        version:
+          format: int64
+          type: integer
+      required:
+      - version
+      - comparableAttempts
+      - metrics
+      type: object
+    DomainEvolutionCohortMetrics:
+      properties:
+        assessedFailed:
+          format: int64
+          type: integer
+        assessedPassed:
+          format: int64
+          type: integer
+        attempts:
+          format: int64
+          type: integer
+        firstPassCompleted:
+          format: int64
+          type: integer
+        inconclusive:
+          format: int64
+          type: integer
+        ongoing:
+          format: int64
+          type: integer
+        resultRevisions:
+          format: int64
+          type: integer
+        retryAttempts:
+          format: int64
+          type: integer
+        superseded:
+          format: int64
+          type: integer
+        unassessed:
+          format: int64
+          type: integer
+      required:
+      - attempts
+      - assessedPassed
+      - assessedFailed
+      - inconclusive
+      - unassessed
+      - superseded
+      - firstPassCompleted
+      - resultRevisions
+      - retryAttempts
+      - ongoing
+      type: object
+    DomainEvolutionConclusion:
+      properties:
+        actor:
+          $ref: '#/components/schemas/RegistryActor'
+        decidedAt:
+          format: date-time
+          type: string
+        evidence:
+          $ref: '#/components/schemas/DomainEvolutionEvidence'
+        outcome:
+          enum:
+          - promote_candidate
+          - keep_control
+          - insufficient_evidence
+          type: string
+        promotion:
+          enum:
+          - version_permitted
+          - recommendation_required
+          - none
+          type: string
+        reason:
+          type: string
+        verdict:
+          $ref: '#/components/schemas/DomainEvolutionVerdict'
+      required:
+      - outcome
+      - promotion
+      - reason
+      - actor
+      - decidedAt
+      - evidence
+      - verdict
+      type: object
+    DomainEvolutionDecision:
+      properties:
+        actor:
+          $ref: '#/components/schemas/RegistryActor'
+        decidedAt:
+          format: date-time
+          type: string
+        disposition:
+          enum:
+          - dismissed
+          - adopted
+          type: string
+        reason:
+          type: string
+      required:
+      - disposition
+      - reason
+      - actor
+      - decidedAt
+      type: object
+    DomainEvolutionEvidence:
+      properties:
+        candidate:
+          $ref: '#/components/schemas/DomainEvolutionCohort'
+        confoundedTasks:
+          format: int64
+          type: integer
+        control:
+          $ref: '#/components/schemas/DomainEvolutionCohort'
+        excludedMixedAttempts:
+          format: int64
+          type: integer
+        excludedUnseededAttempts:
+          format: int64
+          type: integer
+        from:
+          format: date-time
+          type: string
+        observedAt:
+          format: date-time
+          type: string
+        to:
+          format: date-time
+          type: string
+      required:
+      - from
+      - to
+      - observedAt
+      - control
+      - candidate
+      - excludedMixedAttempts
+      - excludedUnseededAttempts
+      - confoundedTasks
+      type: object
+    DomainEvolutionExperiment:
+      properties:
+        candidateVersion:
+          format: int64
+          type: integer
+        conclusion:
+          $ref: '#/components/schemas/DomainEvolutionConclusion'
+        controlVersion:
+          format: int64
+          type: integer
+        createdAt:
+          format: date-time
+          type: string
+        entryId:
+          type: string
+        hypothesis:
+          type: string
+        id:
+          type: string
+        kind:
+          enum:
+          - agent_type
+          - skill
+          type: string
+        minimumSamples:
+          format: int64
+          type: integer
+        projectId:
+          type: string
+        status:
+          enum:
+          - running
+          - concluded
+          type: string
+      required:
+      - id
+      - projectId
+      - kind
+      - entryId
+      - controlVersion
+      - candidateVersion
+      - hypothesis
+      - minimumSamples
+      - status
+      - createdAt
+      type: object
+    DomainEvolutionRecommendation:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        decision:
+          $ref: '#/components/schemas/DomainEvolutionDecision'
+        entryId:
+          type: string
+        fromVersion:
+          format: int64
+          type: integer
+        id:
+          type: string
+        kind:
+          enum:
+          - agent_type
+          - skill
+          type: string
+        observation:
+          type: string
+        projectId:
+          type: string
+        proposed:
+          $ref: '#/components/schemas/RegistryDefinition'
+        sampleSize:
+          format: int64
+          type: integer
+        status:
+          enum:
+          - pending
+          - dismissed
+          - adopted
+          type: string
+      required:
+      - id
+      - projectId
+      - kind
+      - entryId
+      - fromVersion
+      - observation
+      - sampleSize
+      - proposed
+      - status
+      - createdAt
+      type: object
+    DomainEvolutionVerdict:
+      properties:
+        eligible:
+          type: boolean
+        findings:
+          items:
+            type: string
+          type: array
+      required:
+      - eligible
+      - findings
+      type: object
     DomainManagerRoutingOutcome:
       properties:
         agentType:
@@ -18062,6 +19012,50 @@ components:
       - state
       - reason
       type: object
+    DomainRegistryDefinitionDiff:
+      properties:
+        entryId:
+          type: string
+        fields:
+          items:
+            $ref: '#/components/schemas/DomainRegistryDiffField'
+          type: array
+        fromVersion:
+          format: int64
+          type: integer
+        kind:
+          enum:
+          - agent_type
+          - skill
+          type: string
+        toVersion:
+          format: int64
+          type: integer
+      required:
+      - kind
+      - entryId
+      - fromVersion
+      - toVersion
+      - fields
+      type: object
+    DomainRegistryDiffField:
+      properties:
+        change:
+          enum:
+          - added
+          - removed
+          - changed
+          type: string
+        from:
+          type: string
+        path:
+          type: string
+        to:
+          type: string
+      required:
+      - path
+      - change
+      type: object
     DomainReviewerConfig:
       properties:
         agentConfig:
@@ -18290,6 +19284,146 @@ components:
       - outputNanos
       - coverage
       - providerAttribution
+      type: object
+    EvolutionConclusionInput:
+      properties:
+        from:
+          format: date-time
+          type: string
+        outcome:
+          enum:
+          - promote_candidate
+          - keep_control
+          - insufficient_evidence
+          type: string
+        reason:
+          type: string
+        to:
+          format: date-time
+          type: string
+      required:
+      - outcome
+      - reason
+      - from
+      - to
+      type: object
+    EvolutionDecisionInput:
+      properties:
+        disposition:
+          enum:
+          - dismissed
+          - adopted
+          type: string
+        reason:
+          type: string
+      required:
+      - disposition
+      - reason
+      type: object
+    EvolutionDefinitionDiffResponse:
+      properties:
+        diff:
+          $ref: '#/components/schemas/DomainRegistryDefinitionDiff'
+      required:
+      - diff
+      type: object
+    EvolutionEvidenceResponse:
+      properties:
+        evidence:
+          $ref: '#/components/schemas/DomainEvolutionEvidence'
+      required:
+      - evidence
+      type: object
+    EvolutionExperimentInput:
+      properties:
+        candidateVersion:
+          format: int64
+          type: integer
+        controlVersion:
+          format: int64
+          type: integer
+        entryId:
+          type: string
+        hypothesis:
+          type: string
+        kind:
+          enum:
+          - agent_type
+          - skill
+          type: string
+        minimumSamples:
+          format: int64
+          type: integer
+      required:
+      - kind
+      - entryId
+      - controlVersion
+      - candidateVersion
+      - hypothesis
+      - minimumSamples
+      type: object
+    EvolutionExperimentResponse:
+      properties:
+        experiment:
+          $ref: '#/components/schemas/DomainEvolutionExperiment'
+      required:
+      - experiment
+      type: object
+    EvolutionExperimentsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/DomainEvolutionExperiment'
+          type: array
+        nextAfterId:
+          type: string
+      required:
+      - items
+      type: object
+    EvolutionRecommendationInput:
+      properties:
+        entryId:
+          type: string
+        fromVersion:
+          format: int64
+          type: integer
+        kind:
+          enum:
+          - agent_type
+          - skill
+          type: string
+        observation:
+          type: string
+        proposed:
+          $ref: '#/components/schemas/RegistryDefinition'
+        sampleSize:
+          format: int64
+          type: integer
+      required:
+      - kind
+      - entryId
+      - fromVersion
+      - observation
+      - sampleSize
+      - proposed
+      type: object
+    EvolutionRecommendationResponse:
+      properties:
+        recommendation:
+          $ref: '#/components/schemas/DomainEvolutionRecommendation'
+      required:
+      - recommendation
+      type: object
+    EvolutionRecommendationsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/DomainEvolutionRecommendation'
+          type: array
+        nextAfterId:
+          type: string
+      required:
+      - items
       type: object
     ExitAgentResponse:
       properties:

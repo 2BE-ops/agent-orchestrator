@@ -208,6 +208,7 @@ func NewRootCommand(deps Deps) *cobra.Command {
 	root.AddCommand(newTaskCommand(ctx))
 	root.AddCommand(newAgentManagerCommand(ctx))
 	root.AddCommand(newKnowledgeCommand(ctx))
+	root.AddCommand(newEvolutionCommand(ctx))
 	root.AddCommand(newSpawnCommand(ctx))
 	root.AddCommand(newSendCommand(ctx))
 	root.AddCommand(newPreviewCommand(ctx))
