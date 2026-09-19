@@ -4,6 +4,25 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 12d — prior findings and incoming contracts in context (2026-09-19)
+
+The bounded context builder selects the latest correction from up to three prior
+attempts and the latest worker result matching each frozen dependency revision.
+A projection carries findings, unresolved issues and interface claims, excluding
+executable test commands. The manifest pins both the original result hash and the
+exact projected content hash. Up to eight recent incoming interface proposals
+retain their full immutable attribution. Candidate limits and prompt budgets
+record omissions; context inclusion does not acknowledge outbox delivery.
+
+Three real SQLite tests cover correction selection, dependency revision changes
+before/after reservation, explicit candidate omissions, unrelated/wrong-target/
+forged artifact rejection, and historical context after new messages and restart.
+Focused context tests PASS (1.005s). Full domain, SQLite (34.678s), store (18.023s),
+task/context/message suites PASS. Backend build, sqlc and full affected-package
+pinned lint PASS (0 issues). Existing native context regression also PASS. Logs:
+ignored `*stage12d*`. Native submission instructions are next; live consumption
+remains stage 25. No API shapes or migrations changed in this slice.
+
 ## Stage 12c2b — native message delivery and restart recovery (2026-09-19)
 
 The daemon starts the outbox consumer after native/session startup reconciliation

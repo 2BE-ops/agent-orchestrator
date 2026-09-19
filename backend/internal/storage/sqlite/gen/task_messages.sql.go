@@ -475,6 +475,62 @@ func (q *Queries) ResolveTaskMessageDelivery(ctx context.Context, arg ResolveTas
 	return result.RowsAffected()
 }
 
+const selectTaskContextInterfaces = `-- name: SelectTaskContextInterfaces :many
+SELECT sequence, id, project_id, task_id, attempt_id, session_id, native_generation, source_owner, task_revision, criteria_version, configuration_hash, configuration_sequence, context_hash, target_task_id, correlation_id, reply_to_id, result_id, idempotency_key, definition, content_hash, created_at FROM adaptive_task_messages WHERE project_id=? AND target_task_id=?
+AND json_extract(definition,'$.kind')='interface_contract' ORDER BY sequence DESC LIMIT ?
+`
+
+type SelectTaskContextInterfacesParams struct {
+	ProjectID    string
+	TargetTaskID string
+	Limit        int64
+}
+
+func (q *Queries) SelectTaskContextInterfaces(ctx context.Context, arg SelectTaskContextInterfacesParams) ([]AdaptiveTaskMessage, error) {
+	rows, err := q.db.QueryContext(ctx, selectTaskContextInterfaces, arg.ProjectID, arg.TargetTaskID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AdaptiveTaskMessage{}
+	for rows.Next() {
+		var i AdaptiveTaskMessage
+		if err := rows.Scan(
+			&i.Sequence,
+			&i.ID,
+			&i.ProjectID,
+			&i.TaskID,
+			&i.AttemptID,
+			&i.SessionID,
+			&i.NativeGeneration,
+			&i.SourceOwner,
+			&i.TaskRevision,
+			&i.CriteriaVersion,
+			&i.ConfigurationHash,
+			&i.ConfigurationSequence,
+			&i.ContextHash,
+			&i.TargetTaskID,
+			&i.CorrelationID,
+			&i.ReplyToID,
+			&i.ResultID,
+			&i.IdempotencyKey,
+			&i.Definition,
+			&i.ContentHash,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setTaskMessageDispatchCursor = `-- name: SetTaskMessageDispatchCursor :execrows
 UPDATE adaptive_task_message_dispatch_cursor SET after_sequence=? WHERE id=1
 `

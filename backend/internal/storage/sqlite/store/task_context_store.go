@@ -238,6 +238,41 @@ func validateTaskContextSources(ctx context.Context, q *gen.Queries, attempt dom
 				return ports.ErrTaskConflict
 			}
 			delete(refs, key)
+		case "result":
+			row, err := q.GetTaskResult(ctx, source.ID)
+			if err != nil {
+				return taskReadError(err)
+			}
+			result, err := taskResultFromRow(row)
+			if err != nil {
+				return err
+			}
+			if result.TaskID == attempt.TaskID {
+				prior, err := q.GetTaskAttempt(ctx, result.AttemptID)
+				if err != nil {
+					return taskReadError(err)
+				}
+				if prior.Number >= attempt.Number {
+					return ports.ErrTaskConflict
+				}
+			} else if ref, ok := dependencies[result.TaskID]; !ok || result.TaskRevision != ref.Revision {
+				return ports.ErrTaskConflict
+			}
+			if source.Version != result.Number || source.SourceHash != result.ContentHash || !contextContentMatches(source, result.ContextFacts()) {
+				return ports.ErrTaskConflict
+			}
+		case "interface_contract":
+			row, err := q.GetTaskMessage(ctx, source.ID)
+			if err != nil {
+				return taskReadError(err)
+			}
+			message, err := taskMessageFromRow(row)
+			if err != nil {
+				return err
+			}
+			if string(message.ProjectID) != task.ProjectID || message.Definition.TargetTaskID != attempt.TaskID || message.Definition.Kind != "interface_contract" || source.Version != 1 || source.SourceHash != message.ContentHash || !contextContentMatches(source, message) {
+				return ports.ErrTaskConflict
+			}
 		case "file":
 			if !files[source.ID] || source.Disposition != "inline" || source.SourceHash != source.ContentHash {
 				return ports.ErrTaskConflict

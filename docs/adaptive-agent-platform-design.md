@@ -416,6 +416,16 @@ session operation fence. Chat uses the existing keyed automation relay and queue
 through its native controller. Worker-provided message JSON is escaped and labeled
 as claims; it grants no change to planning, criteria, permissions or ownership.
 
+Stage 12 context enrichment selects the latest correction from at most three
+prior attempts and the latest result for each reserved dependency revision.
+Projected findings, unresolved issues and interface claims retain the original
+result hash and exact projection hash; executable test commands are excluded.
+Up to eight incoming interface proposals carry their immutable message provenance.
+Candidate and prompt limits record explicit omissions. Sealing rechecks task/
+dependency ownership, revision pins and exact content. These historical worker
+claims confer neither verified completion nor delivery acknowledgement; later
+messages and result corrections never rewrite a sealed context.
+
 ## Evaluation, management and evolution
 
 Evaluations reference exact criteria and target commits. Gather objective facts

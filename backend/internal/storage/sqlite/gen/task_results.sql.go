@@ -194,3 +194,63 @@ func (q *Queries) ListTaskResults(ctx context.Context, arg ListTaskResultsParams
 	}
 	return items, nil
 }
+
+const selectTaskContextResults = `-- name: SelectTaskContextResults :many
+SELECT r.id, r.attempt_id, r.task_id, r.number, r.session_id, r.native_generation, r.source_owner, r.task_revision, r.criteria_version, r.configuration_hash, r.configuration_sequence, r.context_hash, r.idempotency_key, r.definition, r.content_hash, r.created_at FROM adaptive_task_results r JOIN adaptive_task_attempts a ON a.id=r.attempt_id
+WHERE r.task_id=?1 AND (?2=0 OR r.task_revision=?2)
+AND r.attempt_id!=?3
+AND NOT EXISTS(SELECT 1 FROM adaptive_task_results newer WHERE newer.attempt_id=r.attempt_id AND newer.number>r.number)
+ORDER BY a.number DESC LIMIT ?4
+`
+
+type SelectTaskContextResultsParams struct {
+	TaskID          string
+	TaskRevision    interface{}
+	ExcludedAttempt string
+	PageLimit       int64
+}
+
+func (q *Queries) SelectTaskContextResults(ctx context.Context, arg SelectTaskContextResultsParams) ([]AdaptiveTaskResult, error) {
+	rows, err := q.db.QueryContext(ctx, selectTaskContextResults,
+		arg.TaskID,
+		arg.TaskRevision,
+		arg.ExcludedAttempt,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AdaptiveTaskResult{}
+	for rows.Next() {
+		var i AdaptiveTaskResult
+		if err := rows.Scan(
+			&i.ID,
+			&i.AttemptID,
+			&i.TaskID,
+			&i.Number,
+			&i.SessionID,
+			&i.NativeGeneration,
+			&i.SourceOwner,
+			&i.TaskRevision,
+			&i.CriteriaVersion,
+			&i.ConfigurationHash,
+			&i.ConfigurationSequence,
+			&i.ContextHash,
+			&i.IdempotencyKey,
+			&i.Definition,
+			&i.ContentHash,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

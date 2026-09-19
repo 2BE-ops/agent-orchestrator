@@ -15,6 +15,7 @@ import (
 type Store interface {
 	ports.TaskContextStore
 	ports.ContextKnowledgeStore
+	ports.ContextArtifactStore
 	GetTaskLease(context.Context, string) (domain.TaskLease, error)
 	GetTaskAttempt(context.Context, string) (domain.TaskAttempt, error)
 	GetTaskWorkerDispatch(context.Context, string) (domain.TaskWorkerDispatch, bool, error)
@@ -173,6 +174,9 @@ func (b *Builder) relatedSources(ctx context.Context, selection *sourceSelection
 		selection.optional(definitionSource("dependency", dependency.TaskID, dependency.Revision, dependency.ContentHash, version.Definition, "Dependency planning pinned by the attempt; not completion evidence"))
 		taskIDs = append(taskIDs, dependency.TaskID)
 	}
+	if err := b.workerArtifactSources(ctx, selection, task, attempt); err != nil {
+		return err
+	}
 	for _, path := range revision.Definition.ContextFiles {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -202,6 +206,41 @@ func (b *Builder) relatedSources(ctx context.Context, selection *sourceSelection
 			reason = "Accepted knowledge matching the task category"
 		}
 		selection.optional(definitionSource("knowledge", version.KnowledgeID, version.Number, version.ContentHash, version.Definition, reason))
+	}
+	return nil
+}
+
+func (b *Builder) workerArtifactSources(ctx context.Context, selection *sourceSelection, task domain.AdaptiveTask, attempt domain.TaskAttempt) error {
+	refs := append([]domain.TaskRevisionRef{{TaskID: task.ID}}, attempt.Dependencies...)
+	for _, ref := range refs {
+		limit := 1
+		reason := "Latest worker claims for a pinned dependency revision; not independently verified completion"
+		if ref.TaskID == task.ID {
+			limit = 4
+			reason = "Latest correction from a previous attempt; historical worker findings, not verified evidence"
+		}
+		results, err := b.store.SelectTaskContextResults(ctx, ref.TaskID, ref.Revision, attempt.ID, limit)
+		if err != nil {
+			return err
+		}
+		for i, result := range results {
+			if ref.TaskID == task.ID && i == 3 {
+				selection.optional(domain.ContextSource{Kind: "selection", ID: "previous-result-candidate-limit", Disposition: "omitted", Reason: "Additional prior attempt findings omitted after the latest three attempts"})
+				break
+			}
+			selection.optional(definitionSource("result", result.ID, result.Number, result.ContentHash, result.ContextFacts(), reason))
+		}
+	}
+	contracts, err := b.store.SelectTaskContextInterfaces(ctx, task.ProjectID, task.ID, 9)
+	if err != nil {
+		return err
+	}
+	for i, message := range contracts {
+		if i == 8 {
+			selection.optional(domain.ContextSource{Kind: "selection", ID: "interface-candidate-limit", Disposition: "omitted", Reason: "Additional incoming interface contracts omitted after the latest eight"})
+			break
+		}
+		selection.optional(definitionSource("interface_contract", message.ID, 1, message.ContentHash, message, "Historical incoming worker interface proposal; not an accepted agreement or delivery acknowledgement"))
 	}
 	return nil
 }

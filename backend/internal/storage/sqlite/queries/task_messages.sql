@@ -49,3 +49,7 @@ UPDATE adaptive_task_message_dispatch_cursor SET after_sequence=? WHERE id=1;
 
 -- name: CountUnsettledTaskMessageDeliveries :one
 SELECT count(*) FROM adaptive_task_message_deliveries WHERE session_id=? AND state IN ('dispatching','uncertain');
+
+-- name: SelectTaskContextInterfaces :many
+SELECT * FROM adaptive_task_messages WHERE project_id=? AND target_task_id=?
+AND json_extract(definition,'$.kind')='interface_contract' ORDER BY sequence DESC LIMIT ?;

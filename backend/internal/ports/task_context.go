@@ -34,3 +34,10 @@ type TaskContextBuilder interface {
 type ContextKnowledgeStore interface {
 	SelectContextKnowledge(context.Context, domain.ProjectID, []string, string, int) ([]domain.KnowledgeVersion, error)
 }
+
+// ContextArtifactStore selects bounded immutable worker evidence. A zero result
+// revision allows prior revisions of the same task; dependencies pin a revision.
+type ContextArtifactStore interface {
+	SelectTaskContextResults(context.Context, string, int64, string, int) ([]domain.TaskResult, error)
+	SelectTaskContextInterfaces(context.Context, domain.ProjectID, string, int) ([]domain.TaskMessage, error)
+}
