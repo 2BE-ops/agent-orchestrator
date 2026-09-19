@@ -3762,6 +3762,135 @@ paths:
       summary: Inspect a sealed routing request
       tags:
       - agent-managers
+  /api/v1/projects/{id}/agent-manager/requests/{requestId}/proposals:
+    get:
+      operationId: listAgentManagerProposals
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManagerProposalsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect bounded native proposal and correction history
+      tags:
+      - agent-managers
+  /api/v1/projects/{id}/agent-manager/requests/{requestId}/proposals/{proposalId}:
+    get:
+      operationId: getAgentManagerProposal
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: proposalId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManagerProposal'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect exact native output and parser outcome
+      tags:
+      - agent-managers
   /api/v1/projects/{id}/agent-manager/requests/{requestId}/resolution:
     get:
       operationId: getAgentManagerRequestResolution
@@ -5477,6 +5606,74 @@ paths:
       summary: Report an agent activity-state signal for a session
       tags:
       - sessions
+  /api/v1/sessions/{sessionId}/agent-manager/requests/{requestId}/proposals:
+    post:
+      operationId: submitAgentManagerProposal
+      parameters:
+      - description: Session identifier, e.g. project-1.
+        in: path
+        name: sessionId
+        required: true
+        schema:
+          description: Session identifier, e.g. project-1.
+          type: string
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentManagerProposalRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManagerProposalResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Retain generation-fenced native output without applying selection
+      tags:
+      - agent-managers
   /api/v1/sessions/{sessionId}/agent-switches:
     get:
       operationId: listSessionAgentSwitches
@@ -12641,6 +12838,20 @@ components:
       required:
       - items
       type: object
+    AgentManagerCandidateReason:
+      properties:
+        agentTypeId:
+          type: string
+        reason:
+          type: string
+        version:
+          format: int64
+          type: integer
+      required:
+      - agentTypeId
+      - version
+      - reason
+      type: object
     AgentManagerConfiguration:
       properties:
         actor:
@@ -12772,6 +12983,111 @@ components:
       - maxVersionsPerEntry
       - maxPendingRequests
       - maxProposalAttempts
+      type: object
+    AgentManagerProposal:
+      properties:
+        configurationHash:
+          type: string
+        contentHash:
+          type: string
+        controllerId:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        definition:
+          anyOf:
+          - type: "null"
+          - $ref: '#/components/schemas/AgentManagerProposalDefinition'
+            type: object
+        id:
+          type: string
+        nativeGeneration:
+          type: string
+        number:
+          format: int64
+          type: integer
+        raw:
+          type: string
+        requestHash:
+          type: string
+        requestId:
+          type: string
+        sessionId:
+          type: string
+        validationError:
+          type: string
+      required:
+      - id
+      - requestId
+      - number
+      - controllerId
+      - sessionId
+      - nativeGeneration
+      - configurationHash
+      - requestHash
+      - raw
+      - definition
+      - createdAt
+      - contentHash
+      type: object
+    AgentManagerProposalDefinition:
+      properties:
+        action:
+          enum:
+          - select_existing
+          - needs_human
+          type: string
+        agentTypeId:
+          type: string
+        agentTypeVersion:
+          format: int64
+          type: integer
+        candidates:
+          items:
+            $ref: '#/components/schemas/AgentManagerCandidateReason'
+          type: array
+        rationale:
+          type: string
+        schemaVersion:
+          type: integer
+      required:
+      - schemaVersion
+      - action
+      - rationale
+      - candidates
+      type: object
+    AgentManagerProposalRequest:
+      properties:
+        idempotencyKey:
+          type: string
+        raw:
+          type: string
+        sourceGeneration:
+          type: string
+      required:
+      - sourceGeneration
+      - idempotencyKey
+      - raw
+      type: object
+    AgentManagerProposalResponse:
+      properties:
+        created:
+          type: boolean
+        proposal:
+          $ref: '#/components/schemas/AgentManagerProposal'
+      required:
+      - proposal
+      - created
+      type: object
+    AgentManagerProposalsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AgentManagerProposal'
+          type: array
+      required:
+      - items
       type: object
     AgentManagerRequest:
       properties:

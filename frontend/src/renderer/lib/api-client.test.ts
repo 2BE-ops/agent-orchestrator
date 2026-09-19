@@ -33,6 +33,8 @@ it("redacts Manager project, configuration and request identities from telemetry
 	expect(normalizeApiOperation("POST", "/api/v1/projects/private-project/agent-manager/requests")).toBe("POST /api/v1/projects/:id/agent-manager/requests");
 	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id");
 	expect(normalizeApiOperation("POST", "/api/v1/projects/private-project/agent-manager/requests/private-work/resolution")).toBe("POST /api/v1/projects/:id/agent-manager/requests/:id/resolution");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work/proposals/private-proposal")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id/proposals/:id");
+	expect(normalizeApiOperation("POST", "/api/v1/sessions/private-manager/agent-manager/requests/private-work/proposals")).toBe("POST /api/v1/sessions/:id/agent-manager/requests/:id/proposals");
 });
 
 it("redacts knowledge identities from telemetry routes", () => {

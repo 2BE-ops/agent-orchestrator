@@ -21,6 +21,8 @@ func TestAgentManagerCLITransport(t *testing.T) {
 		{[]string{"requests", "client project", "--cursor", "2", "--limit", "7"}, http.MethodGet, "/requests", "2", "7"},
 		{[]string{"request", "client project", "work item"}, http.MethodGet, "/requests/work item", "", ""},
 		{[]string{"request-resolution", "client project", "work item"}, http.MethodGet, "/requests/work item/resolution", "", ""},
+		{[]string{"proposals", "client project", "work item"}, http.MethodGet, "/requests/work item/proposals", "", ""},
+		{[]string{"proposal", "client project", "work item", "native output"}, http.MethodGet, "/requests/work item/proposals/native output", "", ""},
 		{[]string{"enqueue", "client project", "--file", "-"}, http.MethodPost, "/requests", "", ""},
 		{[]string{"resolve", "client project", "work item", "--file", "-"}, http.MethodPost, "/requests/work item/resolution", "", ""},
 		{[]string{"configure", "client project", "--file", "-"}, http.MethodPut, "", "", ""},
@@ -63,6 +65,7 @@ func TestAgentManagerCLIUsageAndDaemonFailure(t *testing.T) {
 		{"inbox"}, {"inbox", "project", "--limit", "0"}, {"requests", "project", "--cursor", "-1"},
 		{"request", "project"}, {"request", "project", "bad\nrequest"}, {"request-resolution", "project", ""},
 		{"enqueue", "project"}, {"enqueue", "project", "--file", "-"}, {"resolve", "project", "work"}, {"resolve", "project", "work", "--file", "-"},
+		{"propose", "manager"}, {"propose", "manager", "request"}, {"propose", "manager", "request", "--file", "-"}, {"proposal", "project", "request"}, {"proposals", "project", "bad\nrequest"},
 	} {
 		deps := aliveDeps()
 		deps.In = strings.NewReader(`[]`)

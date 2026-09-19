@@ -33,6 +33,22 @@ type AgentManagerEnqueueRequest managersvc.EnqueueInput
 // AgentManagerResolveRequest closes only Manager routing intent.
 type AgentManagerResolveRequest managersvc.ResolveInput
 
+// AgentManagerProposalRequest wraps bounded raw output and its native retry key.
+type AgentManagerProposalRequest managersvc.ProposalInput
+
+// AgentManagerProposalResponse acknowledges persistence, not applied selection.
+type AgentManagerProposalResponse managersvc.ProposalReceipt
+
+// AgentManagerProposalsResponse contains the bounded native correction history.
+type AgentManagerProposalsResponse struct {
+	Items []domain.AgentManagerProposal `json:"items"`
+}
+
+// AgentManagerProposalIDParam identifies exact retained native output.
+type AgentManagerProposalIDParam struct {
+	ProposalID string `path:"proposalId"`
+}
+
 // AgentManagerRequestIDParam identifies a retained project routing request.
 type AgentManagerRequestIDParam struct {
 	RequestID string `path:"requestId" required:"true"`

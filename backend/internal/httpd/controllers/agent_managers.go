@@ -40,6 +40,9 @@ func (c *AgentManagersController) Register(r chi.Router) {
 		r.Get("/projects/{id}/agent-manager/requests/{requestId}", c.request)
 		r.Get("/projects/{id}/agent-manager/requests/{requestId}/resolution", c.requestResolution)
 		r.Post("/projects/{id}/agent-manager/requests/{requestId}/resolution", c.resolveRequest)
+		r.Get("/projects/{id}/agent-manager/requests/{requestId}/proposals", c.proposals)
+		r.Get("/projects/{id}/agent-manager/requests/{requestId}/proposals/{proposalId}", c.proposal)
+		r.Post("/sessions/{sessionId}/agent-manager/requests/{requestId}/proposals", c.propose)
 	})
 }
 

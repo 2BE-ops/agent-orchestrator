@@ -87,6 +87,9 @@ var legacyActorlessUserCLICommands = map[string]struct{}{
 	"ao agent-manager request-resolution": {},
 	"ao agent-manager enqueue":            {},
 	"ao agent-manager resolve":            {},
+	"ao agent-manager propose":            {},
+	"ao agent-manager proposals":          {},
+	"ao agent-manager proposal":           {},
 
 	"ao task":                   {},
 	"ao task list":              {},

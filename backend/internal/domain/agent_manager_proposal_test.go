@@ -21,6 +21,11 @@ func TestAgentManagerProposalStrictProtocol(t *testing.T) {
 	if _, err := ParseAgentManagerProposal(escalation); err != nil {
 		t.Fatal(err)
 	}
+	for _, raw := range []string{strings.Replace(escalation, `"candidates":[]`, `"candidates":null`, 1), strings.Replace(escalation, `,"candidates":[]`, "", 1)} {
+		if _, err := ParseAgentManagerProposal(raw); err == nil {
+			t.Fatal("nullable/missing candidate list escaped the wire contract")
+		}
+	}
 	definition.Candidates = append(definition.Candidates, definition.Candidates[0])
 	if err := definition.Validate(); err == nil {
 		t.Fatal("duplicate candidate explanations")

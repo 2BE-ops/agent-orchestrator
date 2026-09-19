@@ -420,6 +420,14 @@ records cancelled, superseded or Needs Human with a reason. Both writes use boun
 16 KiB JSON and server-derived authority. They affect routing intent only: native
 launch, task cancellation and ownership release use their own service boundaries.
 
+`propose <session-id> <request> --file proposal-envelope.json` submits a native
+Manager's `sourceGeneration`, `idempotencyKey` and exact `raw` output. It preserves
+malformed/empty output for bounded correction and rejects stale or unrelated native
+sources. Receipts acknowledge persistence, not applied selection. `proposals
+<project> <request>` and `proposal <project> <request> <proposal>` expose the retained
+output/parser history independently of live ownership. The embedded contract above
+documents the versioned inner protocol and envelope bounds.
+
 ## Task performance evidence and metrics
 
 ```bash

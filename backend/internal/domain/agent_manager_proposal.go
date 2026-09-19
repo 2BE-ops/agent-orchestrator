@@ -31,7 +31,7 @@ type AgentManagerProposalDefinition struct {
 
 // Validate bounds semantic explanations and requires an exact selected version.
 func (d AgentManagerProposalDefinition) Validate() error {
-	if d.SchemaVersion != 1 || !resultText(d.Rationale, 8000, true) || len(d.Candidates) > 32 {
+	if d.SchemaVersion != 1 || !resultText(d.Rationale, 8000, true) || d.Candidates == nil || len(d.Candidates) > 32 {
 		return fmt.Errorf("proposal requires schema 1, a rationale and at most 32 candidate explanations")
 	}
 	switch d.Action {

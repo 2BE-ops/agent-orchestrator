@@ -4,6 +4,34 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 14c4 — native Manager proposal API and CLI (2026-09-19)
+
+Three operations now submit native Manager output and read bounded proposal
+history. The service derives project/owner from the session, checks the supplied
+generation and passes trusted facts to the atomic store gate. A strict outer
+envelope accepts only generation, retry key and raw output; it permits JSON
+escaping within 512 KiB around at most 64 KiB inner output. CLI commands remain
+HTTP clients. History survives native termination; parsed proposals do not launch
+workers or resolve a selection. Generated contracts and telemetry paths are updated.
+
+Focused service/HTTP PASS (0.333s/0.644s). CLI's mock initially treated its separate
+telemetry request as a proposal; handling the telemetry path fixed the test, which
+PASS (0.149s). Initial API generation caught a session path placeholder mismatch;
+aligned the route/spec with existing `{sessionId}` and regenerated successfully.
+Contract inspection then found missing/null candidate arrays accepted by the parser
+despite a non-null generated array; now rejected. Focused domain/store/service/HTTP
+regressions PASS (0.664s/1.009s/0.259s/0.543s), followed by full affected suites.
+
+Full domain (1.012s), store (28.003s), Manager service (0.529s), HTTP router (0.886s),
+spec (0.378s), specgen (16.576s), envelope (0.761s), CLI (28.354s), telemetry (0.596s)
+and embedded skill assets (0.491s) PASS. Final full HTTP controllers FAIL (18.402s)
+only at recorded Windows pairing-rename/file-URL-clone baselines. Backend build,
+frontend typecheck, API generation and pinned affected lint PASS (0 issues).
+All 40 frontend API-client tests PASS (2.49s). Complete source/generated shape,
+nullable parser result and whitespace review PASS. Logs:
+`.cache/adaptive-tests/stage14c4-*`. Production Manager start, native work delivery
+and deterministic selection remain subsequent integration work.
+
 ## Stage 14c3 — bounded native Manager proposal receipts (2026-09-19)
 
 Migration 0172 retains exact UTF-8 native output (up to 64 KiB), strict v1 parser

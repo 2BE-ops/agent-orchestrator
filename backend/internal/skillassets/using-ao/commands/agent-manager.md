@@ -14,6 +14,9 @@ ao agent-manager request <project> <request>
 ao agent-manager request-resolution <project> <request>
 ao agent-manager enqueue <project> --file routing.json
 ao agent-manager resolve <project> <request> --file resolution.json
+ao agent-manager propose <session-id> <request> --file proposal-envelope.json
+ao agent-manager proposals <project> <request>
+ao agent-manager proposal <project> <request> <proposal>
 ```
 
 `configure` is a human governance action. Manager tools cannot grant themselves
@@ -56,3 +59,24 @@ and `reason`, retaining an immutable receipt. It closes only routing intent; it
 does not cancel a task, stop a worker, release ownership or claim successful
 selection. Governance/inbox writes derive authority from the caller's daemon
 service context; actor, origin and session fields are not accepted in JSON.
+
+The native `propose` command uses its Manager session path and accepts an envelope
+with `sourceGeneration`, `idempotencyKey` and `raw`. The generation must be the
+current confirmed Manager generation; workers cannot use this role. `raw` retains
+the exact output, including empty/malformed output, up to 64 KiB; the JSON envelope
+limit is 512 KiB to accommodate escaping. Actor, project, controller and source-owner
+fields are never supplied by the model. Example inner output (encode as `raw`):
+
+```json
+{"schemaVersion":1,"action":"select_existing","agentTypeId":"permitted-type","agentTypeVersion":1,"rationale":"Explain candidates and tradeoffs","candidates":[]}
+```
+
+The alternative action `needs_human` requires a rationale and no selected Type.
+Candidate explanations contain exact `agentTypeId`, `version` and `reason`, at
+most 32 entries; they are claims for deterministic validation. A successful receipt
+means output was retained, not that selection was approved or a worker launched.
+Malformed inner output is retained with `validationError`; exhaustion of the
+configured correction budget closes the routing request as Needs Human. Exact
+retry keys return the original proposal; changed bytes conflict. A valid selection
+awaits the deterministic application boundary. History reads return at most five
+proposals and remain available after native termination.

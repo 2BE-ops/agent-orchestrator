@@ -724,6 +724,16 @@ and immutable, and blocks downgrade that would discard it. Native transport/API
 and delivery-context sealing remain subsequent integrations, not supplied by this
 store boundary.
 
+Stage 14c4 adds the native proposal service/API/CLI and historical reads. The
+service derives project and exact owner from the Manager session, checks the
+submitting generation, and relies on the writing transaction to recheck all facts.
+The outer envelope contains only generation, retry key and raw output; unknown
+authority fields are rejected. Its 512 KiB transport budget permits JSON escaping
+around at most 64 KiB inner output. A missing/null candidate list is a retained
+parser rejection, matching the generated non-null array contract. Historical
+proposal reads remain project/request scoped after native termination. These
+operations still do not start controllers, deliver task content or apply selection.
+
 Metrics retain denominators and time windows: attempted/completed, first-pass
 completion, revisions, CI failures, review findings, retries, duration and usage
 when measured. Attribute to all pinned Skills without claiming causality.
