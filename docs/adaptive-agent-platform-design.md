@@ -668,6 +668,16 @@ restore guard prevents resurrection after release. Audit/CDC share every mutatio
 downgrade refuses retained admission history. Production lifecycle hooks and the
 Manager inbox are subsequent stage-14 slices, not supplied by these store methods.
 
+Stage 14b2 connects those intents to the existing TUI and Chat engines. A dedicated
+internal admission is mandatory before Manager spawning; replay returns the
+retained session before live readiness or registry changes can cause new effects.
+Launch and restore reserve a native generation and resolve only after connection.
+Failed or uncertain effects retain ownership for reconciliation. The Manager uses
+its own role prompt and pinned Type/Skills, without inheriting implementation or
+orchestrator project rules. Ordinary session restoration performs no extra Manager
+storage reads. Reopened-database tests cover both native modes and exact retained
+resources. Production start, inbox and structured tools remain subsequent work.
+
 Metrics retain denominators and time windows: attempted/completed, first-pass
 completion, revisions, CI failures, review findings, retries, duration and usage
 when measured. Attribute to all pinned Skills without claiming causality.

@@ -82,6 +82,7 @@ func interfaceTransitionProviderBoundaryID(transitionID string) string {
 // signature does not grow to a dozen positional arguments.
 type chatSpawn struct {
 	taskExecution    *domain.TaskExecutionOperation
+	managerExecution *domain.AgentManagerExecutionOperation
 	cfg              ports.SpawnConfig
 	project          domain.ProjectRecord
 	projectKind      domain.ProjectKind
@@ -130,6 +131,9 @@ func (m *Manager) launchChatController(ctx context.Context, in chatSpawn) (domai
 	generation := ""
 	if in.taskExecution != nil {
 		generation = in.taskExecution.ID
+	}
+	if in.managerExecution != nil {
+		generation = in.managerExecution.ID
 	}
 	_, err = m.chat.StartChat(ctx, ChatStart{
 		ControllerGeneration:    generation,
@@ -219,6 +223,9 @@ func (m *Manager) launchChatController(ctx context.Context, in chatSpawn) (domai
 	}
 
 	if err := m.finishTaskExecution(ctx, in.taskExecution); err != nil {
+		return domain.SessionRecord{}, err
+	}
+	if err := m.finishManagerExecution(ctx, in.managerExecution); err != nil {
 		return domain.SessionRecord{}, err
 	}
 	return m.getRecord(ctx, id)
@@ -335,6 +342,13 @@ func (m *Manager) resumeChatController(
 	}
 	if taskExecution != nil {
 		controllerGeneration = taskExecution.ID
+	}
+	managerExecution, err := m.beginManagerExecution(ctx, rec, "restore", controllerGeneration)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	if managerExecution != nil {
+		controllerGeneration = managerExecution.ID
 	}
 	rec, err = m.restoreTaskContext(ctx, rec)
 	if err != nil {
@@ -472,6 +486,9 @@ func (m *Manager) resumeChatController(
 	// Native continuity: the provider still holds the conversation, so the agent
 	// resumes with its own history rather than a replayed prompt.
 	if err := m.finishTaskExecution(ctx, taskExecution); err != nil {
+		return RestoreResult{}, err
+	}
+	if err := m.finishManagerExecution(ctx, managerExecution); err != nil {
 		return RestoreResult{}, err
 	}
 	return RestoreResult{Session: restored, Mode: RestoreModeNative}, nil

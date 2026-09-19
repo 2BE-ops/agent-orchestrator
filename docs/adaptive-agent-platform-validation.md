@@ -4,6 +4,30 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 14b2 — existing native Manager engines (2026-09-19)
+
+Dedicated internal admission now drives the existing TUI/Chat launch and restore
+paths. Exact retries return retained sessions before live registry/readiness work;
+native generation reservations resolve only after connection. Uncertain launch
+retains its dispatch and pending operation. The distinct Manager role uses sealed
+Type instructions and native Skill files, excluding worker/orchestrator rules.
+Production start, durable inbox and structured tools remain subsequent work.
+
+Focused native Manager tests PASS (0.641s); configured-worker/task execution
+regressions PASS (0.693s). Full-suite investigation found one new redundant-read
+regression in ordinary restoration; removed that read and the combined focused
+regression suite PASS (0.913s). Reopened SQLite tests verify exact Manager TUI and
+Chat configuration/resources, replay without readiness effects, forged admission
+rejection before side effects and failed native launch without duplicate launch.
+
+Full session-manager suite FAIL (42.022s) only at its eight recorded Windows
+baselines, matching stage09c5 (handoff/switch paths, permissions, transcript lookup,
+dev namespace and executable PATH). Ports, chat and session service suites PASS;
+the final rerun reused passing service results (prior chat 38.400s/session 53.310s).
+Backend build and pinned affected-package lint PASS (0 issues). An initial lint
+negation suggestion was corrected. Source diff and whitespace review PASS. Logs:
+`.cache/adaptive-tests/stage14b2-*`. No live provider test is claimed.
+
 ## Stage 14b1 — durable Manager admission and native fences (2026-09-19)
 
 Migration 0170 retains one unreleased controller per project, atomic native session

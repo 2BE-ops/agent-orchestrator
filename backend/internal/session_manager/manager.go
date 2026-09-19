@@ -844,6 +844,9 @@ func New(d Deps) *Manager {
 // materialization fails the still-seed row is deleted outright; a later failure
 // parks the row as terminated and rolls back what was built.
 func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.SessionRecord, int, int, error) {
+	if prior, found, err := m.managerDispatchReplay(ctx, cfg); err != nil || found {
+		return prior, 0, 0, err
+	}
 	if prior, found, err := m.taskDispatchReplay(ctx, cfg); err != nil || found {
 		return prior, 0, 0, err
 	}
@@ -980,6 +983,16 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 			if err == nil && !created {
 				return rec, 0, 0, nil
 			}
+		} else if cfg.ManagerController != nil {
+			managerStore, ok := m.store.(ports.AgentManagerControllerStore)
+			if !ok {
+				return domain.SessionRecord{}, 0, 0, managerExecutionUnavailable()
+			}
+			var created bool
+			rec, created, err = managerStore.CreateAgentManagerSession(ctx, *cfg.ManagerController, seed, *workerSnapshot, m.clock())
+			if err == nil && !created {
+				return rec, 0, 0, nil
+			}
 		} else {
 			rec, err = configuredStore.CreateConfiguredSession(ctx, seed, *workerSnapshot)
 		}
@@ -992,6 +1005,17 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 	m.markFreshSessionStatusReady(rec.ID)
 	id := rec.ID
 	var taskExecution *domain.TaskExecutionOperation
+	var managerExecution *domain.AgentManagerExecutionOperation
+	if cfg.ManagerController != nil {
+		if err := m.beginAgentOperation(ctx, id, agentOperationManagerDispatch); err != nil {
+			return domain.SessionRecord{}, 0, 0, err
+		}
+		defer m.endAgentOperation(id, agentOperationManagerDispatch)
+		managerExecution, err = m.beginManagerExecution(ctx, rec, "dispatch", "")
+		if err != nil {
+			return domain.SessionRecord{}, 0, 0, err
+		}
+	}
 	if cfg.TaskLease != nil {
 		if err := m.beginAgentOperation(ctx, id, agentOperationTaskDispatch); err != nil {
 			return domain.SessionRecord{}, 0, 0, err
@@ -1094,6 +1118,7 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 			prompt:           prompt,
 			systemPrompt:     systemPrompt,
 			taskExecution:    taskExecution,
+			managerExecution: managerExecution,
 		})
 		if err != nil {
 			return domain.SessionRecord{}, 0, 0, err
@@ -1155,6 +1180,9 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 	var launchID string
 	if taskExecution != nil {
 		launchID = taskExecution.ID
+		argv, err = m.wrapAgentProcessWithLaunchID(agent, id, env, argv, launchID, true)
+	} else if managerExecution != nil {
+		launchID = managerExecution.ID
 		argv, err = m.wrapAgentProcessWithLaunchID(agent, id, env, argv, launchID, true)
 	} else {
 		argv, launchID, err = m.superviseAgentProcess(agent, id, env, argv)
@@ -1225,6 +1253,9 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 		return domain.SessionRecord{}, 0, 0, err
 	}
 	if err := m.finishTaskExecution(ctx, taskExecution); err != nil {
+		return domain.SessionRecord{}, 0, 0, err
+	}
+	if err := m.finishManagerExecution(ctx, managerExecution); err != nil {
 		return domain.SessionRecord{}, 0, 0, err
 	}
 	return rec, promptBytes, systemPromptBytes, nil
@@ -2307,6 +2338,13 @@ func (m *Manager) RestoreWithMode(ctx context.Context, id domain.SessionID) (Res
 	if taskExecution != nil {
 		ctx = context.WithValue(ctx, taskExecutionContextKey{}, taskExecution)
 	}
+	managerExecution, err := m.beginManagerExecution(ctx, rec, "restore", "")
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	if managerExecution != nil {
+		ctx = context.WithValue(ctx, managerExecutionContextKey{}, managerExecution)
+	}
 
 	ws, err := m.restoreSessionWorkspace(ctx, project, rec)
 	if err != nil {
@@ -2563,6 +2601,13 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 	if taskExecution != nil {
 		reservedGeneration = taskExecution.ID
 	}
+	managerExecution, err := m.beginManagerExecution(ctx, rec, "restore", reservedGeneration)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	if managerExecution != nil {
+		reservedGeneration = managerExecution.ID
+	}
 	rec, err = m.restoreTaskContext(ctx, rec)
 	if err != nil {
 		return RestoreResult{}, err
@@ -2733,6 +2778,9 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 		return RestoreResult{}, err
 	}
 	if err := m.finishTaskExecution(ctx, taskExecution); err != nil {
+		return RestoreResult{}, err
+	}
+	if err := m.finishManagerExecution(ctx, managerExecution); err != nil {
 		return RestoreResult{}, err
 	}
 	return RestoreResult{Session: updated, Mode: mode}, nil
@@ -4236,6 +4284,8 @@ func buildPrompt(cfg ports.SpawnConfig) string {
 
 func promptRoleForKind(kind domain.SessionKind) sessionPromptRole {
 	switch kind {
+	case domain.KindAgentManager:
+		return sessionPromptRoleAgentManager
 	case domain.KindOrchestrator:
 		return sessionPromptRoleOrchestrator
 	case domain.KindWorker:
@@ -4373,6 +4423,9 @@ func (m *Manager) buildSystemPrompt(ctx context.Context, kind domain.SessionKind
 	switch kind {
 	case domain.KindOrchestrator:
 		cfg.OrchestratorRules = project.Config.OrchestratorRules
+	case domain.KindAgentManager:
+		// The Manager's exact Type/Skills carry its configuration. Worker and
+		// orchestrator repository rules are separate roles, not inherited policy.
 	case domain.KindWorker:
 		if projectID != "" {
 			orchestratorID, ok, err := m.activeOrchestratorSessionID(ctx, projectID)

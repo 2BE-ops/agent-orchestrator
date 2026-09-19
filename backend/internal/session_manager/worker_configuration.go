@@ -10,7 +10,7 @@ import (
 )
 
 func (m *Manager) resolveConfiguredWorker(ctx context.Context, cfg ports.SpawnConfig, project domain.ProjectRecord) (ports.SpawnConfig, *domain.WorkerConfiguration, error) {
-	if cfg.Kind != domain.KindWorker {
+	if cfg.Kind != domain.KindWorker && (cfg.Kind != domain.KindAgentManager || cfg.ManagerController == nil) {
 		return cfg, nil, apierr.Invalid("WORKER_TYPE_REQUIRED", "Agent Types may only launch worker sessions", nil)
 	}
 	if m.workerConfigurations == nil {
