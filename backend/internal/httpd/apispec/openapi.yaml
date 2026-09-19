@@ -11348,6 +11348,8 @@ components:
       type: object
     AdaptiveTaskResponse:
       properties:
+        completion:
+          $ref: '#/components/schemas/TaskCompletion'
         criteria:
           $ref: '#/components/schemas/AcceptanceCriteriaVersion'
         intent:
@@ -11365,6 +11367,7 @@ components:
       - revision
       - intent
       - state
+      - completion
       type: object
     AdaptiveTaskReviseRequest:
       properties:
@@ -11403,6 +11406,7 @@ components:
           - leased
           - working
           - failed
+          - completed
           - cancelling
           - cancelled
           type: string
@@ -11417,6 +11421,8 @@ components:
       type: object
     AdaptiveTaskView:
       properties:
+        completion:
+          $ref: '#/components/schemas/TaskCompletion'
         criteria:
           $ref: '#/components/schemas/AcceptanceCriteriaVersion'
         intent:
@@ -11434,6 +11440,7 @@ components:
       - revision
       - intent
       - state
+      - completion
       type: object
     AddProjectInput:
       properties:
@@ -17505,6 +17512,29 @@ components:
       - conclusion
       - observedAt
       - snapshotAt
+      type: object
+    TaskCompletion:
+      properties:
+        attemptId:
+          type: string
+        evaluationId:
+          type: string
+        reason:
+          type: string
+        resultId:
+          type: string
+        taskId:
+          type: string
+        taskRevision:
+          format: int64
+          type: integer
+        verified:
+          type: boolean
+      required:
+      - taskId
+      - taskRevision
+      - verified
+      - reason
       type: object
     TaskContextSnapshot:
       properties:

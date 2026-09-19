@@ -166,6 +166,7 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"DomainTaskReviewEvidence":                             "TaskReviewEvidence",
 	"DomainTaskReviewAttribution":                          "TaskReviewAttribution",
 	"DomainTaskReviewTarget":                               "TaskReviewTarget",
+	"DomainTaskCompletion":                                 "TaskCompletion",
 	"DomainTaskWorkerEvidence":                             "TaskWorkerEvidence",
 	"DomainTaskArtifactEvidence":                           "TaskArtifactEvidence",
 	"ControllersTaskResultSubmitRequest":                   "TaskResultSubmitRequest",

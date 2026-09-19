@@ -81,12 +81,13 @@ type CriteriaInput struct {
 
 // View combines exact current planning with independently observed lease facts.
 type View struct {
-	Task     domain.AdaptiveTask               `json:"task"`
-	Revision domain.TaskRevision               `json:"revision"`
-	Criteria *domain.AcceptanceCriteriaVersion `json:"criteria,omitempty"`
-	Lease    *domain.TaskLease                 `json:"lease,omitempty"`
-	Intent   domain.TaskIntent                 `json:"intent"`
-	State    State                             `json:"state"`
+	Task       domain.AdaptiveTask               `json:"task"`
+	Revision   domain.TaskRevision               `json:"revision"`
+	Criteria   *domain.AcceptanceCriteriaVersion `json:"criteria,omitempty"`
+	Lease      *domain.TaskLease                 `json:"lease,omitempty"`
+	Intent     domain.TaskIntent                 `json:"intent"`
+	State      State                             `json:"state"`
+	Completion domain.TaskCompletion             `json:"completion"`
 }
 
 // AttemptView includes retained worker association and current ownership facts.
@@ -190,6 +191,10 @@ func (m *Manager) view(ctx context.Context, task domain.AdaptiveTask) (View, err
 		view.Lease = &lease
 	}
 	view.Intent, err = m.store.GetTaskIntent(ctx, task.ID)
+	if err != nil {
+		return View{}, mapError(err)
+	}
+	view.Completion, err = m.store.GetTaskCompletion(ctx, task.ID, task.Revision)
 	if err != nil {
 		return View{}, mapError(err)
 	}

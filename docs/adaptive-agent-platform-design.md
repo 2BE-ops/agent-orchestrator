@@ -509,6 +509,19 @@ fails only the qualitative review criterion. Generic approvals and prior-result
 reviews cannot pass it. Newer passes supersede older approvals for assessment.
 Qualitative review does not supply missing CI, artifact or mergeability evidence.
 
+Current completion is a transactionally derived read, separate from historical
+evaluation outcomes. It requires the latest attempt/result/assessment at the
+current task revision, a retained passing assessment, no cancellation intent,
+and still-passing current SCM/review evidence. Assessed PRs must still have an
+observed matching head. Verified immutable Git blob observations may be reused
+without filesystem I/O in SQLite. Task reads expose the result/assessment IDs and
+reason; completed tasks keep active lease ownership until native lifecycle
+reconciliation releases it. A new attempt, result or revision supersedes the old
+completion projection. Shared scheduler dependency/admission checks in stage 16
+must use the same predicate inside their reservation transaction, not trust a
+prior API read. Historical performance must distinguish assessed success from
+this current completion projection.
+
 Stage 13's initial collector snapshots independently observed CI facts under the
 same transaction as evaluation and audit. Migration 0165 preserves assessment,
 frozen criteria/result/context hashes and the exact historical worker activation;

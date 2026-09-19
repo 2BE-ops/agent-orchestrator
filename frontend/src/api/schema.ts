@@ -3440,6 +3440,7 @@ export interface components {
             nextCursor?: string;
         };
         AdaptiveTaskResponse: {
+            completion: components["schemas"]["TaskCompletion"];
             criteria?: components["schemas"]["AcceptanceCriteriaVersion"];
             intent: components["schemas"]["TaskIntent"];
             lease?: components["schemas"]["TaskLease"];
@@ -3460,11 +3461,12 @@ export interface components {
         AdaptiveTaskState: {
             cancelledBy?: string;
             /** @enum {string} */
-            phase: "planned" | "blocked" | "ready" | "leased" | "working" | "failed" | "cancelling" | "cancelled";
+            phase: "planned" | "blocked" | "ready" | "leased" | "working" | "failed" | "completed" | "cancelling" | "cancelled";
             reason: string;
             requiresReconciliation: boolean;
         };
         AdaptiveTaskView: {
+            completion: components["schemas"]["TaskCompletion"];
             criteria?: components["schemas"]["AcceptanceCriteriaVersion"];
             intent: components["schemas"]["TaskIntent"];
             lease?: components["schemas"]["TaskLease"];
@@ -5749,6 +5751,16 @@ export interface components {
             status: string;
             targetCommit: string;
             url: string;
+        };
+        TaskCompletion: {
+            attemptId?: string;
+            evaluationId?: string;
+            reason: string;
+            resultId?: string;
+            taskId: string;
+            /** Format: int64 */
+            taskRevision: number;
+            verified: boolean;
         };
         TaskContextSnapshot: {
             attemptId: string;

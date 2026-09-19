@@ -4,6 +4,9 @@ INSERT INTO adaptive_task_attempts(id,task_id,task_revision,criteria_version,num
 -- name: GetTaskAttempt :one
 SELECT * FROM adaptive_task_attempts WHERE id=?;
 
+-- name: LatestTaskAttempt :one
+SELECT * FROM adaptive_task_attempts WHERE task_id=? ORDER BY number DESC LIMIT 1;
+
 -- name: GetTaskAttemptByIntent :one
 SELECT * FROM adaptive_task_attempts WHERE launch_intent_id=?;
 

@@ -124,6 +124,12 @@ func TestTaskReviewAPIUsesFrozenPolicyAndInspectsNativeProvenance(t *testing.T) 
 	if _, err := reviews.SubmitMany(ctx, frozen.SessionID, []reviewsvc.SubmittedReview{{RunID: run.ID, SourceGeneration: view.Snapshot.Context.LaunchID, Verdict: domain.VerdictApproved, Body: "No blocking findings"}}); err != nil {
 		t.Fatal(err)
 	}
+	request(http.MethodPost, base+"/evaluations", `{"resultId":"`+frozen.ResultID+`","idempotencyKey":"acceptance","reason":"Assess exact result"}`, http.StatusOK)
+	w = request(http.MethodGet, "/tasks/"+frozen.TaskID, "", http.StatusOK)
+	var taskView controllers.AdaptiveTaskResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &taskView); err != nil || !taskView.Completion.Verified || taskView.State.Phase != "completed" || taskView.Lease == nil {
+		t.Fatalf("completion API lost evidence or ownership: %+v %v", taskView, err)
+	}
 	w = request(http.MethodPost, base+"/reviews", input, http.StatusOK)
 	if err := json.Unmarshal(w.Body.Bytes(), &receipt); err != nil || receipt.Created || native.spawns != 1 {
 		t.Fatalf("approved retry duplicated review: %+v %v", receipt, err)

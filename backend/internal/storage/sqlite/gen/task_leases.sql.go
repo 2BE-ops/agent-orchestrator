@@ -208,6 +208,28 @@ func (q *Queries) InsertTaskWorkerDispatch(ctx context.Context, arg InsertTaskWo
 	return err
 }
 
+const latestTaskAttempt = `-- name: LatestTaskAttempt :one
+SELECT id, task_id, task_revision, criteria_version, number, launch_intent_id, dependencies, actor, reason, created_at FROM adaptive_task_attempts WHERE task_id=? ORDER BY number DESC LIMIT 1
+`
+
+func (q *Queries) LatestTaskAttempt(ctx context.Context, taskID string) (AdaptiveTaskAttempt, error) {
+	row := q.db.QueryRowContext(ctx, latestTaskAttempt, taskID)
+	var i AdaptiveTaskAttempt
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.TaskRevision,
+		&i.CriteriaVersion,
+		&i.Number,
+		&i.LaunchIntentID,
+		&i.Dependencies,
+		&i.Actor,
+		&i.Reason,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listExpiredTaskLeases = `-- name: ListExpiredTaskLeases :many
 SELECT attempt_id, task_id, generation, holder_id, heartbeat_at, last_activity_at, expires_at, released_at, release_reason FROM adaptive_task_leases WHERE released_at IS NULL AND expires_at <= ? AND attempt_id > ? ORDER BY attempt_id LIMIT ?
 `

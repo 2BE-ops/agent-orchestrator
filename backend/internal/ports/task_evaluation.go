@@ -10,6 +10,7 @@ import (
 // attribution and audit. Collector input is trusted daemon context, never public
 // request JSON. Final writes recheck the preparation's immutable result/version.
 type TaskEvaluationStore interface {
+	GetTaskCompletion(context.Context, string, int64) (domain.TaskCompletion, error)
 	PrepareTaskEvaluation(context.Context, domain.TaskEvaluationRequest) (domain.TaskEvaluationPreparation, error)
 	EvaluateTaskResult(context.Context, domain.TaskEvaluationRequest) (domain.TaskEvaluation, bool, error)
 	GetTaskEvaluation(context.Context, string) (domain.TaskEvaluation, error)

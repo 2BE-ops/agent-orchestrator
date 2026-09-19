@@ -4,6 +4,36 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 13d1 — derived current task completion (2026-09-19)
+
+Task reads now expose current completion evidence IDs/reason and a completed
+phase. One SQLite transaction checks latest attempt/result/assessment, current
+revision, cancellation and fresh stored SCM/review facts. A historical passing
+assessment cannot hide a new result, review pass, failed check or changed PR head.
+Verified immutable Git blob evidence is reused for its exact commit; no filesystem
+or native process I/O runs inside SQLite. Completion never releases ownership or
+rewrites historical assessments. Scheduler dependency/admission integration of
+the shared predicate remains stage 16.
+
+Three SQLite completion tests cover absent assessment, current success, retained
+lease, changed/failed checks, cancellation/resume, result correction, criteria
+revision, reopen, immutable artifacts, changed heads, native exit and a new
+attempt. Existing native review integration now verifies completed API output
+with an active lease and loss of current completion when a newer review starts.
+Focused completion/review tests PASS (0.711s).
+
+Full domain (1.403s), ports (0.445s), SQLite (32.490s), store (16.313s), task service
+(1.625s), CLI (19.984s), API spec (0.192s) and specgen (7.181s) PASS. After tightening
+the current PR observation guard, full store/task rerun PASS (14.619s/1.172s).
+sqlc/API generation, backend build, frontend typecheck and affected pinned lint
+PASS (0 issues). Complete diff/whitespace inspection PASS. Full HTTP controllers
+remain FAIL (9.150s) only at recorded Windows baselines
+`TestBridgeStatusConcurrentSecurePairing` and `TestProjectsAPI_Clone`; new API
+completion checks pass. Logs: ignored `.cache/adaptive-tests/stage13d1-*`.
+
+Attributable performance/usage history remains stage 13's next increment. This
+slice adds no migration and no desktop authoring flow.
+
 ## Stage 13c3f — independent review attribution in evaluations (2026-09-19)
 
 The collector separates generic history from native passes for the exact result,

@@ -11,7 +11,7 @@ import (
 // State is a read projection. It is never stored on a session or used instead of
 // transactional admission, and expiry never means that a worker has died.
 type State struct {
-	Phase                  string `json:"phase" enum:"planned,blocked,ready,leased,working,failed,cancelling,cancelled"`
+	Phase                  string `json:"phase" enum:"planned,blocked,ready,leased,working,failed,completed,cancelling,cancelled"`
 	Reason                 string `json:"reason"`
 	CancelledBy            string `json:"cancelledBy,omitempty"`
 	RequiresReconciliation bool   `json:"requiresReconciliation"`
@@ -78,7 +78,13 @@ func (m *Manager) state(ctx context.Context, view View) (State, error) {
 		} else if rec.Metadata.RuntimeLaunchID != "" || rec.Metadata.ControllerGeneration != "" {
 			state.Phase, state.Reason = "working", "Task attempt has a connected worker generation"
 		}
+		if view.Completion.Verified {
+			state.Phase, state.Reason = "completed", "Independent evidence passes current criteria; native ownership remains reserved"
+		}
 		return state, nil
+	}
+	if view.Completion.Verified {
+		return State{Phase: "completed", Reason: view.Completion.Reason}, nil
 	}
 	if view.Criteria == nil {
 		return State{Phase: "planned", Reason: "Acceptance criteria must be frozen before dispatch"}, nil

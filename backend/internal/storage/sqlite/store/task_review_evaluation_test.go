@@ -52,6 +52,9 @@ func TestTaskEvaluationRequiresPinnedReviewAndObservedLaunch(t *testing.T) {
 		t.Fatalf("launch witness: %v %v", started, err)
 	}
 	passed := assess("native-approved", 2, "passed")
+	if proof, err := s.GetTaskCompletion(ctx, result.TaskID, result.TaskRevision); err != nil || !proof.Verified {
+		t.Fatalf("native review completion: %+v %v", proof, err)
+	}
 	var attributed *domain.TaskReviewAttribution
 	for _, e := range passed.Definition.Observations.Reviews {
 		if e.RunID == run.ID {
@@ -72,6 +75,9 @@ func TestTaskEvaluationRequiresPinnedReviewAndObservedLaunch(t *testing.T) {
 	newRun.ID, newRun.TaskScope, newRun.CreatedAt = "later-pass", newContext.ScopeHash(), newContext.CreatedAt
 	if err := s.InsertTaskReviewRun(ctx, newRun, newContext); err != nil {
 		t.Fatal(err)
+	}
+	if proof, err := s.GetTaskCompletion(ctx, result.TaskID, result.TaskRevision); err != nil || proof.Verified {
+		t.Fatalf("new review retained old completion without reassessment: %+v %v", proof, err)
 	}
 	assess("newer-running", 3, "inconclusive")
 	if _, err := s.UpdateReviewRunResult(ctx, newRun.ID, domain.ReviewRunFailed, domain.VerdictNone, "Native provider failed", "", false); err != nil {
