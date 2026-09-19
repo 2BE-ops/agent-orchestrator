@@ -25,6 +25,8 @@ ao agent-manager context <project> <request> <context>
 ao agent-manager deliveries <project> <request>
 ao agent-manager candidates <project> <request> --limit 20
 ao agent-manager candidate <project> <request> <type> --version 1
+ao agent-manager decisions <project> <request>
+ao agent-manager decision <project> <request> <proposal>
 ```
 
 `configure` is a human governance action. Manager tools cannot grant themselves
@@ -114,13 +116,22 @@ fields are never supplied by the model. Example inner output (encode as `raw`):
 
 The alternative action `needs_human` requires a rationale and no selected Type.
 Candidate explanations contain exact `agentTypeId`, `version` and `reason`, at
-most 32 entries; they are claims for deterministic validation. A successful receipt
-means output was retained, not that selection was approved or a worker launched.
-Malformed inner output is retained with `validationError`; exhaustion of the
-configured correction budget closes the routing request as Needs Human. Exact
-retry keys return the original proposal; changed bytes conflict. A valid selection
-awaits the deterministic application boundary. History reads return at most five
-proposals and remain available after native termination.
+most 32 entries; they are claims for deterministic validation. The receipt retains
+the proposal and includes `decision` when assessment completed. `accepted` records
+routing selection; worker admission remains the scheduler's responsibility.
+`rejected` includes candidate exclusion codes. Malformed inner output is retained
+with `validationError`. Parser and semantic failures share the original correction
+budget; exhaustion closes routing as Needs Human. A semantic rejection permits a
+changed correction under a new key. Exact retries inspect retained output and its
+first decision; changed bytes conflict. `routingOutcome` is a terminal code, never
+the caller's unclassified resolution reason. Stop correcting a terminal request.
+
+`decisions` returns at most five immutable assessments; `decision` uses a proposal
+ID and returns `decision: null` if none is retained. History remains available
+after policy changes or native termination. The daemon recovers unassessed parsed
+output after restart through the same deterministic service. Native protocol v3
+supplies feedback/history commands and bounded retry instructions, preserving the
+original v1/v2 bytes. Interrupted responses do not prove that persistence failed.
 
 `contexts` lists at most 32 immutable routing inputs; `context` reads exact bytes,
 per-item classification, pinned clearance, native generation, tool instructions

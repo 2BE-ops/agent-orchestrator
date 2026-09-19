@@ -76,6 +76,11 @@ type AdaptiveAgentManagerDecision struct {
 	CreatedAt   time.Time
 }
 
+type AdaptiveAgentManagerDecisionCursor struct {
+	ID              int64
+	AfterProposalID string
+}
+
 type AdaptiveAgentManagerDelivery struct {
 	ID           string
 	RequestID    string

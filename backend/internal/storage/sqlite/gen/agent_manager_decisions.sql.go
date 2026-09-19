@@ -10,6 +10,17 @@ import (
 	"time"
 )
 
+const agentManagerDecisionCursor = `-- name: AgentManagerDecisionCursor :one
+SELECT after_proposal_id FROM adaptive_agent_manager_decision_cursor WHERE id=1
+`
+
+func (q *Queries) AgentManagerDecisionCursor(ctx context.Context) (string, error) {
+	row := q.db.QueryRowContext(ctx, agentManagerDecisionCursor)
+	var after_proposal_id string
+	err := row.Scan(&after_proposal_id)
+	return after_proposal_id, err
+}
+
 const getAgentManagerDecision = `-- name: GetAgentManagerDecision :one
 SELECT proposal_id, request_id, outcome, snapshot, content_hash, created_at FROM adaptive_agent_manager_decisions WHERE proposal_id=?
 `
@@ -86,4 +97,59 @@ func (q *Queries) ListAgentManagerDecisions(ctx context.Context, requestID strin
 		return nil, err
 	}
 	return items, nil
+}
+
+const listUnassessedAgentManagerProposals = `-- name: ListUnassessedAgentManagerProposals :many
+SELECT r.project_id,p.request_id,p.id AS proposal_id FROM adaptive_agent_manager_proposals p
+JOIN adaptive_agent_manager_requests r ON r.id=p.request_id
+WHERE p.id>?1 AND json_extract(p.snapshot,'$.definition.action')='select_existing'
+AND NOT EXISTS(SELECT 1 FROM adaptive_agent_manager_decisions d WHERE d.proposal_id=p.id)
+AND NOT EXISTS(SELECT 1 FROM adaptive_agent_manager_request_resolutions x WHERE x.request_id=p.request_id)
+ORDER BY p.id LIMIT ?2
+`
+
+type ListUnassessedAgentManagerProposalsParams struct {
+	AfterProposalID string
+	PageLimit       int64
+}
+
+type ListUnassessedAgentManagerProposalsRow struct {
+	ProjectID  string
+	RequestID  string
+	ProposalID string
+}
+
+func (q *Queries) ListUnassessedAgentManagerProposals(ctx context.Context, arg ListUnassessedAgentManagerProposalsParams) ([]ListUnassessedAgentManagerProposalsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUnassessedAgentManagerProposals, arg.AfterProposalID, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUnassessedAgentManagerProposalsRow{}
+	for rows.Next() {
+		var i ListUnassessedAgentManagerProposalsRow
+		if err := rows.Scan(&i.ProjectID, &i.RequestID, &i.ProposalID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setAgentManagerDecisionCursor = `-- name: SetAgentManagerDecisionCursor :execrows
+UPDATE adaptive_agent_manager_decision_cursor SET after_proposal_id=? WHERE id=1
+`
+
+func (q *Queries) SetAgentManagerDecisionCursor(ctx context.Context, afterProposalID string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setAgentManagerDecisionCursor, afterProposalID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

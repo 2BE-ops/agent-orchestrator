@@ -80,6 +80,8 @@ const ROUTE_TEMPLATES = [
 	"/api/v1/projects/{id}/agent-manager/requests/{requestId}/contexts",
 	"/api/v1/projects/{id}/agent-manager/requests/{requestId}/contexts/{contextId}",
 	"/api/v1/projects/{id}/agent-manager/requests/{requestId}/deliveries",
+	"/api/v1/projects/{id}/agent-manager/requests/{requestId}/decisions",
+	"/api/v1/projects/{id}/agent-manager/requests/{requestId}/decisions/{proposalId}",
 	"/api/v1/projects/{id}/agent-manager/requests/{requestId}/candidates",
 	"/api/v1/projects/{id}/agent-manager/requests/{requestId}/candidates/{agentTypeId}",
 	"/api/v1/projects/{id}/agent-manager/requests/{requestId}/proposals/{proposalId}",

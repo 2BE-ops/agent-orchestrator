@@ -18,6 +18,8 @@ func addAgentManagerDeliveryCommands(root *cobra.Command, ctx *commandContext) {
 		{"contexts <project> <request>", "contexts", "Inspect bounded sealed native input history", 2},
 		{"context <project> <request> <context>", "contexts", "Inspect exact classified input and native tool instructions", 3},
 		{"deliveries <project> <request>", "deliveries", "Inspect native send history and uncertain outcomes", 2},
+		{"decisions <project> <request>", "decisions", "Inspect retained deterministic proposal assessments", 2},
+		{"decision <project> <request> <proposal>", "decisions", "Inspect an exact immutable assessment or pending status", 3},
 	} {
 		root.AddCommand(&cobra.Command{Use: spec.use, Short: spec.description, Args: usageArgs(cobra.ExactArgs(spec.args)), RunE: func(cmd *cobra.Command, args []string) error {
 			for _, arg := range args {

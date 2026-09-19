@@ -4220,6 +4220,135 @@ paths:
       summary: Inspect exact sealed input and native tool instructions
       tags:
       - agent-managers
+  /api/v1/projects/{id}/agent-manager/requests/{requestId}/decisions:
+    get:
+      operationId: listAgentManagerDecisions
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManagerDecisionsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect retained deterministic assessments of native proposals
+      tags:
+      - agent-managers
+  /api/v1/projects/{id}/agent-manager/requests/{requestId}/decisions/{proposalId}:
+    get:
+      operationId: getAgentManagerDecision
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: proposalId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManagerDecisionResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect an exact immutable assessment or pending status
+      tags:
+      - agent-managers
   /api/v1/projects/{id}/agent-manager/requests/{requestId}/deliveries:
     get:
       operationId: listAgentManagerDeliveries
@@ -6191,7 +6320,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/APIError'
           description: Not Implemented
-      summary: Retain generation-fenced native output without applying selection
+      summary: Retain generation-fenced native output and assess routing without launching
+        a worker
       tags:
       - agent-managers
   /api/v1/sessions/{sessionId}/agent-switches:
@@ -13687,6 +13817,92 @@ components:
       required:
       - state
       type: object
+    AgentManagerDecision:
+      properties:
+        candidates:
+          items:
+            $ref: '#/components/schemas/AgentManagerCandidate'
+          type: array
+        classification:
+          enum:
+          - technical
+          - engagement
+          - mission
+          type: string
+        configurationHash:
+          type: string
+        contentHash:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        engagementId:
+          type: string
+        observedAt:
+          format: date-time
+          type: string
+        optimization:
+          enum:
+          - quality
+          - balanced
+          - speed
+          - usage
+          type: string
+        outcome:
+          enum:
+          - accepted
+          - rejected
+          type: string
+        projectConfigurationHash:
+          type: string
+        projectId:
+          type: string
+        proposalHash:
+          type: string
+        proposalId:
+          type: string
+        requestHash:
+          type: string
+        requestId:
+          type: string
+        schemaVersion:
+          type: integer
+      required:
+      - schemaVersion
+      - projectId
+      - requestId
+      - proposalId
+      - requestHash
+      - proposalHash
+      - configurationHash
+      - projectConfigurationHash
+      - optimization
+      - classification
+      - candidates
+      - outcome
+      - observedAt
+      - createdAt
+      - contentHash
+      type: object
+    AgentManagerDecisionResponse:
+      properties:
+        decision:
+          anyOf:
+          - type: "null"
+          - $ref: '#/components/schemas/AgentManagerDecision'
+            type: object
+      required:
+      - decision
+      type: object
+    AgentManagerDecisionsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AgentManagerDecision'
+          type: array
+      required:
+      - items
+      type: object
     AgentManagerDefinition:
       properties:
         agentTypeId:
@@ -13950,8 +14166,17 @@ components:
       properties:
         created:
           type: boolean
+        decision:
+          $ref: '#/components/schemas/AgentManagerDecision'
         proposal:
           $ref: '#/components/schemas/AgentManagerProposal'
+        routingOutcome:
+          enum:
+          - cancelled
+          - superseded
+          - needs_human
+          - selected
+          type: string
       required:
       - proposal
       - created

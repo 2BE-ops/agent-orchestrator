@@ -680,6 +680,18 @@ decisions per request. Upgrade/downgrade preserves old receipts; downgrade refus
 retained decisions. Service execution, recovery and public decision history follow
 in the next slice, before the shared scheduler consumes accepted selections.
 
+Stage 15c runs assessment synchronously after native output persistence and also
+through an independent post-reconciliation recovery consumer. Migration 0177
+stores its eight-proposal scan checkpoint; blocked projects do not prevent later
+work from being assessed. The same service preserves first-committed decisions,
+checks cancellation/supersession, and refreshes a concurrent registry/configuration
+change once within a 45-second assessment context. Continuous races remain pending
+for retry instead of bypassing policy. Input is never resent to obtain a decision.
+Native responses include the decision and a terminal routing code, excluding a
+caller's unclassified resolution reason/actor. Public API/CLI expose retained
+history but cannot submit a compatibility verdict. Protocol v3 documents feedback,
+shared correction limits and exact history tools while keeping v1/v2 immutable.
+
 Persist manager policy/status, its controller/conversation binding, work inbox and
 decisions. Reuse the conversation/runtime execution engine. Decide any required
 session-kind extension explicitly with migrations and lifecycle tests; do not

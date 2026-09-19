@@ -13,3 +13,18 @@ type AgentManagerDecisionStore interface {
 	GetAgentManagerDecision(context.Context, domain.ProjectID, string, string) (domain.AgentManagerDecision, bool, error)
 	ListAgentManagerDecisions(context.Context, domain.ProjectID, string) ([]domain.AgentManagerDecision, error)
 }
+
+// AgentManagerUnassessedProposal is a paging reference, never unclassified content.
+type AgentManagerUnassessedProposal struct {
+	ProjectID  domain.ProjectID
+	RequestID  string
+	ProposalID string
+}
+
+// AgentManagerDecisionRecoveryStore provides a fair restart-safe scan. Parser
+// failures and terminal requests already have their own bounded resolution.
+type AgentManagerDecisionRecoveryStore interface {
+	ListUnassessedAgentManagerProposals(context.Context, string, int) ([]AgentManagerUnassessedProposal, error)
+	AgentManagerDecisionCursor(context.Context) (string, error)
+	SetAgentManagerDecisionCursor(context.Context, string) error
+}

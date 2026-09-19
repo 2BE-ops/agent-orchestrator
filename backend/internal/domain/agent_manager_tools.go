@@ -18,7 +18,7 @@ type AgentManagerToolPaths struct {
 
 // Validate bounds literal argv/environment values without evaluating a shell.
 func (p AgentManagerToolPaths) Validate() error {
-	if (p.SchemaVersion != 1 && p.SchemaVersion != 2) || strings.TrimSpace(p.Executable) == "" || !utf8.ValidString(p.Executable) || !utf8.ValidString(p.RunFile) || len(p.Executable) > 4096 || strings.IndexFunc(p.Executable, unicode.IsControl) >= 0 || len(p.RunFile) > 4096 || strings.IndexFunc(p.RunFile, unicode.IsControl) >= 0 {
+	if (p.SchemaVersion < 1 || p.SchemaVersion > 3) || strings.TrimSpace(p.Executable) == "" || !utf8.ValidString(p.Executable) || !utf8.ValidString(p.RunFile) || len(p.Executable) > 4096 || strings.IndexFunc(p.Executable, unicode.IsControl) >= 0 || len(p.RunFile) > 4096 || strings.IndexFunc(p.RunFile, unicode.IsControl) >= 0 {
 		return fmt.Errorf("invalid Manager CLI routing paths")
 	}
 	return nil
@@ -38,6 +38,9 @@ func (c AgentManagerContext) toolPrompt() (string, error) {
 	}
 	if c.Tools.SchemaVersion == 2 {
 		return c.toolPromptV2()
+	}
+	if c.Tools.SchemaVersion == 3 {
+		return c.toolPromptV3()
 	}
 	executable := c.Tools.Executable
 	definition := AgentManagerProposalDefinition{SchemaVersion: 1, Action: "select_existing", AgentTypeID: "REPLACE_WITH_PERMITTED_TYPE_ID", AgentTypeVersion: 1, Rationale: "Replace with the evidence for your selection", Candidates: []AgentManagerCandidateReason{}}
@@ -138,6 +141,51 @@ AO revalidates accepted choices before dispatch. Compare eligible candidates usi
 the sealed optimization preference and task requirements, inspect existing Skills
 before requesting evolution, and retain evidence and rejection reasons in your
 proposal. Capability tags are prerequisites, not a semantic quality ranking.
+
+AO_MANAGER_TOOLS_JSON
+` + string(data), nil
+}
+
+// toolPromptV3 adds retained assessment feedback without changing v1/v2 history.
+func (c AgentManagerContext) toolPromptV3() (string, error) {
+	paths := *c.Tools
+	paths.SchemaVersion = 2
+	c.Tools = &paths
+	previous, err := c.toolPrompt()
+	if err != nil {
+		return "", err
+	}
+	prefix, encoded, _ := strings.Cut(previous, "AO_MANAGER_TOOLS_JSON\n")
+	var protocol map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(encoded), &protocol); err != nil {
+		return "", err
+	}
+	var commands map[string][]string
+	if err := json.Unmarshal(protocol["commands"], &commands); err != nil {
+		return "", err
+	}
+	commands["decisions"] = []string{paths.Executable, "agent-manager", "decisions", string(c.ProjectID), c.RequestID}
+	commands["decision"] = []string{paths.Executable, "agent-manager", "decision", string(c.ProjectID), c.RequestID, "REPLACE_WITH_PROPOSAL_ID"}
+	protocol["commands"], err = json.Marshal(commands)
+	if err != nil {
+		return "", err
+	}
+	protocol["schemaVersion"] = json.RawMessage(`3`)
+	data, err := json.Marshal(protocol)
+	if err != nil {
+		return "", err
+	}
+	return prefix + `Proposal responses include decision when deterministic assessment has completed.
+decision.outcome rejected includes candidate exclusion codes; correct the choice
+with a new idempotencyKey within the original maxProposalAttempts. Parser and
+semantic failures share that budget across native generations. decision.outcome
+accepted records routing selection only; the scheduler owns worker admission.
+routingOutcome selected, cancelled, superseded or needs_human is terminal for this
+request. Stop corrections after a terminal outcome. An interrupted proposal response
+does not mean persistence failed: retry the identical envelope/key, or inspect
+proposals and decisions. The daemon recovers unassessed output after restart.
+The exact decision command requires the proposal ID returned in the receipt.
+Do not copy decision narratives or higher-class context into worker instructions.
 
 AO_MANAGER_TOOLS_JSON
 ` + string(data), nil

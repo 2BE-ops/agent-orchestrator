@@ -16,6 +16,8 @@ func TestAgentManagerCLIInputHistoryUsesScopedHTTPReads(t *testing.T) {
 		{[]string{"contexts", "private project", "work item"}, "contexts"},
 		{[]string{"context", "private project", "work item", "exact input"}, "contexts/exact input"},
 		{[]string{"deliveries", "private project", "work item"}, "deliveries"},
+		{[]string{"decisions", "private project", "work item"}, "decisions"},
+		{[]string{"decision", "private project", "work item", "private proposal"}, "decisions/private proposal"},
 	} {
 		t.Run(spec.args[0], func(t *testing.T) {
 			cfg := setConfigEnv(t)

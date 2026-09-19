@@ -18,10 +18,13 @@ type ProposalInput struct {
 	Raw              string `json:"raw"`
 }
 
-// ProposalReceipt acknowledges output persistence, not an applied selection.
+// ProposalReceipt retains native output plus optional deterministic assessment.
+// A selected routing outcome is not a worker launch or task completion receipt.
 type ProposalReceipt struct {
-	Proposal domain.AgentManagerProposal `json:"proposal"`
-	Created  bool                        `json:"created"`
+	Proposal       domain.AgentManagerProposal  `json:"proposal"`
+	Created        bool                         `json:"created"`
+	Decision       *domain.AgentManagerDecision `json:"decision,omitempty"`
+	RoutingOutcome string                       `json:"routingOutcome,omitempty" enum:"cancelled,superseded,needs_human,selected"`
 }
 
 type nativeProposalStore interface {
@@ -69,7 +72,23 @@ func (m *Manager) Propose(ctx context.Context, sessionID domain.SessionID, reque
 	}
 	submission.ProjectID, submission.SourceOwner = rec.ProjectID, owner
 	receipt.Proposal, receipt.Created, err = store.SubmitAgentManagerProposal(ctx, submission)
-	return receipt, mapInboxError(err)
+	if err != nil {
+		return receipt, mapInboxError(err)
+	}
+	if m.candidates != nil {
+		receipt.Decision, err = m.AssessProposal(ctx, rec.ProjectID, requestID, receipt.Proposal.ID)
+		if err != nil {
+			return receipt, err
+		}
+		var resolution *domain.AgentManagerRequestResolution
+		resolution, err = m.Resolution(ctx, rec.ProjectID, requestID)
+		// Native feedback carries only the terminal code, never an unclassified
+		// caller's free-form resolution reason or claimed actor identity.
+		if resolution != nil {
+			receipt.RoutingOutcome = resolution.Outcome
+		}
+	}
+	return receipt, err
 }
 
 // Proposals reads at most five retained parser/selection claims within a project.

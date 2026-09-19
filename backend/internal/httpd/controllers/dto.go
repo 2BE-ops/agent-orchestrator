@@ -58,12 +58,22 @@ type AgentManagerResolveRequest managersvc.ResolveInput
 // AgentManagerProposalRequest wraps bounded raw output and its native retry key.
 type AgentManagerProposalRequest managersvc.ProposalInput
 
-// AgentManagerProposalResponse acknowledges persistence, not applied selection.
+// AgentManagerProposalResponse includes retained output and deterministic feedback.
 type AgentManagerProposalResponse managersvc.ProposalReceipt
 
 // AgentManagerProposalsResponse contains the bounded native correction history.
 type AgentManagerProposalsResponse struct {
 	Items []domain.AgentManagerProposal `json:"items"`
+}
+
+// AgentManagerDecisionsResponse contains at most five immutable assessments.
+type AgentManagerDecisionsResponse struct {
+	Items []domain.AgentManagerDecision `json:"items"`
+}
+
+// AgentManagerDecisionResponse is null for output without a retained assessment.
+type AgentManagerDecisionResponse struct {
+	Decision *domain.AgentManagerDecision `json:"decision"`
 }
 
 // AgentManagerContextsResponse contains at most 32 sealed routing inputs.

@@ -4,6 +4,37 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 15c - automatic assessment, feedback and decision recovery (2026-09-19)
+
+Native proposals run through the existing registry assessor and atomic decision
+store. Responses expose retained acceptance/rejection and a terminal routing code,
+excluding unclassified human resolution text/identity. One policy-race refresh is
+allowed; continuous changes remain pending. Cancellation or supersession closes
+routing without probes. Migration 0177 retains an independent recovery cursor;
+the daemon starts/drains this consumer separately from native inbox delivery.
+Eight blocked project assessments cannot starve the ninth. Interrupted assessment
+preserves output, and a fresh service consumes it without another native send/start.
+First-decision replay survives policy disable. Public API/CLI reads show bounded
+history and pending null; unknown verdict fields in native input are rejected.
+Protocol v3 has its own golden and preserves v1/v2 hashes.
+
+Focused Manager service PASS (1.275s); focused SQLite/store/HTTP/CLI PASS
+(3.296s / 1.639s / 0.531s / 0.290s). Full domain (1.958s), ports (0.497s), SQLite
+(54.402s), helpers (2.320s), store (37.612s), registry (2.833s), Manager service
+(4.050s), router (1.494s), spec (0.629s), specgen (20.379s), envelope (cached), CLI
+(32.134s), telemetry (0.545s), embedded skills (0.512s) PASS. Final full Manager
+service after the concurrent human-resolution case PASS (3.093s). Full HTTP
+(23.254s) retains its two recorded Windows baselines; daemon (10.800s) retains
+the CWD cleanup baseline. All 40 API-client tests PASS (2.61s). Backend build,
+frontend typecheck, API/sqlc generation, final pinned new-diff lint (0 issues),
+source/generated review and whitespace checks PASS. Initial v3 golden capture and
+one lint expression finding were corrected. Logs: `.cache/adaptive-tests/15c-*`.
+
+Automatic routing selection is tested through the native tool boundary with a
+scripted harness. Shared worker scheduling is stage 16 and live native/desktop
+validation remains stage 25. Stage 15 composition/evolution and classification
+authoring/inspector/live-message/review work continues next.
+
 ## Stage 15b - immutable decisions and atomic routing selection (2026-09-19)
 
 Migration 0176 seals exact semantic-proposal and deterministic-candidate history.

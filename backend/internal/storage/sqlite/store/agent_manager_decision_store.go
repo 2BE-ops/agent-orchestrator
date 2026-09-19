@@ -185,18 +185,12 @@ func (s *Store) RecordAgentManagerDecision(ctx context.Context, input domain.Age
 }
 
 func managerAssessmentMatchesProposal(candidates []domain.AgentManagerCandidate, proposal domain.AgentManagerProposalDefinition) bool {
-	refs := []domain.SkillVersionRef{{ID: proposal.AgentTypeID, Version: proposal.AgentTypeVersion}}
-	for _, candidate := range proposal.Candidates {
-		ref := domain.SkillVersionRef{ID: candidate.AgentTypeID, Version: candidate.Version}
-		if !slices.Contains(refs, ref) {
-			refs = append(refs, ref)
-		}
-	}
+	refs := proposal.CandidateSelections()
 	if len(candidates) != len(refs) {
 		return false
 	}
 	for i, ref := range refs {
-		if candidates[i].AgentType.ID != ref.ID || candidates[i].AgentType.Version != ref.Version {
+		if candidates[i].AgentType.ID != ref.AgentTypeID || candidates[i].AgentType.Version != ref.Version {
 			return false
 		}
 	}

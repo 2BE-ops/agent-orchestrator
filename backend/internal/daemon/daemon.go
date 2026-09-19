@@ -890,6 +890,7 @@ func Run() error {
 	var startupReconcileDone <-chan struct{}
 	var taskMessagesDone <-chan struct{}
 	var managerInboxDone <-chan struct{}
+	var managerDecisionsDone <-chan struct{}
 	runErr := srv.RunWithReady(ctx, func() {
 		// Agent-readiness warming is advisory and idempotent, and request paths
 		// lazily Ensure on demand. Kick it here, after the listener is live, so its
@@ -898,6 +899,17 @@ func Run() error {
 		agentSvc.WarmReadiness()
 		done := make(chan struct{})
 		startupReconcileDone = done
+		decisionsDone := make(chan struct{})
+		managerDecisionsDone = decisionsDone
+		go func() {
+			defer close(decisionsDone)
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+			}
+			managersvc.NewDecisionDispatcher(store, managerSvc, log).Run(ctx)
+		}()
 		if transport, ok := sessMgr.(ports.TaskMessageTransport); ok {
 			messagesDone := make(chan struct{})
 			taskMessagesDone = messagesDone
@@ -926,7 +938,7 @@ func Run() error {
 					log.Error("Manager CLI routing unavailable", "error", err)
 					return
 				}
-				dispatcher, err := managersvc.NewInboxDispatcher(store, managerSvc, transport, domain.AgentManagerToolPaths{SchemaVersion: 2, Executable: executable, RunFile: cfg.RunFilePath}, log)
+				dispatcher, err := managersvc.NewInboxDispatcher(store, managerSvc, transport, domain.AgentManagerToolPaths{SchemaVersion: 3, Executable: executable, RunFile: cfg.RunFilePath}, log)
 				if err != nil {
 					log.Error("Manager inbox configuration invalid", "error", err)
 					return
@@ -959,6 +971,15 @@ func Run() error {
 	// via defer) avoids the LIFO trap where a Stop() that blocks on ctx-cancel
 	// runs before the cancel: a non-signal exit path would hang otherwise.
 	stop()
+	if managerDecisionsDone != nil {
+		decisionStopCtx, decisionStopCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		select {
+		case <-managerDecisionsDone:
+		case <-decisionStopCtx.Done():
+			log.Error("Manager decision recovery shutdown timed out; proposals remain retained")
+		}
+		decisionStopCancel()
+	}
 	if managerInboxDone != nil {
 		inboxStopCtx, inboxStopCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 		select {

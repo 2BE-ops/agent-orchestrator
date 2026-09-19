@@ -451,6 +451,13 @@ availability. Rejected candidates remain visible. Follow `nextCursor` using
 `candidate <project> <request> <type> --version N` checks an exact historical
 version. These observations do not authorize a launch or apply a selection.
 
+Native `propose` responses now include a retained `decision` when assessment
+finishes and a `routingOutcome` code when routing closes. Rejected assessments
+allow corrections within the shared parser/semantic budget; `selected` records a
+validated configuration choice without claiming a worker launch. Inspect history
+with `decisions <project> <request>` or `decision <project> <request> <proposal>`.
+The daemon resumes unassessed native output after restart without resending input.
+
 ## Task performance evidence and metrics
 
 ```bash

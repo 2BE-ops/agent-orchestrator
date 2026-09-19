@@ -29,6 +29,24 @@ type AgentManagerProposalDefinition struct {
 	Candidates       []AgentManagerCandidateReason `json:"candidates"`
 }
 
+// CandidateSelections gives the canonical selected-first exact version set for
+// both native assessment and transactional validation, without one-off overrides.
+func (d AgentManagerProposalDefinition) CandidateSelections() []WorkerSelection {
+	if d.Action != "select_existing" {
+		return nil
+	}
+	items := []WorkerSelection{{AgentTypeID: d.AgentTypeID, Version: d.AgentTypeVersion}}
+	seen := map[SkillVersionRef]bool{{ID: d.AgentTypeID, Version: d.AgentTypeVersion}: true}
+	for _, candidate := range d.Candidates {
+		key := SkillVersionRef{ID: candidate.AgentTypeID, Version: candidate.Version}
+		if !seen[key] {
+			items = append(items, WorkerSelection{AgentTypeID: key.ID, Version: key.Version})
+			seen[key] = true
+		}
+	}
+	return items
+}
+
 // Validate bounds semantic explanations and requires an exact selected version.
 func (d AgentManagerProposalDefinition) Validate() error {
 	if d.SchemaVersion != 1 || !resultText(d.Rationale, 8000, true) || d.Candidates == nil || len(d.Candidates) > 32 {

@@ -1377,6 +1377,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/agent-manager/requests/{requestId}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect retained deterministic assessments of native proposals */
+        get: operations["listAgentManagerDecisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/agent-manager/requests/{requestId}/decisions/{proposalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect an exact immutable assessment or pending status */
+        get: operations["getAgentManagerDecision"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/agent-manager/requests/{requestId}/deliveries": {
         parameters: {
             query?: never;
@@ -1869,7 +1903,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Retain generation-fenced native output without applying selection */
+        /** Retain generation-fenced native output and assess routing without launching a worker */
         post: operations["submitAgentManagerProposal"];
         delete?: never;
         options?: never;
@@ -4082,6 +4116,35 @@ export interface components {
         AgentManagerCurrentControllerResponse: {
             state: null | components["schemas"]["AgentManagerControllerResponse"];
         };
+        AgentManagerDecision: {
+            candidates: components["schemas"]["AgentManagerCandidate"][];
+            /** @enum {string} */
+            classification: "technical" | "engagement" | "mission";
+            configurationHash: string;
+            contentHash: string;
+            /** Format: date-time */
+            createdAt: string;
+            engagementId?: string;
+            /** Format: date-time */
+            observedAt: string;
+            /** @enum {string} */
+            optimization: "quality" | "balanced" | "speed" | "usage";
+            /** @enum {string} */
+            outcome: "accepted" | "rejected";
+            projectConfigurationHash: string;
+            projectId: string;
+            proposalHash: string;
+            proposalId: string;
+            requestHash: string;
+            requestId: string;
+            schemaVersion: number;
+        };
+        AgentManagerDecisionResponse: {
+            decision: null | components["schemas"]["AgentManagerDecision"];
+        };
+        AgentManagerDecisionsResponse: {
+            items: components["schemas"]["AgentManagerDecision"][];
+        };
         AgentManagerDefinition: {
             agentTypeId: string;
             /** Format: int64 */
@@ -4181,7 +4244,10 @@ export interface components {
         };
         AgentManagerProposalResponse: {
             created: boolean;
+            decision?: components["schemas"]["AgentManagerDecision"];
             proposal: components["schemas"]["AgentManagerProposal"];
+            /** @enum {string} */
+            routingOutcome?: "cancelled" | "superseded" | "needs_human" | "selected";
         };
         AgentManagerProposalsResponse: {
             items: components["schemas"]["AgentManagerProposal"][];
@@ -12782,6 +12848,163 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentManagerContext"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listAgentManagerDecisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentManagerDecisionsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getAgentManagerDecision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+                requestId: string;
+                proposalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentManagerDecisionResponse"];
                 };
             };
             /** @description Bad Request */

@@ -96,6 +96,8 @@ var legacyActorlessUserCLICommands = map[string]struct{}{
 	"ao agent-manager contexts":           {},
 	"ao agent-manager context":            {},
 	"ao agent-manager deliveries":         {},
+	"ao agent-manager decisions":          {},
+	"ao agent-manager decision":           {},
 	"ao agent-manager candidates":         {},
 	"ao agent-manager candidate":          {},
 

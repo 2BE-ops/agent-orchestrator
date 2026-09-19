@@ -51,7 +51,7 @@ func TestAgentManagerToolsRetainLiteralNativeIdentityAndEnvelope(t *testing.T) {
 }
 
 func TestAgentManagerToolPathsRejectMissingExecutableAndControls(t *testing.T) {
-	for _, paths := range []AgentManagerToolPaths{{}, {SchemaVersion: 1, Executable: "ao\nother"}, {SchemaVersion: 1, Executable: "ao", RunFile: "file\x00"}, {SchemaVersion: 1, Executable: strings.Repeat("a", 4097)}, {SchemaVersion: 3, Executable: "ao"}, {SchemaVersion: 1, Executable: "ao", RunFile: string([]byte{0xff})}} {
+	for _, paths := range []AgentManagerToolPaths{{}, {SchemaVersion: 1, Executable: "ao\nother"}, {SchemaVersion: 1, Executable: "ao", RunFile: "file\x00"}, {SchemaVersion: 1, Executable: strings.Repeat("a", 4097)}, {SchemaVersion: 4, Executable: "ao"}, {SchemaVersion: 1, Executable: "ao", RunFile: string([]byte{0xff})}} {
 		if err := paths.Validate(); err == nil {
 			t.Fatalf("unsafe native routing accepted: %+v", paths)
 		}
@@ -95,5 +95,42 @@ func TestAgentManagerCandidateProtocolRetainsV1AndScopesV2(t *testing.T) {
 	}
 	if hash := ContextTextHash(text); hash != "190ac41041b5e290f80c0e5942ed8f1f6cdea73c499bc9c740fca1716e494831" {
 		t.Fatalf("protocol v2 hash: %s", hash)
+	}
+}
+
+func TestAgentManagerDecisionProtocolRetainsLiteralFeedbackTools(t *testing.T) {
+	c := managerContextFixture(t)
+	c.ProjectID = "project with spaces"
+	c.Tools = &AgentManagerToolPaths{SchemaVersion: 3, Executable: `C:\AO tools\ao $name.exe`, RunFile: `C:\AO data\running.json`}
+	var err error
+	c.Prompt, err = c.RenderPrompt()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.ContentHash = c.Hash()
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	_, encoded, _ := strings.Cut(c.Prompt, "AO_MANAGER_TOOLS_JSON\n")
+	var protocol struct {
+		SchemaVersion int                 `json:"schemaVersion"`
+		Commands      map[string][]string `json:"commands"`
+	}
+	if err := json.Unmarshal([]byte(encoded), &protocol); err != nil {
+		t.Fatal(err)
+	}
+	argv := protocol.Commands["decision"]
+	if protocol.SchemaVersion != 3 || len(argv) != 6 || argv[0] != c.Tools.Executable || argv[3] != string(c.ProjectID) || argv[4] != c.RequestID || len(protocol.Commands["decisions"]) != 5 || len(protocol.Commands["candidates"]) != 7 {
+		t.Fatalf("feedback routing lost: %+v", protocol)
+	}
+	if !strings.Contains(c.Prompt, "routingOutcome") || !strings.Contains(c.Prompt, "Parser and\nsemantic failures share that budget") {
+		t.Fatal("terminal/correction semantics absent")
+	}
+	text, err := c.toolPrompt()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash := ContextTextHash(text); hash != "1c37e79d61ea4cf1f86c931f5a0967d6b931ec222c7156d0b9e16fe0490e2e55" {
+		t.Fatalf("protocol v3 hash: %s", hash)
 	}
 }
