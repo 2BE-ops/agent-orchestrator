@@ -4,6 +4,35 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 14c3 — bounded native Manager proposal receipts (2026-09-19)
+
+Migration 0172 retains exact UTF-8 native output (up to 64 KiB), strict v1 parser
+outcome, selected-version/rationale claims, request/native-configuration hashes and
+generation provenance. The store checks current Manager ownership and an existing
+connection receipt for that generation, no unresolved native effects, current task
+run intent/revision and unchanged enabled governance. Exact retry keys preserve
+the original receipt. Parsed selections remain unapplied; candidate compatibility
+and deterministic application are stage 15. Empty and malformed output consume the
+1–5 correction budget; exhaustion or explicit escalation writes Needs Human in the
+same transaction as proposal/audit/CDC, without touching worker ownership.
+
+Focused domain/SQLite/store PASS (0.527s/1.180s/1.282s). Tests cover native TUI/Chat
+attribution, eight competing exact retries, byte-for-byte retry identity, blocked
+replacement of unassessed selections, malformed output plus reopen, concurrent
+correction bounds, single escalation, stale/terminated/unconfirmed generations,
+pending restore, task/policy changes, disabled governance, cross-project history,
+atomic audit-failure rollback and SQL immutability/scope guards. Migration preserves
+prior inbox/CDC through empty down/up and refuses history loss with integrity/FKs
+intact. Test setup corrections handled GetSession's found result and CreateSession's
+allocated ID; those initial compile/fixture failures are not passing evidence.
+
+Full domain (1.061s), ports (0.474s), SQLite (47.448s), helpers (2.166s), store
+(30.499s), Manager service (0.420s) and registry service (2.669s) PASS. sqlc and
+backend build PASS. Pinned affected-package lint PASS (0 issues) after its empty
+string style correction. Complete source/generated diff and whitespace review
+PASS. Logs: `.cache/adaptive-tests/stage14c3-*`. Native API/CLI/transport and sealed
+delivery context are not yet wired; no live proposal/application claim is made.
+
 ## Stage 14c2 — Manager inbox service, API and CLI (2026-09-19)
 
 Six project-scoped HTTP operations expose exact routing requests, pending inbox,

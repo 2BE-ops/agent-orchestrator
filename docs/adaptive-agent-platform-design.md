@@ -705,6 +705,25 @@ controllers or workers. Manager native tools use their subsequent generation-fen
 service path. Generated contracts and telemetry route/command allowlists accompany
 the six new operations; telemetry identifies routes, not projects or request IDs.
 
+Stage 14c3 retains native proposal receipts (0172) with the exact output, parser
+outcome, request hash, native configuration hash and source generation. Strict v1
+JSON proposes an exact existing Type or Needs Human with a rationale and bounded
+candidate explanations. These explanations remain LLM claims; deterministic
+compatibility, ownership, composition and application belong to stage 15. A parsed
+selection waits unapplied and cannot be replaced under a new native retry key.
+
+Submission requires the exact current Manager owner, an unreleased project
+controller, no unresolved native effects, a confirmed connection receipt for that
+generation, current task run intent/revision and unchanged enabled governance.
+Exact request/key/output retries return history before these live checks. Empty
+and malformed output count against the pinned/current policy's 1–5 correction
+budget; exhausted correction or explicit escalation atomically adds a Needs Human
+request receipt. This closes routing intent only. All output, audit and escalation
+either commit together or roll back. Proposal history survives restart, is bounded
+and immutable, and blocks downgrade that would discard it. Native transport/API
+and delivery-context sealing remain subsequent integrations, not supplied by this
+store boundary.
+
 Metrics retain denominators and time windows: attempted/completed, first-pass
 completion, revisions, CI failures, review findings, retries, duration and usage
 when measured. Attribute to all pinned Skills without claiming causality.

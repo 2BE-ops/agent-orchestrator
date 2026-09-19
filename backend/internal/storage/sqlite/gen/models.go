@@ -74,6 +74,19 @@ type AdaptiveAgentManagerExecutionResolution struct {
 	CreatedAt     time.Time
 }
 
+type AdaptiveAgentManagerProposal struct {
+	ID             string
+	RequestID      string
+	Number         int64
+	IdempotencyKey string
+	ControllerID   string
+	SessionID      string
+	SourceOwner    string
+	Snapshot       string
+	ContentHash    string
+	CreatedAt      time.Time
+}
+
 type AdaptiveAgentManagerRequest struct {
 	Sequence             int64
 	ID                   string
