@@ -21,6 +21,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/agentlaunch"
 	"github.com/aoagents/agent-orchestrator/backend/internal/attachmentstore"
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
+	"github.com/aoagents/agent-orchestrator/backend/internal/httpd/apierr"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	aoprocess "github.com/aoagents/agent-orchestrator/backend/internal/process"
 	"github.com/aoagents/agent-orchestrator/backend/internal/sessionguard"
@@ -1000,6 +1001,14 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 		rec, err = m.store.CreateSession(ctx, seed)
 	}
 	if err != nil {
+		// Scheduler limits are deterministic admission refusals, not spawn
+		// failures: surface them as typed retryable envelopes.
+		switch {
+		case errors.Is(err, ports.ErrSchedulerWorkerLimit):
+			return domain.SessionRecord{}, 0, 0, apierr.TooManyRequests("SCHEDULER_WORKER_LIMIT", "The daemon-wide concurrent worker limit is reached; stop a worker or raise the cap in settings")
+		case errors.Is(err, ports.ErrSchedulerAgentTypeLimit):
+			return domain.SessionRecord{}, 0, 0, apierr.TooManyRequests("SCHEDULER_AGENT_TYPE_LIMIT", "This Agent Type reached its maxParallelWorkers limit; launch is refused until a worker stops")
+		}
 		return domain.SessionRecord{}, 0, 0, wrapSpawnStageEarly(ErrSpawnCreate, err)
 	}
 	m.markFreshSessionStatusReady(rec.ID)

@@ -65,6 +65,11 @@ func createConfiguredSessionForRole(ctx context.Context, q *gen.Queries, rec dom
 			return domain.SessionRecord{}, ports.ErrRegistryConflict
 		}
 	}
+	if role == domain.KindWorker {
+		if err := admitAgentTypeWorkers(ctx, q, snapshot.AgentType.ID, snapshot.Effective.MaxParallelWorkers); err != nil {
+			return domain.SessionRecord{}, err
+		}
+	}
 	created, err := createSessionRow(ctx, q, rec)
 	if err != nil {
 		return domain.SessionRecord{}, err

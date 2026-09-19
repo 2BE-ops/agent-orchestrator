@@ -3000,6 +3000,10 @@ type SettingsResponse struct {
 	// CloudControlPlaneURL is the cloud control plane base URL; empty when no
 	// control plane is configured.
 	CloudControlPlaneURL string `json:"cloudControlPlaneUrl"`
+	// MaxConcurrentWorkers caps simultaneously running worker sessions. It is
+	// enforced transactionally at session creation; lowering it never kills a
+	// running worker.
+	MaxConcurrentWorkers int `json:"maxConcurrentWorkers" minimum:"1" maximum:"1000"`
 }
 
 // AgentInstallerCatalogResponse is the body of GET /api/v1/agents/installers.
@@ -3016,6 +3020,12 @@ type UpdateSessionInterfaceRequest struct {
 type UpdateCloudOfferingRequest struct {
 	// Enabled turns the cloud offering on or off for this machine's user.
 	Enabled *bool `json:"enabled"`
+}
+
+// UpdateMaxConcurrentWorkersRequest changes the daemon-wide worker cap.
+type UpdateMaxConcurrentWorkersRequest struct {
+	// MaxConcurrentWorkers applies to session creation from now on (1-1000).
+	MaxConcurrentWorkers int `json:"maxConcurrentWorkers" minimum:"1" maximum:"1000"`
 }
 
 // capabilityNames lists the abilities a provider has, sorted so a client sees a

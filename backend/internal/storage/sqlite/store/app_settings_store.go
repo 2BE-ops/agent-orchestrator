@@ -25,7 +25,10 @@ type AppSettings struct {
 	// CloudOffering is the user's cloud toggle (Settings, Developer Mode). The
 	// daemon gate combines it with the deployment's control-plane URL.
 	CloudOffering bool
-	UpdatedAt     time.Time
+	// MaxConcurrentWorkers caps simultaneously running worker sessions. It is
+	// enforced inside the session-creation transaction, never by an LLM.
+	MaxConcurrentWorkers int
+	UpdatedAt            time.Time
 }
 
 // GetAppSettings reads the preference row.
@@ -37,9 +40,10 @@ func (s *Store) GetAppSettings(ctx context.Context) (AppSettings, error) {
 	return AppSettings{
 		// Normalized on read: a value written by a build that knows a mode this
 		// one does not must still resolve to something dispatchable.
-		DefaultSessionMode: domain.NormalizeSessionMode(row.DefaultSessionMode),
-		CloudOffering:      row.CloudOffering,
-		UpdatedAt:          row.UpdatedAt,
+		DefaultSessionMode:   domain.NormalizeSessionMode(row.DefaultSessionMode),
+		CloudOffering:        row.CloudOffering,
+		MaxConcurrentWorkers: int(row.MaxConcurrentWorkers),
+		UpdatedAt:            row.UpdatedAt,
 	}, nil
 }
 
@@ -68,6 +72,24 @@ func (s *Store) SetCloudOffering(ctx context.Context, enabled bool, now time.Tim
 		UpdatedAt:     now,
 	}); err != nil {
 		return fmt.Errorf("set cloud offering: %w", err)
+	}
+	return nil
+}
+
+// SetMaxConcurrentWorkers persists the daemon-wide concurrent worker cap.
+// The limit affects the next session-creation transaction; running workers
+// are never terminated by lowering it.
+func (s *Store) SetMaxConcurrentWorkers(ctx context.Context, limit int, now time.Time) error {
+	if limit < 1 || limit > 1000 {
+		return fmt.Errorf("max concurrent workers must be between 1 and 1000")
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if err := s.qw.SetMaxConcurrentWorkers(ctx, gen.SetMaxConcurrentWorkersParams{
+		MaxConcurrentWorkers: int64(limit),
+		UpdatedAt:            now,
+	}); err != nil {
+		return fmt.Errorf("set max concurrent workers: %w", err)
 	}
 	return nil
 }

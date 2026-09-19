@@ -38,6 +38,44 @@ Group), and mixed line endings introduced by edits. Race run remains NOT RUN
 classified inspector, public delegation history and live message/review gates
 remain for stage 15.
 
+## Stage 16 - deterministic scheduler admission (2026-09-19)
+
+Migration 0179 adds max_concurrent_workers to app_settings (default 100, CHECK
+1-1000) with a settings service/store/adapter setter and a generated
+PATCH /api/v1/settings/max-concurrent-workers route (settings are a
+daemon-owned surface; no CLI settings command exists by design). Admission is
+enforced in the storage layer inside each session-creation transaction: the
+global count query and the session insert share the store's single-writer lock,
+per-Agent-Type counting joins adaptive_worker_configurations with live worker
+sessions against the pinned snapshot's maxParallelWorkers, and both limits read
+app_settings in-transaction so a cap change applies to the very next spawn.
+Because every worker launch — manual spawn, delegated task, review launcher,
+task dispatch, and any future caller — creates its session through the same
+three store paths, the gate covers all callers without touching their code.
+Counts derive from durable rows: termination frees capacity, reopening the
+store at the same data dir preserves it, and lowering the cap never kills a
+running worker. Manager/orchestrator sessions are exempt. Spawn surfaces the
+two sentinel limits as apierr.TooManyRequests envelopes. Dispatch replay stays
+cap-exempt by construction (replays return the existing session before any
+creation code), and 0156's one-lease-per-task/one-dispatch-per-attempt SQL
+guards still make blind reassignment impossible.
+
+Test evidence: five new store admission tests PASS — cap enforcement with
+orchestrator exemption, termination/raise/lower behavior, an 8-goroutine
+concurrent spawn race holding a cap of 4 exactly (4 created, 8 refused),
+per-type limit with unrelated-type exemption, and a close/reopen restart at
+the same directory; settings bounds test PASS. Full SQLite (33.9s),
+SQLite/store (23.0s), settings service, session service (44.5s) and
+apispec/specgen suites PASS; session-manager retains exactly its eight
+recorded Windows baselines (verified unchanged); controllers retain the two
+recorded pairing/clone baselines plus no new failures after an order-sensitivity
+fix in the stage-15e registry history test (receipt pages keyset by unique ID,
+not creation order); daemon retains its recorded CWD baseline. `npm run api`
+and `npm run sqlc` regenerated cleanly; frontend typecheck PASS; backend build
+and touched pinned lint (0 issues) PASS. Race run NOT RUN (Windows GCC
+baseline). Waiting/queueing policy beyond typed refusals remains with the
+stage 17/20 orchestrator controls.
+
 ## Stage 15f - public delegation history (2026-09-19)
 
 Task attempts expose their immutable sealed-context delegation receipts: the task

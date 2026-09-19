@@ -14,7 +14,7 @@ import (
 
 const getAppSettings = `-- name: GetAppSettings :one
 
-SELECT id, default_session_mode, updated_at, cloud_offering FROM app_settings WHERE id = 1
+SELECT id, default_session_mode, updated_at, cloud_offering, max_concurrent_workers FROM app_settings WHERE id = 1
 `
 
 // Daemon-owned user preferences. One row, seeded by migration 0042, so a read
@@ -27,6 +27,7 @@ func (q *Queries) GetAppSettings(ctx context.Context) (AppSetting, error) {
 		&i.DefaultSessionMode,
 		&i.UpdatedAt,
 		&i.CloudOffering,
+		&i.MaxConcurrentWorkers,
 	)
 	return i, err
 }
@@ -56,5 +57,19 @@ type SetDefaultSessionModeParams struct {
 
 func (q *Queries) SetDefaultSessionMode(ctx context.Context, arg SetDefaultSessionModeParams) error {
 	_, err := q.db.ExecContext(ctx, setDefaultSessionMode, arg.DefaultSessionMode, arg.UpdatedAt)
+	return err
+}
+
+const setMaxConcurrentWorkers = `-- name: SetMaxConcurrentWorkers :exec
+UPDATE app_settings SET max_concurrent_workers = ?, updated_at = ? WHERE id = 1
+`
+
+type SetMaxConcurrentWorkersParams struct {
+	MaxConcurrentWorkers int64
+	UpdatedAt            time.Time
+}
+
+func (q *Queries) SetMaxConcurrentWorkers(ctx context.Context, arg SetMaxConcurrentWorkersParams) error {
+	_, err := q.db.ExecContext(ctx, setMaxConcurrentWorkers, arg.MaxConcurrentWorkers, arg.UpdatedAt)
 	return err
 }

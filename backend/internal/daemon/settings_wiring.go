@@ -23,9 +23,10 @@ func (s settingsStore) GetAppSettings(ctx context.Context) (settingssvc.Snapshot
 		return settingssvc.Snapshot{}, err
 	}
 	return settingssvc.Snapshot{
-		DefaultSessionMode: row.DefaultSessionMode,
-		CloudOffering:      row.CloudOffering,
-		UpdatedAt:          row.UpdatedAt,
+		DefaultSessionMode:   row.DefaultSessionMode,
+		CloudOffering:        row.CloudOffering,
+		MaxConcurrentWorkers: row.MaxConcurrentWorkers,
+		UpdatedAt:            row.UpdatedAt,
 	}, nil
 }
 
@@ -39,4 +40,8 @@ func (s settingsStore) SetDefaultSessionMode(
 
 func (s settingsStore) SetCloudOffering(ctx context.Context, enabled bool, now time.Time) error {
 	return s.store.SetCloudOffering(ctx, enabled, now)
+}
+
+func (s settingsStore) SetMaxConcurrentWorkers(ctx context.Context, limit int, now time.Time) error {
+	return s.store.SetMaxConcurrentWorkers(ctx, limit, now)
 }

@@ -17,6 +17,7 @@ type SettingsService interface {
 	Get(ctx context.Context) (settingssvc.Snapshot, error)
 	SetDefaultSessionMode(ctx context.Context, mode domain.SessionMode) (settingssvc.Snapshot, error)
 	SetCloudOffering(ctx context.Context, enabled bool) (settingssvc.Snapshot, error)
+	SetMaxConcurrentWorkers(ctx context.Context, limit int) (settingssvc.Snapshot, error)
 	ChatHarnesses(candidates []domain.AgentHarness) []domain.AgentHarness
 	Offering() settingssvc.Offering
 }
@@ -35,6 +36,7 @@ func (c *SettingsController) Register(r chi.Router) {
 	r.Get("/settings", c.get)
 	r.Patch("/settings/session-interface", c.setSessionInterface)
 	r.Patch("/settings/cloud-offering", c.setCloudOffering)
+	r.Patch("/settings/max-concurrent-workers", c.setMaxConcurrentWorkers)
 }
 
 func (c *SettingsController) get(w http.ResponseWriter, r *http.Request) {
@@ -99,6 +101,28 @@ func (c *SettingsController) setCloudOffering(w http.ResponseWriter, r *http.Req
 	envelope.WriteJSON(w, http.StatusOK, c.response(snapshot))
 }
 
+func (c *SettingsController) setMaxConcurrentWorkers(w http.ResponseWriter, r *http.Request) {
+	if c.Svc == nil {
+		apispec.NotImplemented(w, r, "PATCH", "/api/v1/settings/max-concurrent-workers")
+		return
+	}
+	var req UpdateMaxConcurrentWorkersRequest
+	if !decodeConversationBody(w, r, &req) {
+		return
+	}
+	if req.MaxConcurrentWorkers < 1 || req.MaxConcurrentWorkers > 1000 {
+		envelope.WriteAPIError(w, r, http.StatusBadRequest, "validation",
+			"MAX_CONCURRENT_WORKERS_INVALID", "maxConcurrentWorkers must be between 1 and 1000", nil)
+		return
+	}
+	snapshot, err := c.Svc.SetMaxConcurrentWorkers(r.Context(), req.MaxConcurrentWorkers)
+	if err != nil {
+		envelope.WriteError(w, r, err)
+		return
+	}
+	envelope.WriteJSON(w, http.StatusOK, c.response(snapshot))
+}
+
 func (c *SettingsController) response(snapshot settingssvc.Snapshot) SettingsResponse {
 	// Reported so the client can warn that choosing chat narrows which agents are
 	// available, instead of letting the user discover it at spawn time.
@@ -116,5 +140,6 @@ func (c *SettingsController) response(snapshot settingssvc.Snapshot) SettingsRes
 		CloudOffering:        snapshot.CloudOffering,
 		CloudEnabled:         offering.CloudEnabled(snapshot),
 		CloudControlPlaneURL: offering.CloudControlPlaneURL,
+		MaxConcurrentWorkers: snapshot.MaxConcurrentWorkers,
 	}
 }

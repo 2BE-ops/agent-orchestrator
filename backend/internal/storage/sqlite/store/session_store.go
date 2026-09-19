@@ -24,6 +24,9 @@ func (s *Store) CreateSession(ctx context.Context, rec domain.SessionRecord) (do
 }
 
 func createSessionRow(ctx context.Context, q *gen.Queries, rec domain.SessionRecord) (domain.SessionRecord, error) {
+	if err := admitSessionByKind(ctx, q, rec.Kind); err != nil {
+		return domain.SessionRecord{}, err
+	}
 	var num int64
 	var err error
 	prefix := string(rec.ProjectID)

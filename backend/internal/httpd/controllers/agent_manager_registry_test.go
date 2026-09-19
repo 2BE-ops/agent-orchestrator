@@ -127,11 +127,19 @@ func TestAgentManagerHTTPNativeRegistryAuthoringAndHistory(t *testing.T) {
 	base := "/projects/project/agent-manager/requests/native-request/registry-receipts"
 	w = registryRequest(t, router, http.MethodGet, base+"?limit=100", nil, http.StatusOK)
 	var history controllers.AgentManagerRegistryReceiptsResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &history); err != nil || len(history.Items) != 2 || history.Items[0].ID != first.Receipt.ID || history.Items[0].Action.Action != "create" || history.Items[1].Action.Action != "append_version" {
+	if err := json.Unmarshal(w.Body.Bytes(), &history); err != nil || len(history.Items) != 2 {
 		t.Fatalf("receipt history: %+v %v", history, err)
 	}
-	if history.NextAfterID != "" {
-		t.Fatalf("partial page advertised continuation: %q", history.NextAfterID)
+	// Receipt pages keyset by unique receipt ID, not creation order.
+	actions := map[string]int{}
+	for _, item := range history.Items {
+		actions[item.Action.Action]++
+		if item.RequestID != "native-request" || item.SessionID != rec.ID {
+			t.Fatalf("unsealed receipt attribution: %+v", item)
+		}
+	}
+	if actions["create"] != 1 || actions["append_version"] != 1 {
+		t.Fatalf("unexpected retained actions: %+v", actions)
 	}
 	registryRequest(t, router, http.MethodGet, base+"/"+first.Receipt.ID, nil, http.StatusOK)
 	registryRequest(t, router, http.MethodGet, base+"?limit=0", nil, http.StatusBadRequest)

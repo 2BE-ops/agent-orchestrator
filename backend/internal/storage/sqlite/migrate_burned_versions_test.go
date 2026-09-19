@@ -183,6 +183,7 @@ var shippedMigrations = map[int64]string{
 	176: "0176_agent_manager_decisions.sql",
 	177: "0177_agent_manager_decision_cursor.sql",
 	178: "0178_agent_manager_registry_actions.sql",
+	179: "0179_max_concurrent_workers.sql",
 }
 
 // burnedVersion reports version numbers that must never be (re)used: they
