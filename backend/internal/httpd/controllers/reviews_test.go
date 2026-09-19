@@ -19,6 +19,7 @@ import (
 )
 
 type fakeReviewService struct {
+	ports.TaskReviewLauncher
 	// triggeredHarness/config record the override the controller forwarded.
 	triggeredHarness  domain.ReviewerHarness
 	triggeredConfig   domain.AgentConfig

@@ -8,6 +8,10 @@ SELECT * FROM adaptive_task_review_contexts WHERE run_id=?;
 -- name: CountTaskReviewContexts :one
 SELECT count(*) FROM adaptive_task_review_contexts WHERE result_id=?;
 
+-- name: ListTaskReviewRuns :many
+SELECT r.* FROM review_run r JOIN adaptive_task_review_contexts c ON c.run_id=r.id
+WHERE c.result_id=? ORDER BY r.created_at,r.id LIMIT 64;
+
 -- name: MarkTaskReviewStarted :execrows
 UPDATE adaptive_task_review_contexts SET started_at=sqlc.arg(started_at)
 WHERE run_id=sqlc.arg(run_id) AND launch_id=sqlc.arg(launch_id) AND started_at IS NULL

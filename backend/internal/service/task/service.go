@@ -23,6 +23,8 @@ type Store interface {
 	ports.TaskResultStore
 	ports.TaskMessageStore
 	ports.TaskEvaluationStore
+	ports.TaskReviewStore
+	GetReviewRun(context.Context, string) (domain.ReviewRun, bool, error)
 	GetEffectiveWorkerConfiguration(context.Context, domain.SessionID) (domain.WorkerConfiguration, int64, bool, error)
 	GetSession(context.Context, domain.SessionID) (domain.SessionRecord, bool, error)
 	GetProject(context.Context, string) (domain.ProjectRecord, bool, error)
@@ -30,10 +32,13 @@ type Store interface {
 	GetRegistryVersion(context.Context, string, int64) (domain.RegistryVersion, error)
 }
 
-// Manager applies shared validation without starting worker processes.
+// Manager validates task actions and coordinates daemon-owned evidence/review
+// services. Native process management stays behind their existing boundaries.
 type Manager struct {
-	store     Store
-	artifacts ports.TaskArtifactCollector
+	store            Store
+	artifacts        ports.TaskArtifactCollector
+	reviewerResolver ports.WorkerConfigurationResolver
+	reviewer         ports.TaskReviewLauncher
 }
 
 // Option wires optional daemon-owned collectors into the shared service.

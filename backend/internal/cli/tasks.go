@@ -18,6 +18,7 @@ func newTaskCommand(ctx *commandContext) *cobra.Command {
 	root := &cobra.Command{Use: "task", Aliases: []string{"tasks"}, Short: "Author persistent tasks and inspect planning/attempt history (JSON output)"}
 	root.AddCommand(newTaskResultCommands(ctx)...)
 	root.AddCommand(newTaskEvaluationCommands(ctx)...)
+	root.AddCommand(newTaskReviewCommands(ctx)...)
 	root.AddCommand(newTaskMessageCommands(ctx)...)
 	root.AddCommand(&cobra.Command{Use: "context <task-id> <attempt-id>", Short: "Inspect exact worker context, provenance and omissions", Args: usageArgs(cobra.ExactArgs(2)), RunE: func(cmd *cobra.Command, args []string) error {
 		if strings.TrimSpace(args[0]) == "" || strings.TrimSpace(args[1]) == "" {

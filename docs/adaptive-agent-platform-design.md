@@ -485,6 +485,18 @@ Repeated invocations share an effective scope while retaining their own hashes;
 ordinary review scope remains separate. Native consumption, generation-fenced
 submission and evaluation attribution must use this retained context.
 
+The shared task service now requests native review from an exact result ID;
+callers cannot supply reviewer configuration, criteria, authority or verdict.
+It resolves the frozen policy through the existing registry, seals its output,
+and invokes the reviewer service behind the Codex account-operation gate. The
+store rechecks explicit Type settings and selection authority before insertion;
+orchestrator selection obeys Manager select policy. HTTP/CLI expose bounded
+per-result history and individual sealed context inspection. Retried admission
+still checks current Type/native availability, while historical inspection never
+re-resolves registry content. Generation-fenced submissions acknowledge exact
+historical retries and atomically retain the review audit. Uncertain native
+launch returns a reconciliation conflict with its running pass retained.
+
 Stage 13's initial collector snapshots independently observed CI facts under the
 same transaction as evaluation and audit. Migration 0165 preserves assessment,
 frozen criteria/result/context hashes and the exact historical worker activation;

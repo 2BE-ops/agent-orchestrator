@@ -3147,6 +3147,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tasks/{taskId}/attempts/{attemptId}/results/{resultId}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect bounded native review history for an exact result */
+        get: operations["listTaskReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{taskId}/attempts/{attemptId}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request native review using the frozen acceptance policy */
+        post: operations["requestTaskReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{taskId}/attempts/{attemptId}/reviews/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect sealed reviewer configuration, criteria and native launch evidence */
+        get: operations["getTaskReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tasks/{taskId}/audit": {
         parameters: {
             query?: never;
@@ -5991,6 +6042,30 @@ export interface components {
             items: components["schemas"]["TaskResult"][];
             nextCursor?: string;
         };
+        TaskReviewContext: {
+            actor: components["schemas"]["AdaptiveActor"];
+            attemptId: string;
+            contentHash: string;
+            /** Format: date-time */
+            createdAt: string;
+            criteria: components["schemas"]["AcceptanceCriteria"];
+            criteriaHash: string;
+            /** Format: int64 */
+            criteriaVersion: number;
+            implementingConfigurationHash: string;
+            implementingHarness: string;
+            implementingType: components["schemas"]["WorkerDefinitionRef"];
+            launchId: string;
+            resultHash: string;
+            resultId: string;
+            reviewer: components["schemas"]["WorkerConfiguration"];
+            schemaVersion: number;
+            sessionId: string;
+            targetCommit: string;
+            taskId: string;
+            /** Format: int64 */
+            taskRevision: number;
+        };
         TaskReviewEvidence: {
             /** Format: int64 */
             bodyBytes: number;
@@ -6013,6 +6088,27 @@ export interface components {
             differentHarness: boolean;
             /** Format: int64 */
             version: number;
+        };
+        TaskReviewReceipt: {
+            created: boolean;
+            runs: components["schemas"]["ReviewRun"][];
+            skipReason?: string;
+        };
+        TaskReviewRequest: {
+            resultId: string;
+        };
+        TaskReviewResponse: {
+            run: components["schemas"]["ReviewRun"];
+            snapshot: components["schemas"]["TaskReviewSnapshot"];
+        };
+        TaskReviewSnapshot: {
+            context: components["schemas"]["TaskReviewContext"];
+            runId: string;
+            /** Format: date-time */
+            startedAt?: null | string;
+        };
+        TaskReviewsResponse: {
+            items: components["schemas"]["ReviewRun"][];
         };
         TaskRevision: {
             actor: components["schemas"]["AdaptiveActor"];
@@ -19380,6 +19476,243 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listTaskReviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+                attemptId: string;
+                resultId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskReviewsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    requestTaskReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskReviewReceipt"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getTaskReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+                attemptId: string;
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskReviewResponse"];
                 };
             };
             /** @description Bad Request */

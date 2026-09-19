@@ -787,7 +787,7 @@ func Run() error {
 		Reviews:            reviewSvc,
 		Notifications:      notifier,
 		Registry:           registrySvc,
-		AdaptiveTasks:      tasksvc.New(store, tasksvc.WithArtifactCollector(taskverify.Artifacts{})),
+		AdaptiveTasks:      tasksvc.New(store, tasksvc.WithArtifactCollector(taskverify.Artifacts{}), tasksvc.WithNativeReviews(registrySvc, reviewSvc)),
 		ProjectKnowledge:   knowledgesvc.New(store),
 		NotificationStream: notificationHub,
 		Push:               pushRegistry,

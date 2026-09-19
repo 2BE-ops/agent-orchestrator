@@ -57,6 +57,7 @@ func reviewErrorKind(err error) string {
 
 // Manager is the reviews surface the HTTP controller depends on.
 type Manager interface {
+	ports.TaskReviewLauncher
 	Trigger(ctx context.Context, workerID domain.SessionID, harness domain.ReviewerHarness, config domain.AgentConfig) (reviewcore.TriggerResult, error)
 	RequestRereview(ctx context.Context, workerID domain.SessionID, prURL, reviewer string) error
 	ResolveReviewComment(ctx context.Context, workerID domain.SessionID, prURL, commentURL string) error

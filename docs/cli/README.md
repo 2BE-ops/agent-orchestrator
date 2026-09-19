@@ -372,6 +372,29 @@ The CLI and daemon share the same environment-driven config:
 
 The daemon always binds `127.0.0.1`.
 
+## Task review requests and evidence
+
+An attempt's acceptance criteria can pin `reviewPolicy.agentTypeId` and `version`,
+with `differentAgentType` and `differentHarness` requirements. Request review of
+an exact submitted result using a JSON file containing `{"resultId":"..."}`:
+
+```bash
+ao task request-review <task-id> <attempt-id> --file review-request.json
+ao task reviews <task-id> <attempt-id> <result-id>
+ao task review <task-id> <attempt-id> <run-id>
+```
+
+The daemon resolves that pinned Type and its Skills, seals the criteria and native
+configuration, and launches through the existing reviewer service. History is
+bounded to 64 passes per result; inspection shows the retained payload and native
+launch witness even after registry edits. Active and approved scopes are reused.
+An uncertain launch remains reserved for reconciliation. New admission still
+requires the pinned Type and native configuration to be available.
+
+The native reviewer's submission includes `sourceGeneration` in each batch item,
+or `--source-generation` for a single `ao review submit`. A verdict is qualitative
+review evidence; independent task evaluation remains a separate operation.
+
 ## Manual smoke test
 
 ```bash

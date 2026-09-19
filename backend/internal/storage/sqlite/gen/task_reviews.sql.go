@@ -72,6 +72,51 @@ func (q *Queries) InsertTaskReviewContext(ctx context.Context, arg InsertTaskRev
 	return err
 }
 
+const listTaskReviewRuns = `-- name: ListTaskReviewRuns :many
+SELECT r.id, r.review_id, r.session_id, r.harness, r.pr_url, r.target_sha, r.status, r.verdict, r.body, r.created_at, r.github_review_id, r.delivered_at, r.batch_id, r.auto_inject_review, r.trigger_source, r.task_scope FROM review_run r JOIN adaptive_task_review_contexts c ON c.run_id=r.id
+WHERE c.result_id=? ORDER BY r.created_at,r.id LIMIT 64
+`
+
+func (q *Queries) ListTaskReviewRuns(ctx context.Context, resultID string) ([]ReviewRun, error) {
+	rows, err := q.db.QueryContext(ctx, listTaskReviewRuns, resultID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReviewRun{}
+	for rows.Next() {
+		var i ReviewRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.ReviewID,
+			&i.SessionID,
+			&i.Harness,
+			&i.PRURL,
+			&i.TargetSha,
+			&i.Status,
+			&i.Verdict,
+			&i.Body,
+			&i.CreatedAt,
+			&i.GithubReviewID,
+			&i.DeliveredAt,
+			&i.BatchID,
+			&i.AutoInjectReview,
+			&i.TriggerSource,
+			&i.TaskScope,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markTaskReviewStarted = `-- name: MarkTaskReviewStarted :execrows
 UPDATE adaptive_task_review_contexts SET started_at=?1
 WHERE run_id=?2 AND launch_id=?3 AND started_at IS NULL

@@ -4,6 +4,38 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 13c3e — native review request and inspection API/CLI (2026-09-19)
+
+The task service resolves an exact result's frozen reviewer policy through the
+shared registry, seals native configuration and invokes the existing reviewer
+service/engine behind Codex account admission. Three HTTP routes and three thin
+CLI commands request review, list up to 64 passes for a result, and inspect a
+single retained configuration/criteria/launch witness. Strict 8 KiB requests
+exclude actor, configuration and verdict input. Store insertion additionally
+fences explicit Type settings and actor-to-selection provenance.
+
+Real SQLite + task/review services + engine + HTTP tests use an injected native
+launcher. They verify retained-before-launch ordering, policy pins, scoped reads,
+invalid/worker denial, running/approved retries, result submission, history after
+Type disable, missing binary versus uncertain launch, and Codex account gating.
+They do not claim a live provider run. CLI checks cover all three routes, usage
+errors and preservation of the daemon error code/request ID.
+
+Focused task-review/API/CLI tests PASS (store 1.026s, controllers 0.496s, CLI
+0.262s). Full domain/ports, SQLite (37.686s), store (18.302s), task service
+(1.649s), review service (0.149s), CLI (21.527s), telemetry (0.562s), HTTP router
+(0.594s), API spec (0.251s), specgen (8.981s) and envelope (0.634s) PASS. Final
+CLI rerun after sharing request transport PASS (16.767s). Focused daemon wiring
+PASS (1.142s). sqlc/API generation, backend build, frontend typecheck and pinned
+affected-package lint PASS (0 issues). Full diff/whitespace inspection PASS.
+
+Full controllers remain FAIL (11.293s) only at the two recorded Windows baseline
+tests: `TestBridgeStatusConcurrentSecurePairing` (mobile.json rename denied) and
+`TestProjectsAPI_Clone` (Windows file URL validation). They are not relabeled as
+passed. Logs: ignored `.cache/adaptive-tests/stage13c3e-*`. No migration or desktop
+authoring surface changed. Live reviewer flows remain stage 25; evaluator review
+attribution and derived completion/performance remain stage 13's next work.
+
 ## Stage 13c3d — generation-fenced native review results (2026-09-19)
 
 Task review submissions require the retained launch generation and matching

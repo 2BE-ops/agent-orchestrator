@@ -84,6 +84,16 @@ func (s *Store) InsertTaskReviewRun(ctx context.Context, run domain.ReviewRun, s
 	if err := snapshot.Validate(); err != nil {
 		return fmt.Errorf("%w: %w", ports.ErrTaskInvalid, err)
 	}
+	origin := domain.RegistrySystem
+	if snapshot.Actor.Kind == "USER" {
+		origin = domain.RegistryUser
+	}
+	if snapshot.Actor.Kind == "ORCHESTRATOR" {
+		origin = domain.RegistryManager
+	}
+	if snapshot.Reviewer.Origin != origin || snapshot.Reviewer.ActorID != snapshot.Actor.ID {
+		return fmt.Errorf("%w: reviewer selection authority differs from task actor", ports.ErrTaskForbidden)
+	}
 	if run.TaskScope != snapshot.ScopeHash() || run.SessionID != snapshot.SessionID || run.TargetSHA != snapshot.TargetCommit || domain.AgentHarness(run.Harness) != snapshot.Reviewer.Effective.Harness || run.Status != domain.ReviewRunRunning || run.Verdict != domain.VerdictNone {
 		return fmt.Errorf("%w: review pass does not match sealed context", ports.ErrTaskInvalid)
 	}
@@ -157,6 +167,15 @@ func validateTaskReviewerConfiguration(ctx context.Context, q *gen.Queries, snap
 	if definition == nil || definition.Harness != snapshot.Effective.Harness || definition.Instructions != snapshot.Effective.Instructions || !reflect.DeepEqual(definition.Skills, snapshot.Effective.Skills) || definition.ProviderBindingID != snapshot.Effective.ProviderBindingID {
 		return fmt.Errorf("%w: reviewer differs from pinned Type", ports.ErrTaskInvalid)
 	}
+	effective := snapshot.Effective
+	if definition.MaxParallelWorkers != effective.MaxParallelWorkers || definition.ProviderBindingRequired != effective.ProviderBindingRequired || !reflect.DeepEqual(definition.Capabilities, effective.Capabilities) ||
+		(definition.SessionMode != "" && definition.SessionMode != effective.SessionMode) ||
+		(definition.Config.Model != "" && definition.Config.Model != effective.Config.Model) ||
+		(definition.Config.Mode != "" && definition.Config.Mode != effective.Config.Mode) ||
+		(definition.Config.Effort != "" && definition.Config.Effort != effective.Config.Effort) ||
+		(definition.Config.Permissions != "" && definition.Config.Permissions != effective.Config.Permissions) {
+		return fmt.Errorf("%w: reviewer changed explicit pinned configuration", ports.ErrTaskInvalid)
+	}
 	for _, skill := range snapshot.Skills {
 		if err := validateWorkerReference(ctx, q, skill.Reference, domain.RegistrySkill, snapshot.Origin); err != nil {
 			return err
@@ -215,4 +234,17 @@ func (s *Store) MarkTaskReviewStarted(ctx context.Context, runID, launchID strin
 	defer s.writeMu.Unlock()
 	count, err := s.qw.MarkTaskReviewStarted(ctx, gen.MarkTaskReviewStartedParams{RunID: runID, LaunchID: launchID, StartedAt: sql.NullTime{Time: time.Now().UTC(), Valid: true}})
 	return count == 1, err
+}
+
+// ListTaskReviewRuns bounds history by the enforced per-result pass limit.
+func (s *Store) ListTaskReviewRuns(ctx context.Context, resultID string) ([]domain.ReviewRun, error) {
+	rows, err := s.qr.ListTaskReviewRuns(ctx, resultID)
+	if err != nil {
+		return nil, err
+	}
+	runs := make([]domain.ReviewRun, 0, len(rows))
+	for _, row := range rows {
+		runs = append(runs, reviewRunFromRow(row))
+	}
+	return runs, nil
 }

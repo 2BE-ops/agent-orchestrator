@@ -75,6 +75,9 @@ func TestTaskReviewContextAtomicProvenanceAndLaunchWitness(t *testing.T) {
 		{"wrong implementing type", func(c *domain.TaskReviewContext) { c.ImplementingType.ID = "other" }},
 		{"wrong task", func(c *domain.TaskReviewContext) { c.TaskID = "other" }},
 		{"wrong instructions", func(c *domain.TaskReviewContext) { c.Reviewer.Effective.Instructions = "Different from Type" }},
+		{"wrong worker limit", func(c *domain.TaskReviewContext) { c.Reviewer.Effective.MaxParallelWorkers++ }},
+		{"wrong mode", func(c *domain.TaskReviewContext) { c.Reviewer.Effective.SessionMode = domain.SessionModeChat }},
+		{"forged selection authority", func(c *domain.TaskReviewContext) { c.Reviewer.Origin = domain.RegistrySystem }},
 		{"worker provenance", func(c *domain.TaskReviewContext) { c.Actor.Kind = "WORKER" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

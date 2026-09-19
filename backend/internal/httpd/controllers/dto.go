@@ -93,6 +93,22 @@ type TaskMessagesResponse struct {
 	NextCursor string               `json:"nextCursor,omitempty"`
 }
 
+// TaskReviewRunParam identifies a retained native review pass.
+type TaskReviewRunParam struct {
+	RunID string `path:"runId"`
+}
+
+// TaskReviewRequest selects a result, never reviewer configuration or authority.
+type TaskReviewRequest tasksvc.ReviewInput
+
+// TaskReviewResponse exposes exactly what one native reviewer received.
+type TaskReviewResponse tasksvc.ReviewView
+
+// TaskReviewsResponse lists the bounded review history for a result.
+type TaskReviewsResponse struct {
+	Items []domain.ReviewRun `json:"items"`
+}
+
 // TaskEvaluationIDParam identifies an immutable independent assessment.
 type TaskEvaluationIDParam struct {
 	EvaluationID string `path:"evaluationId"`

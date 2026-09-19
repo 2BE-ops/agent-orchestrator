@@ -14,6 +14,13 @@ type TaskReviewPreparation struct {
 	Implementer WorkerConfiguration
 }
 
+// TaskReviewReceipt reports native review admission, never an evaluation result.
+type TaskReviewReceipt struct {
+	Runs       []ReviewRun `json:"runs"`
+	Created    bool        `json:"created"`
+	SkipReason string      `json:"skipReason,omitempty"`
+}
+
 // TaskReviewContext seals what a native review pass was asked to assess. The
 // review lifecycle and verdict still belong to the existing ReviewRun entity.
 type TaskReviewContext struct {
