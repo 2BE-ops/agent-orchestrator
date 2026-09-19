@@ -12,6 +12,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/lifecycle"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
+	managersvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agentmanager"
 	registrysvc "github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite"
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite/sqlitetest"
@@ -27,6 +28,64 @@ type nativeManagerFixture struct {
 	launcher   *recordingLauncher
 	agent      *recordingAgent
 	native     *workerNative
+}
+
+func TestManagerServiceStartsBothNativeModesAndOnlyInspectsRetries(t *testing.T) {
+	ctx := context.Background()
+	for _, mode := range []domain.SessionMode{domain.SessionModeTUI, domain.SessionModeChat} {
+		t.Run(string(mode), func(t *testing.T) {
+			f := newNativeManagerFixture(t, mode)
+			if err := f.store.ReleaseAgentManagerController(ctx, domain.AgentManagerControllerRelease{Token: f.controller.AgentManagerControllerToken, Reason: "Release unseeded fixture admission", Now: time.Now().UTC()}); err != nil {
+				t.Fatal(err)
+			}
+			service := managersvc.NewWithRuntime(f.store, f.manager)
+			input := managersvc.ControllerStartInput{ID: "service-admission", ConfigurationVersion: 1, Reason: "Start configured native Manager"}
+			actor := domain.AdaptiveActor{Kind: "USER", ID: "human"}
+			receipt, err := service.StartController(ctx, actor, "manager-project", input)
+			if err != nil || !receipt.Created || receipt.State.Dispatch == nil || receipt.State.PendingOperation != nil {
+				t.Fatalf("native start: %+v %v", receipt, err)
+			}
+			rec, found, err := f.store.GetSession(ctx, receipt.State.Dispatch.SessionID)
+			if err != nil || !found || rec.Kind != domain.KindAgentManager || rec.Mode != mode {
+				t.Fatalf("native mode/role: %+v %v %v", rec, found, err)
+			}
+			checks, starts, chatStarts := f.native.checks, f.runtime.created, len(f.launcher.started)
+			f.native.unavailable = true
+			replay, err := service.StartController(ctx, actor, "manager-project", input)
+			if err != nil || replay.Created || replay.State.Dispatch == nil || replay.State.Dispatch.SessionID != rec.ID || f.native.checks != checks || f.runtime.created != starts || len(f.launcher.started) != chatStarts {
+				t.Fatalf("retry relaunched: %+v %v", replay, err)
+			}
+			current, err := service.CurrentController(ctx, "manager-project")
+			if err != nil || current == nil || current.Controller.ID != input.ID {
+				t.Fatalf("current: %+v %v", current, err)
+			}
+		})
+	}
+}
+
+func TestManagerServiceRetainsPendingNativeStartAcrossRetry(t *testing.T) {
+	ctx := context.Background()
+	f := newNativeManagerFixture(t, domain.SessionModeChat)
+	if err := f.store.ReleaseAgentManagerController(ctx, domain.AgentManagerControllerRelease{Token: f.controller.AgentManagerControllerToken, Reason: "Release unseeded fixture admission", Now: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	f.launcher.startErr = errors.New("native connection outcome unknown")
+	service := managersvc.NewWithRuntime(f.store, f.manager)
+	input := managersvc.ControllerStartInput{ID: "uncertain-admission", ConfigurationVersion: 1, Reason: "Start native Manager"}
+	actor := domain.AdaptiveActor{Kind: "SYSTEM", ID: "daemon"}
+	if _, err := service.StartController(ctx, actor, "manager-project", input); err == nil {
+		t.Fatal("native start failure hidden")
+	}
+	current, err := service.CurrentController(ctx, "manager-project")
+	if err != nil || current == nil || current.Dispatch == nil || current.PendingOperation == nil || current.Controller.ReleasedAt != nil {
+		t.Fatalf("lost pending native ownership: %+v %v", current, err)
+	}
+	starts := len(f.launcher.started)
+	f.launcher.startErr = nil
+	replay, err := service.StartController(ctx, actor, "manager-project", input)
+	if err != nil || replay.Created || replay.State.PendingOperation == nil || len(f.launcher.started) != starts {
+		t.Fatalf("retry repeated uncertain launch: %+v %v", replay, err)
+	}
 }
 
 func newNativeManagerFixture(t *testing.T, mode domain.SessionMode) nativeManagerFixture {

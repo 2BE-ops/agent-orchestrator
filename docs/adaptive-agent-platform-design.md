@@ -708,6 +708,17 @@ orchestrator project rules. Ordinary session restoration performs no extra Manag
 storage reads. Reopened-database tests cover both native modes and exact retained
 resources. Production start, inbox and structured tools remain subsequent work.
 
+Stage 14d1 adds the dedicated controller start service on top of that native
+boundary. A stable admission ID, exact governance version and reason are the only
+start inputs; authority is supplied by the user/daemon boundary. The service
+reserves before calling the shared session manager, supplies only the configured
+Type/version and governing user's registry authority, and never accepts role or
+configuration overrides. Only a newly created reservation can call Spawn. Exact
+retries inspect even an unseeded admission or unresolved native generation; they
+do not infer that a failed connection permits another process. Current/historical
+controller reads expose admission, dispatch and pending-operation facts without
+claiming native liveness. API/daemon wiring and classified work delivery follow.
+
 Stage 14c1 adds the durable Manager inbox (0171). Routing requests reference exact
 task/criteria and governance versions plus hashes, without embedding task content.
 They are independent of a native controller's lifetime. Enqueue serializes with

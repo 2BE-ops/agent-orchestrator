@@ -14,10 +14,18 @@ import (
 )
 
 // Manager applies governance validation before persistence or native effects.
-type Manager struct{ store ports.AgentManagerStore }
+type Manager struct {
+	store  ports.AgentManagerStore
+	native NativeRuntime
+}
 
 // New constructs the Manager boundary over the daemon's existing store.
 func New(store ports.AgentManagerStore) *Manager { return &Manager{store: store} }
+
+// NewWithRuntime binds dedicated Manager admission to the shared native engine.
+func NewWithRuntime(store ports.AgentManagerStore, native NativeRuntime) *Manager {
+	return &Manager{store: store, native: native}
+}
 
 // ConfigureInput contains desired policy, never actor authority or process state.
 type ConfigureInput struct {

@@ -4,6 +4,27 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 14d1 - dedicated native controller start service (2026-09-19)
+
+Manager service now accepts bounded stable admission IDs and exact governance
+versions, derives the native Type/version and registry actor from that governance,
+and calls the existing session manager only for a newly reserved controller.
+Current/history reads expose retained dispatch and pending-native-operation facts.
+Native errors retain ownership, including the unseeded crash window; retries are
+inspection, never permission for another launch. Missing native support and invalid
+authority/bounds fail before writes. No daemon/API/CLI start wiring is claimed yet.
+
+Real SQLite service tests race eight identical starts and observe one native call;
+changed keys, another admission, cross-project reads and fresh-service retries
+cannot bypass ownership. Service-to-native tests start both TUI and Chat with the
+proper Manager role/configuration; retries bypass changed readiness without new
+effects. A Chat start failure retains its pending operation through retry.
+Focused service/native tests PASS (1.242s/0.543s). Full Manager service PASS
+(2.329s); full session-manager FAIL (39.206s) only at the eight recorded Windows
+handoff/path baselines. Backend build and pinned affected new-diff lint PASS
+(0 issues). Source/diff/whitespace review PASS. Logs:
+`.cache/adaptive-tests/stage14d1-*`.
+
 ## Stage 15.0 - pinned classification and delegation foundations (2026-09-19)
 
 Migration 0173 preserves historical JSON/hash bytes while validating authored
