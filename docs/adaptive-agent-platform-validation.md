@@ -38,6 +38,83 @@ Group), and mixed line endings introduced by edits. Race run remains NOT RUN
 classified inspector, public delegation history and live message/review gates
 remain for stage 15.
 
+## Stage 17 - orchestrator protocol and autonomous feedback loop (2026-09-19)
+
+Three commits: `feat: persist project goals and verified orchestrator planning`
+(17a storage), `feat: seal native orchestrator planning protocol v1` (17b
+protocol/service/prompt), `feat: expose orchestrator goal loop through API, CLI
+and feedback reads` (17c surfaces).
+
+Migration 0180 adds adaptive_project_goals(+versions/completions) and
+adaptive_orchestrator_plan_receipts. Goal wording is user/system authority only
+(domain validation refuses ORCHESTRATOR); versions are immutable (UPDATE/DELETE
+triggers), the pointer moves in the same transaction, and Down refuses any
+history-losing downgrade. Goal completion is verified inside one write
+transaction: it walks every project task (bounded at 10000), accepts only
+independently verified completion or cancelled ancestry (reusing the exact
+currentTaskCompletion evidence derivation), requires at least one verified
+completed task, refuses superseded goal versions, and returns typed
+ProjectGoalBlockers through ErrGoalIncomplete rather than storing derived
+status; the retained completion seals the verified fact set (task/revision/
+result/evaluation hashes) guarded by a scope trigger (current-version join,
+json_type evidence shape checks — a coalesce/json_extract IS NOT NULL arm was
+empirically wrong on SQLite 3.53.3 for absent keys and was replaced). Plan
+receipts seal action+outcome (task id, revision, criteria version, request
+hash) with UNIQUE(project_id, idempotency_key): exact retries return the
+original receipt without re-running, changed payloads conflict, and the
+in-transaction task paths recheck ORCHESTRATOR session authority/kind/project/
+termination for every action. Task create/revise bodies were extracted into
+createAdaptiveTaskTx/reviseAdaptiveTaskTx so receipt+action commit atomically.
+
+Protocol v1 is sealed and golden-pinned
+(`3ace095c02ff39120066f97d238d59da480b0f5e19021aa56dcc577803ae82d4`): literal
+argv goal/plan/complete/feedback/receipts/tasks commands, runfile environment,
+pinned goal version, and a parseable plan example. The orchestrator system
+prompt gains the section only when the store has a current goal (optional
+projectGoalReader capability; nil store keeps the legacy prompt) and is
+recomputed on restore like the rest of buildSystemPrompt. The native service
+resolves the project's live orchestrator session server-side (spawn semantics
+keep one active per project; newest live wins), returns its exact current
+generation from the native goal read, and refuses plan/complete on any
+generation mismatch (ORCHESTRATOR_OWNER_CHANGED) — no session identity is
+embedded in the prompt, so staleness self-heals by re-reading the goal.
+Feedback is derived at read time from durable rows only (pending/working/
+completed/failed where attempts >= maxAttempts with no live lease/cancelling/
+cancelled); nothing is stored, verified by a close/reopen restart test.
+
+Test evidence: new store tests PASS (goal versioning/authority/immutability/
+restart; completion verified-vs-blockers-vs-superseded with the full evaluation
+fixture; empty-project refusal; plan seal/replay/conflict/stale-revision/
+restart; terminated/orchestrator-less plan refusal), migration round-trip +
+CDC-silence + blocker-evidence trigger + history-losing downgrade refusal +
+integrity/FK PASS with 0180 appended to the migration ledger, two feedback
+tests PASS (terminal fact derivation with a released exhausted attempt,
+keyset paging, restart stability), domain protocol tests PASS, orchestrator
+service tests PASS (goal lifecycle, generation fencing, deterministic
+completion blockers surfaced in typed apierr details), session-manager prompt
+test PASS (legacy without goal, sealed section with goal pin/literal routing,
+no leak into worker prompts), HTTP controller loop test PASS (goal CRUD,
+native goal/plan/replay/complete-with-blockers/feedback/receipts envelopes,
+strict query validation, 404/400 paths) and CLI transport test PASS (paths
+with spaces, exact envelopes, bounded queries, exit-2 usage). Full SQLite
+(56.0s), SQLite/store (42.0s), domain, ports, telemetrymeta, CLI (31.3s),
+skillassets, httpd, apispec and specgen suites PASS; session-manager retains
+exactly its eight recorded Windows baselines; controllers retain the two
+recorded pairing/clone baselines; daemon retains its recorded CWD baseline;
+service/agent, service/project, service/importer, systemcheck and
+systeminstall retain their recorded stage-08 Windows environment failures
+(untouched by this stage). `npm run api` regenerated openapi.yaml and
+schema.ts; `npm run sqlc` clean; frontend typecheck PASS; backend build and
+pinned golangci-lint v2.12.2 over all touched packages PASS (0 issues; fixed
+one gocritic bool-simplify and one unconvert during the pass). Race run
+remains NOT RUN (Windows GCC baseline).
+
+Named remainder: proactive daemon-push notification of new terminal facts to
+the orchestrator session (the loop's push half — durable-cursor delivery like
+the Manager inbox dispatcher) is deferred to stage 23 recovery/replacement
+delivery; desktop goal/feedback/decision surfaces are stages 21-22; live app
+demonstration of the whole loop is stage 25.
+
 ## Stage 16 - deterministic scheduler admission (2026-09-19)
 
 Migration 0179 adds max_concurrent_workers to app_settings (default 100, CHECK
