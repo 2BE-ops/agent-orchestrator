@@ -20,20 +20,37 @@ var _ ports.ContextKnowledgeStore = (*Store)(nil)
 // SelectContextKnowledge excludes unreviewed, invalidated and unrelated claims
 // before returning any content. The extra 33rd row permits a bounded truncation
 // signal without loading an entire project's history into memory.
-func (s *Store) SelectContextKnowledge(ctx context.Context, projectID domain.ProjectID, taskIDs []string, category string, limit int) ([]domain.KnowledgeVersion, error) {
-	if projectID == "" || len(taskIDs) == 0 || len(taskIDs) > 34 || len(category) > 100 || limit < 1 || limit > 33 {
+func (s *Store) SelectContextKnowledge(ctx context.Context, attemptID string, limit int) ([]domain.KnowledgeVersion, error) {
+	if strings.TrimSpace(attemptID) == "" || len(attemptID) > 200 || limit < 1 || limit > 33 {
 		return nil, ports.ErrKnowledgeInvalid
 	}
-	for _, id := range taskIDs {
-		if strings.TrimSpace(id) == "" || len(id) > 200 {
-			return nil, ports.ErrKnowledgeInvalid
-		}
+	policy, attempt, revision, err := taskContextPolicy(ctx, s.qr, attemptID)
+	if err != nil {
+		return nil, err
+	}
+	task, err := s.qr.GetAdaptiveTask(ctx, attempt.TaskID)
+	if err != nil {
+		return nil, err
+	}
+	taskIDs := []string{attempt.TaskID}
+	if revision.Definition.ParentID != "" {
+		taskIDs = append(taskIDs, revision.Definition.ParentID)
+	}
+	for _, ref := range attempt.Dependencies {
+		taskIDs = append(taskIDs, ref.TaskID)
 	}
 	ids, err := json.Marshal(taskIDs)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.qr.SelectContextKnowledge(ctx, gen.SelectContextKnowledgeParams{ProjectID: string(projectID), TaskIds: string(ids), Category: category, PageLimit: int64(limit)})
+	var rank int64
+	switch policy.MaxContextClass {
+	case domain.ContextEngagement:
+		rank = 1
+	case domain.ContextMission:
+		rank = 2
+	}
+	rows, err := s.qr.SelectContextKnowledge(ctx, gen.SelectContextKnowledgeParams{ProjectID: task.ProjectID, TaskIds: string(ids), Category: revision.Definition.Category, PageLimit: int64(limit), MaxClassRank: rank, EngagementID: policy.EngagementID})
 	if err != nil {
 		return nil, err
 	}
@@ -184,6 +201,16 @@ func validateKnowledgeScope(ctx context.Context, q *gen.Queries, id string, proj
 			}
 			if lease.ReleasedAt.Valid {
 				return ports.ErrKnowledgeForbidden
+			}
+			class, engagement, err := taskOutputScope(ctx, q, source.AttemptID)
+			if errors.Is(err, ports.ErrTaskNotFound) {
+				return ports.ErrKnowledgeForbidden
+			}
+			if err != nil {
+				return err
+			}
+			if !domain.CanEmbedContext(d.Classification, d.EngagementID, class, engagement) {
+				return fmt.Errorf("%w: knowledge candidate must retain source context classification", ports.ErrKnowledgeForbidden)
 			}
 			ownWorkerSource = true
 		}

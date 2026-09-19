@@ -39,6 +39,10 @@ WITH relevant AS (
     END AS relevance
   FROM project_knowledge k JOIN project_knowledge_versions v ON v.knowledge_id=k.id AND v.number=k.version
   WHERE k.project_id=sqlc.arg(project_id) AND json_extract(v.definition,'$.status')='accepted'
+    AND (CASE COALESCE(json_extract(v.definition,'$.classification'),'technical') WHEN 'technical' THEN 0 WHEN 'engagement' THEN 1 WHEN 'mission' THEN 2 ELSE 3 END) <= CAST(sqlc.arg(max_class_rank) AS INTEGER)
+    AND (COALESCE(json_extract(v.definition,'$.classification'),'technical')='technical'
+      OR COALESCE(json_extract(v.definition,'$.engagementId'),'')=''
+      OR json_extract(v.definition,'$.engagementId')=sqlc.arg(engagement_id))
 )
 SELECT knowledge_id,number,definition,content_hash,actor,reason,created_at FROM relevant
 WHERE relevance<4 ORDER BY relevance,knowledge_id LIMIT sqlc.arg(page_limit);

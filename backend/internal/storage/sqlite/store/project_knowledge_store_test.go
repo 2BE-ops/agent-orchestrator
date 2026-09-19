@@ -87,7 +87,14 @@ func TestProjectKnowledgeImmutableReviewHistoryAndRestart(t *testing.T) {
 func TestProjectKnowledgeWorkerProposalsRequireOwnActiveAttempt(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
-	seed, lease := taskExecutionSeed(t, s)
+	snapshot, lease := taskContextFixture(t, s)
+	if err := s.SaveTaskContext(ctx, lease.TaskLeaseToken, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	seed, found, err := s.GetSession(ctx, snapshot.SessionID)
+	if err != nil || !found {
+		t.Fatalf("worker seed: %v %v", found, err)
+	}
 	d := knowledgeDefinition()
 	d.Sources = []domain.KnowledgeSource{{Kind: "worker", Reference: "Observed service ownership", TaskID: "work", AttemptID: lease.AttemptID, SessionID: seed.ID}}
 	mutation := domain.KnowledgeMutation{Actor: domain.AdaptiveActor{Kind: "WORKER", ID: "worker", SessionID: seed.ID}, Reason: "Propose a discovered constraint"}

@@ -123,6 +123,9 @@ func (s *Store) SaveTaskContext(ctx context.Context, token domain.TaskLeaseToken
 		if config.ContentHash != snapshot.ConfigurationHash {
 			return ports.ErrTaskConflict
 		}
+		if err := validateContextClassifications(ctx, q, snapshot); err != nil {
+			return err
+		}
 		if err := validateTaskContextSources(ctx, q, attempt, config, snapshot); err != nil {
 			return err
 		}
@@ -131,6 +134,9 @@ func (s *Store) SaveTaskContext(ctx context.Context, token domain.TaskLeaseToken
 			return err
 		}
 		if err := q.InsertTaskContext(ctx, gen.InsertTaskContextParams{AttemptID: snapshot.AttemptID, SessionID: string(snapshot.SessionID), ExecutionOperationID: snapshot.ExecutionOperationID, ConfigurationHash: snapshot.ConfigurationHash, Snapshot: string(encoded), ContentHash: snapshot.ContentHash, CreatedAt: snapshot.CreatedAt}); err != nil {
+			return err
+		}
+		if err := insertInitialTaskDelegation(ctx, q, snapshot); err != nil {
 			return err
 		}
 		return insertTaskAudit(ctx, q, attempt.TaskID, attempt.TaskRevision, "context_sealed", domain.TaskMutation{Actor: domain.AdaptiveActor{Kind: "SYSTEM", ID: token.HolderID}, Reason: "Sealed bounded worker context " + snapshot.ContentHash}, snapshot.CreatedAt)

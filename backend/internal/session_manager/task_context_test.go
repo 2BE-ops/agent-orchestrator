@@ -40,6 +40,9 @@ func TestTaskContextReachesNativeLaunchAndFreshRestoreWithoutRebuilding(t *testi
 				if _, found, err := f.store.GetTaskContextBySession(ctx, start.SessionID); err != nil || !found {
 					t.Fatalf("native launch preceded seal: %v %v", found, err)
 				}
+				if delegation, err := f.store.GetTaskDelegation(ctx, f.lease.AttemptID, 1); err != nil || delegation.SessionID != start.SessionID {
+					t.Fatalf("native launch preceded delegation artifact: %+v %v", delegation, err)
+				}
 			}
 			rec, promptBytes, _, err := f.manager.Spawn(ctx, f.cfg)
 			if err != nil {
@@ -48,6 +51,10 @@ func TestTaskContextReachesNativeLaunchAndFreshRestoreWithoutRebuilding(t *testi
 			frozen, found, err := f.store.GetTaskContext(ctx, f.lease.AttemptID)
 			if err != nil || !found {
 				t.Fatalf("context: %v %v", found, err)
+			}
+			delegation, err := f.store.GetTaskDelegation(ctx, f.lease.AttemptID, 1)
+			if err != nil || delegation.ContextHash != frozen.ContentHash || delegation.Prompt != frozen.Prompt || delegation.SystemPrompt != frozen.SystemPrompt || delegation.Classification != domain.ContextTechnical {
+				t.Fatalf("native context differs from classified receipt: %+v %v", delegation, err)
 			}
 			if promptBytes != len(frozen.Prompt) || !strings.Contains(frozen.Prompt, "Original repository interface") || !strings.Contains(frozen.Prompt, "Original accepted knowledge") || strings.Contains(frozen.Prompt, "SHOULD_NEVER_REACH_CONTEXT") {
 				t.Fatalf("incorrect native context: %+v", frozen)

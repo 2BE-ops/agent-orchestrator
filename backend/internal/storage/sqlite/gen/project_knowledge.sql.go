@@ -241,16 +241,22 @@ WITH relevant AS (
     END AS relevance
   FROM project_knowledge k JOIN project_knowledge_versions v ON v.knowledge_id=k.id AND v.number=k.version
   WHERE k.project_id=?4 AND json_extract(v.definition,'$.status')='accepted'
+    AND (CASE COALESCE(json_extract(v.definition,'$.classification'),'technical') WHEN 'technical' THEN 0 WHEN 'engagement' THEN 1 WHEN 'mission' THEN 2 ELSE 3 END) <= CAST(?5 AS INTEGER)
+    AND (COALESCE(json_extract(v.definition,'$.classification'),'technical')='technical'
+      OR COALESCE(json_extract(v.definition,'$.engagementId'),'')=''
+      OR json_extract(v.definition,'$.engagementId')=?6)
 )
 SELECT knowledge_id,number,definition,content_hash,actor,reason,created_at FROM relevant
 WHERE relevance<4 ORDER BY relevance,knowledge_id LIMIT ?1
 `
 
 type SelectContextKnowledgeParams struct {
-	PageLimit int64
-	TaskIds   interface{}
-	Category  interface{}
-	ProjectID string
+	PageLimit    int64
+	TaskIds      interface{}
+	Category     interface{}
+	ProjectID    string
+	MaxClassRank int64
+	EngagementID string
 }
 
 type SelectContextKnowledgeRow struct {
@@ -269,6 +275,8 @@ func (q *Queries) SelectContextKnowledge(ctx context.Context, arg SelectContextK
 		arg.TaskIds,
 		arg.Category,
 		arg.ProjectID,
+		arg.MaxClassRank,
+		arg.EngagementID,
 	)
 	if err != nil {
 		return nil, err

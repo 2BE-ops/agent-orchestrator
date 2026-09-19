@@ -238,6 +238,18 @@ type AdaptiveTaskCriterium struct {
 	CreatedAt       time.Time
 }
 
+type AdaptiveTaskDelegation struct {
+	AttemptID            string
+	Number               int64
+	ExecutionOperationID string
+	SessionID            string
+	ConfigurationHash    string
+	ContextHash          string
+	Snapshot             string
+	ContentHash          string
+	CreatedAt            time.Time
+}
+
 type AdaptiveTaskDependency struct {
 	ProjectID    string
 	TaskID       string

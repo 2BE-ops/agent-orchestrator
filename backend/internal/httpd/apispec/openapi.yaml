@@ -13416,6 +13416,12 @@ components:
           type: string
         instructions:
           type: string
+        maxContextClass:
+          enum:
+          - technical
+          - engagement
+          - mission
+          type: string
         maxParallelWorkers:
           type: integer
         providerBindingId:
@@ -14152,6 +14158,12 @@ components:
       type: object
     ContextSource:
       properties:
+        classification:
+          enum:
+          - technical
+          - engagement
+          - mission
+          type: string
         content:
           type: string
         contentHash:
@@ -14161,6 +14173,8 @@ components:
           - inline
           - reference
           - omitted
+          type: string
+        engagementId:
           type: string
         id:
           type: string
@@ -15778,6 +15792,12 @@ components:
       type: object
     KnowledgeDefinition:
       properties:
+        classification:
+          enum:
+          - technical
+          - engagement
+          - mission
+          type: string
         confidence:
           enum:
           - low
@@ -15785,6 +15805,8 @@ components:
           - high
           type: string
         content:
+          type: string
+        engagementId:
           type: string
         kind:
           enum:
@@ -19022,6 +19044,12 @@ components:
           type: string
         budget:
           $ref: '#/components/schemas/ContextBudget'
+        classification:
+          enum:
+          - technical
+          - engagement
+          - mission
+          type: string
         configurationHash:
           type: string
         contentHash:
@@ -19032,9 +19060,17 @@ components:
         criteriaVersion:
           format: int64
           type: integer
+        engagementId:
+          type: string
         estimatedTokens:
           type: integer
         executionOperationId:
+          type: string
+        maxContextClass:
+          enum:
+          - technical
+          - engagement
+          - mission
           type: string
         prompt:
           type: string
@@ -19046,6 +19082,8 @@ components:
           items:
             $ref: '#/components/schemas/ContextSource'
           type: array
+        systemPrompt:
+          type: string
         systemPromptBytes:
           type: integer
         systemPromptHash:
@@ -19096,6 +19134,12 @@ components:
           type: string
         category:
           type: string
+        classification:
+          enum:
+          - technical
+          - engagement
+          - mission
+          type: string
         contextFiles:
           items:
             type: string
@@ -19106,6 +19150,8 @@ components:
           type:
           - array
           - "null"
+        engagementId:
+          type: string
         maxAttempts:
           type: integer
         parentId:

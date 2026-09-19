@@ -4033,6 +4033,8 @@ export interface components {
             config: components["schemas"]["AgentConfig"];
             harness: string;
             instructions: string;
+            /** @enum {string} */
+            maxContextClass?: "technical" | "engagement" | "mission";
             maxParallelWorkers: number;
             providerBindingId?: string;
             providerBindingRequired?: boolean;
@@ -4297,10 +4299,13 @@ export interface components {
             maxSources: number;
         };
         ContextSource: {
+            /** @enum {string} */
+            classification?: "technical" | "engagement" | "mission";
             content?: string;
             contentHash?: string;
             /** @enum {string} */
             disposition: "inline" | "reference" | "omitted";
+            engagementId?: string;
             id: string;
             /** @enum {string} */
             kind: "task" | "criteria" | "parent" | "dependency" | "knowledge" | "file" | "agent_type" | "skill" | "result" | "interface_contract" | "selection";
@@ -4878,8 +4883,11 @@ export interface components {
         };
         KnowledgeDefinition: {
             /** @enum {string} */
+            classification?: "technical" | "engagement" | "mission";
+            /** @enum {string} */
             confidence: "low" | "medium" | "high";
             content: string;
+            engagementId?: string;
             /** @enum {string} */
             kind: "architecture" | "convention" | "interface" | "constraint" | "pitfall" | "failed_approach" | "file_relationship" | "external_behavior" | "question";
             pinned: boolean;
@@ -6147,18 +6155,24 @@ export interface components {
             attemptId: string;
             basePrompt: string;
             budget: components["schemas"]["ContextBudget"];
+            /** @enum {string} */
+            classification?: "technical" | "engagement" | "mission";
             configurationHash: string;
             contentHash: string;
             /** Format: date-time */
             createdAt: string;
             /** Format: int64 */
             criteriaVersion: number;
+            engagementId?: string;
             estimatedTokens: number;
             executionOperationId: string;
+            /** @enum {string} */
+            maxContextClass?: "technical" | "engagement" | "mission";
             prompt: string;
             schemaVersion: number;
             sessionId: string;
             sources: components["schemas"]["ContextSource"][];
+            systemPrompt?: string;
             systemPromptBytes: number;
             systemPromptHash: string;
             task: components["schemas"]["TaskRevisionRef"];
@@ -6173,8 +6187,11 @@ export interface components {
         TaskDefinition: {
             brief: string;
             category: string;
+            /** @enum {string} */
+            classification?: "technical" | "engagement" | "mission";
             contextFiles?: string[];
             dependencies: string[] | null;
+            engagementId?: string;
             maxAttempts: number;
             parentId?: string;
             priority: number;

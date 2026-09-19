@@ -14,7 +14,15 @@ func TestContextKnowledgeSelectionIsAcceptedRelevantRankedAndBounded(t *testing.
 	s := newTestStore(t)
 	seedProject(t, s, "project")
 	seedProject(t, s, "foreign")
-	createTask(t, s, "task", taskDefinition())
+	definition := taskDefinition()
+	definition.Category = "backend"
+	createTask(t, s, "task", definition)
+	_, lease := reserveTask(t, s, "selection-attempt", "task")
+	rec, config := workerSnapshot(t, s)
+	rec.ProjectID = "project"
+	if _, _, err := s.CreateTaskWorkerSession(ctx, lease.TaskLeaseToken, rec, config, lease.HeartbeatAt); err != nil {
+		t.Fatal(err)
+	}
 	createTask(t, s, "unrelated", taskDefinition())
 	for _, tc := range []struct {
 		id, status, project string
@@ -38,7 +46,7 @@ func TestContextKnowledgeSelectionIsAcceptedRelevantRankedAndBounded(t *testing.
 			t.Fatalf("%s: %v", tc.id, err)
 		}
 	}
-	versions, err := s.SelectContextKnowledge(ctx, "project", []string{"task"}, "backend", 33)
+	versions, err := s.SelectContextKnowledge(ctx, lease.AttemptID, 33)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,8 +63,8 @@ func TestContextKnowledgeSelectionIsAcceptedRelevantRankedAndBounded(t *testing.
 	if _, err := s.ReviseProjectKnowledge(ctx, "a-general", d, knowledgeMutation(1)); err != nil {
 		t.Fatal(err)
 	}
-	versions, err = s.SelectContextKnowledge(ctx, "project", []string{"task"}, "", 33)
-	if err != nil || len(versions) != 3 || versions[2].Number != 2 || versions[2].Definition.Content != d.Content {
+	versions, err = s.SelectContextKnowledge(ctx, lease.AttemptID, 33)
+	if err != nil || len(versions) != 4 || versions[3].Number != 2 || versions[3].Definition.Content != d.Content {
 		t.Fatalf("current accepted content: %+v %v", versions, err)
 	}
 	for i := 0; i < 40; i++ {
@@ -64,11 +72,11 @@ func TestContextKnowledgeSelectionIsAcceptedRelevantRankedAndBounded(t *testing.
 			t.Fatal(err)
 		}
 	}
-	versions, err = s.SelectContextKnowledge(ctx, "project", []string{"task"}, "backend", 33)
+	versions, err = s.SelectContextKnowledge(ctx, lease.AttemptID, 33)
 	if err != nil || len(versions) != 33 {
 		t.Fatalf("bounded query: %d %v", len(versions), err)
 	}
-	if _, err := s.SelectContextKnowledge(ctx, "project", []string{"task"}, "backend", 34); err == nil {
+	if _, err := s.SelectContextKnowledge(ctx, lease.AttemptID, 34); err == nil {
 		t.Fatal("unbounded context query accepted")
 	}
 }

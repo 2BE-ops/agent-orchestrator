@@ -28,20 +28,25 @@ type KnowledgeVersionRef struct {
 // KnowledgeDefinition keeps claims, provenance and review disposition together.
 // Deletion withdraws future selection; immutable historical content is retained.
 type KnowledgeDefinition struct {
-	Title        string               `json:"title"`
-	Kind         string               `json:"kind" enum:"architecture,convention,interface,constraint,pitfall,failed_approach,file_relationship,external_behavior,question"`
-	Content      string               `json:"content"`
-	Status       string               `json:"status" enum:"candidate,accepted,invalidated,superseded,deleted"`
-	Confidence   string               `json:"confidence" enum:"low,medium,high"`
-	Pinned       bool                 `json:"pinned"`
-	Sources      []KnowledgeSource    `json:"sources"`
-	TaskIDs      []string             `json:"taskIds,omitempty"`
-	Tags         []string             `json:"tags,omitempty"`
-	SupersededBy *KnowledgeVersionRef `json:"supersededBy,omitempty"`
+	Classification ContextClass         `json:"classification,omitempty" enum:"technical,engagement,mission"`
+	EngagementID   string               `json:"engagementId,omitempty"`
+	Title          string               `json:"title"`
+	Kind           string               `json:"kind" enum:"architecture,convention,interface,constraint,pitfall,failed_approach,file_relationship,external_behavior,question"`
+	Content        string               `json:"content"`
+	Status         string               `json:"status" enum:"candidate,accepted,invalidated,superseded,deleted"`
+	Confidence     string               `json:"confidence" enum:"low,medium,high"`
+	Pinned         bool                 `json:"pinned"`
+	Sources        []KnowledgeSource    `json:"sources"`
+	TaskIDs        []string             `json:"taskIds,omitempty"`
+	Tags           []string             `json:"tags,omitempty"`
+	SupersededBy   *KnowledgeVersionRef `json:"supersededBy,omitempty"`
 }
 
 // Validate bounds inert content before it enters project history or prompts.
 func (d KnowledgeDefinition) Validate() error {
+	if err := ValidateContextScope(d.Classification, d.EngagementID); err != nil {
+		return err
+	}
 	if strings.TrimSpace(d.Title) == "" || len(d.Title) > 200 || strings.TrimSpace(d.Content) == "" || len(d.Content) > 16384 || strings.ContainsRune(d.Content, 0) {
 		return fmt.Errorf("knowledge requires a title and content within 16 KiB")
 	}

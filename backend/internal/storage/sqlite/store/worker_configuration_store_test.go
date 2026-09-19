@@ -14,10 +14,13 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite/sqlitetest"
 )
 
-func workerSnapshot(t *testing.T, s *sqlite.Store) (domain.SessionRecord, domain.WorkerConfiguration) {
+func workerSnapshot(t *testing.T, s *sqlite.Store, clearance ...domain.ContextClass) (domain.SessionRecord, domain.WorkerConfiguration) {
 	t.Helper()
 	ctx := context.Background()
 	definition := registryAgentDefinition()
+	if len(clearance) > 0 {
+		definition.AgentType.MaxContextClass = clearance[0]
+	}
 	definition.AgentType.SessionMode = domain.SessionModeTUI
 	definition.AgentType.Config.Permissions = domain.PermissionModeAuto
 	entry, err := s.CreateRegistryEntry(ctx, "snapshot-type", domain.RegistryAgentType, registryMetadata("Snapshot reviewer"), definition, registryMutation(domain.RegistryUser, 0))

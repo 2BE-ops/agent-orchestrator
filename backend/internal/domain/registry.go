@@ -85,6 +85,7 @@ type SkillVersionRef struct {
 // AgentTypeDefinition packages AO's existing harness/config vocabulary. Adapter
 // capability and readiness checks still run in services before launch.
 type AgentTypeDefinition struct {
+	MaxContextClass         ContextClass      `json:"maxContextClass,omitempty" enum:"technical,engagement,mission"`
 	Harness                 AgentHarness      `json:"harness"`
 	SessionMode             SessionMode       `json:"sessionMode,omitempty"`
 	Config                  AgentConfig       `json:"config"`
@@ -179,6 +180,9 @@ func (d RegistryDefinition) Validate(kind RegistryKind) error {
 			return fmt.Errorf("agent type definition required")
 		}
 		a := d.AgentType
+		if err := a.MaxContextClass.Validate(); err != nil {
+			return err
+		}
 		if !a.Harness.IsKnown() {
 			return fmt.Errorf("unknown harness %q", a.Harness)
 		}

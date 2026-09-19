@@ -112,6 +112,10 @@ func (b *Builder) Build(ctx context.Context, request ports.TaskContextRequest) (
 	if !found || config.ContentHash != dispatch.ConfigurationHash {
 		return empty, ports.ErrTaskConflict
 	}
+	policy, err := b.store.GetTaskContextPolicy(ctx, attempt.ID)
+	if err != nil {
+		return empty, err
+	}
 	basePrompt := request.Prompt
 	if request.WorkerExecutable != "" {
 		basePrompt, err = workerOutputPrompt(basePrompt, request.WorkerExecutable, request.WorkerRunFilePath, task, attempt, request.SessionID, op.ID)
@@ -119,15 +123,16 @@ func (b *Builder) Build(ctx context.Context, request ports.TaskContextRequest) (
 			return empty, err
 		}
 	}
-	snapshot := domain.TaskContextSnapshot{SchemaVersion: 1, AttemptID: attempt.ID, SessionID: request.SessionID,
+	snapshot := domain.TaskContextSnapshot{SchemaVersion: 2, AttemptID: attempt.ID, SessionID: request.SessionID,
+		MaxContextClass: policy.MaxContextClass, Classification: policy.Classification, EngagementID: policy.EngagementID, SystemPrompt: request.SystemPrompt,
 		Task:            domain.TaskRevisionRef{TaskID: task.ID, Revision: revision.Number, ContentHash: revision.ContentHash},
 		CriteriaVersion: criteria.Number, ConfigurationHash: config.ContentHash, ExecutionOperationID: op.ID,
 		SystemPromptHash: domain.ContextTextHash(request.SystemPrompt), SystemPromptBytes: len(request.SystemPrompt),
 		BasePrompt: basePrompt, Budget: budget}
 	selection := sourceSelection{snapshot: &snapshot}
 	for _, source := range []domain.ContextSource{
-		definitionSource("task", task.ID, revision.Number, revision.ContentHash, revision.Definition, "Frozen attempt task revision"),
-		definitionSource("criteria", task.ID, criteria.Number, criteria.ContentHash, criteria.Definition, "Frozen acceptance criteria"),
+		classifiedSource(definitionSource("task", task.ID, revision.Number, revision.ContentHash, revision.Definition, "Frozen attempt task revision"), policy.Classification, policy.EngagementID),
+		classifiedSource(definitionSource("criteria", task.ID, criteria.Number, criteria.ContentHash, criteria.Definition, "Frozen acceptance criteria"), policy.Classification, policy.EngagementID),
 		referenceSource("agent_type", config.AgentType),
 	} {
 		if err := selection.required(source); err != nil {
@@ -167,7 +172,7 @@ func (b *Builder) relatedSources(ctx context.Context, selection *sourceSelection
 		if err != nil {
 			return err
 		}
-		selection.optional(definitionSource("parent", parentID, version.Number, version.ContentHash, version.Definition, "Parent planning at context construction"))
+		selection.optional(classifiedSource(definitionSource("parent", parentID, version.Number, version.ContentHash, version.Definition, "Parent planning at context construction"), version.Definition.Classification, version.Definition.EngagementID))
 		taskIDs = append(taskIDs, parentID)
 	}
 	for _, dependency := range attempt.Dependencies {
@@ -178,7 +183,7 @@ func (b *Builder) relatedSources(ctx context.Context, selection *sourceSelection
 		if version.ContentHash != dependency.ContentHash {
 			return ports.ErrTaskConflict
 		}
-		selection.optional(definitionSource("dependency", dependency.TaskID, dependency.Revision, dependency.ContentHash, version.Definition, "Dependency planning pinned by the attempt; not completion evidence"))
+		selection.optional(classifiedSource(definitionSource("dependency", dependency.TaskID, dependency.Revision, dependency.ContentHash, version.Definition, "Dependency planning pinned by the attempt; not completion evidence"), version.Definition.Classification, version.Definition.EngagementID))
 		taskIDs = append(taskIDs, dependency.TaskID)
 	}
 	if err := b.workerArtifactSources(ctx, selection, task, attempt); err != nil {
@@ -192,9 +197,9 @@ func (b *Builder) relatedSources(ctx context.Context, selection *sourceSelection
 			selection.skipped++
 			continue
 		}
-		selection.optional(workspaceSource(workspace, path, selection.snapshot.Budget.MaxSourceBytes))
+		selection.optional(classifiedSource(workspaceSource(workspace, path, selection.snapshot.Budget.MaxSourceBytes), revision.Definition.Classification, revision.Definition.EngagementID))
 	}
-	versions, err := b.store.SelectContextKnowledge(ctx, task.ProjectID, taskIDs, revision.Definition.Category, 33)
+	versions, err := b.store.SelectContextKnowledge(ctx, attempt.ID, 33)
 	if err != nil {
 		return err
 	}
@@ -212,7 +217,7 @@ func (b *Builder) relatedSources(ctx context.Context, selection *sourceSelection
 		case intersects(version.Definition.Tags, []string{revision.Definition.Category}):
 			reason = "Accepted knowledge matching the task category"
 		}
-		selection.optional(definitionSource("knowledge", version.KnowledgeID, version.Number, version.ContentHash, version.Definition, reason))
+		selection.optional(classifiedSource(definitionSource("knowledge", version.KnowledgeID, version.Number, version.ContentHash, version.Definition, reason), version.Definition.Classification, version.Definition.EngagementID))
 	}
 	return nil
 }
@@ -235,7 +240,14 @@ func (b *Builder) workerArtifactSources(ctx context.Context, selection *sourceSe
 				selection.optional(domain.ContextSource{Kind: "selection", ID: "previous-result-candidate-limit", Disposition: "omitted", Reason: "Additional prior attempt findings omitted after the latest three attempts"})
 				break
 			}
-			selection.optional(definitionSource("result", result.ID, result.Number, result.ContentHash, result.ContextFacts(), reason))
+			prior, found, err := b.store.GetTaskContext(ctx, result.AttemptID)
+			if err != nil {
+				return err
+			}
+			if !found {
+				return ports.ErrTaskConflict
+			}
+			selection.optional(classifiedSource(definitionSource("result", result.ID, result.Number, result.ContentHash, result.ContextFacts(), reason), prior.Classification, prior.EngagementID))
 		}
 	}
 	contracts, err := b.store.SelectTaskContextInterfaces(ctx, task.ProjectID, task.ID, 9)
@@ -247,7 +259,14 @@ func (b *Builder) workerArtifactSources(ctx context.Context, selection *sourceSe
 			selection.optional(domain.ContextSource{Kind: "selection", ID: "interface-candidate-limit", Disposition: "omitted", Reason: "Additional incoming interface contracts omitted after the latest eight"})
 			break
 		}
-		selection.optional(definitionSource("interface_contract", message.ID, 1, message.ContentHash, message, "Historical incoming worker interface proposal; not an accepted agreement or delivery acknowledgement"))
+		prior, found, err := b.store.GetTaskContext(ctx, message.AttemptID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return ports.ErrTaskConflict
+		}
+		selection.optional(classifiedSource(definitionSource("interface_contract", message.ID, 1, message.ContentHash, message, "Historical incoming worker interface proposal; not an accepted agreement or delivery acknowledgement"), prior.Classification, prior.EngagementID))
 	}
 	return nil
 }
@@ -271,4 +290,9 @@ func definitionSource(kind, id string, version int64, hash string, definition an
 
 func referenceSource(kind string, ref domain.WorkerDefinitionRef) domain.ContextSource {
 	return domain.ContextSource{Kind: kind, ID: ref.ID, Version: ref.Version, SourceHash: ref.ContentHash, Disposition: "reference", Reason: "Exact configured instructions and materialized resources in worker system context"}
+}
+
+func classifiedSource(source domain.ContextSource, class domain.ContextClass, engagement string) domain.ContextSource {
+	source.Classification, source.EngagementID = class.Effective(), engagement
+	return source
 }

@@ -36,14 +36,16 @@ func (b ContextBudget) Validate() error {
 // ContextSource records both immutable provenance and what actually reached the
 // prompt. Referenced Skills remain sealed resources rather than eager file dumps.
 type ContextSource struct {
-	Kind        string `json:"kind" enum:"task,criteria,parent,dependency,knowledge,file,agent_type,skill,result,interface_contract,selection"`
-	ID          string `json:"id"`
-	Version     int64  `json:"version,omitempty"`
-	SourceHash  string `json:"sourceHash,omitempty"`
-	Content     string `json:"content,omitempty"`
-	ContentHash string `json:"contentHash,omitempty"`
-	Disposition string `json:"disposition" enum:"inline,reference,omitted"`
-	Reason      string `json:"reason"`
+	Classification ContextClass `json:"classification,omitempty" enum:"technical,engagement,mission"`
+	EngagementID   string       `json:"engagementId,omitempty"`
+	Kind           string       `json:"kind" enum:"task,criteria,parent,dependency,knowledge,file,agent_type,skill,result,interface_contract,selection"`
+	ID             string       `json:"id"`
+	Version        int64        `json:"version,omitempty"`
+	SourceHash     string       `json:"sourceHash,omitempty"`
+	Content        string       `json:"content,omitempty"`
+	ContentHash    string       `json:"contentHash,omitempty"`
+	Disposition    string       `json:"disposition" enum:"inline,reference,omitted"`
+	Reason         string       `json:"reason"`
 }
 
 // ContextTextHash hashes exact bytes, including whitespace and file line endings.
@@ -97,6 +99,10 @@ func RenderTaskContextPrompt(base string, sources []ContextSource) (string, erro
 // the actual workspace and before native process creation. Later config changes
 // remain separate execution segments; they never rewrite this original context.
 type TaskContextSnapshot struct {
+	MaxContextClass      ContextClass    `json:"maxContextClass,omitempty" enum:"technical,engagement,mission"`
+	Classification       ContextClass    `json:"classification,omitempty" enum:"technical,engagement,mission"`
+	EngagementID         string          `json:"engagementId,omitempty"`
+	SystemPrompt         string          `json:"systemPrompt,omitempty"`
 	SchemaVersion        int             `json:"schemaVersion"`
 	AttemptID            string          `json:"attemptId"`
 	SessionID            SessionID       `json:"sessionId"`
@@ -131,8 +137,17 @@ func (s TaskContextSnapshot) Validate() error {
 	if err := s.Budget.Validate(); err != nil {
 		return err
 	}
-	if s.SchemaVersion != 1 || s.AttemptID == "" || s.SessionID == "" || s.Task.TaskID == "" || s.Task.Revision < 1 || s.CriteriaVersion < 1 || s.ExecutionOperationID == "" || s.CreatedAt.IsZero() {
-		return fmt.Errorf("task context must be a sealed schema v1 snapshot")
+	if (s.SchemaVersion != 1 && s.SchemaVersion != 2) || s.AttemptID == "" || s.SessionID == "" || s.Task.TaskID == "" || s.Task.Revision < 1 || s.CriteriaVersion < 1 || s.ExecutionOperationID == "" || s.CreatedAt.IsZero() {
+		return fmt.Errorf("task context must be a sealed supported snapshot")
+	}
+	if !CanEmbedContext(s.MaxContextClass, s.EngagementID, s.Classification, s.EngagementID) {
+		return fmt.Errorf("context classification exceeds its clearance or scope")
+	}
+	if s.SchemaVersion == 1 && (s.SystemPrompt != "" || s.Classification != "" || s.MaxContextClass != "" || s.EngagementID != "") {
+		return fmt.Errorf("classified context requires schema v2")
+	}
+	if s.SchemaVersion == 2 && (s.MaxContextClass == "" || s.Classification == "" || s.SystemPromptHash != ContextTextHash(s.SystemPrompt) || s.SystemPromptBytes != len(s.SystemPrompt)) {
+		return fmt.Errorf("classified context must retain exact system instructions")
 	}
 	for _, hash := range []string{s.ConfigurationHash, s.SystemPromptHash, s.Task.ContentHash, s.ContentHash} {
 		if len(hash) != 64 {
@@ -154,6 +169,15 @@ func (s TaskContextSnapshot) Validate() error {
 	seen := map[string]bool{}
 	task, criteria := false, false
 	for _, source := range s.Sources {
+		if !CanEmbedContext(s.MaxContextClass, s.EngagementID, source.Classification, source.EngagementID) || !s.Classification.Allows(source.Classification) {
+			return fmt.Errorf("source classification exceeds context clearance or scope")
+		}
+		if s.SchemaVersion == 2 && source.Classification == "" {
+			return fmt.Errorf("classified manifest requires explicit per-item labels")
+		}
+		if s.SchemaVersion == 1 && (source.Classification != "" || source.EngagementID != "") {
+			return fmt.Errorf("classified sources require schema v2")
+		}
 		switch source.Kind {
 		case "task", "criteria", "parent", "dependency", "knowledge", "file", "agent_type", "skill", "result", "interface_contract", "selection":
 		default:

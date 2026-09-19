@@ -134,6 +134,8 @@ func ciEvidenceKind(kind string) bool {
 
 // TaskDefinition is work intent, independent of any session display status.
 type TaskDefinition struct {
+	Classification       ContextClass     `json:"classification,omitempty" enum:"technical,engagement,mission"`
+	EngagementID         string           `json:"engagementId,omitempty"`
 	Title                string           `json:"title"`
 	Brief                string           `json:"brief"`
 	Category             string           `json:"category"`
@@ -148,6 +150,9 @@ type TaskDefinition struct {
 
 // Validate bounds one revision; graph validity belongs to the store transaction.
 func (d TaskDefinition) Validate() error {
+	if err := ValidateContextScope(d.Classification, d.EngagementID); err != nil {
+		return err
+	}
 	if strings.TrimSpace(d.Title) == "" || len(d.Title) > 300 || strings.TrimSpace(d.Brief) == "" || len(d.Brief) > 32000 || len(d.Category) > 100 || d.Priority < -100 || d.Priority > 100 || len(d.ParentID) > 200 || d.MaxAttempts < 1 || d.MaxAttempts > 10 {
 		return fmt.Errorf("invalid task definition")
 	}

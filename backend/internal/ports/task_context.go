@@ -13,6 +13,12 @@ type TaskContextStore interface {
 	GetTaskContextBySession(context.Context, domain.SessionID) (domain.TaskContextSnapshot, bool, error)
 }
 
+// TaskDelegationStore exposes bounded, immutable native input receipts.
+type TaskDelegationStore interface {
+	GetTaskDelegation(context.Context, string, int64) (domain.TaskDelegation, error)
+	ListTaskDelegations(context.Context, string, int64, int) ([]domain.TaskDelegation, error)
+}
+
 // TaskContextRequest is internal manager context, never public file-path input.
 type TaskContextRequest struct {
 	Lease                domain.TaskLeaseToken
@@ -34,7 +40,8 @@ type TaskContextBuilder interface {
 // ContextKnowledgeStore selects a bounded accepted cohort, ordered by explicit
 // pin, task relevance, category relevance, then general project knowledge.
 type ContextKnowledgeStore interface {
-	SelectContextKnowledge(context.Context, domain.ProjectID, []string, string, int) ([]domain.KnowledgeVersion, error)
+	GetTaskContextPolicy(context.Context, string) (domain.TaskContextPolicy, error)
+	SelectContextKnowledge(context.Context, string, int) ([]domain.KnowledgeVersion, error)
 }
 
 // ContextArtifactStore selects bounded immutable worker evidence. A zero result

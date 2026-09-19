@@ -4,6 +4,47 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 15.0 - pinned classification and delegation foundations (2026-09-19)
+
+Migration 0173 preserves historical JSON/hash bytes while validating authored
+task/knowledge classifications and immutable Type clearance. Engagement scope is
+project-local and required for engagement material. Knowledge selection derives
+authority/relevance from the pinned attempt and applies class/scope predicates
+before ranking limits. Context Builder and the transactional store independently
+gate all selected/retained sources, including omission metadata. New schema-v2
+manifests retain explicit per-item labels, aggregate sensitivity and exact system
+text. Numbered delegation version 1 is sealed atomically with the manifest and
+retains native execution, configuration/context hashes and exact input text.
+
+Tests cover activated live Type clearance changes in both directions, higher-class
+task rejection, foreign knowledge occupying more than the candidate limit, forged
+labels, omitted-source disclosure, upward technical results/contracts, downward
+and foreign-engagement results/contracts, and worker knowledge candidate laundering.
+Result class comes from the sealed source context, including when a technical task
+received more sensitive knowledge. Migration/reopen/rollback/immutable SQL tests
+prove history retention, unchanged legacy hashes and refusal to downgrade classified
+history. Native TUI/Chat tests check the matching artifact exists before launch.
+
+Focused domain/SQLite/store PASS (0.667s/1.089s/1.489s); added flow tests PASS
+(1.150s). Full domain (1.243s), ports (0.472s), SQLite (49.604s), SQLite helpers
+(2.921s), store (32.952s), Context Builder (0.558s), task (2.492s), knowledge
+(0.430s), registry (3.721s), Manager (0.487s), HTTP router (1.114s), API spec
+(0.399s), specgen (16.667s) and envelope (0.712s) PASS. Full session-manager FAIL
+(46.740s) only at the eight previously recorded Windows handoff/path baselines;
+full HTTP controllers FAIL (18.953s) only at pairing-rename/file-URL-clone baselines.
+Additional native context/receipt tests PASS (0.901s). Backend build, frontend
+typecheck, sqlc and API regeneration PASS. Initial lint found a missing constant
+comment and import grouping; both fixed. Final pinned affected lint PASS (0 issues).
+SQL parameter inference initially required an explicit INTEGER cast; regenerated
+successfully. Source/generated diff and whitespace inspection PASS. Logs:
+`.cache/adaptive-tests/stage15_0-*`.
+
+Stage 15.0 validates foundations, not the complete platform boundary: Manager
+selection/delivery, public delegation-history operations, live-message/review
+context gates and authoring/inspector UI are still stage 15. Replaced native
+generations need subsequent immutable delivery versions in stage 23. Legacy
+manifests remain readable without inventing an exact system-text receipt.
+
 ## Stage 14c4 — native Manager proposal API and CLI (2026-09-19)
 
 Three operations now submit native Manager output and read bounded proposal

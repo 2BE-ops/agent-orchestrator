@@ -348,6 +348,36 @@ their authoring views. The session inspector displays per-item classifications
 from the sealed manifest. This amendment extends, rather than replaces, the
 existing version, provenance, budget and ownership rules below.
 
+Foundation encoding uses `classification` and project-local `engagementId` in
+immutable task/knowledge definitions, and `maxContextClass` (the API spelling of
+`max_context_class`) in immutable Agent Type definitions. Missing historical
+fields resolve to technical without changing original JSON bytes or hashes.
+Engagement classification requires a scope; mission content can retain a scope
+when derived from engagement inputs. Technical task intent may identify its
+receiving engagement; technical output remains eligible to flow upward.
+
+Clearance is loaded from the exact registry version/hash in the attempt's initial
+dispatch configuration. Active Type versions and configuration overrides cannot
+raise it. Knowledge selection accepts an attempt identity, derives its frozen
+relevance and scope, and applies class/scope filtering before the candidate limit.
+Schema-v2 context seals record explicit item labels, aggregate sensitivity and
+exact system instructions. Parent/dependency briefs, criteria and selected files
+inherit their task revision's label. Results/interface contracts inherit the
+source attempt's sealed aggregate, so a technical task that received mission
+knowledge cannot turn its output into technical input. Worker knowledge candidates
+must retain at least that source sensitivity and engagement.
+
+Migration 0173 adds definition validation and immutable, numbered delegation
+artifacts. Initial artifact version 1 seals the exact system/task text, context
+hash, configuration hash, class/scope and native execution identity in the same
+transaction as the manifest. It is an input receipt, not a delivery acknowledgement.
+Legacy manifests stay readable without fabricating missing system text or receipts.
+Forbidden optional sources contribute only a generic omission explanation, without
+their identifiers/content/hashes. Store validation independently verifies source
+labels, even on omission metadata. Stage 15 still connects public artifact history,
+Manager selection/delivery, live message/review context gates and authoring/inspector
+UI; stage 23 must retain new execution receipts when restoring a native generation.
+
 Extend `buildTaskPrompt`/`buildSystemPromptText`; do not assemble business logic in
 React. Context selection includes the pinned task/criteria, parent summary,
 completed dependency contracts, selected accepted knowledge, relevant file
