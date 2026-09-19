@@ -4,6 +4,33 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 14b1 — durable Manager admission and native fences (2026-09-19)
+
+Migration 0170 retains one unreleased controller per project, atomic native session
+and frozen configuration binding, execution intents/resolutions and immutable
+audit. Generic configured workers retain their existing role restriction. Native
+effects are not wired yet; these store methods define the required lifecycle gate.
+Current policy and exact Type/Skills are checked at seed time. Replayed requests
+inspect existing records; a second dispatch cannot follow a resolved first launch.
+
+Tests cover eight competing admissions and eight competing seeds, exact replay,
+changed idempotency data, floating/overridden configuration, disable between reserve
+and seed, unseeded cancellation, stale desired policy, separate project lookup,
+injected seed/release audit failure with zero partial state or CDC, disabled-Type
+history and reopen. Native tests cover the reserved target generation, unresolved
+effects across reopen, failed/stale resolution, exact resolution retry, competing
+restore/release, SQL history/release guards and released-session resurrection.
+Migration tests retain governance/CDC through empty down/up and atomically refuse
+downgrade with retained ownership, then check integrity and foreign keys.
+
+Focused domain/SQLite/store PASS (0.447s/1.143s/0.883s). Full domain (1.040s), ports
+(0.480s), SQLite (42.615s), SQLite test helpers (2.360s), store (22.928s), Manager
+service (0.279s) and registry service (1.785s) PASS. sqlc, backend build and pinned
+affected-package lint PASS (0 issues). One initial test command used the wrong
+working directory and did not execute; corrected focused/full commands above ran.
+Complete source/generated diff and whitespace review PASS. Logs:
+`.cache/adaptive-tests/stage14b1-*`. No live controller/process claim is made.
+
 ## Stage 14a3 — Manager governance API and CLI (2026-09-19)
 
 The daemon wires a shared Manager service, project-scoped governance PUT/GET and

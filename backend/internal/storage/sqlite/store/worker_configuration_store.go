@@ -35,10 +35,16 @@ func (s *Store) CreateConfiguredSession(ctx context.Context, rec domain.SessionR
 
 // The task dispatch transaction uses the same seed/configuration boundary.
 func createConfiguredSession(ctx context.Context, q *gen.Queries, rec domain.SessionRecord, snapshot domain.WorkerConfiguration) (domain.SessionRecord, error) {
+	return createConfiguredSessionForRole(ctx, q, rec, snapshot, domain.KindWorker)
+}
+
+// Dedicated Manager admission supplies its role after checking durable ownership.
+// Generic configured spawn remains worker-only through the wrapper above.
+func createConfiguredSessionForRole(ctx context.Context, q *gen.Queries, rec domain.SessionRecord, snapshot domain.WorkerConfiguration, role domain.SessionKind) (domain.SessionRecord, error) {
 	if err := snapshot.Validate(); err != nil {
 		return domain.SessionRecord{}, err
 	}
-	if rec.Kind != domain.KindWorker || rec.Harness != snapshot.Effective.Harness || rec.Mode != snapshot.Effective.SessionMode || rec.Metadata.Permissions != snapshot.Effective.Config.Permissions {
+	if rec.Kind != role || rec.Harness != snapshot.Effective.Harness || rec.Mode != snapshot.Effective.SessionMode || rec.Metadata.Permissions != snapshot.Effective.Config.Permissions {
 		return domain.SessionRecord{}, fmt.Errorf("session seed does not match worker configuration")
 	}
 	if err := validateWorkerReference(ctx, q, snapshot.AgentType, domain.RegistryAgentType, snapshot.Origin); err != nil {

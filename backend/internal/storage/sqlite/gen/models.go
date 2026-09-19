@@ -39,6 +39,41 @@ type AdaptiveAgentManagerConfiguration struct {
 	CreatedAt        time.Time
 }
 
+type AdaptiveAgentManagerController struct {
+	ID                   string
+	ProjectID            string
+	ConfigurationVersion int64
+	Actor                string
+	Reason               string
+	CreatedAt            time.Time
+	ReleasedAt           sql.NullTime
+	ReleaseReason        string
+}
+
+type AdaptiveAgentManagerDispatch struct {
+	ControllerID      string
+	SessionID         string
+	ConfigurationHash string
+	CreatedAt         time.Time
+}
+
+type AdaptiveAgentManagerExecutionOperation struct {
+	ID           string
+	ControllerID string
+	SessionID    string
+	SourceOwner  string
+	Kind         string
+	CreatedAt    time.Time
+}
+
+type AdaptiveAgentManagerExecutionResolution struct {
+	OperationID   string
+	ObservedOwner string
+	Outcome       string
+	Reason        string
+	CreatedAt     time.Time
+}
+
 type AdaptiveProviderBinding struct {
 	ID        string
 	Name      string

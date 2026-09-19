@@ -648,6 +648,26 @@ Migration 0169 refuses downgrade over retained policy history. Native controller
 admission will resolve the exact pinned Type through existing worker configuration
 and session engines rather than introducing another provider execution engine.
 
+Stage 14b1 adds durable controller admission, atomic session/configuration binding
+and native execution intent/resolution (0170). One unreleased admission per project
+survives timeout and daemon restart; retained history is bounded to 1000 admissions.
+Only user/system service context can reserve against enabled, current governance.
+The dedicated seed transaction rechecks the exact Type, rejects ungoverned overrides
+and retains the existing WorkerConfiguration format, including pinned Skills.
+Ordinary configured session creation stays worker-only. Repeated reserve/seed/Begin
+calls are inspection acknowledgements, never permission for another native launch.
+
+Each dispatch/restore reserves its target native generation before side effects.
+Unresolved operations block both release and replacement, even when the session's
+terminated flag has changed. Resolution fences the observed owner; connection also
+requires the reserved generation or exact existing Chat adoption. Lifecycle code
+must independently confirm native connection/termination; unknown probes do not
+provide evidence. Bound admission release requires that exact terminated owner
+and no pending operation. Unseeded intent can be cancelled safely. A database
+restore guard prevents resurrection after release. Audit/CDC share every mutation;
+downgrade refuses retained admission history. Production lifecycle hooks and the
+Manager inbox are subsequent stage-14 slices, not supplied by these store methods.
+
 Metrics retain denominators and time windows: attempted/completed, first-pass
 completion, revisions, CI failures, review findings, retries, duration and usage
 when measured. Attribute to all pinned Skills without claiming causality.
