@@ -52,11 +52,20 @@ func TestTaskMessageDeliveryExclusiveClaimAndCrashRetention(t *testing.T) {
 	if _, created, err := s.BeginTaskMessageDelivery(ctx, input.ID, winner.ID); err != nil || created {
 		t.Fatalf("claim replay permits native send: %v %v", created, err)
 	}
+	if err := s.SetTaskMessageDispatchCursor(ctx, 19); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetTaskMessageDispatchCursor(ctx, -1); !errors.Is(err, ports.ErrTaskInvalid) {
+		t.Fatalf("invalid checkpoint: %v", err)
+	}
 	reopened, err := sqlite.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = reopened.Close() })
+	if cursor, err := reopened.TaskMessageDispatchCursor(ctx); err != nil || cursor != 19 {
+		t.Fatalf("lost durable dispatch position: %d %v", cursor, err)
+	}
 	pending, err := reopened.ListPendingTaskMessages(ctx, 0, 100)
 	if err != nil || len(pending) != 0 {
 		t.Fatalf("uncertain native operation requeued after crash: %+v %v", pending, err)
@@ -78,6 +87,13 @@ func TestTaskMessageDeliveryExclusiveClaimAndCrashRetention(t *testing.T) {
 	}
 	if _, _, err := reopened.BeginTaskMessageDelivery(ctx, input.ID, "restart-retry"); !errors.Is(err, ports.ErrTaskConflict) {
 		t.Fatalf("unknown outcome blindly retried: %v", err)
+	}
+	input.ID, input.IdempotencyKey = "next-message", "next-message"
+	if _, _, err := reopened.SubmitTaskMessage(ctx, input); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := reopened.BeginTaskMessageDelivery(ctx, input.ID, "later-send"); !errors.Is(err, ports.ErrTaskLeaseFenced) {
+		t.Fatalf("later message could append to an uncertain partial write: %v", err)
 	}
 }
 

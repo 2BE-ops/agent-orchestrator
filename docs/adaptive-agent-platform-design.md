@@ -400,6 +400,22 @@ The existing TUI paste/Enter transport cannot prove recipient receipt; neither
 elapsed time nor daemon restart may be treated as evidence to repeat that write.
 Stable message delivery keys also feed the existing Chat idempotency boundary.
 
+Stage 12 native delivery waits for startup session/runtime reconciliation before
+scanning the outbox. Migration 0164 checkpoints a rotating sequence cursor so
+temporarily blocked recipients do not starve unrelated messages across restart.
+Each five-second cycle examines at most 16 candidates, with a ten-second native
+deadline per candidate and a separate three-second outcome commit budget. Native
+readiness failures do not consume delivery attempts or prove worker death. A
+recipient with an unresolved/uncertain prior send rejects additional reservations
+until reconciliation, preventing a later automated paste from appending to an
+unknown partial write. Human resolution integrates with stage 20.
+
+TUI writes require an idle, input-ready, exactly owned live runtime, and recheck
+generation at the existing guarded coordination boundary while holding the
+session operation fence. Chat uses the existing keyed automation relay and queues
+through its native controller. Worker-provided message JSON is escaped and labeled
+as claims; it grants no change to planning, criteria, permissions or ownership.
+
 ## Evaluation, management and evolution
 
 Evaluations reference exact criteria and target commits. Gather objective facts

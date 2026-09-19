@@ -17,4 +17,20 @@ type TaskMessageStore interface {
 	ResolveTaskMessageDelivery(context.Context, domain.TaskMessageDeliveryResolution) error
 	ListTaskMessageDeliveries(context.Context, string) ([]domain.TaskMessageDelivery, error)
 	ListUnresolvedTaskMessageDeliveries(context.Context, string, int) ([]domain.TaskMessageDelivery, error)
+	TaskMessageDispatchCursor(context.Context) (int64, error)
+	SetTaskMessageDispatchCursor(context.Context, int64) error
+}
+
+// TaskMessageTransportResult distinguishes proven no-write from an ambiguous
+// transport failure. Only not_sent can authorize another automatic attempt.
+type TaskMessageTransportResult struct {
+	State  string
+	Reason string
+}
+
+// TaskMessageTransport uses existing native controllers and terminal guards.
+// Readiness is advisory; delivery must recheck the reserved native owner.
+type TaskMessageTransport interface {
+	TaskMessageTargetReady(context.Context, domain.SessionID) (bool, error)
+	DeliverTaskMessage(context.Context, domain.TaskMessageDelivery, domain.TaskMessage) TaskMessageTransportResult
 }

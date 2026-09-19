@@ -4,6 +4,41 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 12c2b — native message delivery and restart recovery (2026-09-19)
+
+The daemon starts the outbox consumer after native/session startup reconciliation
+and drains it before controller shutdown. Migration 0164 persists a fair scan
+cursor, with at most 16 candidates per five-second cycle. Readiness probes defer
+busy, blocked, expired or unknown recipients without consuming send attempts.
+Each native call is bounded to ten seconds; a separate three-second commit budget
+retains its outcome on cancellation. Restart converts unresolved prior claims to
+uncertain without replay. A failed branch read does not stop unrelated messages.
+
+TUI delivery reuses guarded coordination under the existing exclusive operation
+fence and exact-generation pre-write check; only idle/input-ready workers receive
+it. Chat uses the existing keyed automation relay and its controller queue. The
+escaped payload is visibly attributed worker information, not planning authority.
+Runtime errors after a write starts remain uncertain. Review also fenced subsequent
+messages to a recipient with an unresolved/uncertain write, avoiding concatenation
+with a possible partial paste. This fence's human resolution belongs to stage 20.
+
+Four dispatcher tests and three native transport tests PASS (focused message
+service 0.283s, manager 0.822s, store 1.247s). They cover durable-before-send ordering,
+fair cursor restart, lost commit acknowledgement, no duplicate send, independent
+branch progress, shutdown outcomes, TUI/Chat routing, busy/blocked/stale/unknown
+refusal, exit at the final write boundary, escaped attribution and partial-write
+uncertainty. SQLite tests additionally reopen the cursor and fence later sends to
+an uncertain recipient. The populated migration test upgrades/downgrades 0164.
+
+Full domain/SQLite/store/CDC/task/context/message/Chat/session suites PASS (SQLite
+46.854s, store 24.175s, Chat 43.141s, session 55.641s). Final affected persistence
+rerun PASS (SQLite 29.704s, store 12.473s). Full sessionguard/supervisor PASS; full
+manager retains the same eight Windows baseline failures, daemon the recorded cwd
+TempDir cleanup failure. Backend build, sqlc and changed-native plus full new
+package/domain/ports/SQLite pinned lint PASS (0 issues). Logs: ignored `*stage12c2b*`.
+An unused test import was removed before focused validation. Native adapters here
+are recording fakes; authenticated provider and Electron consumption remain 25.
+
 ## Stage 12c2a — typed message API, timeline and CLI (2026-09-19)
 
 Three daemon routes provide strict 64 KiB submission and project-scoped timeline

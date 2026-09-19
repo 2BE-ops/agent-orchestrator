@@ -40,3 +40,12 @@ SELECT * FROM adaptive_task_message_deliveries WHERE state='dispatching' AND id>
 
 -- name: ResolveTaskMessageDelivery :execrows
 UPDATE adaptive_task_message_deliveries SET state=?, reason=?, updated_at=? WHERE id=? AND state='dispatching';
+
+-- name: TaskMessageDispatchCursor :one
+SELECT after_sequence FROM adaptive_task_message_dispatch_cursor WHERE id=1;
+
+-- name: SetTaskMessageDispatchCursor :execrows
+UPDATE adaptive_task_message_dispatch_cursor SET after_sequence=? WHERE id=1;
+
+-- name: CountUnsettledTaskMessageDeliveries :one
+SELECT count(*) FROM adaptive_task_message_deliveries WHERE session_id=? AND state IN ('dispatching','uncertain');

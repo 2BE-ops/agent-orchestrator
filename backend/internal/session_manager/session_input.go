@@ -14,6 +14,7 @@ type agentOperationKind string
 
 const (
 	agentOperationTaskDispatch      agentOperationKind = "task_dispatch"
+	agentOperationTaskMessage       agentOperationKind = "task_message"
 	agentOperationSwitch            agentOperationKind = "switch"
 	agentOperationExit              agentOperationKind = "exit"
 	agentOperationResume            agentOperationKind = "resume"

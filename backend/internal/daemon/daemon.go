@@ -63,6 +63,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systeminstall"
 	tasksvc "github.com/aoagents/agent-orchestrator/backend/internal/service/task"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/taskcontext"
+	"github.com/aoagents/agent-orchestrator/backend/internal/service/taskmessage"
 	usagesvc "github.com/aoagents/agent-orchestrator/backend/internal/service/usage"
 	"github.com/aoagents/agent-orchestrator/backend/internal/skillassets"
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite"
@@ -879,6 +880,7 @@ func Run() error {
 	}
 
 	var startupReconcileDone <-chan struct{}
+	var taskMessagesDone <-chan struct{}
 	runErr := srv.RunWithReady(ctx, func() {
 		// Agent-readiness warming is advisory and idempotent, and request paths
 		// lazily Ensure on demand. Kick it here, after the listener is live, so its
@@ -887,6 +889,19 @@ func Run() error {
 		agentSvc.WarmReadiness()
 		done := make(chan struct{})
 		startupReconcileDone = done
+		if transport, ok := sessMgr.(ports.TaskMessageTransport); ok {
+			messagesDone := make(chan struct{})
+			taskMessagesDone = messagesDone
+			go func() {
+				defer close(messagesDone)
+				select {
+				case <-ctx.Done():
+					return
+				case <-done:
+				}
+				taskmessage.New(store, transport, log).Run(ctx)
+			}()
+		}
 		go func() {
 			defer close(done)
 			if reconcileErr := reconcilePersistentChatHosts(ctx, cfg.DataDir, store); reconcileErr != nil {
@@ -912,6 +927,15 @@ func Run() error {
 	// via defer) avoids the LIFO trap where a Stop() that blocks on ctx-cancel
 	// runs before the cancel: a non-signal exit path would hang otherwise.
 	stop()
+	if taskMessagesDone != nil {
+		messageStopCtx, messageStopCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		select {
+		case <-taskMessagesDone:
+		case <-messageStopCtx.Done():
+			log.Error("task message dispatcher shutdown timed out; retained claims require reconciliation")
+		}
+		messageStopCancel()
+	}
 	if agentSwitchDispatcher != nil {
 		dispatcherStopContext, dispatcherStopCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 		if err := agentSwitchDispatcher.Stop(dispatcherStopContext); err != nil {

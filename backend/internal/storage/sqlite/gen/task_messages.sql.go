@@ -33,6 +33,17 @@ func (q *Queries) CountTaskMessages(ctx context.Context, attemptID string) (int6
 	return count, err
 }
 
+const countUnsettledTaskMessageDeliveries = `-- name: CountUnsettledTaskMessageDeliveries :one
+SELECT count(*) FROM adaptive_task_message_deliveries WHERE session_id=? AND state IN ('dispatching','uncertain')
+`
+
+func (q *Queries) CountUnsettledTaskMessageDeliveries(ctx context.Context, sessionID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUnsettledTaskMessageDeliveries, sessionID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getTaskMessage = `-- name: GetTaskMessage :one
 SELECT sequence, id, project_id, task_id, attempt_id, session_id, native_generation, source_owner, task_revision, criteria_version, configuration_hash, configuration_sequence, context_hash, target_task_id, correlation_id, reply_to_id, result_id, idempotency_key, definition, content_hash, created_at FROM adaptive_task_messages WHERE id=?
 `
@@ -462,4 +473,27 @@ func (q *Queries) ResolveTaskMessageDelivery(ctx context.Context, arg ResolveTas
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const setTaskMessageDispatchCursor = `-- name: SetTaskMessageDispatchCursor :execrows
+UPDATE adaptive_task_message_dispatch_cursor SET after_sequence=? WHERE id=1
+`
+
+func (q *Queries) SetTaskMessageDispatchCursor(ctx context.Context, afterSequence int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setTaskMessageDispatchCursor, afterSequence)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const taskMessageDispatchCursor = `-- name: TaskMessageDispatchCursor :one
+SELECT after_sequence FROM adaptive_task_message_dispatch_cursor WHERE id=1
+`
+
+func (q *Queries) TaskMessageDispatchCursor(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, taskMessageDispatchCursor)
+	var after_sequence int64
+	err := row.Scan(&after_sequence)
+	return after_sequence, err
 }

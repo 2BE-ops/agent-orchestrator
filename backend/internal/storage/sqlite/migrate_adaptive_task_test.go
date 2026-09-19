@@ -40,7 +40,13 @@ INSERT INTO sessions(id,project_id,num,activity_last_at,created_at,updated_at) V
 	if _, err := s.ReviseAcceptanceCriteria(ctx, "migration-task", criteria, mutation); err != nil {
 		t.Fatal(err)
 	}
-	upTo(t, db, 163)
+	upTo(t, db, 164)
+	if err := s.SetTaskMessageDispatchCursor(ctx, 19); err != nil {
+		t.Fatal(err)
+	}
+	if cursor, err := s.TaskMessageDispatchCursor(ctx); err != nil || cursor != 19 {
+		t.Fatalf("dispatch checkpoint: %d %v", cursor, err)
+	}
 	mutation.ExpectedRevision = 2
 	_, lease, err := s.ReserveTask(ctx, domain.TaskReservation{ID: "upgrade-attempt", TaskID: "migration-task", LaunchIntentID: "upgrade-launch", HolderID: "scheduler", Mutation: mutation, Now: time.Now().UTC(), TTL: time.Minute})
 	if err != nil {

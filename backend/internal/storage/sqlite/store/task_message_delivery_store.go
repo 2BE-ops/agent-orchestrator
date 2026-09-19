@@ -88,6 +88,15 @@ func (s *Store) BeginTaskMessageDelivery(ctx context.Context, messageID, deliver
 			return taskReadError(err)
 		}
 		rec := rowToRecord(session)
+		unsettled, err := q.CountUnsettledTaskMessageDeliveries(ctx, string(rec.ID))
+		if err != nil {
+			return err
+		}
+		// A previous partial TUI paste may still occupy the composer. Do not
+		// append another automated message until that recipient is reconciled.
+		if unsettled != 0 {
+			return ports.ErrTaskLeaseFenced
+		}
 		_, activation, _, err := effectiveWorkerConfiguration(ctx, q, rec.ID)
 		if err != nil {
 			return err
@@ -187,4 +196,28 @@ func (s *Store) ListUnresolvedTaskMessageDeliveries(ctx context.Context, after s
 		return nil, err
 	}
 	return messageDeliveriesFromRows(rows)
+}
+
+// TaskMessageDispatchCursor restores fair scanning past temporarily blocked work.
+func (s *Store) TaskMessageDispatchCursor(ctx context.Context) (int64, error) {
+	return s.qr.TaskMessageDispatchCursor(ctx)
+}
+
+// SetTaskMessageDispatchCursor checkpoints scheduling, never delivery success.
+func (s *Store) SetTaskMessageDispatchCursor(ctx context.Context, after int64) error {
+	if after < 0 {
+		return ports.ErrTaskInvalid
+	}
+	if err := s.writeMu.LockContext(ctx); err != nil {
+		return err
+	}
+	defer s.writeMu.Unlock()
+	changed, err := s.qw.SetTaskMessageDispatchCursor(ctx, after)
+	if err != nil {
+		return err
+	}
+	if changed != 1 {
+		return fmt.Errorf("task message dispatch checkpoint is missing")
+	}
+	return nil
 }

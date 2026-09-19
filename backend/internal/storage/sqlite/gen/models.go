@@ -234,6 +234,11 @@ type AdaptiveTaskMessageDelivery struct {
 	UpdatedAt       time.Time
 }
 
+type AdaptiveTaskMessageDispatchCursor struct {
+	ID            int64
+	AfterSequence int64
+}
+
 type AdaptiveTaskResult struct {
 	ID                    string
 	AttemptID             string
