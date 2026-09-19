@@ -5122,6 +5122,7 @@ export interface components {
             sessionId: string;
             status: string;
             targetSha: string;
+            taskScope?: string;
             /** @enum {string} */
             triggerSource: "manual" | "auto";
             verdict: string;

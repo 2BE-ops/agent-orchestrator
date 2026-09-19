@@ -471,6 +471,20 @@ is reused, with added configuration attribution; a reviewer is not a duplicate
 implementation worker. Distinguish a review finding, crash, environment failure,
 planning mistake and human rejection in outcomes.
 
+Stage 13c3 freezes the reviewer policy in acceptance criteria, with an exact Type
+version and optional different-Type/harness requirements. Migration 0167 extends
+existing review runs with a scope hash and a separate immutable context record;
+it does not introduce another review lifecycle. Context retains frozen criteria,
+result/commit, implementing configuration and full reviewer configuration.
+Insertion rechecks result freshness, PR head/ownership, registry availability and
+provenance in the same transaction as the run and task audit. Context is capped
+at 2 MiB and review history at 64 passes per result, including failed retries.
+A native launch witness can be recorded once against the matching reviewer
+launch ID and handle. Mere preparation is not evidence of launch or acceptance.
+Repeated invocations share an effective scope while retaining their own hashes;
+ordinary review scope remains separate. Native consumption, generation-fenced
+submission and evaluation attribution must use this retained context.
+
 Stage 13's initial collector snapshots independently observed CI facts under the
 same transaction as evaluation and audit. Migration 0165 preserves assessment,
 frozen criteria/result/context hashes and the exact historical worker activation;

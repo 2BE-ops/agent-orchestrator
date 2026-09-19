@@ -15840,6 +15840,8 @@ components:
           type: string
         targetSha:
           type: string
+        taskScope:
+          type: string
         triggerSource:
           enum:
           - manual

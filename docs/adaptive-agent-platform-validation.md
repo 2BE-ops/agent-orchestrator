@@ -4,6 +4,32 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 13c3b — retained native review provenance (2026-09-19)
+
+Migration 0167 adds an effective scope to existing review runs and an immutable
+context record; no duplicate review lifecycle. The store seals frozen criteria,
+result/commit, implementing configuration and reviewer configuration with the
+run and task audit. It rejects caller-forged provenance, worker authority,
+changed results, changed PR head/ownership, unavailable registry references and
+overridden Type instructions. The generic insert path cannot assert task scope.
+Review context is bounded to 2 MiB and 64 passes per result (failed passes count).
+The launch timestamp is recorded once only for a matching launch ID and handle.
+It is a launch observation, not an acceptance verdict.
+
+Three real-SQLite context tests PASS (0.664s): forged references, exact retry
+scope, result replacement, audit failure rollback, native launch fencing,
+history/caps, generic scope coexistence, registry disable/reopen and SQL
+immutability violations. Upgrade/downgrade test PASS (0.881s). Full domain,
+ports, task and review-service suites PASS. Final SQLite suite PASS (34.141s),
+store PASS (19.932s), spec PASS (0.268s), specgen PASS (9.571s).
+Full review engine FAIL retains the previously recorded
+`TestLauncherSpawnPrependsNodeRuntimeForNodeShimReviewer` Windows PATH baseline;
+no launcher implementation changed in this slice. `npm run sqlc`, `npm run api`,
+`npm run frontend:typecheck`, backend build and pinned domain/ports/SQLite lint
+PASS (0 issues). Full staged diff inspected, whitespace check PASS. Logs:
+ignored `*stage13c3b*`. Native consumption, generation-fenced submission and
+evaluation attribution are next; persistence alone is not launch validation.
+
 ## Stage 13c3a — frozen reviewer policy (2026-09-19)
 
 Acceptance criteria optionally pin an exact reviewer Agent Type/version and

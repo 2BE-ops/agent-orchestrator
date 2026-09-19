@@ -40,7 +40,7 @@ INSERT INTO sessions(id,project_id,num,activity_last_at,created_at,updated_at) V
 	if _, err := s.ReviseAcceptanceCriteria(ctx, "migration-task", criteria, mutation); err != nil {
 		t.Fatal(err)
 	}
-	upTo(t, db, 166)
+	upTo(t, db, 167)
 	if err := s.SetTaskMessageDispatchCursor(ctx, 19); err != nil {
 		t.Fatal(err)
 	}

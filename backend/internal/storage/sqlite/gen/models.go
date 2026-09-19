@@ -274,6 +274,17 @@ type AdaptiveTaskResult struct {
 	CreatedAt             time.Time
 }
 
+type AdaptiveTaskReviewContext struct {
+	RunID       string
+	ResultID    string
+	ScopeHash   string
+	Snapshot    string
+	ContentHash string
+	LaunchID    string
+	StartedAt   sql.NullTime
+	CreatedAt   time.Time
+}
+
 type AdaptiveTaskRevision struct {
 	TaskID          string
 	Number          int64
@@ -859,6 +870,7 @@ type ReviewRun struct {
 	BatchID          string
 	AutoInjectReview bool
 	TriggerSource    domain.ReviewTriggerSource
+	TaskScope        string
 }
 
 type Session struct {
