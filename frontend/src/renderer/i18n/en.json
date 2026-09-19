@@ -32,6 +32,8 @@
 	"browser.agentUsing": "Agent using browser",
 	"browser.annotate": "Annotate page",
 	"browser.annotationActive": "Annotating",
+	"browser.annotationCount_one": "{{count}} annotation",
+	"browser.annotationCount_other": "{{count}} annotations",
 	"browser.annotationDiscardAll": "Discard all",
 	"browser.annotationDiscardAllComments": "Discard all comments",
 	"browser.annotationExit": "Exit",
