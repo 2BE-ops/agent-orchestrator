@@ -5976,6 +5976,7 @@ export interface components {
             artifactsTruncated?: boolean;
             prs: components["schemas"]["TaskPREvidence"][];
             prsTruncated: boolean;
+            reviewTarget?: components["schemas"]["TaskReviewTarget"];
             reviews: components["schemas"]["TaskReviewEvidence"][];
             reviewsTruncated: boolean;
             worker: components["schemas"]["TaskWorkerEvidence"];
@@ -6042,6 +6043,15 @@ export interface components {
             items: components["schemas"]["TaskResult"][];
             nextCursor?: string;
         };
+        TaskReviewAttribution: {
+            configurationHash: string;
+            contextHash: string;
+            model: string;
+            reviewerType: components["schemas"]["WorkerDefinitionRef"];
+            /** Format: date-time */
+            startedAt?: null | string;
+            target: components["schemas"]["TaskReviewTarget"];
+        };
         TaskReviewContext: {
             actor: components["schemas"]["AdaptiveActor"];
             attemptId: string;
@@ -6067,6 +6077,7 @@ export interface components {
             taskRevision: number;
         };
         TaskReviewEvidence: {
+            attribution?: components["schemas"]["TaskReviewAttribution"];
             /** Format: int64 */
             bodyBytes: number;
             bodyPreview: string;
@@ -6106,6 +6117,14 @@ export interface components {
             runId: string;
             /** Format: date-time */
             startedAt?: null | string;
+        };
+        TaskReviewTarget: {
+            criteriaHash: string;
+            implementingConfigurationHash: string;
+            implementingHarness: string;
+            implementingType: components["schemas"]["WorkerDefinitionRef"];
+            resultHash: string;
+            resultId: string;
         };
         TaskReviewsResponse: {
             items: components["schemas"]["ReviewRun"][];

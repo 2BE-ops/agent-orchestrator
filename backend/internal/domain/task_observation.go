@@ -19,18 +19,19 @@ type TaskPREvidence struct {
 // TaskReviewEvidence points to an existing AO review run. Its verdict and body
 // remain qualitative reviewer output; no Type identity is inferred from harness.
 type TaskReviewEvidence struct {
-	RunID           string          `json:"runId"`
-	ReviewID        string          `json:"reviewId"`
-	PRURL           string          `json:"prUrl"`
-	TargetCommit    string          `json:"targetCommit"`
-	Harness         ReviewerHarness `json:"harness"`
-	Status          ReviewRunStatus `json:"status"`
-	Verdict         ReviewVerdict   `json:"verdict"`
-	BodyPreviewHash string          `json:"bodyPreviewHash"`
-	BodyPreview     string          `json:"bodyPreview"`
-	BodyBytes       int64           `json:"bodyBytes"`
-	BodyTruncated   bool            `json:"bodyTruncated"`
-	CreatedAt       time.Time       `json:"createdAt"`
+	RunID           string                 `json:"runId"`
+	ReviewID        string                 `json:"reviewId"`
+	PRURL           string                 `json:"prUrl"`
+	TargetCommit    string                 `json:"targetCommit"`
+	Harness         ReviewerHarness        `json:"harness"`
+	Status          ReviewRunStatus        `json:"status"`
+	Verdict         ReviewVerdict          `json:"verdict"`
+	BodyPreviewHash string                 `json:"bodyPreviewHash"`
+	BodyPreview     string                 `json:"bodyPreview"`
+	BodyBytes       int64                  `json:"bodyBytes"`
+	BodyTruncated   bool                   `json:"bodyTruncated"`
+	CreatedAt       time.Time              `json:"createdAt"`
+	Attribution     *TaskReviewAttribution `json:"attribution,omitempty"`
 }
 
 // TaskWorkerEvidence retains observed lifecycle and reservation time. Exited or
@@ -57,6 +58,7 @@ type TaskObservationEvidence struct {
 	PRsTruncated       bool                   `json:"prsTruncated"`
 	Reviews            []TaskReviewEvidence   `json:"reviews"`
 	ReviewsTruncated   bool                   `json:"reviewsTruncated"`
+	ReviewTarget       *TaskReviewTarget      `json:"reviewTarget,omitempty"`
 	Worker             TaskWorkerEvidence     `json:"worker"`
 	Artifacts          []TaskArtifactEvidence `json:"artifacts,omitempty"`
 	ArtifactsTruncated bool                   `json:"artifactsTruncated,omitempty"`
@@ -75,6 +77,16 @@ func (e TaskObservationEvidence) Validate() error {
 	for _, review := range e.Reviews {
 		if !resultText(review.RunID, 200, true) || !resultText(review.ReviewID, 200, true) || !resultText(review.PRURL, 2000, true) || len(review.TargetCommit) > 64 || len(review.Harness) > 100 || len(review.Status) > 100 || len(review.Verdict) > 100 || review.BodyPreviewHash != ContextTextHash(review.BodyPreview) || len(review.BodyPreview) > 4096 || review.BodyBytes < 0 {
 			return fmt.Errorf("invalid review evidence")
+		}
+		if review.Attribution != nil {
+			if err := review.Attribution.validate(); err != nil {
+				return err
+			}
+		}
+	}
+	if e.ReviewTarget != nil {
+		if err := e.ReviewTarget.validate(); err != nil {
+			return err
 		}
 	}
 	if len(e.Artifacts) > 16 {

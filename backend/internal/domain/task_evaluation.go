@@ -117,6 +117,9 @@ func EvaluateTaskEvidence(criteria AcceptanceCriteria, target string, checks []T
 		if criterion.EvidenceKind == "artifact" && validEvaluationCommit(target) {
 			decision.Outcome, decision.Reason = evaluateTaskArtifact(criterion, target, observations, now)
 		}
+		if criterion.EvidenceKind == "review" && validEvaluationCommit(target) {
+			decision.Outcome, decision.Reason = evaluateTaskReview(criteria, target, observations, now)
+		}
 		if decision.Outcome == "failed" {
 			outcome = "failed"
 		} else if decision.Outcome != "passed" && outcome != "failed" {
@@ -204,6 +207,9 @@ func (d TaskEvaluationDefinition) Validate() error {
 	if d.Observations != nil {
 		if err := d.Observations.Validate(); err != nil {
 			return err
+		}
+		if target := d.Observations.ReviewTarget; target != nil && (target.ResultHash != d.ResultHash || target.CriteriaHash != d.CriteriaHash) {
+			return fmt.Errorf("review target differs from evaluation provenance")
 		}
 	}
 	content, _, err := TaskContent(d)

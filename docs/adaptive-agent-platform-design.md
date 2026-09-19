@@ -497,6 +497,18 @@ re-resolves registry content. Generation-fenced submissions acknowledge exact
 historical retries and atomically retain the review audit. Uncertain native
 launch returns a reconciliation conflict with its running pass retained.
 
+Review evaluation now collects the latest native pass per PR/harness for the
+exact result, separately from generic review history. It decodes and verifies
+retained context in the evaluation transaction, then stores compact result,
+criteria, implementing/reviewing Type/configuration and launch attribution.
+The immutable context hash links to full Skill content without multiplying it
+across every PR/evaluation. A review criterion requires observed current PR heads,
+matching frozen policy and result provenance, and a native launch witness.
+Incomplete/failed native passes remain inconclusive; a changes-requested verdict
+fails only the qualitative review criterion. Generic approvals and prior-result
+reviews cannot pass it. Newer passes supersede older approvals for assessment.
+Qualitative review does not supply missing CI, artifact or mergeability evidence.
+
 Stage 13's initial collector snapshots independently observed CI facts under the
 same transaction as evaluation and audit. Migration 0165 preserves assessment,
 frozen criteria/result/context hashes and the exact historical worker activation;

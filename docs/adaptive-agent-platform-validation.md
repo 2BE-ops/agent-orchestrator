@@ -4,6 +4,35 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 13c3f — independent review attribution in evaluations (2026-09-19)
+
+The collector separates generic history from native passes for the exact result,
+retains the latest PR/harness pass including running/failed states, and verifies
+sealed review context in the evaluation transaction. Compact attribution records
+exact result/criteria/configuration hashes, implementing/reviewing Type versions,
+model, and native launch witness; full Skills remain in the inspectable context.
+Review criteria require matching policy/provenance and independently observed
+current PR heads. Reasons explicitly label reviewer verdicts qualitative.
+
+Seventeen domain cases cover approval, generic/unwitnessed/future/stale/mismatched
+evidence, policy violations, changes requested and newer incomplete passes.
+Real SQLite tests exercise generic-only approval, fast unwitnessed reply, launch
+witness, passing native review, newer running/failed/changes-requested passes,
+same-commit result correction, Type disable and historical retry after reopen.
+An approved review cannot satisfy a missing objective CI criterion. Optional
+attribution fields preserve prior evaluation JSON/hash compatibility.
+
+Focused new domain/store tests PASS (0.490s/0.497s). Full domain (1.086s), SQLite
+(36.626s), store (20.450s), task service (1.578s), review service (0.148s), API spec
+(0.245s) and specgen (12.039s) PASS. Focused HTTP evaluation/review tests PASS
+(0.762s). sqlc/API generation, backend build and pinned domain/SQLite lint PASS
+(0 issues). Frontend typecheck PASS. Complete
+diff inspection and whitespace check PASS. Logs: ignored `stage13c3f-*`.
+
+This completes stage 13's pinned native-review evidence path. Derived task
+completion and attributable performance/usage remain stage 13 work; native
+restart reconciliation and live provider runs remain stages 23/25.
+
 ## Stage 13c3e — native review request and inspection API/CLI (2026-09-19)
 
 The task service resolves an exact result's frozen reviewer policy through the

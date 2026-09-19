@@ -18129,6 +18129,8 @@ components:
           type: array
         prsTruncated:
           type: boolean
+        reviewTarget:
+          $ref: '#/components/schemas/TaskReviewTarget'
         reviews:
           items:
             $ref: '#/components/schemas/TaskReviewEvidence'
@@ -18337,6 +18339,30 @@ components:
       required:
       - items
       type: object
+    TaskReviewAttribution:
+      properties:
+        configurationHash:
+          type: string
+        contextHash:
+          type: string
+        model:
+          type: string
+        reviewerType:
+          $ref: '#/components/schemas/WorkerDefinitionRef'
+        startedAt:
+          format: date-time
+          type:
+          - "null"
+          - string
+        target:
+          $ref: '#/components/schemas/TaskReviewTarget'
+      required:
+      - target
+      - contextHash
+      - configurationHash
+      - reviewerType
+      - model
+      type: object
     TaskReviewContext:
       properties:
         actor:
@@ -18403,6 +18429,8 @@ components:
       type: object
     TaskReviewEvidence:
       properties:
+        attribution:
+          $ref: '#/components/schemas/TaskReviewAttribution'
         bodyBytes:
           format: int64
           type: integer
@@ -18505,6 +18533,28 @@ components:
       required:
       - runId
       - context
+      type: object
+    TaskReviewTarget:
+      properties:
+        criteriaHash:
+          type: string
+        implementingConfigurationHash:
+          type: string
+        implementingHarness:
+          type: string
+        implementingType:
+          $ref: '#/components/schemas/WorkerDefinitionRef'
+        resultHash:
+          type: string
+        resultId:
+          type: string
+      required:
+      - resultId
+      - resultHash
+      - criteriaHash
+      - implementingType
+      - implementingHarness
+      - implementingConfigurationHash
       type: object
     TaskReviewsResponse:
       properties:

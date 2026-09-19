@@ -113,7 +113,11 @@ func (s *Store) EvaluateTaskResult(ctx context.Context, input domain.TaskEvaluat
 			return err
 		}
 		now := time.Now().UTC()
-		observations, err := collectTaskObservations(ctx, q, result, attempt.CreatedAt, now)
+		var reviewTarget *domain.TaskReviewTarget
+		if criteria.Definition.ReviewPolicy != nil {
+			reviewTarget = &domain.TaskReviewTarget{ResultID: result.ID, ResultHash: result.ContentHash, CriteriaHash: criteria.ContentHash, ImplementingType: configuration.AgentType, ImplementingHarness: configuration.Effective.Harness, ImplementingConfigurationHash: result.ConfigurationHash}
+		}
+		observations, err := collectTaskObservations(ctx, q, result, reviewTarget, attempt.CreatedAt, now)
 		if err != nil {
 			return err
 		}

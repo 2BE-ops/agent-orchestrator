@@ -120,14 +120,17 @@ func (q *Queries) CollectTaskPRFacts(ctx context.Context, sessionID domain.Sessi
 }
 
 const collectTaskReviewFacts = `-- name: CollectTaskReviewFacts :many
-SELECT r.id,r.review_id,r.pr_url,r.target_sha,r.harness,r.status,r.verdict,
+SELECT r.id,r.review_id,r.pr_url,r.target_sha,r.harness,r.status,r.verdict,r.task_scope,
 CAST(substr(r.body,1,4096) AS TEXT) AS body_preview,
 CAST(length(CAST(r.body AS BLOB)) AS INTEGER) AS body_bytes,r.created_at
 FROM review_run r
 WHERE r.session_id=?1 AND r.target_sha=?2
+AND (r.task_scope='' OR EXISTS (SELECT 1 FROM adaptive_task_review_contexts c WHERE c.run_id=r.id AND c.result_id=?3))
 AND NOT EXISTS (SELECT 1 FROM review_run newer
  WHERE newer.session_id=r.session_id AND newer.pr_url=r.pr_url
  AND newer.target_sha=r.target_sha AND newer.harness=r.harness
+ AND ((newer.task_scope='' AND r.task_scope='') OR (newer.task_scope!='' AND r.task_scope!=''
+ AND EXISTS (SELECT 1 FROM adaptive_task_review_contexts c WHERE c.run_id=newer.id AND c.result_id=?3)))
  AND (newer.created_at>r.created_at OR (newer.created_at=r.created_at AND newer.id>r.id)))
 ORDER BY r.pr_url,r.harness,r.id LIMIT 33
 `
@@ -135,6 +138,7 @@ ORDER BY r.pr_url,r.harness,r.id LIMIT 33
 type CollectTaskReviewFactsParams struct {
 	SessionID    domain.SessionID
 	TargetCommit string
+	ResultID     string
 }
 
 type CollectTaskReviewFactsRow struct {
@@ -145,6 +149,7 @@ type CollectTaskReviewFactsRow struct {
 	Harness     domain.ReviewerHarness
 	Status      domain.ReviewRunStatus
 	Verdict     domain.ReviewVerdict
+	TaskScope   string
 	BodyPreview string
 	BodyBytes   int64
 	CreatedAt   time.Time
@@ -152,8 +157,10 @@ type CollectTaskReviewFactsRow struct {
 
 // Latest pass per PR and harness at this exact commit, including incomplete
 // passes. An older approval cannot hide a newer running or failed review.
+// Task passes additionally match this exact result; generic history is a
+// separate group and never supplies native Type or launch attribution.
 func (q *Queries) CollectTaskReviewFacts(ctx context.Context, arg CollectTaskReviewFactsParams) ([]CollectTaskReviewFactsRow, error) {
-	rows, err := q.db.QueryContext(ctx, collectTaskReviewFacts, arg.SessionID, arg.TargetCommit)
+	rows, err := q.db.QueryContext(ctx, collectTaskReviewFacts, arg.SessionID, arg.TargetCommit, arg.ResultID)
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +176,7 @@ func (q *Queries) CollectTaskReviewFacts(ctx context.Context, arg CollectTaskRev
 			&i.Harness,
 			&i.Status,
 			&i.Verdict,
+			&i.TaskScope,
 			&i.BodyPreview,
 			&i.BodyBytes,
 			&i.CreatedAt,
