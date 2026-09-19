@@ -23,6 +23,7 @@ const (
 
 // reviewRun mirrors the daemon's domain.ReviewRun for the CLI client.
 type reviewRun struct {
+	TaskScope      string     `json:"taskScope,omitempty"`
 	ID             string     `json:"id"`
 	ReviewID       string     `json:"reviewId"`
 	SessionID      string     `json:"sessionId"`
@@ -68,28 +69,31 @@ type reviewRunResponse struct {
 
 // submitReviewItem mirrors controllers.SubmitReviewItem.
 type submitReviewItem struct {
-	RunID          string `json:"runId"`
-	Verdict        string `json:"verdict"`
-	Body           string `json:"body,omitempty"`
-	GithubReviewID string `json:"githubReviewId,omitempty"`
+	SourceGeneration string `json:"sourceGeneration,omitempty"`
+	RunID            string `json:"runId"`
+	Verdict          string `json:"verdict"`
+	Body             string `json:"body,omitempty"`
+	GithubReviewID   string `json:"githubReviewId,omitempty"`
 }
 
 // submitReviewRequest mirrors controllers.SubmitReviewInput.
 type submitReviewRequest struct {
-	RunID          string             `json:"runId,omitempty"`
-	Verdict        string             `json:"verdict,omitempty"`
-	Body           string             `json:"body,omitempty"`
-	GithubReviewID string             `json:"githubReviewId,omitempty"`
-	Reviews        []submitReviewItem `json:"reviews,omitempty"`
+	SourceGeneration string             `json:"sourceGeneration,omitempty"`
+	RunID            string             `json:"runId,omitempty"`
+	Verdict          string             `json:"verdict,omitempty"`
+	Body             string             `json:"body,omitempty"`
+	GithubReviewID   string             `json:"githubReviewId,omitempty"`
+	Reviews          []submitReviewItem `json:"reviews,omitempty"`
 }
 
 type reviewSubmitOptions struct {
-	session  string
-	runID    string
-	verdict  string
-	body     string
-	reviewID string
-	reviews  string
+	sourceGeneration string
+	session          string
+	runID            string
+	verdict          string
+	body             string
+	reviewID         string
+	reviews          string
 }
 
 type reviewSessionOptions struct {
@@ -156,6 +160,7 @@ func newReviewSubmitCommand(ctx *commandContext) *cobra.Command {
 	})
 	cmd.Flags().StringVar(&opts.session, "session", "", "Worker session id (or pass it as the positional argument)")
 	cmd.Flags().StringVar(&opts.runID, "run", "", "Review run id (required)")
+	cmd.Flags().StringVar(&opts.sourceGeneration, "source-generation", "", "Pinned native launch generation for a task review")
 	cmd.Flags().StringVar(&opts.verdict, "verdict", "", "Review verdict: approved or changes_requested (required)")
 	cmd.Flags().StringVar(&opts.body, "body", "", "Review body: a path to a Markdown file, or - to read from stdin (so nothing is written into the worktree)")
 	cmd.Flags().StringVar(&opts.reviewID, "review-id", "", "Id of the GitHub PR review just posted (the .id from the gh api POST that created the review)")
@@ -201,7 +206,7 @@ func (c *commandContext) submitReview(cmd *cobra.Command, args []string, opts re
 	reviewID := strings.TrimSpace(opts.reviewID)
 	path := "sessions/" + url.PathEscape(session) + "/reviews/submit"
 	var res reviewRunResponse
-	if err := c.postReviewJSON(cmd.Context(), path, submitReviewRequest{RunID: runID, Verdict: verdict, Body: body, GithubReviewID: reviewID}, &res); err != nil {
+	if err := c.postReviewJSON(cmd.Context(), path, submitReviewRequest{RunID: runID, SourceGeneration: opts.sourceGeneration, Verdict: verdict, Body: body, GithubReviewID: reviewID}, &res); err != nil {
 		return err
 	}
 	// A submit response always carries the recorded run's ID and verdict; a
@@ -215,8 +220,8 @@ func (c *commandContext) submitReview(cmd *cobra.Command, args []string, opts re
 }
 
 func (c *commandContext) submitReviewBatch(cmd *cobra.Command, session string, opts reviewSubmitOptions) error {
-	if strings.TrimSpace(opts.runID) != "" || strings.TrimSpace(opts.verdict) != "" || strings.TrimSpace(opts.body) != "" || strings.TrimSpace(opts.reviewID) != "" {
-		return usageError{errors.New("usage: --reviews cannot be combined with --run, --verdict, --body, or --review-id")}
+	if strings.TrimSpace(opts.runID) != "" || strings.TrimSpace(opts.verdict) != "" || strings.TrimSpace(opts.body) != "" || strings.TrimSpace(opts.reviewID) != "" || strings.TrimSpace(opts.sourceGeneration) != "" {
+		return usageError{errors.New("usage: --reviews cannot be combined with --run, --verdict, --body, --review-id, or --source-generation")}
 	}
 	reviews, err := readReviewItems(cmd, strings.TrimSpace(opts.reviews))
 	if err != nil {

@@ -5588,6 +5588,8 @@ export interface components {
             reviews?: components["schemas"]["SubmitReviewItem"][];
             /** @description Review run id being completed. */
             runId?: string;
+            /** @description Exact native launch generation required for task-attributed reviews. */
+            sourceGeneration?: string;
             /** @description Review verdict: approved or changes_requested. */
             verdict?: string;
         };
@@ -5598,6 +5600,8 @@ export interface components {
             githubReviewId?: string;
             /** @description Review run id being completed. */
             runId: string;
+            /** @description Exact native launch generation required for task-attributed reviews. */
+            sourceGeneration?: string;
             /** @description Review verdict: approved or changes_requested. */
             verdict: string;
         };

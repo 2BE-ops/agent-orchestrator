@@ -9,6 +9,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 )
 
 const countTaskReviewContexts = `-- name: CountTaskReviewContexts :one
@@ -86,6 +88,41 @@ type MarkTaskReviewStartedParams struct {
 
 func (q *Queries) MarkTaskReviewStarted(ctx context.Context, arg MarkTaskReviewStartedParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, markTaskReviewStarted, arg.StartedAt, arg.RunID, arg.LaunchID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const submitTaskReviewResult = `-- name: SubmitTaskReviewResult :execrows
+UPDATE review_run SET status='complete', verdict=?1, body=?2,
+github_review_id=?3, auto_inject_review=?4
+WHERE review_run.id=?5 AND review_run.session_id=?6 AND review_run.status='running' AND review_run.task_scope!=''
+AND EXISTS(SELECT 1 FROM adaptive_task_review_contexts c JOIN review v ON v.id=review_run.review_id
+ WHERE c.run_id=review_run.id AND c.launch_id=?7
+ AND v.reviewer_launch_id=c.launch_id)
+`
+
+type SubmitTaskReviewResultParams struct {
+	Verdict          domain.ReviewVerdict
+	Body             string
+	GithubReviewID   string
+	AutoInjectReview bool
+	RunID            string
+	SessionID        domain.SessionID
+	SourceGeneration string
+}
+
+func (q *Queries) SubmitTaskReviewResult(ctx context.Context, arg SubmitTaskReviewResultParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, submitTaskReviewResult,
+		arg.Verdict,
+		arg.Body,
+		arg.GithubReviewID,
+		arg.AutoInjectReview,
+		arg.RunID,
+		arg.SessionID,
+		arg.SourceGeneration,
+	)
 	if err != nil {
 		return 0, err
 	}

@@ -17059,6 +17059,10 @@ components:
         runId:
           description: Review run id being completed.
           type: string
+        sourceGeneration:
+          description: Exact native launch generation required for task-attributed
+            reviews.
+          type: string
         verdict:
           description: 'Review verdict: approved or changes_requested.'
           type: string
@@ -17073,6 +17077,10 @@ components:
           type: string
         runId:
           description: Review run id being completed.
+          type: string
+        sourceGeneration:
+          description: Exact native launch generation required for task-attributed
+            reviews.
           type: string
         verdict:
           description: 'Review verdict: approved or changes_requested.'

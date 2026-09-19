@@ -4,6 +4,32 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 13c3d — generation-fenced native review results (2026-09-19)
+
+Task review submissions require the retained launch generation and matching
+worker. The running-to-complete transition checks current reviewer ownership and
+commits the result with its task audit in one transaction. Exact historical retries
+acknowledge the same verdict/body/provider review ID after delivery, replacement
+or restart; changed retry content is rejected. The generic review update can only
+fail/cancel a task review with an empty verdict. A fast reply may be recorded
+before native handle persistence, but cannot invent the separate launch witness.
+
+Single and batch HTTP/CLI submissions preserve sourceGeneration. Cancelled task
+results cannot strand valid sibling reviews. Telemetry emits only on the actual
+persisted result transition and contains the existing enum/count fields, never
+review prose or context identities. Existing generic review behavior is preserved.
+
+Focused store/service/CLI/HTTP submission tests PASS (0.834/0.091/0.863/0.099s).
+Full domain, ports, SQLite (41.035s), store (26.143s), review service (0.134s),
+task service (1.735s), CLI (26.438s), API spec (0.230s) and specgen (14.525s)
+PASS. sqlc and API/TypeScript generation, backend build and pinned affected-package
+lint PASS (0 issues). Final store rerun PASS (13.546s), frontend typecheck PASS,
+and complete staged diff inspection/whitespace check PASS. No migration or desktop authoring flow
+changed. Ignored logs: `.cache/adaptive-tests/stage13c3d-*`.
+
+Review request/inspection through the shared task service and evaluator review
+attribution remain the next stage 13 increment; this is not a completion claim.
+
 ## Stage 13c3c — native task review engine and payload delivery (2026-09-19)
 
 The existing review engine accepts sealed task context, filters exact PR heads

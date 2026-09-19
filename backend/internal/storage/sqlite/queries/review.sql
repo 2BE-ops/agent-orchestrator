@@ -49,7 +49,10 @@ INSERT INTO review_run (id, review_id, session_id, batch_id, harness, trigger_so
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateReviewRunResult :execrows
-UPDATE review_run SET status = ?, verdict = ?, body = ?, github_review_id = ?, auto_inject_review = ? WHERE id = ? AND status = 'running';
+UPDATE review_run SET status=sqlc.arg(status), verdict=sqlc.arg(verdict), body=sqlc.arg(body),
+github_review_id=sqlc.arg(github_review_id), auto_inject_review=sqlc.arg(auto_inject_review)
+WHERE id=sqlc.arg(id) AND status='running'
+AND (task_scope='' OR (sqlc.arg(verdict)='' AND (sqlc.arg(status)='failed' OR sqlc.arg(status)='cancelled')));
 
 -- name: SupersedeStaleRunningReviewRuns :execrows
 UPDATE review_run SET status = 'failed', body = ? WHERE session_id = ? AND pr_url = ? AND target_sha != ? AND status = 'running' AND verdict = '';

@@ -530,6 +530,7 @@ func TestSubmitManySkipsSupersededRunAndDeliversSiblings(t *testing.T) {
 			// A newer-commit trigger superseded run-2 while the reviewer was still
 			// working on the original batch.
 			{ID: "run-2", SessionID: "mer-1", BatchID: "batch-1", PRURL: "pr2", TargetSHA: "sha2", Status: domain.ReviewRunFailed},
+			{ID: "task-run", SessionID: "mer-1", TaskScope: "pinned-task-scope", Status: domain.ReviewRunCancelled},
 		},
 		prs: []domain.PullRequest{{URL: "pr1", HeadSHA: "sha1"}, {URL: "pr2", HeadSHA: "sha2-new"}},
 	}
@@ -539,6 +540,7 @@ func TestSubmitManySkipsSupersededRunAndDeliversSiblings(t *testing.T) {
 	runs, err := svc.SubmitMany(context.Background(), "mer-1", []SubmittedReview{
 		{RunID: "run-1", Verdict: domain.VerdictChangesRequested, Body: "fix pr1"},
 		{RunID: "run-2", Verdict: domain.VerdictChangesRequested, Body: "fix pr2"},
+		{RunID: "task-run", SourceGeneration: "obsolete-launch", Verdict: domain.VerdictApproved},
 	})
 	if err != nil {
 		t.Fatalf("SubmitMany must deliver valid siblings when one run was superseded: %v", err)

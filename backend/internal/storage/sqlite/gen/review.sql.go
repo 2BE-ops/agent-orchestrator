@@ -763,7 +763,10 @@ func (q *Queries) UpdateReviewAgentSessionID(ctx context.Context, arg UpdateRevi
 }
 
 const updateReviewRunResult = `-- name: UpdateReviewRunResult :execrows
-UPDATE review_run SET status = ?, verdict = ?, body = ?, github_review_id = ?, auto_inject_review = ? WHERE id = ? AND status = 'running'
+UPDATE review_run SET status=?1, verdict=?2, body=?3,
+github_review_id=?4, auto_inject_review=?5
+WHERE id=?6 AND status='running'
+AND (task_scope='' OR (?2='' AND (?1='failed' OR ?1='cancelled')))
 `
 
 type UpdateReviewRunResultParams struct {

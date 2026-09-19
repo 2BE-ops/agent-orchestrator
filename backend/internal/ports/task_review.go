@@ -12,4 +12,5 @@ type TaskReviewStore interface {
 	InsertTaskReviewRun(context.Context, domain.ReviewRun, domain.TaskReviewContext) error
 	GetTaskReviewContext(context.Context, string) (domain.TaskReviewSnapshot, bool, error)
 	MarkTaskReviewStarted(context.Context, string, string) (bool, error)
+	SubmitTaskReviewResult(context.Context, domain.TaskReviewSubmission) (domain.ReviewRun, bool, error)
 }

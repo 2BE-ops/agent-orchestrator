@@ -118,7 +118,7 @@ func TestTaskReviewContextAtomicProvenanceAndLaunchWitness(t *testing.T) {
 	if _, found, err := s.GetTaskReviewContext(ctx, duplicate.ID); err != nil || found {
 		t.Fatalf("partial duplicate context: %v %v", found, err)
 	}
-	if _, err := s.UpdateReviewRunResult(ctx, run.ID, domain.ReviewRunComplete, domain.VerdictApproved, "No blocking findings", "", false); err != nil {
+	if _, _, err := s.SubmitTaskReviewResult(ctx, domain.TaskReviewSubmission{RunID: run.ID, SessionID: run.SessionID, SourceGeneration: snapshot.LaunchID, Verdict: domain.VerdictApproved, Body: "No blocking findings"}); err != nil {
 		t.Fatal(err)
 	}
 	// The legacy scope remains independent, even for the same PR/head/harness.

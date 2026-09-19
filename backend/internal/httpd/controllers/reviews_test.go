@@ -403,17 +403,26 @@ func TestReviewsSubmitAcceptsBatchedReviews(t *testing.T) {
 	svc := &fakeReviewService{}
 	srv := newReviewTestServer(t, svc)
 
-	body, status, headers := doRequest(t, srv, "POST", "/api/v1/sessions/mer-1/reviews/submit", `{"reviews":[{"runId":"run-1","verdict":"changes_requested","body":"fix auth","githubReviewId":"101"},{"runId":"run-2","verdict":"approved"}]}`)
+	body, status, headers := doRequest(t, srv, "POST", "/api/v1/sessions/mer-1/reviews/submit", `{"reviews":[{"runId":"run-1","sourceGeneration":"launch-1","verdict":"changes_requested","body":"fix auth","githubReviewId":"101"},{"runId":"run-2","sourceGeneration":"launch-2","verdict":"approved"}]}`)
 	assertJSON(t, headers)
 	if status != http.StatusOK {
 		t.Fatalf("status = %d body=%s", status, body)
 	}
-	if len(svc.submitted) != 2 || svc.submitted[0].RunID != "run-1" || svc.submitted[1].Verdict != domain.VerdictApproved {
+	if len(svc.submitted) != 2 || svc.submitted[0].RunID != "run-1" || svc.submitted[1].Verdict != domain.VerdictApproved || svc.submitted[0].SourceGeneration != "launch-1" || svc.submitted[1].SourceGeneration != "launch-2" {
 		t.Fatalf("submitted = %+v", svc.submitted)
 	}
 	for _, want := range []string{`"reviews"`, `"run-1"`, `"run-2"`} {
 		if !strings.Contains(string(body), want) {
 			t.Fatalf("body missing %s: %s", want, body)
 		}
+	}
+}
+
+func TestReviewsSubmitPreservesSingleSourceGeneration(t *testing.T) {
+	svc := &fakeReviewService{}
+	srv := newReviewTestServer(t, svc)
+	body, status, _ := doRequest(t, srv, "POST", "/api/v1/sessions/mer-1/reviews/submit", `{"runId":"run-1","sourceGeneration":"native-launch","verdict":"approved"}`)
+	if status != http.StatusOK || len(svc.submitted) != 1 || svc.submitted[0].SourceGeneration != "native-launch" {
+		t.Fatalf("submission = %+v status=%d body=%s", svc.submitted, status, body)
 	}
 }
