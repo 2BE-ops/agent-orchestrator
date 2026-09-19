@@ -395,6 +395,22 @@ The native reviewer's submission includes `sourceGeneration` in each batch item,
 or `--source-generation` for a single `ao review submit`. A verdict is qualitative
 review evidence; independent task evaluation remains a separate operation.
 
+## Agent Manager governance
+
+`ao agent-manager configure <project> --file manager.json` versions desired
+human-owned policy through the daemon. It does not launch a controller or change
+a running controller's pins. `show`, `configurations`, `configuration <project>
+<version>` and `audit` inspect the current policy and immutable history as JSON.
+History/audit accept `--cursor` and `--limit` (1–100).
+
+The request contains `definition`, `expectedRevision` (0 only initially) and a
+reason. The definition pins an exact Agent Type version and carries explicit,
+bounded creation/inbox/retry policy. Creation is opt-in; entry-level ownership
+permissions remain independent. Stale edits return a conflict. See the embedded
+[Manager command contract](../../backend/internal/skillassets/using-ao/commands/agent-manager.md)
+for all fields and bounds. Governance edits are human actions; the Manager's
+structured tools cannot escalate their own permissions.
+
 ## Task performance evidence and metrics
 
 ```bash

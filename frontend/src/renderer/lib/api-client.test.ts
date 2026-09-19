@@ -24,6 +24,13 @@ vi.mock("./sentry", () => ({
 const captureMock = vi.mocked(captureRendererEvent);
 const sentryCaptureMock = vi.mocked(captureApiErrorToSentry);
 
+it("redacts Manager project and configuration identities from telemetry routes", () => {
+	expect(normalizeApiOperation("PUT", "/api/v1/projects/private-project/agent-manager")).toBe("PUT /api/v1/projects/:id/agent-manager");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/configurations")).toBe("GET /api/v1/projects/:id/agent-manager/configurations");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/configurations/42")).toBe("GET /api/v1/projects/:id/agent-manager/configurations/:id");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/audit")).toBe("GET /api/v1/projects/:id/agent-manager/audit");
+});
+
 it("redacts knowledge identities from telemetry routes", () => {
 	expect(normalizeApiOperation("GET", "/api/v1/projects/private/knowledge")).toBe("GET /api/v1/projects/:id/knowledge");
 	expect(normalizeApiOperation("POST", "/api/v1/knowledge/private-fact/versions")).toBe("POST /api/v1/knowledge/:id/versions");

@@ -75,6 +75,13 @@ var legacyActorlessSystemCLICommands = map[string]struct{}{
 }
 
 var legacyActorlessUserCLICommands = map[string]struct{}{
+	"ao agent-manager":                {},
+	"ao agent-manager show":           {},
+	"ao agent-manager configure":      {},
+	"ao agent-manager configurations": {},
+	"ao agent-manager configuration":  {},
+	"ao agent-manager audit":          {},
+
 	"ao task":                   {},
 	"ao task list":              {},
 	"ao task show":              {},

@@ -12,6 +12,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	agentsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agent"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/agentauth"
+	managersvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agentmanager"
 	knowledgesvc "github.com/aoagents/agent-orchestrator/backend/internal/service/knowledge"
 	projectsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/project"
 	registrysvc "github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
@@ -22,6 +23,21 @@ import (
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/mobilebridge"
 )
+
+// AgentManagerConfigureRequest changes desired policy at an expected revision.
+type AgentManagerConfigureRequest managersvc.ConfigureInput
+
+// AgentManagerConfigurationsResponse pages immutable governance history.
+type AgentManagerConfigurationsResponse struct {
+	Items      []domain.AgentManagerConfiguration `json:"items"`
+	NextCursor string                             `json:"nextCursor,omitempty"`
+}
+
+// AgentManagerAuditResponse pages user policy provenance.
+type AgentManagerAuditResponse struct {
+	Items      []domain.AgentManagerAudit `json:"items"`
+	NextCursor string                     `json:"nextCursor,omitempty"`
+}
 
 // KnowledgeIDParam identifies a retained project claim.
 type KnowledgeIDParam struct {

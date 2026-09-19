@@ -4,6 +4,32 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 14a3 — Manager governance API and CLI (2026-09-19)
+
+The daemon wires a shared Manager service, project-scoped governance PUT/GET and
+immutable configuration/audit reads. Strict 64 KiB decoding rejects actor/origin
+fields, trailing objects and malformed policy; the service denies nonhuman
+governance before persistence. Five `ao agent-manager` commands remain HTTP-only,
+with bounded pages, exact version reads and preserved daemon error/request IDs.
+OpenAPI/TypeScript generation, telemetry route templates and the embedded CLI
+catalog accompany the API. There is still no native launch effect in configuration.
+
+Focused service/HTTP PASS (0.417s/0.520s), focused CLI PASS (0.386s). Tests cover
+CAS conflict envelopes, exact history, cross-project isolation, unknown/duplicate
+page parameters, body limits, forged authority, invalid versions/policy, missing
+service, stdin transport and usage exit codes. Full service (0.526s), HTTP router
+(0.858s), spec (0.366s), specgen (16.481s), envelope (0.788s), CLI (27.654s),
+telemetry (0.588s) and embedded skill assets (0.492s) PASS. Full HTTP controllers
+FAIL (17.922s) only at the recorded Windows pairing rename and file-URL clone
+baselines. Full daemon FAIL (3.403s) only at the recorded CWD TempDir cleanup test.
+
+API regeneration, backend build, frontend typecheck and affected-package pinned
+lint (including daemon, 0 issues) PASS. All 40 frontend API-client tests PASS
+(2.53s), including Manager identity redaction. A first gofmt invocation used root
+paths from backend and failed; the corrected root invocation completed before
+the full checks. Diff review removed map alignment churn; generated schema/route
+changes and new source were inspected. Logs: `.cache/adaptive-tests/stage14a3-*`.
+
 ## Stage 14a2 — versioned Manager governance (2026-09-19)
 
 Migration 0169 adds project Manager configuration history, user provenance and

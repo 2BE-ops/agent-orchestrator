@@ -50,6 +50,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/runfile"
 	agentsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agent"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/agentauth"
+	managersvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agentmanager"
 	browsersvc "github.com/aoagents/agent-orchestrator/backend/internal/service/browser"
 	chatsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/chat"
 	devimportsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/devimport"
@@ -788,6 +789,7 @@ func Run() error {
 		Notifications:      notifier,
 		Registry:           registrySvc,
 		AdaptiveTasks:      tasksvc.New(store, tasksvc.WithArtifactCollector(taskverify.Artifacts{}), tasksvc.WithNativeReviews(registrySvc, reviewSvc)),
+		AgentManagers:      managersvc.New(store),
 		ProjectKnowledge:   knowledgesvc.New(store),
 		NotificationStream: notificationHub,
 		Push:               pushRegistry,
