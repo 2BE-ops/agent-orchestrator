@@ -13,6 +13,7 @@ import (
 	agentsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agent"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/agentauth"
 	managersvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agentmanager"
+	controlsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/control"
 	knowledgesvc "github.com/aoagents/agent-orchestrator/backend/internal/service/knowledge"
 	projectsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/project"
 	registrysvc "github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
@@ -3208,6 +3209,32 @@ type OrchestratorPlanningOutcomesResponse struct {
 // OrchestratorPlanningSummaryResponse aggregates one complete planning cohort.
 type OrchestratorPlanningSummaryResponse struct {
 	Summary domain.OrchestratorPlanningSummary `json:"summary"`
+}
+
+// ProjectControlResponse returns one project's stored and derived control.
+type ProjectControlResponse struct {
+	View domain.ProjectControlView `json:"view"`
+}
+
+// ProjectCancelWorkResponse reports exactly what one bulk cancel did.
+type ProjectCancelWorkResponse struct {
+	Cancel controlsvc.CancelResult `json:"cancel"`
+}
+
+// ProjectNeedsHumanResponse pages a project's open human requests.
+type ProjectNeedsHumanResponse struct {
+	Items       []domain.TaskNeedsHuman `json:"items"`
+	NextAfterID string                  `json:"nextAfterId,omitempty"`
+}
+
+// TaskNeedsHumanResponse returns one raised or resolved request.
+type TaskNeedsHumanResponse struct {
+	NeedsHuman domain.TaskNeedsHuman `json:"needsHuman"`
+}
+
+// DryRunResponse returns one read-only plan simulation.
+type DryRunResponse struct {
+	Verdict domain.DryRunVerdict `json:"verdict"`
 }
 
 // EvolutionExperimentResponse returns one sealed experiment with any conclusion.

@@ -242,6 +242,13 @@ func (s *Store) CancelProjectWork(ctx context.Context, cancellation domain.Proje
 	return result, nil
 }
 
+// ListProjectActiveAttemptSessions names the live worker sessions holding
+// task attempts in one project. It is the termination candidate set for
+// cancel-all; cancellation never assumes any of them stopped.
+func (s *Store) ListProjectActiveAttemptSessions(ctx context.Context, projectID domain.ProjectID) ([]domain.SessionID, error) {
+	return s.qr.ListProjectActiveAttemptSessions(ctx, string(projectID))
+}
+
 // RaiseTaskNeedsHuman records one structured request for human input. A task
 // holds at most one pending request; the raise blocks new attempts on the task
 // and its descendants while every unrelated branch stays schedulable.

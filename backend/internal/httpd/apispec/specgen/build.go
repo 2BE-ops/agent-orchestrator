@@ -18,6 +18,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/httpd/controllers"
 	"github.com/aoagents/agent-orchestrator/backend/internal/httpd/envelope"
+	controlsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/control"
 	evolutionsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/evolution"
 	importsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/importer"
 	projectsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/project"
@@ -175,6 +176,11 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"ControllersProjectFeedbackResponse":                   "ProjectFeedbackResponse",
 	"ControllersManagerRoutingOutcomesResponse":            "ManagerRoutingOutcomesResponse",
 	"ControllersEvolutionExperimentResponse":               "EvolutionExperimentResponse",
+	"ControllersProjectControlResponse":                    "ProjectControlResponse",
+	"ControllersProjectCancelWorkResponse":                 "ProjectCancelWorkResponse",
+	"ControllersProjectNeedsHumanResponse":                 "ProjectNeedsHumanResponse",
+	"ControllersTaskNeedsHumanResponse":                    "TaskNeedsHumanResponse",
+	"ControllersDryRunResponse":                            "DryRunResponse",
 	"ControllersEvolutionExperimentsResponse":              "EvolutionExperimentsResponse",
 	"ControllersEvolutionEvidenceResponse":                 "EvolutionEvidenceResponse",
 	"ControllersEvolutionDefinitionDiffResponse":           "EvolutionDefinitionDiffResponse",
@@ -788,6 +794,7 @@ func operations() []operation {
 	ops = append(ops, orchestratorGoalOperations()...)
 	ops = append(ops, agentManagerOperations()...)
 	ops = append(ops, evolutionOperations()...)
+	ops = append(ops, controlOperations()...)
 	ops = append(ops, projectKnowledgeOperations()...)
 	ops = append(ops, usageOperations()...)
 	ops = append(ops, pushOperations()...)
@@ -1832,6 +1839,27 @@ func evolutionOperations() []operation {
 		{http.MethodGet, "/projects/{id}/recommendations/{recommendationId}/diff", "getEvolutionRecommendationDiff", "Read the inspectable diff from the sealed version to the proposal", nil, controllers.EvolutionDefinitionDiffResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionRecommendationIDParam{}}},
 	} {
 		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "evolution", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
+	}
+	return ops
+}
+
+func controlOperations() []operation {
+	ops := make([]operation, 0, 7)
+	for _, endpoint := range []struct {
+		method, path, id, summary string
+		request, response         any
+		status                    int
+		params                    []any
+	}{
+		{http.MethodGet, "/projects/{id}/control", "getProjectControl", "Read the stored control state and its derived effective state", nil, controllers.ProjectControlResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodPost, "/projects/{id}/control", "setProjectControl", "Pause, resume, drain or stop one project deterministically", controlsvc.StateInput{}, controllers.ProjectControlResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodPost, "/projects/{id}/control/cancel-work", "cancelProjectWork", "Cancel pending or all work and report requested terminations", controlsvc.CancelInput{}, controllers.ProjectCancelWorkResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/needs-human", "listProjectNeedsHuman", "Page the project's open requests for human input", nil, controllers.ProjectNeedsHumanResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodPost, "/projects/{id}/dry-run", "dryRunProjectPlan", "Simulate an autonomous plan with writes and launches disabled", domain.DryRunRequest{}, controllers.DryRunResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodPost, "/tasks/{taskId}/needs-human", "raiseTaskNeedsHuman", "Record one structured request for human input on a task", controlsvc.NeedsHumanInput{}, controllers.TaskNeedsHumanResponse{}, http.StatusCreated, []any{controllers.AdaptiveTaskIDParam{}}},
+		{http.MethodPost, "/tasks/{taskId}/needs-human/resolve", "resolveTaskNeedsHuman", "Close the pending request exactly once with the human decision", controlsvc.ResolveInput{}, controllers.TaskNeedsHumanResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}}},
+	} {
+		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "control", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
 	}
 	return ops
 }

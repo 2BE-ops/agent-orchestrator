@@ -53,6 +53,7 @@ import (
 	managersvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agentmanager"
 	browsersvc "github.com/aoagents/agent-orchestrator/backend/internal/service/browser"
 	chatsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/chat"
+	controlsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/control"
 	devimportsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/devimport"
 	evolutionsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/evolution"
 	importsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/importer"
@@ -62,6 +63,7 @@ import (
 	prsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/pr"
 	projectsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/project"
 	registrysvc "github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
+	sessionsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/session"
 	settingssvc "github.com/aoagents/agent-orchestrator/backend/internal/service/settings"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systemcheck"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systeminstall"
@@ -799,6 +801,7 @@ func Run() error {
 		OrchestratorGoals:  orchestratorsvc.New(store),
 		AgentManagers:      managerSvc,
 		Evolution:          evolutionsvc.New(store),
+		Control:            controlsvc.New(store, controlsvc.WithTerminator(sessionKillTerminator{svc: sessionSvc})),
 		ProjectKnowledge:   knowledgesvc.New(store),
 		NotificationStream: notificationHub,
 		Push:               pushRegistry,
@@ -1109,4 +1112,16 @@ func stabilizeWorkingDirectory(dataDir string) error {
 		return fmt.Errorf("daemon working directory: chdir %s: %w", dataDir, err)
 	}
 	return nil
+}
+
+// sessionKillTerminator adapts the session service's kill to the control
+// surface: cancel-all requests worker termination through the normal kill
+// services and reports each request without claiming it succeeded.
+type sessionKillTerminator struct {
+	svc *sessionsvc.Service
+}
+
+func (t sessionKillTerminator) Kill(ctx context.Context, id domain.SessionID) error {
+	_, err := t.svc.Kill(ctx, id)
+	return err
 }

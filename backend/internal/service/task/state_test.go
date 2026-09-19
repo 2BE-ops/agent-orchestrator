@@ -2,6 +2,7 @@ package task_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,5 +89,48 @@ func TestTaskStateRequiresDependencyVerificationAndRespectsParentCancellation(t 
 	child, err = svc.Get(ctx, child.Task.ID)
 	if err != nil || child.Intent.Intent != "run" || child.State.Phase != "cancelled" || child.State.CancelledBy != parent.Task.ID {
 		t.Fatalf("inherited cancellation: %+v %v", child, err)
+	}
+}
+
+func TestTaskStateSurfacesNeedsHumanForTaskAndDescendants(t *testing.T) {
+	ctx := context.Background()
+	s := sqlitetest.MustOpen(t)
+	if err := s.UpsertProject(ctx, domain.ProjectRecord{ID: "project", Path: "/repo", RegisteredAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	svc := tasksvc.New(s)
+	actor := domain.AdaptiveActor{Kind: "USER", ID: "human"}
+	input := tasksvc.CreateInput{Definition: domain.TaskDefinition{Title: "Parent", Brief: "Plan dependencies", MaxAttempts: 2}, Criteria: &domain.AcceptanceCriteria{Criteria: []domain.AcceptanceCriterion{{ID: "review", Requirement: "Verify dependency", EvidenceKind: "review"}}}, Reason: "Author work"}
+	parent, err := svc.Create(ctx, actor, "project", input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.Definition.ParentID = parent.Task.ID
+	input.Definition.Dependencies = []string{parent.Task.ID}
+	child, err := svc.Create(ctx, actor, "project", input)
+	if err != nil || child.State.Phase != "blocked" {
+		t.Fatalf("unverified dependency ready: %+v %v", child.State, err)
+	}
+	if _, err := s.RaiseTaskNeedsHuman(ctx, parent.Task.ID, domain.TaskNeedsHuman{ID: "nh-1", ReasonCode: "credential_missing", Detail: "The provider credential expired", Actor: actor, CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	parent, err = svc.Get(ctx, parent.Task.ID)
+	if err != nil || parent.State.Phase != "needs-human" || parent.State.NeedsHumanTaskID != parent.Task.ID || !strings.Contains(parent.State.Reason, "credential_missing") {
+		t.Fatalf("needs human phase: %+v %v", parent.State, err)
+	}
+	child, err = svc.Get(ctx, child.Task.ID)
+	if err != nil || child.State.Phase != "blocked" || child.State.NeedsHumanTaskID != parent.Task.ID {
+		t.Fatalf("descendant not blocked: %+v %v", child.State, err)
+	}
+	if _, err := s.ResolveTaskNeedsHuman(ctx, parent.Task.ID, domain.TaskNeedsHumanResolution{Resolution: "Rotated the credential", Actor: actor, ResolvedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	parent, err = svc.Get(ctx, parent.Task.ID)
+	if err != nil || parent.State.Phase == "needs-human" {
+		t.Fatalf("resolved task still needs human: %+v %v", parent.State, err)
+	}
+	child, err = svc.Get(ctx, child.Task.ID)
+	if err != nil || child.State.NeedsHumanTaskID != "" {
+		t.Fatalf("resolved descendant still blocked: %+v %v", child.State, err)
 	}
 }

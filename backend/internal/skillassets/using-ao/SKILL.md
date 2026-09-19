@@ -13,6 +13,7 @@ trigger: "Using the ao CLI in an AO workspace: spawning workers, managing sessio
 | `spawn` | Spawn a project worker or projectless standalone worker | Starting a new task or issue | [commands/spawn.md](commands/spawn.md) |
 | `session` | Manage agent sessions (list, kill, rename, restore, etc.) | Inspecting or controlling running/terminated sessions | [commands/session.md](commands/session.md) |
 | `project` | Register, inspect, configure, or remove projects | Setting up or managing repos AO knows about | [commands/project.md](commands/project.md) |
+| `project` controls | Pause, resume, drain, stop, cancel work, list Needs Human, dry-run plans | Steering a project deterministically without touching unrelated projects | [commands/project-control.md](commands/project-control.md) |
 | `agent-type` | Author reusable, versioned worker configurations | Inspecting, creating, cloning or activating Agent Types | [commands/registry.md](commands/registry.md) |
 | `skill` | Author and version composable Skills | Managing pinned reusable instructions | [commands/registry.md](commands/registry.md) |
 | `task` | Inspect persistent work, context, results and typed messages | Executing a reserved task or observing its history | [commands/task.md](commands/task.md) |

@@ -37,3 +37,12 @@ WITH RECURSIVE ancestry(id,parent_id,depth) AS (
 SELECT n.task_id FROM ancestry a JOIN adaptive_task_needs_human n ON n.task_id=a.id
 WHERE n.resolved_at IS NULL
 ORDER BY a.depth LIMIT 1;
+
+-- name: ListProjectActiveAttemptSessions :many
+SELECT s.id FROM adaptive_task_attempts a
+ JOIN adaptive_tasks t ON t.id=a.task_id
+ JOIN adaptive_task_leases l ON l.attempt_id=a.id
+ JOIN adaptive_task_dispatches d ON d.attempt_id=a.id
+ JOIN sessions s ON s.id=d.session_id
+ WHERE t.project_id=? AND l.released_at IS NULL AND s.is_terminated=0 AND s.kind='worker'
+ ORDER BY s.id;

@@ -4969,6 +4969,251 @@ paths:
       summary: Replace a project's per-project config
       tags:
       - projects
+  /api/v1/projects/{id}/control:
+    get:
+      operationId: getProjectControl
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectControlResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Read the stored control state and its derived effective state
+      tags:
+      - control
+    post:
+      operationId: setProjectControl
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlStateInput'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectControlResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Pause, resume, drain or stop one project deterministically
+      tags:
+      - control
+  /api/v1/projects/{id}/control/cancel-work:
+    post:
+      operationId: cancelProjectWork
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlCancelInput'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectCancelWorkResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Cancel pending or all work and report requested terminations
+      tags:
+      - control
+  /api/v1/projects/{id}/dry-run:
+    post:
+      operationId: dryRunProjectPlan
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DomainDryRunRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DryRunResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Simulate an autonomous plan with writes and launches disabled
+      tags:
+      - control
   /api/v1/projects/{id}/experiments:
     get:
       operationId: listEvolutionExperiments
@@ -5742,6 +5987,63 @@ paths:
       summary: Record a project claim and its provenance
       tags:
       - knowledge
+  /api/v1/projects/{id}/needs-human:
+    get:
+      operationId: listProjectNeedsHuman
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectNeedsHumanResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Page the project's open requests for human input
+      tags:
+      - control
   /api/v1/projects/{id}/orchestrator/complete:
     post:
       operationId: submitOrchestratorComplete
@@ -14460,6 +14762,128 @@ paths:
       summary: Request run or cancellation intent without releasing worker ownership
       tags:
       - tasks
+  /api/v1/tasks/{taskId}/needs-human:
+    post:
+      operationId: raiseTaskNeedsHuman
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlNeedsHumanInput'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskNeedsHumanResponse'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Record one structured request for human input on a task
+      tags:
+      - control
+  /api/v1/tasks/{taskId}/needs-human/resolve:
+    post:
+      operationId: resolveTaskNeedsHuman
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlResolveInput'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskNeedsHumanResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Close the pending request exactly once with the human decision
+      tags:
+      - control
   /api/v1/tasks/{taskId}/revisions:
     get:
       operationId: listTaskRevisions
@@ -15026,6 +15450,8 @@ components:
       properties:
         cancelledBy:
           type: string
+        needsHumanTaskId:
+          type: string
         phase:
           enum:
           - planned
@@ -15035,6 +15461,7 @@ components:
           - working
           - failed
           - completed
+          - needs-human
           - cancelling
           - cancelled
           type: string
@@ -17251,6 +17678,80 @@ components:
       - disposition
       - reason
       type: object
+    ControlCancelInput:
+      properties:
+        reason:
+          type: string
+        scope:
+          enum:
+          - pending
+          - all
+          type: string
+      required:
+      - scope
+      - reason
+      type: object
+    ControlCancelResult:
+      properties:
+        killServiceWired:
+          type: boolean
+        result:
+          $ref: '#/components/schemas/DomainProjectWorkCancellationResult'
+        terminations:
+          items:
+            $ref: '#/components/schemas/ControlSessionTermination'
+          type: array
+      required:
+      - result
+      - killServiceWired
+      type: object
+    ControlNeedsHumanInput:
+      properties:
+        detail:
+          type: string
+        reasonCode:
+          enum:
+          - credential_missing
+          - approval_required
+          - ambiguous_intent
+          - provider_unavailable
+          - recovery_inconclusive
+          type: string
+      required:
+      - reasonCode
+      - detail
+      type: object
+    ControlResolveInput:
+      properties:
+        resolution:
+          type: string
+      required:
+      - resolution
+      type: object
+    ControlSessionTermination:
+      properties:
+        error:
+          type: string
+        sessionId:
+          type: string
+      required:
+      - sessionId
+      type: object
+    ControlStateInput:
+      properties:
+        reason:
+          type: string
+        state:
+          enum:
+          - running
+          - paused
+          - draining
+          - stopped
+          type: string
+      required:
+      - state
+      - reason
+      type: object
     ControllersAgentManagerRegistryReceiptsResponse:
       properties:
         items:
@@ -18497,6 +18998,128 @@ components:
       - createdAt
       - contentHash
       type: object
+    DomainDryRunActionVerdict:
+      properties:
+        action:
+          type: string
+        findings:
+          items:
+            type: string
+          type: array
+        index:
+          type: integer
+        notes:
+          items:
+            type: string
+          type: array
+        taskId:
+          type: string
+        wouldApply:
+          type: boolean
+      required:
+      - index
+      - action
+      - wouldApply
+      - findings
+      type: object
+    DomainDryRunAdmission:
+      properties:
+        activeWorkers:
+          format: int64
+          type: integer
+        controlState:
+          enum:
+          - running
+          - paused
+          - draining
+          - stopped
+          type: string
+        headroom:
+          format: int64
+          type: integer
+        maxConcurrentWorkers:
+          type: integer
+        wouldAdmitDispatch:
+          type: boolean
+      required:
+      - controlState
+      - activeWorkers
+      - maxConcurrentWorkers
+      - headroom
+      - wouldAdmitDispatch
+      type: object
+    DomainDryRunRequest:
+      properties:
+        actions:
+          items:
+            $ref: '#/components/schemas/OrchestratorPlanAction'
+          type: array
+      required:
+      - actions
+      type: object
+    DomainDryRunSelectionVerdict:
+      properties:
+        actionIndex:
+          type: integer
+        activeVersion:
+          format: int64
+          type: integer
+        agentTypeId:
+          type: string
+        findings:
+          items:
+            type: string
+          type: array
+        notes:
+          items:
+            type: string
+          type: array
+        pinsActive:
+          type: boolean
+        requestedVersion:
+          format: int64
+          type: integer
+        resolves:
+          type: boolean
+      required:
+      - actionIndex
+      - agentTypeId
+      - requestedVersion
+      - activeVersion
+      - pinsActive
+      - resolves
+      - findings
+      type: object
+    DomainDryRunVerdict:
+      properties:
+        actions:
+          items:
+            $ref: '#/components/schemas/DomainDryRunActionVerdict'
+          type: array
+        admission:
+          $ref: '#/components/schemas/DomainDryRunAdmission'
+        costEstimate:
+          type: string
+        graphValid:
+          type: boolean
+        projectId:
+          type: string
+        selections:
+          items:
+            $ref: '#/components/schemas/DomainDryRunSelectionVerdict'
+          type: array
+        simulatedAt:
+          format: date-time
+          type: string
+      required:
+      - projectId
+      - graphValid
+      - actions
+      - selections
+      - admission
+      - costEstimate
+      - simulatedAt
+      type: object
     DomainEvolutionCohort:
       properties:
         comparableAttempts:
@@ -18989,6 +19612,50 @@ components:
       - plannedTaskStates
       - plannedTaskAttempts
       type: object
+    DomainProjectControl:
+      properties:
+        actor:
+          $ref: '#/components/schemas/AdaptiveActor'
+        projectId:
+          type: string
+        reason:
+          type: string
+        state:
+          enum:
+          - running
+          - paused
+          - draining
+          - stopped
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      required:
+      - projectId
+      - state
+      - actor
+      - reason
+      - updatedAt
+      type: object
+    DomainProjectControlView:
+      properties:
+        activeAttempts:
+          format: int64
+          type: integer
+        control:
+          $ref: '#/components/schemas/DomainProjectControl'
+        effectiveState:
+          enum:
+          - running
+          - paused
+          - draining
+          - stopped
+          type: string
+      required:
+      - control
+      - effectiveState
+      - activeAttempts
+      type: object
     DomainProjectGoalBlocker:
       properties:
         reason:
@@ -19011,6 +19678,23 @@ components:
       - revision
       - state
       - reason
+      type: object
+    DomainProjectWorkCancellationResult:
+      properties:
+        cancelled:
+          items:
+            type: string
+          type: array
+        retained:
+          items:
+            type: string
+          type: array
+        scope:
+          type: string
+      required:
+      - scope
+      - cancelled
+      - retained
       type: object
     DomainRegistryDefinitionDiff:
       properties:
@@ -19120,6 +19804,54 @@ components:
       - createdAt
       - contentHash
       type: object
+    DomainTaskNeedsHuman:
+      properties:
+        actor:
+          $ref: '#/components/schemas/AdaptiveActor'
+        createdAt:
+          format: date-time
+          type: string
+        detail:
+          type: string
+        id:
+          type: string
+        projectId:
+          type: string
+        reasonCode:
+          enum:
+          - credential_missing
+          - approval_required
+          - ambiguous_intent
+          - provider_unavailable
+          - recovery_inconclusive
+          type: string
+        resolution:
+          $ref: '#/components/schemas/DomainTaskNeedsHumanResolution'
+        taskId:
+          type: string
+      required:
+      - id
+      - taskId
+      - projectId
+      - reasonCode
+      - detail
+      - actor
+      - createdAt
+      type: object
+    DomainTaskNeedsHumanResolution:
+      properties:
+        actor:
+          $ref: '#/components/schemas/AdaptiveActor'
+        resolution:
+          type: string
+        resolvedAt:
+          format: date-time
+          type: string
+      required:
+      - resolution
+      - actor
+      - resolvedAt
+      type: object
     DomainTaskOutcomeTotals:
       properties:
         cancelled:
@@ -19147,6 +19879,13 @@ components:
       - cancelling
       - working
       - pending
+      type: object
+    DryRunResponse:
+      properties:
+        verdict:
+          $ref: '#/components/schemas/DomainDryRunVerdict'
+      required:
+      - verdict
       type: object
     EditConversationMessageRequest:
       properties:
@@ -20815,6 +21554,13 @@ components:
       - defaultBranch
       - folderMissing
       type: object
+    ProjectCancelWorkResponse:
+      properties:
+        cancel:
+          $ref: '#/components/schemas/ControlCancelResult'
+      required:
+      - cancel
+      type: object
     ProjectClonePreparationCleanupInput:
       properties:
         path:
@@ -20869,6 +21615,13 @@ components:
           $ref: '#/components/schemas/TrackerIntakeConfig'
         worker:
           $ref: '#/components/schemas/RoleOverride'
+      type: object
+    ProjectControlResponse:
+      properties:
+        view:
+          $ref: '#/components/schemas/DomainProjectControlView'
+      required:
+      - view
       type: object
     ProjectFeedbackItem:
       properties:
@@ -21090,6 +21843,17 @@ components:
       - version
       - createdAt
       - updatedAt
+      type: object
+    ProjectNeedsHumanResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/DomainTaskNeedsHuman'
+          type: array
+        nextAfterId:
+          type: string
+      required:
+      - items
       type: object
     ProjectOrDegraded:
       oneOf:
@@ -24029,6 +24793,13 @@ components:
           type: string
       required:
       - items
+      type: object
+    TaskNeedsHumanResponse:
+      properties:
+        needsHuman:
+          $ref: '#/components/schemas/DomainTaskNeedsHuman'
+      required:
+      - needsHuman
       type: object
     TaskObservationEvidence:
       properties:

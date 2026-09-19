@@ -48,6 +48,13 @@ type DryRunStore interface {
 	DryRunPlan(ctx context.Context, projectID domain.ProjectID, request domain.DryRunRequest) (domain.DryRunVerdict, error)
 }
 
+// ProjectAttemptSessionReader names the worker sessions holding live task
+// attempts in one project, so cancel-all can request termination through the
+// normal kill services instead of assuming anything stopped.
+type ProjectAttemptSessionReader interface {
+	ListProjectActiveAttemptSessions(ctx context.Context, projectID domain.ProjectID) ([]domain.SessionID, error)
+}
+
 // TaskNeedsHumanStore records and pages structured requests for human input.
 type TaskNeedsHumanStore interface {
 	RaiseTaskNeedsHuman(ctx context.Context, taskID string, request domain.TaskNeedsHuman) (domain.TaskNeedsHuman, error)

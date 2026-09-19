@@ -9,6 +9,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 )
 
 const countProjectActiveAttempts = `-- name: CountProjectActiveAttempts :one
@@ -142,6 +144,39 @@ func (q *Queries) InsertTaskNeedsHuman(ctx context.Context, arg InsertTaskNeedsH
 		arg.CreatedAt,
 	)
 	return err
+}
+
+const listProjectActiveAttemptSessions = `-- name: ListProjectActiveAttemptSessions :many
+SELECT s.id FROM adaptive_task_attempts a
+ JOIN adaptive_tasks t ON t.id=a.task_id
+ JOIN adaptive_task_leases l ON l.attempt_id=a.id
+ JOIN adaptive_task_dispatches d ON d.attempt_id=a.id
+ JOIN sessions s ON s.id=d.session_id
+ WHERE t.project_id=? AND l.released_at IS NULL AND s.is_terminated=0 AND s.kind='worker'
+ ORDER BY s.id
+`
+
+func (q *Queries) ListProjectActiveAttemptSessions(ctx context.Context, projectID string) ([]domain.SessionID, error) {
+	rows, err := q.db.QueryContext(ctx, listProjectActiveAttemptSessions, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []domain.SessionID{}
+	for rows.Next() {
+		var id domain.SessionID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listProjectNeedsHumanIDs = `-- name: ListProjectNeedsHumanIDs :many

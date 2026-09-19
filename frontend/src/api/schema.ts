@@ -1565,6 +1565,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the stored control state and its derived effective state */
+        get: operations["getProjectControl"];
+        put?: never;
+        /** Pause, resume, drain or stop one project deterministically */
+        post: operations["setProjectControl"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/control/cancel-work": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel pending or all work and report requested terminations */
+        post: operations["cancelProjectWork"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Simulate an autonomous plan with writes and launches disabled */
+        post: operations["dryRunProjectPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/experiments": {
         parameters: {
             query?: never;
@@ -1715,6 +1767,23 @@ export interface paths {
         put?: never;
         /** Record a project claim and its provenance */
         post: operations["createProjectKnowledge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/needs-human": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page the project's open requests for human input */
+        get: operations["listProjectNeedsHuman"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4140,6 +4209,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tasks/{taskId}/needs-human": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record one structured request for human input on a task */
+        post: operations["raiseTaskNeedsHuman"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{taskId}/needs-human/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close the pending request exactly once with the human decision */
+        post: operations["resolveTaskNeedsHuman"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tasks/{taskId}/revisions": {
         parameters: {
             query?: never;
@@ -4333,8 +4436,9 @@ export interface components {
         };
         AdaptiveTaskState: {
             cancelledBy?: string;
+            needsHumanTaskId?: string;
             /** @enum {string} */
-            phase: "planned" | "blocked" | "ready" | "leased" | "working" | "failed" | "completed" | "cancelling" | "cancelled";
+            phase: "planned" | "blocked" | "ready" | "leased" | "working" | "failed" | "completed" | "needs-human" | "cancelling" | "cancelled";
             reason: string;
             requiresReconciliation: boolean;
         };
@@ -5141,6 +5245,33 @@ export interface components {
             /** Format: int64 */
             version?: number;
         };
+        ControlCancelInput: {
+            reason: string;
+            /** @enum {string} */
+            scope: "pending" | "all";
+        };
+        ControlCancelResult: {
+            killServiceWired: boolean;
+            result: components["schemas"]["DomainProjectWorkCancellationResult"];
+            terminations?: components["schemas"]["ControlSessionTermination"][];
+        };
+        ControlNeedsHumanInput: {
+            detail: string;
+            /** @enum {string} */
+            reasonCode: "credential_missing" | "approval_required" | "ambiguous_intent" | "provider_unavailable" | "recovery_inconclusive";
+        };
+        ControlResolveInput: {
+            resolution: string;
+        };
+        ControlSessionTermination: {
+            error?: string;
+            sessionId: string;
+        };
+        ControlStateInput: {
+            reason: string;
+            /** @enum {string} */
+            state: "running" | "paused" | "draining" | "stopped";
+        };
         ControllersAgentManagerRegistryReceiptsResponse: {
             items: components["schemas"]["DomainAgentManagerRegistryReceipt"][];
             nextAfterId?: string;
@@ -5584,6 +5715,49 @@ export interface components {
             target: components["schemas"]["WorkerDefinitionRef"];
             workerConfigurationHash: string;
         };
+        DomainDryRunActionVerdict: {
+            action: string;
+            findings: string[];
+            index: number;
+            notes?: string[];
+            taskId?: string;
+            wouldApply: boolean;
+        };
+        DomainDryRunAdmission: {
+            /** Format: int64 */
+            activeWorkers: number;
+            /** @enum {string} */
+            controlState: "running" | "paused" | "draining" | "stopped";
+            /** Format: int64 */
+            headroom: number;
+            maxConcurrentWorkers: number;
+            wouldAdmitDispatch: boolean;
+        };
+        DomainDryRunRequest: {
+            actions: components["schemas"]["OrchestratorPlanAction"][];
+        };
+        DomainDryRunSelectionVerdict: {
+            actionIndex: number;
+            /** Format: int64 */
+            activeVersion: number;
+            agentTypeId: string;
+            findings: string[];
+            notes?: string[];
+            pinsActive: boolean;
+            /** Format: int64 */
+            requestedVersion: number;
+            resolves: boolean;
+        };
+        DomainDryRunVerdict: {
+            actions: components["schemas"]["DomainDryRunActionVerdict"][];
+            admission: components["schemas"]["DomainDryRunAdmission"];
+            costEstimate: string;
+            graphValid: boolean;
+            projectId: string;
+            selections: components["schemas"]["DomainDryRunSelectionVerdict"][];
+            /** Format: date-time */
+            simulatedAt: string;
+        };
         DomainEvolutionCohort: {
             /** Format: int64 */
             comparableAttempts: number;
@@ -5791,6 +5965,22 @@ export interface components {
             /** Format: int64 */
             reviseTask: number;
         };
+        DomainProjectControl: {
+            actor: components["schemas"]["AdaptiveActor"];
+            projectId: string;
+            reason: string;
+            /** @enum {string} */
+            state: "running" | "paused" | "draining" | "stopped";
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        DomainProjectControlView: {
+            /** Format: int64 */
+            activeAttempts: number;
+            control: components["schemas"]["DomainProjectControl"];
+            /** @enum {string} */
+            effectiveState: "running" | "paused" | "draining" | "stopped";
+        };
         DomainProjectGoalBlocker: {
             reason: string;
             /** Format: int64 */
@@ -5798,6 +5988,11 @@ export interface components {
             /** @enum {string} */
             state: "pending" | "working" | "blocked" | "failed" | "cancelling";
             taskId: string;
+        };
+        DomainProjectWorkCancellationResult: {
+            cancelled: string[];
+            retained: string[];
+            scope: string;
         };
         DomainRegistryDefinitionDiff: {
             entryId: string;
@@ -5840,6 +6035,24 @@ export interface components {
             sessionId: string;
             systemPrompt: string;
         };
+        DomainTaskNeedsHuman: {
+            actor: components["schemas"]["AdaptiveActor"];
+            /** Format: date-time */
+            createdAt: string;
+            detail: string;
+            id: string;
+            projectId: string;
+            /** @enum {string} */
+            reasonCode: "credential_missing" | "approval_required" | "ambiguous_intent" | "provider_unavailable" | "recovery_inconclusive";
+            resolution?: components["schemas"]["DomainTaskNeedsHumanResolution"];
+            taskId: string;
+        };
+        DomainTaskNeedsHumanResolution: {
+            actor: components["schemas"]["AdaptiveActor"];
+            resolution: string;
+            /** Format: date-time */
+            resolvedAt: string;
+        };
         DomainTaskOutcomeTotals: {
             /** Format: int64 */
             cancelled: number;
@@ -5853,6 +6066,9 @@ export interface components {
             pending: number;
             /** Format: int64 */
             working: number;
+        };
+        DryRunResponse: {
+            verdict: components["schemas"]["DomainDryRunVerdict"];
         };
         EditConversationMessageRequest: {
             clientMessageId?: string;
@@ -6484,6 +6700,9 @@ export interface components {
             repo: string;
             workspaceRepos?: components["schemas"]["WorkspaceRepo"][];
         };
+        ProjectCancelWorkResponse: {
+            cancel: components["schemas"]["ControlCancelResult"];
+        };
         ProjectClonePreparationCleanupInput: {
             path: string;
             preparationId: string;
@@ -6507,6 +6726,9 @@ export interface components {
             symlinks?: string[];
             trackerIntake?: components["schemas"]["TrackerIntakeConfig"];
             worker?: components["schemas"]["RoleOverride"];
+        };
+        ProjectControlResponse: {
+            view: components["schemas"]["DomainProjectControlView"];
         };
         ProjectFeedbackItem: {
             evaluationId?: string;
@@ -6594,6 +6816,10 @@ export interface components {
             updatedAt: string;
             /** Format: int64 */
             version: number;
+        };
+        ProjectNeedsHumanResponse: {
+            items: components["schemas"]["DomainTaskNeedsHuman"][];
+            nextAfterId?: string;
         };
         ProjectOrDegraded: components["schemas"]["Project"] | components["schemas"]["DegradedProject"];
         ProjectResponse: {
@@ -7738,6 +7964,9 @@ export interface components {
         TaskMessagesResponse: {
             items: components["schemas"]["TaskMessage"][];
             nextCursor?: string;
+        };
+        TaskNeedsHumanResponse: {
+            needsHuman: components["schemas"]["DomainTaskNeedsHuman"];
         };
         TaskObservationEvidence: {
             artifacts?: components["schemas"]["TaskArtifactEvidence"][];
@@ -14836,6 +15065,326 @@ export interface operations {
             };
         };
     };
+    getProjectControl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectControlResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    setProjectControl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ControlStateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectControlResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    cancelProjectWork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ControlCancelInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectCancelWorkResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    dryRunProjectPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DomainDryRunRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DryRunResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
     listEvolutionExperiments: {
         parameters: {
             query?: never;
@@ -15732,6 +16281,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listProjectNeedsHuman: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectNeedsHumanResponse"];
                 };
             };
             /** @description Bad Request */
@@ -26525,6 +27151,166 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskIntent"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    raiseTaskNeedsHuman: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ControlNeedsHumanInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskNeedsHumanResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    resolveTaskNeedsHuman: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ControlResolveInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskNeedsHumanResponse"];
                 };
             };
             /** @description Bad Request */

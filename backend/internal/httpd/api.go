@@ -38,6 +38,7 @@ type APIDeps struct {
 	OrchestratorGoals  controllers.OrchestratorGoalService
 	AgentManagers      controllers.AgentManagerService
 	Evolution          controllers.EvolutionService
+	Control            controllers.ControlService
 	ProjectKnowledge   controllers.ProjectKnowledgeService
 	NotificationStream controllers.NotificationStream
 	Push               controllers.PushRegistry
@@ -123,6 +124,7 @@ type API struct {
 	orchestrator  *controllers.OrchestratorController
 	agentManagers *controllers.AgentManagersController
 	evolution     *controllers.EvolutionController
+	control       *controllers.ControlController
 	knowledge     *controllers.ProjectKnowledgeController
 	push          *controllers.PushController
 	imports       *controllers.ImportController
@@ -171,6 +173,7 @@ func NewAPI(cfg config.Config, deps APIDeps) *API {
 		orchestrator:  &controllers.OrchestratorController{Svc: deps.OrchestratorGoals},
 		agentManagers: &controllers.AgentManagersController{Svc: deps.AgentManagers},
 		evolution:     &controllers.EvolutionController{Svc: deps.Evolution},
+		control:       &controllers.ControlController{Svc: deps.Control},
 		knowledge:     &controllers.ProjectKnowledgeController{Svc: deps.ProjectKnowledge},
 		push:          &controllers.PushController{Registry: deps.Push},
 		imports:       &controllers.ImportController{Svc: deps.Import},
@@ -216,6 +219,7 @@ func (a *API) Register(root chi.Router) {
 			a.orchestrator.Register(r)
 			a.agentManagers.Register(r)
 			a.evolution.Register(r)
+			a.control.Register(r)
 			a.knowledge.Register(r)
 			a.push.Register(r)
 			a.imports.Register(r)
