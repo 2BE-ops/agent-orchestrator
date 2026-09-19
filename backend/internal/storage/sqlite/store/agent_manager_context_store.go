@@ -46,6 +46,23 @@ func (s *Store) SealAgentManagerContext(ctx context.Context, input domain.AgentM
 	var sealed domain.AgentManagerContext
 	created := false
 	err := s.inTx(ctx, "seal Manager context", func(q *gen.Queries) error {
+		var err error
+		sealed, created, err = sealManagerContext(ctx, q, input)
+		return err
+	})
+	if err != nil {
+		return domain.AgentManagerContext{}, false, err
+	}
+	return sealed, created, nil
+}
+
+// sealManagerContext participates in both an explicit seal and an atomic native
+// delivery reservation; neither path commits partial context or audit state.
+func sealManagerContext(ctx context.Context, q *gen.Queries, input domain.AgentManagerContextSeal) (domain.AgentManagerContext, bool, error) {
+	generation := resultGeneration(input.SourceOwner)
+	var sealed domain.AgentManagerContext
+	created := false
+	err := func() error {
 		row, err := q.GetAgentManagerRequest(ctx, input.RequestID)
 		if err != nil {
 			return agentManagerReadError(err)
@@ -185,7 +202,7 @@ func (s *Store) SealAgentManagerContext(ctx context.Context, input domain.AgentM
 		}
 		created = true
 		return nil
-	})
+	}()
 	if err != nil {
 		return domain.AgentManagerContext{}, false, err
 	}

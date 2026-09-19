@@ -67,11 +67,31 @@ type AdaptiveAgentManagerController struct {
 	ReleaseReason        string
 }
 
+type AdaptiveAgentManagerDelivery struct {
+	ID           string
+	RequestID    string
+	ContextID    string
+	ControllerID string
+	Number       int64
+	SessionID    string
+	Owner        string
+	DeliveryKey  string
+	State        string
+	Reason       string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 type AdaptiveAgentManagerDispatch struct {
 	ControllerID      string
 	SessionID         string
 	ConfigurationHash string
 	CreatedAt         time.Time
+}
+
+type AdaptiveAgentManagerDispatchCursor struct {
+	ID            int64
+	AfterSequence int64
 }
 
 type AdaptiveAgentManagerExecutionOperation struct {

@@ -34,7 +34,7 @@ func TestAgentManagerContextPinnedClearanceLattice(t *testing.T) {
 		for _, class := range []domain.ContextClass{domain.ContextTechnical, domain.ContextEngagement, domain.ContextMission} {
 			t.Run(string(clearance)+"/"+string(class), func(t *testing.T) {
 				s := newTestStore(t)
-				native := managerProposalFixture(t, s, domain.SessionModeTUI, clearance)
+				native := managerNativeFixture(t, s, domain.SessionModeTUI, clearance)
 				input := managerContextRequest(t, s, native, "classified", class, "client-a")
 				definition := registryAgentDefinition()
 				definition.AgentType.MaxContextClass = domain.ContextMission
@@ -54,6 +54,13 @@ func TestAgentManagerContextPinnedClearanceLattice(t *testing.T) {
 					if err != nil || len(items) != 0 {
 						t.Fatalf("refusal retained input: %+v %v", items, err)
 					}
+					if _, created, err := s.BeginAgentManagerDelivery(ctx, input, "forbidden-send"); !errors.Is(err, ports.ErrAgentManagerForbidden) || created {
+						t.Fatalf("higher-class native send reserved: %v %v", created, err)
+					}
+					deliveries, err := s.ListAgentManagerDeliveries(ctx, "project", input.RequestID)
+					if err != nil || len(deliveries) != 0 {
+						t.Fatalf("class refusal left native claim: %+v %v", deliveries, err)
+					}
 					return
 				}
 				if err != nil || !created || sealed.MaxContextClass != clearance || sealed.Classification != class || sealed.NativeGeneration != native.SourceOwner.RuntimeLaunchID || len(sealed.Sources) != 2 {
@@ -72,7 +79,7 @@ func TestAgentManagerContextConversationScopeAndSensitivitySurviveGenerations(t 
 	for _, mode := range []domain.SessionMode{domain.SessionModeTUI, domain.SessionModeChat} {
 		t.Run(string(mode), func(t *testing.T) {
 			s := newTestStore(t)
-			native := managerProposalFixture(t, s, mode, domain.ContextMission)
+			native := managerNativeFixture(t, s, mode, domain.ContextMission)
 			firstInput := managerContextRequest(t, s, native, "first", domain.ContextMission, "")
 			first, _, err := s.SealAgentManagerContext(ctx, firstInput)
 			mustNoError(t, err)
@@ -114,7 +121,7 @@ func TestAgentManagerContextRaceRestartBoundsAndExactReplay(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	s := sqlitetest.MustOpenAt(t, dir)
-	native := managerProposalFixture(t, s, domain.SessionModeTUI, domain.ContextEngagement)
+	native := managerNativeFixture(t, s, domain.SessionModeTUI, domain.ContextEngagement)
 	input := managerContextRequest(t, s, native, "bounded", domain.ContextEngagement, "client-a")
 	var wg sync.WaitGroup
 	results := make(chan bool, 8)
@@ -181,7 +188,7 @@ func TestAgentManagerContextAuditRollbackAndSQLProtection(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	s := sqlitetest.MustOpenAt(t, dir)
-	native := managerProposalFixture(t, s, domain.SessionModeTUI, domain.ContextMission)
+	native := managerNativeFixture(t, s, domain.SessionModeTUI, domain.ContextMission)
 	input := managerContextRequest(t, s, native, "atomic", domain.ContextEngagement, "client-a")
 	db, err := sql.Open("sqlite", filepath.Join(dir, "ao.db"))
 	mustNoError(t, err)

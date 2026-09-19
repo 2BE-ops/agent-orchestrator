@@ -56,6 +56,13 @@ func managerProposalAPIFixture(t *testing.T) (http.Handler, *sqlite.Store, domai
 		t.Fatal(err)
 	}
 	registryRequest(t, router, http.MethodPost, "/projects/project/agent-manager/requests", controllers.AgentManagerEnqueueRequest{ID: "native-request", TaskID: "native-task", TaskRevision: 1, ConfigurationVersion: 1, Reason: "Route this task"}, http.StatusOK)
+	delivery, _, err := s.BeginAgentManagerDelivery(ctx, domain.AgentManagerContextSeal{ID: "native-context", ProjectID: "project", RequestID: "native-request", SessionID: rec.ID, SourceOwner: rec.ControllerOwner(), Now: time.Now().UTC()}, "native-delivery")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ResolveAgentManagerDelivery(ctx, domain.AgentManagerDeliveryResolution{ID: delivery.ID, State: "handed_off", Reason: "Observed native input acceptance"}); err != nil {
+		t.Fatal(err)
+	}
 	return router, s, rec
 }
 

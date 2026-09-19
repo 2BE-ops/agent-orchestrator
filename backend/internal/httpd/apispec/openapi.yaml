@@ -13266,11 +13266,23 @@ components:
       type: object
     AgentManagerProposal:
       properties:
+        classification:
+          enum:
+          - technical
+          - engagement
+          - mission
+          type: string
         configurationHash:
           type: string
         contentHash:
           type: string
+        contextHash:
+          type: string
+        contextId:
+          type: string
         controllerId:
+          type: string
+        conversationContextHash:
           type: string
         createdAt:
           format: date-time
@@ -13280,6 +13292,8 @@ components:
           - type: "null"
           - $ref: '#/components/schemas/AgentManagerProposalDefinition'
             type: object
+        engagementId:
+          type: string
         id:
           type: string
         nativeGeneration:

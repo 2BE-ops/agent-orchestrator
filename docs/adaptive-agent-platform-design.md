@@ -751,6 +751,27 @@ of retained history. Sealing and audit/CDC are atomic. Exact retries inspect old
 bytes after task or policy changes; they authorize no native effect. Transport
 acknowledgements and proposal-to-input attribution remain subsequent slices.
 
+Stage 14e2 adds bounded native input delivery (0175). A transaction seals the
+classified input and reserves one of at most four native sends. One unfinished
+routing request occupies a Manager conversation; ambiguous/dispatching writes
+also block later input even if routing intent is independently resolved. Only
+proven no-send outcomes permit automatic retry. The fourth refusal atomically
+records Needs Human. Stable per-request delivery keys use existing Chat dedup;
+TUI retains its lack of recipient acknowledgement. Restart recovery must mark
+unresolved claims uncertain, never resend them based on a timeout or probe.
+
+Manager delivery and worker messages share the existing native operation, Chat
+relay and guarded TUI writer. Manager transport verifies the actual retained
+context/reservation, rechecks live governance/task intent immediately before
+writing, and sends the exact sealed bytes. The shared writer preserves explicit
+role boundaries. New proposals require a matching native input claim (including
+an in-flight claim, because native output can precede transport commit). They
+retain both the received input hash and the latest conversation hash/class/scope;
+prior sensitive context cannot disappear from a later technical routing result.
+Historical unclassified proposal bytes remain readable through optional fields;
+new inserts require attributed input. Public delivery/context inspection, daemon
+consumption and generation-specific CLI instructions follow in 14e3.
+
 Stage 14c1 adds the durable Manager inbox (0171). Routing requests reference exact
 task/criteria and governance versions plus hashes, without embedding task content.
 They are independent of a native controller's lifetime. Enqueue serializes with

@@ -16,6 +16,7 @@ const (
 	agentOperationTaskDispatch      agentOperationKind = "task_dispatch"
 	agentOperationManagerDispatch   agentOperationKind = "manager_dispatch"
 	agentOperationTaskMessage       agentOperationKind = "task_message"
+	agentOperationManagerMessage    agentOperationKind = "manager_message"
 	agentOperationSwitch            agentOperationKind = "switch"
 	agentOperationExit              agentOperationKind = "exit"
 	agentOperationResume            agentOperationKind = "resume"

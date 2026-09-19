@@ -18,7 +18,7 @@ import (
 
 const managerSelectionProposal = `{"schemaVersion":1,"action":"select_existing","agentTypeId":"unvalidated-type","agentTypeVersion":1,"rationale":"Native semantic selection, awaiting deterministic validation","candidates":[]}`
 
-func managerProposalFixture(t *testing.T, s *sqlite.Store, mode domain.SessionMode, clearance ...domain.ContextClass) domain.AgentManagerProposalSubmission {
+func managerNativeFixture(t *testing.T, s *sqlite.Store, mode domain.SessionMode, clearance ...domain.ContextClass) domain.AgentManagerProposalSubmission {
 	t.Helper()
 	ctx := context.Background()
 	reservation, seed, snapshot := managerControllerFixture(t, s, clearance...)
@@ -44,6 +44,18 @@ func managerProposalFixture(t *testing.T, s *sqlite.Store, mode domain.SessionMo
 	_, _, err = s.EnqueueAgentManagerRequest(ctx, domain.AgentManagerEnqueue{ID: "proposal-request", ProjectID: "project", TaskID: "proposal-task", TaskRevision: 1, ConfigurationVersion: 1, Actor: domain.AdaptiveActor{Kind: "USER", ID: "human"}, Reason: "Route bounded work", Now: time.Now().UTC()})
 	mustNoError(t, err)
 	return domain.AgentManagerProposalSubmission{ID: "proposal", ProjectID: "project", RequestID: "proposal-request", SessionID: seed.ID, SourceOwner: seed.ControllerOwner(), IdempotencyKey: "native-key", Raw: managerSelectionProposal, Now: time.Now().UTC()}
+}
+
+func managerProposalFixture(t *testing.T, s *sqlite.Store, mode domain.SessionMode, clearance ...domain.ContextClass) domain.AgentManagerProposalSubmission {
+	t.Helper()
+	input := managerNativeFixture(t, s, mode, clearance...)
+	ctx := context.Background()
+	seal := domain.AgentManagerContextSeal{ID: "proposal-context", ProjectID: input.ProjectID, RequestID: input.RequestID, SessionID: input.SessionID, SourceOwner: input.SourceOwner, Now: time.Now().UTC()}
+	delivery, _, err := s.BeginAgentManagerDelivery(ctx, seal, "proposal-delivery")
+	mustNoError(t, err)
+	mustNoError(t, s.ResolveAgentManagerDelivery(ctx, domain.AgentManagerDeliveryResolution{ID: delivery.ID, State: "handed_off", Reason: "Native controller accepted routing input"}))
+	input.Now = time.Now().UTC()
+	return input
 }
 
 func TestAgentManagerProposalRacesExactReplayAndNativeAttribution(t *testing.T) {
@@ -245,7 +257,7 @@ func TestAgentManagerProposalFencesStaleOwnersAndMutableIntent(t *testing.T) {
 				t.Fatal("unsafe native context accepted")
 			}
 			contexts, err := s.ListAgentManagerContexts(ctx, "project", input.RequestID)
-			if err != nil || len(contexts) != 0 {
+			if err != nil || len(contexts) != 1 || contexts[0].ID != "proposal-context" {
 				t.Fatalf("fenced input left partial state: %+v %v", contexts, err)
 			}
 			items, err := s.ListAgentManagerProposals(ctx, "project", input.RequestID)

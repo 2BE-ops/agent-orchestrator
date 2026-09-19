@@ -4,6 +4,43 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 14e2 - durable Manager native delivery and proposal attribution (2026-09-19)
+
+Migration 0175 and transactional store APIs seal exact input together with a
+bounded exclusive send claim. One unfinished routing request owns the conversation;
+uncertain writes continue blocking it even after the request is resolved. Four
+proven no-send attempts escalate to Needs Human. SQL protects attribution/terminal
+outcomes and requires a native input for new proposals. Proposals record received
+input and cumulative conversation hashes/classification; legacy optional fields
+preserve historical hashes. Manager and worker delivery reuse one guarded native
+Chat/TUI path, with explicit roles. Manager transport also verifies durable receipt
+identity and rechecks task cancellation/governance immediately before the write.
+No daemon inbox consumption or provider demonstration is claimed yet.
+
+Tests cover concurrent duplicate reservations, restart/scan cursor, uncertain
+composer retention, bounded retries/Needs Human, atomic context/audit/CDC rollback,
+SQL immutability, scoped exact reads, missing/proven-unreceived proposal input,
+in-flight proposal races and cumulative output classification. Both native modes
+receive exact sealed bytes and stable keys. Forged/altered receipts, stale owners,
+unknown/changed generations, operation exclusion and changed governance/task intent
+cannot reach native I/O. Partial writes stay uncertain. Migration up/down/up
+preserves inbox hashes and refuses delivery-history loss (integrity/FK PASS).
+
+Focused domain/SQLite/store/native/HTTP PASS (0.662s/3.991s/3.800s/1.989s/0.997s).
+Additional pre-write boundary tests PASS (store 2.629s/native 1.513s). Full domain
+(1.674s), ports (0.503s), SQLite (40.613s), helpers (1.874s), store (25.138s),
+Manager service (2.406s), worker-message service (0.497s), HTTP router (0.885s),
+spec (0.388s), specgen (11.964s) and envelope (0.700s) PASS. Full HTTP controllers
+FAIL (14.088s) only at the two recorded Windows pairing/clone baselines; full native
+suite FAIL (44.791s) only at its eight recorded Windows baselines. After the
+additional pre-write check, full store (26.817s), Manager service (1.795s) and
+worker-message service (cached) PASS; full native suite FAIL (45.016s) at the same
+eight baselines. Final backend build and affected new-diff lint PASS (0 issues);
+frontend typecheck and sqlc/API generation PASS. An initial fixture assertion expected no contexts before new
+proposal attribution required its input receipt; corrected to assert no extra
+context. Source/generated and whitespace review PASS. Logs:
+`.cache/adaptive-tests/stage14e2-*`.
+
 ## Stage 14e1 - classified Manager input and conversation boundary (2026-09-19)
 
 Migration 0174 adds immutable, bounded Manager context artifacts with exact task

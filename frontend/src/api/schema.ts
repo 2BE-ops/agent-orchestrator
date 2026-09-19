@@ -3969,12 +3969,18 @@ export interface components {
             optimization: "quality" | "balanced" | "speed" | "usage";
         };
         AgentManagerProposal: {
+            /** @enum {string} */
+            classification?: "technical" | "engagement" | "mission";
             configurationHash: string;
             contentHash: string;
+            contextHash?: string;
+            contextId?: string;
             controllerId: string;
+            conversationContextHash?: string;
             /** Format: date-time */
             createdAt: string;
             definition: null | components["schemas"]["AgentManagerProposalDefinition"];
+            engagementId?: string;
             id: string;
             nativeGeneration: string;
             /** Format: int64 */

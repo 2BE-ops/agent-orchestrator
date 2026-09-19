@@ -87,19 +87,24 @@ func ParseAgentManagerProposal(raw string) (*AgentManagerProposalDefinition, err
 // AgentManagerProposal is immutable native output and parser outcome. A parsed
 // selection remains unapplied until separately checked against current policy.
 type AgentManagerProposal struct {
-	ID                string                          `json:"id"`
-	RequestID         string                          `json:"requestId"`
-	Number            int64                           `json:"number"`
-	ControllerID      string                          `json:"controllerId"`
-	SessionID         SessionID                       `json:"sessionId"`
-	NativeGeneration  string                          `json:"nativeGeneration"`
-	ConfigurationHash string                          `json:"configurationHash"`
-	RequestHash       string                          `json:"requestHash"`
-	Raw               string                          `json:"raw"`
-	Definition        *AgentManagerProposalDefinition `json:"definition"`
-	ValidationError   string                          `json:"validationError,omitempty"`
-	CreatedAt         time.Time                       `json:"createdAt"`
-	ContentHash       string                          `json:"contentHash"`
+	ID                      string                          `json:"id"`
+	RequestID               string                          `json:"requestId"`
+	Number                  int64                           `json:"number"`
+	ControllerID            string                          `json:"controllerId"`
+	SessionID               SessionID                       `json:"sessionId"`
+	NativeGeneration        string                          `json:"nativeGeneration"`
+	ConfigurationHash       string                          `json:"configurationHash"`
+	RequestHash             string                          `json:"requestHash"`
+	ContextID               string                          `json:"contextId,omitempty"`
+	ContextHash             string                          `json:"contextHash,omitempty"`
+	ConversationContextHash string                          `json:"conversationContextHash,omitempty"`
+	Classification          ContextClass                    `json:"classification,omitempty" enum:"technical,engagement,mission"`
+	EngagementID            string                          `json:"engagementId,omitempty"`
+	Raw                     string                          `json:"raw"`
+	Definition              *AgentManagerProposalDefinition `json:"definition"`
+	ValidationError         string                          `json:"validationError,omitempty"`
+	CreatedAt               time.Time                       `json:"createdAt"`
+	ContentHash             string                          `json:"contentHash"`
 }
 
 // Hash seals exact output, its native attribution and historical parser result.
@@ -111,6 +116,13 @@ func (p AgentManagerProposal) Hash() string {
 
 // Validate checks retained history without reparsing under newer parser rules.
 func (p AgentManagerProposal) Validate() error {
+	if p.ContextID != "" {
+		if !messageIdentity(p.ContextID) || !validArtifactHash(p.ContextHash) || !validArtifactHash(p.ConversationContextHash) || p.Classification == "" || ValidateContextScope(p.Classification, p.EngagementID) != nil {
+			return fmt.Errorf("invalid classified Manager proposal provenance")
+		}
+	} else if p.ContextHash != "" || p.ConversationContextHash != "" || p.Classification != "" || p.EngagementID != "" {
+		return fmt.Errorf("classified Manager proposal requires its sealed input")
+	}
 	for _, id := range []string{p.ID, p.RequestID, p.ControllerID, string(p.SessionID), p.NativeGeneration} {
 		if !messageIdentity(id) {
 			return fmt.Errorf("invalid Manager proposal identity")
