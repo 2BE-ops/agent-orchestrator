@@ -1057,9 +1057,20 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 	}
 
 	if taskExecution != nil {
+		workerExecutable, executableErr := m.executable()
+		if executableErr != nil || strings.TrimSpace(workerExecutable) == "" {
+			m.rollbackSeedSpawnWorkspace(ctx, rec, ws, workspaceProject, false)
+			return domain.SessionRecord{}, 0, 0, wrapSpawnStage(id, ErrSpawnPrompt, errors.Join(errors.New("resolve worker output executable"), executableErr))
+		}
+		workerRunFile := m.runFilePath
+		if workerRunFile == "" {
+			workerRunFile = strings.TrimSpace(os.Getenv(EnvRunFile))
+		}
 		contextSnapshot, contextErr := m.taskContexts.Build(ctx, ports.TaskContextRequest{
 			Lease: *cfg.TaskLease, SessionID: id, ExecutionOperationID: taskExecution.ID,
 			WorkspacePath: ws.Path, Prompt: prompt, SystemPrompt: systemPrompt,
+			WorkerExecutable:  workerExecutable,
+			WorkerRunFilePath: workerRunFile,
 		})
 		if contextErr != nil {
 			m.rollbackSeedSpawnWorkspace(ctx, rec, ws, workspaceProject, false)

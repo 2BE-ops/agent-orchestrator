@@ -112,11 +112,18 @@ func (b *Builder) Build(ctx context.Context, request ports.TaskContextRequest) (
 	if !found || config.ContentHash != dispatch.ConfigurationHash {
 		return empty, ports.ErrTaskConflict
 	}
+	basePrompt := request.Prompt
+	if request.WorkerExecutable != "" {
+		basePrompt, err = workerOutputPrompt(basePrompt, request.WorkerExecutable, request.WorkerRunFilePath, task, attempt, request.SessionID, op.ID)
+		if err != nil {
+			return empty, err
+		}
+	}
 	snapshot := domain.TaskContextSnapshot{SchemaVersion: 1, AttemptID: attempt.ID, SessionID: request.SessionID,
 		Task:            domain.TaskRevisionRef{TaskID: task.ID, Revision: revision.Number, ContentHash: revision.ContentHash},
 		CriteriaVersion: criteria.Number, ConfigurationHash: config.ContentHash, ExecutionOperationID: op.ID,
 		SystemPromptHash: domain.ContextTextHash(request.SystemPrompt), SystemPromptBytes: len(request.SystemPrompt),
-		BasePrompt: request.Prompt, Budget: budget}
+		BasePrompt: basePrompt, Budget: budget}
 	selection := sourceSelection{snapshot: &snapshot}
 	for _, source := range []domain.ContextSource{
 		definitionSource("task", task.ID, revision.Number, revision.ContentHash, revision.Definition, "Frozen attempt task revision"),

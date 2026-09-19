@@ -426,6 +426,14 @@ dependency ownership, revision pins and exact content. These historical worker
 claims confer neither verified completion nor delivery acknowledgement; later
 messages and result corrections never rewrite a sealed context.
 
+The initial native output protocol is included in the sealed base prompt, within
+the same byte/token budget. It records literal executable/argv, the owning run-file
+environment, request examples and the reserved generation. Stale workers may not
+query the current session to replace that generation. The recovery integration
+must journal and deliver replacement-generation instructions without rewriting
+historical context, including when Chat adopts a surviving native host. This is a
+native ownership transition, not permission for a worker to self-refresh identity.
+
 ## Evaluation, management and evolution
 
 Evaluations reference exact criteria and target commits. Gather objective facts

@@ -15,6 +15,8 @@ trigger: "Using the ao CLI in an AO workspace: spawning workers, managing sessio
 | `project` | Register, inspect, configure, or remove projects | Setting up or managing repos AO knows about | [commands/project.md](commands/project.md) |
 | `agent-type` | Author reusable, versioned worker configurations | Inspecting, creating, cloning or activating Agent Types | [commands/registry.md](commands/registry.md) |
 | `skill` | Author and version composable Skills | Managing pinned reusable instructions | [commands/registry.md](commands/registry.md) |
+| `task` | Inspect persistent work, context, results and typed messages | Executing a reserved task or observing its history | [commands/task.md](commands/task.md) |
+| `knowledge` | Inspect versioned project knowledge | Finding accepted project facts and their provenance | [commands/task.md](commands/task.md) |
 | `orchestrator` | List orchestrator sessions | Viewing which sessions are orchestrators | [commands/orchestrator.md](commands/orchestrator.md) |
 | `review` | Submit a reviewer result for a worker's PR | Completing a code review loop | [commands/review.md](commands/review.md) |
 | `send` | Send a message to a running agent session | Correcting or directing a live agent | [commands/send.md](commands/send.md) |

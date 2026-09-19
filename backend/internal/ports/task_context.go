@@ -21,6 +21,8 @@ type TaskContextRequest struct {
 	WorkspacePath        string
 	Prompt               string
 	SystemPrompt         string
+	WorkerExecutable     string
+	WorkerRunFilePath    string
 	Budget               domain.ContextBudget
 }
 

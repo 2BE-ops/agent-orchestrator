@@ -4,6 +4,34 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 12e — native worker output instructions (2026-09-19)
+
+Reserved TUI and Chat launches now seal HTTP-only result/message argv, JSON request
+examples, the owning daemon run-file environment, task/session/attempt identity
+and the reserved native generation into their bounded input. Instructions explain
+partial claims, independent evaluation, idempotency/corrections, message threading,
+field limits and uncertain delivery. Literal JSON argv/environment avoids shell
+interpolation. Unresolvable/invalid executables or combined prompt overflow reject
+before native execution while retaining the task reservation. The embedded
+using-ao catalog documents task output, inspection and knowledge commands.
+
+Two native integration tests cover both modes: actual generated examples pass
+the shared result/message services with real SQLite; exact retries are idempotent,
+claims retain leases, stale generations fail, and malformed/oversized instructions
+never launch. Task/context/native focused regression PASS (1.113s). Full task,
+context, message, Chat (34.364s), store (15.660s), ports/domain, CLI (17.190s), and
+skillassets suites PASS. Full manager retains exactly the eight recorded Windows
+baseline failures (42.224s; final run-file refinement rerun 37.327s), with all new
+tests passing. Backend build and final staged changed-code pinned lint PASS
+(0 issues). Logs: ignored `*stage12e*`. No API shape or migration changed.
+
+Stage 12's initial-launch protocol is tested. Controller replacement deliberately
+cannot refresh authority from a historical prompt. Stage 23 must deliver and
+journal replacement-generation instructions through the native ownership boundary,
+including live Chat host adoption; it must preserve sealed original context and
+fence stale processes. Stage 20 resolves uncertain message recipients; stage 25
+validates actual provider submission/consumption. These remain explicit gaps.
+
 ## Stage 12d — prior findings and incoming contracts in context (2026-09-19)
 
 The bounded context builder selects the latest correction from up to three prior

@@ -112,6 +112,11 @@ cannot be supplied as author tags. Request JSON is limited to 512 KiB; the resul
 definition is limited to 256 KiB and 16 corrections per attempt. Reuse a key only
 for an exact retry; corrections use a new key and the last result version.
 
+Reserved TUI and Chat workers receive executable/argv and JSON examples in their
+sealed launch context. These instructions count toward the prompt budget and
+retain the reserved native generation. Ownership conflicts preserve output for
+recovery; historical instructions cannot refresh themselves to a new owner.
+
 A definition has `schemaVersion: 1`, `claimedOutcome` (`completed`, `partial` or
 `blocked`), `summary` and `implementation`, plus optional `claimedCommit` (full Git
 object ID) and the collections `decisions`, `assumptions`, `interfaces`, `tests`,
