@@ -20,6 +20,9 @@ ao agent-manager resolve <project> <request> --file resolution.json
 ao agent-manager propose <session-id> <request> --file proposal-envelope.json
 ao agent-manager proposals <project> <request>
 ao agent-manager proposal <project> <request> <proposal>
+ao agent-manager contexts <project> <request>
+ao agent-manager context <project> <request> <context>
+ao agent-manager deliveries <project> <request>
 ```
 
 `configure` is a human governance action. Manager tools cannot grant themselves
@@ -71,8 +74,11 @@ the Manager must be enabled at the specified configuration. Queue limits and one
 pending request per task are checked atomically. Retrying the same ID and fields
 returns the retained request; changed fields conflict. IDs are at most 200 bytes
 without control characters; reasons are nonempty and at most 2000 bytes. These
-inbox write bodies are limited to 16 KiB. Neither enqueue nor configuration starts
-a native controller. Task content is referenced by exact versions and hashes.
+inbox write bodies are limited to 16 KiB. The request references exact versions
+and hashes. After startup reconciliation, the daemon consumes eligible inbox work
+and admits the configured native Manager if none is reserved. Configuration edits
+alone do not start a controller. Failed/uncertain admission stays reserved; repeated
+queue scans do not create a replacement process.
 
 `inbox` returns pending requests; `requests` includes terminal history. Reads do
 not acknowledge native delivery. `request-resolution` returns `resolution: null`
@@ -102,3 +108,21 @@ configured correction budget closes the routing request as Needs Human. Exact
 retry keys return the original proposal; changed bytes conflict. A valid selection
 awaits the deterministic application boundary. History reads return at most five
 proposals and remain available after native termination.
+
+`contexts` lists at most 32 immutable routing inputs; `context` reads exact bytes,
+per-item classification, pinned clearance, native generation, tool instructions
+and the preceding conversation hash. `deliveries` lists at most four native send
+attempts. `handed_off` means transport acceptance; it does not prove that the agent
+read the input or that a selection succeeded. `uncertain` and interrupted sends
+hold the conversation for reconciliation. Do not resend them as a new request or
+assume resolving routing intent clears the native composer. Four proven no-send
+attempts become Needs Human. Unknown readiness consumes no attempt.
+
+Each input's native CLI instructions retain the exact source generation, literal
+argv and run-file environment. Use those instructions rather than reconstructing
+commands from live session state. New proposals require an attributed input and
+record cumulative conversation classification, including earlier sensitive work.
+A Manager conversation retains its first engagement binding across requests and
+native generations. A task above its pinned clearance, or another engagement,
+becomes Needs Human without embedding the prohibited context. Other eligible
+projects continue through the bounded inbox scan.

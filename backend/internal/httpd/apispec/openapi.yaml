@@ -3879,7 +3879,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/APIError'
           description: Not Implemented
-      summary: Queue exact routing intent without launching a controller
+      summary: Queue exact routing intent for the native Manager
       tags:
       - agent-managers
   /api/v1/projects/{id}/agent-manager/requests/{requestId}:
@@ -3942,6 +3942,197 @@ paths:
                 $ref: '#/components/schemas/APIError'
           description: Not Implemented
       summary: Inspect a sealed routing request
+      tags:
+      - agent-managers
+  /api/v1/projects/{id}/agent-manager/requests/{requestId}/contexts:
+    get:
+      operationId: listAgentManagerContexts
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManagerContextsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect bounded classified native input history
+      tags:
+      - agent-managers
+  /api/v1/projects/{id}/agent-manager/requests/{requestId}/contexts/{contextId}:
+    get:
+      operationId: getAgentManagerContext
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: contextId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManagerContext'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect exact sealed input and native tool instructions
+      tags:
+      - agent-managers
+  /api/v1/projects/{id}/agent-manager/requests/{requestId}/deliveries:
+    get:
+      operationId: listAgentManagerDeliveries
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManagerDeliveriesResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect native send attempts and uncertain outcomes
       tags:
       - agent-managers
   /api/v1/projects/{id}/agent-manager/requests/{requestId}/proposals:
@@ -13089,6 +13280,87 @@ components:
       - expectedRevision
       - reason
       type: object
+    AgentManagerContext:
+      properties:
+        classification:
+          enum:
+          - technical
+          - engagement
+          - mission
+          type: string
+        configurationHash:
+          type: string
+        contentHash:
+          type: string
+        controllerId:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        engagementId:
+          type: string
+        id:
+          type: string
+        maxContextClass:
+          enum:
+          - technical
+          - engagement
+          - mission
+          type: string
+        nativeGeneration:
+          type: string
+        number:
+          format: int64
+          type: integer
+        policy:
+          $ref: '#/components/schemas/AgentManagerPolicy'
+        previousContextHash:
+          type: string
+        projectId:
+          type: string
+        prompt:
+          type: string
+        requestHash:
+          type: string
+        requestId:
+          type: string
+        schemaVersion:
+          type: integer
+        sessionId:
+          type: string
+        sources:
+          items:
+            $ref: '#/components/schemas/ContextSource'
+          type: array
+        tools:
+          $ref: '#/components/schemas/AgentManagerToolPaths'
+      required:
+      - id
+      - schemaVersion
+      - requestId
+      - number
+      - controllerId
+      - sessionId
+      - nativeGeneration
+      - configurationHash
+      - requestHash
+      - maxContextClass
+      - classification
+      - sources
+      - policy
+      - prompt
+      - createdAt
+      - contentHash
+      type: object
+    AgentManagerContextsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AgentManagerContext'
+          type: array
+      required:
+      - items
+      type: object
     AgentManagerController:
       properties:
         actor:
@@ -13181,6 +13453,63 @@ components:
       - agentTypeId
       - agentTypeVersion
       - policy
+      type: object
+    AgentManagerDeliveriesResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AgentManagerDelivery'
+          type: array
+      required:
+      - items
+      type: object
+    AgentManagerDelivery:
+      properties:
+        contextId:
+          type: string
+        controllerId:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        deliveryKey:
+          type: string
+        id:
+          type: string
+        nativeGeneration:
+          type: string
+        number:
+          format: int64
+          type: integer
+        reason:
+          type: string
+        requestId:
+          type: string
+        sessionId:
+          type: string
+        state:
+          enum:
+          - dispatching
+          - handed_off
+          - not_sent
+          - uncertain
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      required:
+      - id
+      - requestId
+      - contextId
+      - controllerId
+      - number
+      - sessionId
+      - nativeGeneration
+      - deliveryKey
+      - state
+      - reason
+      - createdAt
+      - updatedAt
       type: object
     AgentManagerEnqueueRequest:
       properties:
@@ -13524,6 +13853,18 @@ components:
       required:
       - state
       - created
+      type: object
+    AgentManagerToolPaths:
+      properties:
+        executable:
+          type: string
+        runFile:
+          type: string
+        schemaVersion:
+          type: integer
+      required:
+      - schemaVersion
+      - executable
       type: object
     AgentModelInfo:
       properties:

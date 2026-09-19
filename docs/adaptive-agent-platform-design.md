@@ -772,6 +772,26 @@ Historical unclassified proposal bytes remain readable through optional fields;
 new inserts require attributed input. Public delivery/context inspection, daemon
 consumption and generation-specific CLI instructions follow in 14e3.
 
+Stage 14e3 wires the daemon inbox consumer after startup native reconciliation
+and drains it before closing storage. Startup turns interrupted sends into retained
+uncertainty. Each cycle scans at most 16 requests, checkpoints a durable cursor,
+and bounds each native attempt to 45 seconds. It can admit the configured Manager
+when none is reserved; failed starts retain admission and never authorize another
+launch. Unknown readiness consumes no input/send. Superseded task/governance intent
+closes explicitly; class/scope refusal becomes Needs Human without embedding data.
+Blocked projects do not starve eligible projects on later scan pages.
+
+Sealed inputs now carry project attribution and optional, versioned native CLI
+routing (literal executable/argv and AO_RUN_FILE). Protocol v1 includes the exact
+request/session/generation, strict proposal-envelope example, read-only registry
+inspection and receipt inspection. Its bytes are golden-tested: future instruction
+changes require a new renderer version, retaining v1 for historical validation.
+Older artifacts without tools retain their hash/bytes. Three scoped API/CLI reads
+expose context history, exact input and bounded native delivery attempts, including
+classification and unknown outcomes without serializing internal native owners.
+Automatic semantic assessment, composition/evolution and creation permissions
+remain stage 15; controller recovery and refreshed replacement inputs remain 23.
+
 Stage 14c1 adds the durable Manager inbox (0171). Routing requests reference exact
 task/criteria and governance versions plus hashes, without embedding task content.
 They are independent of a native controller's lifetime. Enqueue serializes with

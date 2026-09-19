@@ -66,6 +66,21 @@ type AgentManagerProposalsResponse struct {
 	Items []domain.AgentManagerProposal `json:"items"`
 }
 
+// AgentManagerContextsResponse contains at most 32 sealed routing inputs.
+type AgentManagerContextsResponse struct {
+	Items []domain.AgentManagerContext `json:"items"`
+}
+
+// AgentManagerDeliveriesResponse contains at most four native send attempts.
+type AgentManagerDeliveriesResponse struct {
+	Items []domain.AgentManagerDelivery `json:"items"`
+}
+
+// AgentManagerContextIDParam identifies an exact immutable input artifact.
+type AgentManagerContextIDParam struct {
+	ContextID string `path:"contextId"`
+}
+
 // AgentManagerProposalIDParam identifies exact retained native output.
 type AgentManagerProposalIDParam struct {
 	ProposalID string `path:"proposalId"`

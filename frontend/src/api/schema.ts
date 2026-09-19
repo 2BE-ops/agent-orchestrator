@@ -1284,7 +1284,7 @@ export interface paths {
         /** Inspect retained routing history */
         get: operations["listAgentManagerRequests"];
         put?: never;
-        /** Queue exact routing intent without launching a controller */
+        /** Queue exact routing intent for the native Manager */
         post: operations["enqueueAgentManagerRequest"];
         delete?: never;
         options?: never;
@@ -1301,6 +1301,57 @@ export interface paths {
         };
         /** Inspect a sealed routing request */
         get: operations["getAgentManagerRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/agent-manager/requests/{requestId}/contexts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect bounded classified native input history */
+        get: operations["listAgentManagerContexts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/agent-manager/requests/{requestId}/contexts/{contextId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect exact sealed input and native tool instructions */
+        get: operations["getAgentManagerContext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/agent-manager/requests/{requestId}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect native send attempts and uncertain outcomes */
+        get: operations["listAgentManagerDeliveries"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3902,6 +3953,35 @@ export interface components {
             expectedRevision: number;
             reason: string;
         };
+        AgentManagerContext: {
+            /** @enum {string} */
+            classification: "technical" | "engagement" | "mission";
+            configurationHash: string;
+            contentHash: string;
+            controllerId: string;
+            /** Format: date-time */
+            createdAt: string;
+            engagementId?: string;
+            id: string;
+            /** @enum {string} */
+            maxContextClass: "technical" | "engagement" | "mission";
+            nativeGeneration: string;
+            /** Format: int64 */
+            number: number;
+            policy: components["schemas"]["AgentManagerPolicy"];
+            previousContextHash?: string;
+            projectId?: string;
+            prompt: string;
+            requestHash: string;
+            requestId: string;
+            schemaVersion: number;
+            sessionId: string;
+            sources: components["schemas"]["ContextSource"][];
+            tools?: components["schemas"]["AgentManagerToolPaths"];
+        };
+        AgentManagerContextsResponse: {
+            items: components["schemas"]["AgentManagerContext"][];
+        };
         AgentManagerController: {
             actor: components["schemas"]["AdaptiveActor"];
             /** Format: int64 */
@@ -3937,6 +4017,27 @@ export interface components {
             enabled: boolean;
             policy: components["schemas"]["AgentManagerPolicy"];
             schemaVersion: number;
+        };
+        AgentManagerDeliveriesResponse: {
+            items: components["schemas"]["AgentManagerDelivery"][];
+        };
+        AgentManagerDelivery: {
+            contextId: string;
+            controllerId: string;
+            /** Format: date-time */
+            createdAt: string;
+            deliveryKey: string;
+            id: string;
+            nativeGeneration: string;
+            /** Format: int64 */
+            number: number;
+            reason: string;
+            requestId: string;
+            sessionId: string;
+            /** @enum {string} */
+            state: "dispatching" | "handed_off" | "not_sent" | "uncertain";
+            /** Format: date-time */
+            updatedAt: string;
         };
         AgentManagerEnqueueRequest: {
             /** Format: int64 */
@@ -4067,6 +4168,11 @@ export interface components {
         AgentManagerStartResponse: {
             created: boolean;
             state: components["schemas"]["AgentManagerControllerResponse"];
+        };
+        AgentManagerToolPaths: {
+            executable: string;
+            runFile?: string;
+            schemaVersion: number;
         };
         AgentModelInfo: {
             defaultEffort?: string;
@@ -12285,6 +12391,241 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentManagerRequest"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listAgentManagerContexts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentManagerContextsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getAgentManagerContext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+                requestId: string;
+                contextId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentManagerContext"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listAgentManagerDeliveries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentManagerDeliveriesResponse"];
                 };
             };
             /** @description Bad Request */

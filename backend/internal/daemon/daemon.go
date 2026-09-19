@@ -888,6 +888,7 @@ func Run() error {
 
 	var startupReconcileDone <-chan struct{}
 	var taskMessagesDone <-chan struct{}
+	var managerInboxDone <-chan struct{}
 	runErr := srv.RunWithReady(ctx, func() {
 		// Agent-readiness warming is advisory and idempotent, and request paths
 		// lazily Ensure on demand. Kick it here, after the listener is live, so its
@@ -907,6 +908,29 @@ func Run() error {
 				case <-done:
 				}
 				taskmessage.New(store, transport, log).Run(ctx)
+			}()
+		}
+		if transport, ok := sessMgr.(ports.AgentManagerTransport); ok {
+			inboxDone := make(chan struct{})
+			managerInboxDone = inboxDone
+			go func() {
+				defer close(inboxDone)
+				select {
+				case <-ctx.Done():
+					return
+				case <-done:
+				}
+				executable, err := os.Executable()
+				if err != nil {
+					log.Error("Manager CLI routing unavailable", "error", err)
+					return
+				}
+				dispatcher, err := managersvc.NewInboxDispatcher(store, managerSvc, transport, domain.AgentManagerToolPaths{SchemaVersion: 1, Executable: executable, RunFile: cfg.RunFilePath}, log)
+				if err != nil {
+					log.Error("Manager inbox configuration invalid", "error", err)
+					return
+				}
+				dispatcher.Run(ctx)
 			}()
 		}
 		go func() {
@@ -934,6 +958,15 @@ func Run() error {
 	// via defer) avoids the LIFO trap where a Stop() that blocks on ctx-cancel
 	// runs before the cancel: a non-signal exit path would hang otherwise.
 	stop()
+	if managerInboxDone != nil {
+		inboxStopCtx, inboxStopCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		select {
+		case <-managerInboxDone:
+		case <-inboxStopCtx.Done():
+			log.Error("Manager inbox shutdown timed out; retained claims require reconciliation")
+		}
+		inboxStopCancel()
+	}
 	if taskMessagesDone != nil {
 		messageStopCtx, messageStopCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 		select {

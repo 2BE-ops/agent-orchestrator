@@ -4,6 +4,43 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 14e3 - daemon inbox consumer, native protocol and history (2026-09-19)
+
+The daemon starts one bounded Manager inbox consumer after native reconciliation
+and drains it on shutdown. It admits a configured controller once, waits without
+budget consumption when readiness is unknown, advances a durable sixteen-request
+cursor past blocked projects, and retains interrupted sends as uncertain. Tests
+use real SQLite and a fake native boundary to verify failed-start ownership,
+readiness, fairness, superseded tasks, class refusal/eligible-work progress,
+proposal submission before transport commit, and persistence after context
+cancellation or invalid native observations. Classified input includes exact
+literal CLI routing and source generation. Protocol v1 has a byte-stability golden
+and strict JSON-envelope test. Optional new fields preserve pre-protocol history.
+
+Three API/CLI read operations expose bounded context/delivery history and exact
+input bytes after policy disable, with project isolation and omitted internal
+owner fields. CLI tests cover escaped IDs, usage and daemon error/request IDs.
+API generation and route/schema parity PASS. All 40 API-client frontend tests
+PASS (2.55s), including private-ID telemetry redaction. Initial focused domain /
+Manager service / HTTP / CLI PASS (0.716s / 3.879s / 0.897s / 1.331s). Full domain
+(1.467s), ports (0.459s), SQLite (42.931s), helpers (1.798s), store (26.259s),
+Manager service (2.916s), router (1.075s), spec (0.337s), specgen (12.218s),
+CLI (25.298s), telemetry (0.578s), embedded skills (0.598s), envelope (0.707s)
+PASS. Full HTTP (14.003s) and daemon (5.280s) retain only recorded Windows baselines.
+
+After final protocol versioning, full domain (1.379s), Manager service (4.565s),
+router (0.989s), spec (0.415s), specgen (16.517s) and envelope (cached) PASS.
+Full HTTP (18.176s) retains pairing/clone baselines; daemon (4.120s) retains its
+CWD cleanup baseline. Final backend build, generated frontend typecheck and
+pinned affected new-diff lint PASS (0 issues). Initial fixture ProjectID conversion
+and unused actor-field findings were corrected. Source/generated/whitespace review
+PASS. Logs: `.cache/adaptive-tests/stage14e3-*`.
+
+Stage 14's controller/inbox/tools foundation is TESTED. Stage 15 must still perform
+deterministic semantic assessment/composition/evolution and classification UI/live
+message/review integration; stages 20/23 supply uncertain-owner controls/recovery,
+and stage 25 supplies a live provider/desktop demonstration.
+
 ## Stage 14e2 - durable Manager native delivery and proposal attribution (2026-09-19)
 
 Migration 0175 and transactional store APIs seal exact input together with a

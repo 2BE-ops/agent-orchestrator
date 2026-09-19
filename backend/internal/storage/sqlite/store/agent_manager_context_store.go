@@ -132,6 +132,11 @@ func sealManagerContext(ctx context.Context, q *gen.Queries, input domain.AgentM
 			return fmt.Errorf("%w: Manager task exceeds pinned context clearance", ports.ErrAgentManagerForbidden)
 		}
 		sealed = domain.AgentManagerContext{ID: input.ID, SchemaVersion: 1, RequestID: request.ID, ControllerID: controller.ID, SessionID: input.SessionID, NativeGeneration: generation, ConfigurationHash: snapshot.ContentHash, RequestHash: request.ContentHash, MaxContextClass: clearance, Classification: class, EngagementID: engagement, Policy: configuration.Definition.Policy, CreatedAt: input.Now}
+		sealed.ProjectID = request.ProjectID
+		if input.Tools != nil {
+			paths := *input.Tools
+			sealed.Tools = &paths
+		}
 		previousRow, err := q.LatestAgentManagerContext(ctx, controller.ID)
 		if err == nil {
 			previous, err := managerContextFromRow(previousRow)

@@ -436,6 +436,14 @@ sources. Receipts acknowledge persistence, not applied selection. `proposals
 output/parser history independently of live ownership. The embedded contract above
 documents the versioned inner protocol and envelope bounds.
 
+Manager inbox consumption starts after daemon native reconciliation. Eligible
+queued work can admit the configured Manager; uncertain ownership is retained.
+`ao agent-manager contexts <project> <request>`, `context <project> <request>
+<context>` and `deliveries <project> <request>` expose exact classified input,
+its native CLI protocol and bounded transport history. Proposals link to those
+sealed inputs. Unknown delivery is never automatically repeated; a persistent
+conversation retains its engagement and cumulative sensitivity.
+
 ## Task performance evidence and metrics
 
 ```bash

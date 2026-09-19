@@ -37,6 +37,9 @@ it("redacts Manager project, configuration and request identities from telemetry
 	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id");
 	expect(normalizeApiOperation("POST", "/api/v1/projects/private-project/agent-manager/requests/private-work/resolution")).toBe("POST /api/v1/projects/:id/agent-manager/requests/:id/resolution");
 	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work/proposals/private-proposal")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id/proposals/:id");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work/contexts")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id/contexts");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work/contexts/private-context")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id/contexts/:id");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work/deliveries")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id/deliveries");
 	expect(normalizeApiOperation("POST", "/api/v1/sessions/private-manager/agent-manager/requests/private-work/proposals")).toBe("POST /api/v1/sessions/:id/agent-manager/requests/:id/proposals");
 });
 
