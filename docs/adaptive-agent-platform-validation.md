@@ -4,6 +4,79 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 18 - Manager/orchestrator outcome attribution (2026-09-19)
+
+Commits `6e88c21b4` (storage) and `dcb8ded5b` (service/API/CLI) on
+`feature/adaptive-agent-platform`.
+
+### What was built
+
+- **Routing attribution (DoD 26)** — `ListManagerRoutingOutcomes` pages every
+  Manager request carrying at least one sealed decision, keyed by the request's
+  durable arrival sequence (the only monotonic cursor in the inbox). Each row
+  couples the request's chosen decision — the accepted selection when present,
+  otherwise its latest rejection — with the routed task's derived fate, using
+  the same deterministic `projectFeedbackItem` projection the stage-17 loop
+  feedback reads: state (pending/working/completed/failed-for-exhaustion/
+  cancelling/cancelled), reason, result/evaluation identity, attempt count and
+  the current revision. Nothing is stored; a reopen test proves restart
+  stability.
+- **Planning attribution (DoD 27)** — `ListOrchestratorPlanningOutcomes` pages
+  every sealed plan receipt (same cursor as the public receipt history), each
+  coupled with its target task's derived fate through the same projection.
+- **Complete bounded summaries** — `ManagerRoutingSummary` and
+  `OrchestratorPlanningSummary` count and list their cohort inside one
+  locked transaction (366-day window cap, 1000-member bound;
+  `ErrOutcomeCohortTooLarge` refuses wider windows instead of partially
+  summing). Domain summarizers (`SummarizeManagerRouting`,
+  `SummarizeOrchestratorPlanning`) keep counts, never percentages; they refuse
+  duplicate/incomplete attribution, accepted routing without its selected
+  type, duplicate created-task attribution, unknown states/actions and counter
+  overflow. Rejections never inflate routed-work counters; per-Type-version
+  groups fold cancelling into cancelled and working/pending into Open;
+  created-task states count each minted task once regardless of later
+  revise/freeze receipts. This is deliberately a decision-maker surface
+  distinct from stage-13 worker (attempt/configuration) metrics.
+- **Exposure** — `GET /projects/{id}/agent-manager/routing-outcomes` and
+  `.../routing-summary`, `GET /projects/{id}/orchestrator/planning-outcomes`
+  and `.../planning-summary`, all with strict query envelopes (numeric
+  sequence cursor / receipt-id cursor, RFC3339 windows); thin CLI
+  (`ao agent-manager routing-outcomes|routing-summary`, `ao orchestrator
+  planning-outcomes|planning-summary` with `--after/--limit/--from/--to`);
+  telemetry allowlist entries; using-ao command docs; regenerated
+  `openapi.yaml` + `frontend/src/api/schema.ts` committed together.
+
+### Findings
+
+- `freeze_criteria` plan actions route through the revise transaction and
+  therefore bump the task revision; reservations on a frozen-but-unrevised
+  task must carry the post-freeze revision. Covered in the planning test.
+- No new migration was needed: attribution is a pure read model over durable
+  rows, per the repo rule that derived status is never stored.
+
+### Test evidence (all commands run from `backend/`)
+
+| Suite | Result |
+| --- | --- |
+| `go test ./internal/domain/ ./internal/ports/` | PASS |
+| `go test ./internal/storage/sqlite/...` (full) | PASS (41.0s / store 27.9s) |
+| `go test ./internal/service/agentmanager/ ./internal/service/orchestrator/` | PASS |
+| `go test ./internal/cli/` (full) | PASS (26.0s) |
+| `go test ./internal/telemetrymeta/ ./internal/skillassets/` | PASS |
+| `go test ./internal/httpd/...` | apispec/specgen/envelope/httpd PASS; controllers retain ONLY the two documented Windows baselines (`TestBridgeStatusConcurrentSecurePairing` rename-denied, `TestProjectsAPI_Clone` file-URL refusal) |
+| `go build ./...` / `go vet ./...` | build PASS; vet shows only the documented `host_race_test.go syscall.Kill` Windows baseline |
+| `npm run api` / `npm run sqlc` | regenerated cleanly; committed |
+| `npm run frontend:typecheck` | PASS |
+| pinned golangci-lint v2.12.2 on all touched packages | 0 issues |
+| attribution tests with `-count=2` | PASS (domain, store, controllers) |
+| `go test -race` | NOT RUN (no GCC on this host; recorded gap) |
+
+### Named remainder
+
+- Desktop metrics/navigation surfaces for both attributions land with stage 22
+  (DoD 26/27 "TESTED through 18" at API/CLI level).
+- Live app demonstration is stage 25.
+
 ## Stage 15e - Manager registry authoring service, protocol v4 and exposure (2026-09-19)
 
 The Manager service exposes governed authoring through the same generation fence
