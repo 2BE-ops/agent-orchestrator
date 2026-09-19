@@ -11913,6 +11913,145 @@ paths:
       summary: Inspect exact sealed worker input and provenance
       tags:
       - tasks
+  /api/v1/tasks/{taskId}/attempts/{attemptId}/delegations:
+    get:
+      operationId: listTaskDelegations
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: attemptId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControllersTaskDelegationsResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect immutable sealed-context delegation receipts
+      tags:
+      - tasks
+  /api/v1/tasks/{taskId}/attempts/{attemptId}/delegations/{number}:
+    get:
+      operationId: getTaskDelegation
+      parameters:
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: attemptId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: number
+        required: true
+        schema:
+          format: int64
+          maximum: 1000
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainTaskDelegation'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect one exact sealed-context delegation receipt
+      tags:
+      - tasks
   /api/v1/tasks/{taskId}/attempts/{attemptId}/evaluations:
     get:
       operationId: listTaskEvaluations
@@ -15842,6 +15981,17 @@ components:
       required:
       - enabled
       type: object
+    ControllersTaskDelegationsResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/DomainTaskDelegation'
+          type: array
+        nextCursor:
+          type: string
+      required:
+      - items
+      type: object
     ControllersUpdateCloudOfferingRequest:
       properties:
         enabled:
@@ -16786,6 +16936,61 @@ components:
           type: string
       required:
       - harness
+      type: object
+    DomainTaskDelegation:
+      properties:
+        attemptId:
+          type: string
+        classification:
+          enum:
+          - technical
+          - engagement
+          - mission
+          type: string
+        configurationHash:
+          type: string
+        contentHash:
+          type: string
+        contextHash:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        engagementId:
+          type: string
+        executionOperationId:
+          type: string
+        maxContextClass:
+          enum:
+          - technical
+          - engagement
+          - mission
+          type: string
+        number:
+          format: int64
+          type: integer
+        prompt:
+          type: string
+        schemaVersion:
+          type: integer
+        sessionId:
+          type: string
+        systemPrompt:
+          type: string
+      required:
+      - schemaVersion
+      - attemptId
+      - number
+      - sessionId
+      - executionOperationId
+      - configurationHash
+      - contextHash
+      - maxContextClass
+      - classification
+      - systemPrompt
+      - prompt
+      - createdAt
+      - contentHash
       type: object
     EditConversationMessageRequest:
       properties:

@@ -17,6 +17,7 @@ import (
 func newTaskCommand(ctx *commandContext) *cobra.Command {
 	root := &cobra.Command{Use: "task", Aliases: []string{"tasks"}, Short: "Author persistent tasks and inspect planning/attempt history (JSON output)"}
 	root.AddCommand(newTaskResultCommands(ctx)...)
+	root.AddCommand(newTaskDelegationCommands(ctx)...)
 	root.AddCommand(newTaskEvaluationCommands(ctx)...)
 	root.AddCommand(newTaskReviewCommands(ctx)...)
 	root.AddCommand(newTaskPerformanceCommands(ctx)...)

@@ -38,6 +38,24 @@ Group), and mixed line endings introduced by edits. Race run remains NOT RUN
 classified inspector, public delegation history and live message/review gates
 remain for stage 15.
 
+## Stage 15f - public delegation history (2026-09-19)
+
+Task attempts expose their immutable sealed-context delegation receipts: the task
+service rechecks that the attempt belongs to the requested task before listing
+or exact-reading (number 1-1000, pages 1-100), mapping missing history to a
+typed TASK_DELEGATION_NOT_FOUND/INVALID_TASK_DELEGATION envelope. Routes follow
+the existing attempt-scoped reads (`GET /tasks/{taskId}/attempts/{attemptId}/
+delegations[/{number}]`); the shared CLI attempt-read helper gained an exact-arg
+label and backs `ao task delegations|delegation`; telemetry allowlists both.
+A delegation proves the exact frozen context a native execution received; no
+send/activation is implied. Task selectors were verified present via task
+creation RequestedWorker, and classified inspection via attempt context reads.
+
+Service test, apispec/specgen, CLI, telemetrymeta and controllers suites PASS
+(controllers retain only the two recorded Windows pairing/clone baselines);
+`npm run api` regenerated openapi.yaml/schema.ts; frontend typecheck, backend
+build, gofmt and pinned lint on touched packages PASS (0 issues).
+
 ## Stage 15d - governed Manager registry authoring storage (2026-09-19)
 
 Migration 0178 adds Manager registry authoring actions. The native controller may

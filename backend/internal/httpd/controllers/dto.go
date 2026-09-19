@@ -280,6 +280,11 @@ type TaskEvaluationsResponse struct {
 	NextCursor string                  `json:"nextCursor,omitempty"`
 }
 
+// TaskDelegationNumberParam selects one sealed-context receipt.
+type TaskDelegationNumberParam struct {
+	Number int64 `path:"number" required:"true" minimum:"1" maximum:"1000"`
+}
+
 // TaskResultIDParam identifies one immutable worker submission.
 type TaskResultIDParam struct {
 	ResultID string `path:"resultId"`
@@ -295,6 +300,12 @@ type TaskResultSubmitResponse tasksvc.ResultReceipt
 type TaskResultsResponse struct {
 	Items      []domain.TaskResult `json:"items"`
 	NextCursor string              `json:"nextCursor,omitempty"`
+}
+
+// TaskDelegationsResponse pages immutable sealed-context receipts.
+type TaskDelegationsResponse struct {
+	Items      []domain.TaskDelegation `json:"items"`
+	NextCursor string                  `json:"nextCursor,omitempty"`
 }
 
 // AdaptiveTaskVersionParam selects immutable task or criteria history.

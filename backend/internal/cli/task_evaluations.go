@@ -10,7 +10,7 @@ import (
 )
 
 func newTaskEvaluationCommands(ctx *commandContext) []*cobra.Command {
-	commands := newTaskAttemptReadCommands(ctx, "evaluation", "evaluations", "independent assessment")
+	commands := newTaskAttemptReadCommands(ctx, "evaluation", "evaluations", "independent assessment", "evaluation-id")
 	evaluate := newTaskAttemptRequestCommand(ctx, "evaluate", "Collect independent evidence for an exact worker result", "evaluations")
 	return append(commands, evaluate)
 }

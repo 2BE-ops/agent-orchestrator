@@ -20,6 +20,7 @@ type Store interface {
 	ports.TaskIntentStore
 	ports.TaskExecutionStore
 	ports.TaskContextStore
+	ports.TaskDelegationStore
 	ports.TaskResultStore
 	ports.TaskMessageStore
 	ports.TaskEvaluationStore

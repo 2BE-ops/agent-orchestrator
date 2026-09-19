@@ -11,7 +11,7 @@ import (
 )
 
 func newTaskResultCommands(ctx *commandContext) []*cobra.Command {
-	commands := newTaskAttemptReadCommands(ctx, "result", "results", "worker claim")
+	commands := newTaskAttemptReadCommands(ctx, "result", "results", "worker claim", "result-id")
 	var file string
 	submit := &cobra.Command{Use: "submit-result <session-id>", Short: "Submit generation-fenced worker claims, not verified completion", Args: usageArgs(cobra.ExactArgs(1)), RunE: func(cmd *cobra.Command, args []string) error {
 		if strings.TrimSpace(args[0]) == "" {
@@ -32,12 +32,12 @@ func newTaskResultCommands(ctx *commandContext) []*cobra.Command {
 }
 
 // Results and evaluations share scoped, immutable version pagination.
-func newTaskAttemptReadCommands(ctx *commandContext, singular, plural, description string) []*cobra.Command {
+func newTaskAttemptReadCommands(ctx *commandContext, singular, plural, description, exactArg string) []*cobra.Command {
 	commands := make([]*cobra.Command, 0, 2)
 	for _, exact := range []bool{false, true} {
 		use, short, count := plural+" <task-id> <attempt-id>", "List immutable "+description+" history (JSON output)", 2
 		if exact {
-			use, short, count = singular+" <task-id> <attempt-id> <"+singular+"-id>", "Inspect an exact "+description+" (JSON output)", 3
+			use, short, count = singular+" <task-id> <attempt-id> <"+exactArg+">", "Inspect an exact "+description+" (JSON output)", 3
 		}
 		var cursor string
 		var limit int
