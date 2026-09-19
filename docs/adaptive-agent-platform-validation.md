@@ -4,6 +4,35 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 15b - immutable decisions and atomic routing selection (2026-09-19)
+
+Migration 0176 seals exact semantic-proposal and deterministic-candidate history.
+The store rechecks selected Type/Skill permissions, hashes/revisions, clearance,
+capabilities, project defaults and provider scope/revision in one transaction with
+decision, routing-only resolution and audit/CDC. Generic resolution calls and SQL
+without decision proof cannot claim selected. Rejected assessments unlock bounded
+semantic corrections within the same parser/semantic proposal budget. No lease
+or native worker is created. The pure worker-options resolver is shared between
+native launch and transactional selection without changing its behavior.
+
+Tests cover eight concurrent decision calls, first-writer replay after disable,
+native exit after output receipt, cross-project reads, classification/forged
+configuration, policy/Skill/provider/task/governance/defaults races, legacy
+unattributed output refusal, parser plus semantic budget exhaustion, late audit
+failure rollback including CDC, SQL immutability, restart, migration round trip,
+downgrade refusal, foreign keys and integrity. Focused domain/SQLite/store PASS
+(0.450s / 0.984s / 1.476s). Full domain (1.170s), ports (0.421s), registry (2.393s),
+Manager service (2.625s), router (1.017s), spec (0.471s), specgen (18.409s), envelope
+(0.687s) PASS. Final full SQLite (40.892s), helpers (cached), store (27.362s) PASS.
+Full HTTP (20.434s) retains its two recorded Windows baselines; native engine
+(49.199s) retains its eight recorded Windows baselines. Backend build, frontend
+typecheck, API/sqlc generation, pinned new-diff lint (0 issues) and diff inspection
+PASS. Initial missing migration-ledger entry, reopening a test fixture via its
+clone helper and two lint findings were corrected. Logs: `.cache/adaptive-tests/15b-*`.
+
+Automatic service assessment/recovery and public decision history are next; this
+store milestone alone does not claim an end-to-end automatic worker launch.
+
 ## Stage 15a - deterministic candidate compatibility and native tools (2026-09-19)
 
 Request-scoped candidate pages and exact-version checks reuse the registry/native

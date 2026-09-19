@@ -74,12 +74,12 @@ func validateManagerInboxActor(actor AdaptiveActor, reason string) error {
 	return (TaskMutation{Actor: actor, Reason: reason}).ValidatePlanning()
 }
 
-// AgentManagerRequestResolution is append-only terminal routing state. This
-// foundation permits cancellation/escalation, never a claimed successful launch.
-// Applied selections will require a separately validated decision transaction.
+// AgentManagerRequestResolution is append-only terminal routing state. The
+// selected outcome is written only by the deterministic decision transaction; it records
+// routing completion, never a claimed worker launch or task completion.
 type AgentManagerRequestResolution struct {
 	RequestID string        `json:"requestId"`
-	Outcome   string        `json:"outcome" enum:"cancelled,superseded,needs_human"`
+	Outcome   string        `json:"outcome" enum:"cancelled,superseded,needs_human,selected"`
 	Actor     AdaptiveActor `json:"actor"`
 	Reason    string        `json:"reason"`
 	CreatedAt time.Time     `json:"createdAt"`
@@ -87,8 +87,11 @@ type AgentManagerRequestResolution struct {
 
 // Validate rejects unvalidated success and authority supplied by a worker.
 func (r AgentManagerRequestResolution) Validate() error {
-	if !messageIdentity(r.RequestID) || r.CreatedAt.IsZero() || (r.Outcome != "cancelled" && r.Outcome != "superseded" && r.Outcome != "needs_human") {
+	if !messageIdentity(r.RequestID) || r.CreatedAt.IsZero() || (r.Outcome != "cancelled" && r.Outcome != "superseded" && r.Outcome != "needs_human" && r.Outcome != "selected") {
 		return fmt.Errorf("invalid Manager request resolution")
+	}
+	if r.Outcome == "selected" && (r.Actor.Kind != "SYSTEM" || r.Actor.ID != "manager-selector" || r.Actor.SessionID != "") {
+		return fmt.Errorf("selection resolution requires deterministic decision authority")
 	}
 	return validateManagerInboxActor(r.Actor, r.Reason)
 }

@@ -14036,6 +14036,7 @@ components:
           - cancelled
           - superseded
           - needs_human
+          - selected
           type: string
         reason:
           type: string

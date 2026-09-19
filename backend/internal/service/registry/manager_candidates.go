@@ -24,7 +24,10 @@ func (m *Manager) AssessManagerCandidate(ctx context.Context, id string, number 
 		return result, invalid(err)
 	}
 	add := func(code, state string) {
-		result.Issues = append(result.Issues, domain.AgentManagerCandidateIssue{Code: code, State: state})
+		issue := domain.AgentManagerCandidateIssue{Code: code, State: state}
+		if !slices.Contains(result.Issues, issue) {
+			result.Issues = append(result.Issues, issue)
+		}
 	}
 	entry, err := m.store.GetRegistryEntry(ctx, id)
 	if errors.Is(err, ports.ErrRegistryNotFound) || (err == nil && entry.Kind != domain.RegistryAgentType) {
@@ -57,7 +60,7 @@ func (m *Manager) AssessManagerCandidate(ctx context.Context, id string, number 
 	if m.defaults != nil {
 		defaultMode = m.defaults.DefaultSessionMode(ctx)
 	}
-	definition := resolveWorkerOptions(*version.Definition.AgentType, domain.WorkerOverrides{}, project.Config, defaultMode)
+	definition := domain.ResolveWorkerOptions(*version.Definition.AgentType, domain.WorkerOverrides{}, project.Config, defaultMode)
 	result.MaxContextClass, result.Harness, result.SessionMode = definition.MaxContextClass.Effective(), definition.Harness, definition.SessionMode
 	result.Config, result.ProviderBindingID = definition.Config, definition.ProviderBindingID
 	result.Capabilities = append(result.Capabilities, definition.Capabilities...)

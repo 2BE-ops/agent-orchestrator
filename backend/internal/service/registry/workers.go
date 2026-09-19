@@ -34,7 +34,7 @@ func (m *Manager) ResolveWorker(ctx context.Context, selection domain.WorkerSele
 	if err != nil {
 		return domain.WorkerConfiguration{}, err
 	}
-	definition := resolveWorkerOptions(*version.Definition.AgentType, selection.Overrides, project.Config, defaultMode)
+	definition := domain.ResolveWorkerOptions(*version.Definition.AgentType, selection.Overrides, project.Config, defaultMode)
 	check, err := m.CheckConfiguration(ctx, definition, project.ID)
 	if err != nil {
 		return domain.WorkerConfiguration{}, err
@@ -62,83 +62,6 @@ func (m *Manager) ResolveWorker(ctx context.Context, selection domain.WorkerSele
 		result.Skills = append(result.Skills, domain.WorkerSkillSnapshot{Reference: domain.WorkerDefinitionRef{ID: pin.ID, Version: pin.Version, Name: skill.Metadata.Name, ContentHash: version.ContentHash}, Definition: *version.Definition.Skill})
 	}
 	return result, nil
-}
-
-func resolveWorkerOptions(definition domain.AgentTypeDefinition, override domain.WorkerOverrides, project domain.ProjectConfig, defaultMode domain.SessionMode) domain.AgentTypeDefinition {
-	if override.Harness != nil && *override.Harness != definition.Harness {
-		definition.Harness = *override.Harness
-		definition.Config.Model = ""
-		definition.Config.Effort = ""
-		definition.Config.Mode = ""
-	}
-	base := domain.AgentConfig{Permissions: project.AgentConfig.Permissions}
-	role := project.Worker
-	if role.Harness == "" || role.Harness == definition.Harness {
-		base = mergeWorkerConfig(project.AgentConfig, role.AgentConfig)
-	} else if role.AgentConfig.Permissions != "" {
-		base.Permissions = role.AgentConfig.Permissions
-	}
-	definition.Config = mergeWorkerConfig(base, definition.Config)
-	if override.Model != nil {
-		definition.Config.Model = *override.Model
-		definition.Config.Mode = ""
-		definition.Config.Effort = ""
-	}
-	if override.Mode != nil {
-		definition.Config.Mode = *override.Mode
-		definition.Config.Model = ""
-		definition.Config.Effort = ""
-	}
-	if override.Effort != nil {
-		definition.Config.Effort = *override.Effort
-	}
-	if override.Permissions != nil {
-		definition.Config.Permissions = *override.Permissions
-	}
-	if definition.Config.Permissions == "" {
-		definition.Config.Permissions = domain.PermissionModeAuto
-	}
-	if override.SessionMode != nil {
-		definition.SessionMode = *override.SessionMode
-	}
-	if definition.SessionMode == "" {
-		definition.SessionMode = domain.NormalizeSessionMode(defaultMode)
-	}
-	if override.ProviderBindingID != nil {
-		definition.ProviderBindingID = *override.ProviderBindingID
-		definition.ProviderBindingRequired = false
-	}
-	if override.Instructions != nil {
-		definition.Instructions = *override.Instructions
-	}
-	if override.Skills != nil {
-		definition.Skills = append([]domain.SkillVersionRef{}, (*override.Skills)...)
-	}
-	return definition
-}
-
-func mergeWorkerConfig(base, override domain.AgentConfig) domain.AgentConfig {
-	if override.Model != "" {
-		if base.Model != override.Model {
-			base.Effort = ""
-		}
-		base.Model = override.Model
-		base.Mode = ""
-	}
-	if override.Mode != "" {
-		if base.Mode != override.Mode {
-			base.Effort = ""
-		}
-		base.Mode = override.Mode
-		base.Model = ""
-	}
-	if override.Effort != "" {
-		base.Effort = override.Effort
-	}
-	if override.Permissions != "" {
-		base.Permissions = override.Permissions
-	}
-	return base
 }
 
 // ValidateWorkerRestore checks current native availability against retained
@@ -182,7 +105,7 @@ func (m *Manager) ResolveWorkerChange(ctx context.Context, current domain.Worker
 		selection.Mode = nil
 		selection.Effort = nil
 	}
-	current.Effective = resolveWorkerOptions(current.Effective, override, projectConfig, current.Effective.SessionMode)
+	current.Effective = domain.ResolveWorkerOptions(current.Effective, override, projectConfig, current.Effective.SessionMode)
 	if override.Harness != nil {
 		selection.Harness = override.Harness
 	}

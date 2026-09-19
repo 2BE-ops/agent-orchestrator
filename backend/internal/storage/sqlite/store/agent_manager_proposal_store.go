@@ -122,10 +122,23 @@ func (s *Store) SubmitAgentManagerProposal(ctx context.Context, input domain.Age
 			if err != nil {
 				return err
 			}
-			// An unassessed valid selection waits for the deterministic decision
-			// boundary. Repeated native messages cannot replace it under a new key.
+			// Only a deterministic rejection permits another semantic correction;
+			// every raw proposal still consumes the same request-wide budget.
 			if p.Definition != nil {
-				return ports.ErrAgentManagerConflict
+				assessment, err := q.GetAgentManagerDecision(ctx, p.ID)
+				if errors.Is(err, sql.ErrNoRows) {
+					return ports.ErrAgentManagerConflict
+				}
+				if err != nil {
+					return err
+				}
+				decision, err := managerDecisionFromRow(assessment)
+				if err != nil {
+					return err
+				}
+				if decision.Outcome != "rejected" {
+					return ports.ErrAgentManagerConflict
+				}
 			}
 			if input.Now.Before(p.CreatedAt) {
 				return ports.ErrAgentManagerInvalid

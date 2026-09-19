@@ -63,7 +63,7 @@ func (m *Manager) Check(ctx context.Context, id string, input CheckInput) (Confi
 	if m.defaults != nil {
 		defaultMode = m.defaults.DefaultSessionMode(ctx)
 	}
-	definition := resolveWorkerOptions(*version.Definition.AgentType, domain.WorkerOverrides{}, project.Config, defaultMode)
+	definition := domain.ResolveWorkerOptions(*version.Definition.AgentType, domain.WorkerOverrides{}, project.Config, defaultMode)
 	result, err := m.CheckConfiguration(ctx, definition, input.ProjectID)
 	if !entry.Metadata.Enabled {
 		result.Issues = append(result.Issues, ConfigurationIssue{Code: "DEFINITION_DISABLED", State: "invalid", Message: "Enable this Agent Type before launch."})

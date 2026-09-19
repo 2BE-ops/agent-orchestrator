@@ -657,6 +657,29 @@ These are live observations, not saved decisions or launch authorization; the
 decision/application transaction must recheck their policy/content pins. Native
 protocol v2 supplies scoped candidate tools while preserving v1 input bytes.
 
+Stage 15b retains one immutable decision per attributed native proposal (0176).
+It seals the selected-first candidate observations, exact request/proposal and
+governance hashes, project configuration hash, optimization preference and native
+conversation classification. Candidate reasons remain in the referenced immutable
+proposal. Within the commit transaction, accepted choices recheck Type/Skill
+permissions and metadata revisions, content pins, actual capabilities, exact
+clearance, provider scope/revision and effective configuration. The existing pure
+worker option resolver now lives in the domain package so launch and persistence
+cannot diverge. Native readiness is an observation and must be rechecked at launch.
+
+Acceptance writes the routing-only `selected` resolution with audit/CDC atomically;
+neither a worker lease nor a native launch occurs. Generic resolution calls cannot
+claim `selected`, including system callers. One accepted decision per request is
+SQL-protected. Deterministic rejection permits a new semantic correction, but
+parser failures and semantic rejections share the original policy's request-wide
+proposal budget; exhausting it yields Needs Human. Exact decision retries inspect
+the first committed result after policy edits or native exit. Legacy unattributed
+proposals remain inspectable but cannot acquire invented input provenance.
+History is bounded to 33 candidate versions / 16 MiB per decision and at most five
+decisions per request. Upgrade/downgrade preserves old receipts; downgrade refuses
+retained decisions. Service execution, recovery and public decision history follow
+in the next slice, before the shared scheduler consumes accepted selections.
+
 Persist manager policy/status, its controller/conversation binding, work inbox and
 decisions. Reuse the conversation/runtime execution engine. Decide any required
 session-kind extension explicitly with migrations and lifecycle tests; do not

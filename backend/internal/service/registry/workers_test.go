@@ -159,12 +159,12 @@ func TestWorkerResolutionDoesNotLeakOtherHarnessDefaults(t *testing.T) {
 	definition := *workerTypeInput().Definition.AgentType
 	definition.Config = domain.AgentConfig{}
 	project := domain.ProjectConfig{AgentConfig: domain.AgentConfig{Model: "claude-alias", Effort: "claude-effort"}, Worker: domain.RoleOverride{Harness: domain.HarnessClaudeCode, AgentConfig: domain.AgentConfig{Model: "claude-role", Permissions: domain.PermissionModeDefault}}}
-	resolved := resolveWorkerOptions(definition, domain.WorkerOverrides{}, project, domain.SessionModeTUI)
+	resolved := domain.ResolveWorkerOptions(definition, domain.WorkerOverrides{}, project, domain.SessionModeTUI)
 	if resolved.Config.Model != "" || resolved.Config.Effort != "" || resolved.Config.Permissions != domain.PermissionModeDefault {
 		t.Fatalf("incompatible inherited defaults: %+v", resolved)
 	}
 	harness := domain.HarnessClaudeCode
-	resolved = resolveWorkerOptions(*workerTypeInput().Definition.AgentType, domain.WorkerOverrides{Harness: &harness}, domain.ProjectConfig{}, domain.SessionModeTUI)
+	resolved = domain.ResolveWorkerOptions(*workerTypeInput().Definition.AgentType, domain.WorkerOverrides{Harness: &harness}, domain.ProjectConfig{}, domain.SessionModeTUI)
 	if resolved.Config.Model != "" || resolved.Config.Effort != "" {
 		t.Fatal("one-off harness change retained incompatible type model")
 	}

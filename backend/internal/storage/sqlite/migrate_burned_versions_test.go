@@ -180,6 +180,7 @@ var shippedMigrations = map[int64]string{
 	173: "0173_context_classification.sql",
 	174: "0174_agent_manager_contexts.sql",
 	175: "0175_agent_manager_deliveries.sql",
+	176: "0176_agent_manager_decisions.sql",
 }
 
 // burnedVersion reports version numbers that must never be (re)used: they

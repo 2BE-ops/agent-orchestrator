@@ -198,6 +198,9 @@ func managerRequestResolutionFromRow(row gen.AdaptiveAgentManagerRequestResoluti
 // ResolveAgentManagerRequest closes routing intent, without touching task intent,
 // leases or native controllers. Exact retries retain the original terminal proof.
 func (s *Store) ResolveAgentManagerRequest(ctx context.Context, project domain.ProjectID, resolution domain.AgentManagerRequestResolution) error {
+	if resolution.Outcome == "selected" {
+		return ports.ErrAgentManagerForbidden
+	}
 	if err := validateAgentManagerProject(project); err != nil {
 		return err
 	}

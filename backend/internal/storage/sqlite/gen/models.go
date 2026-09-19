@@ -67,6 +67,15 @@ type AdaptiveAgentManagerController struct {
 	ReleaseReason        string
 }
 
+type AdaptiveAgentManagerDecision struct {
+	ProposalID  string
+	RequestID   string
+	Outcome     string
+	Snapshot    string
+	ContentHash string
+	CreatedAt   time.Time
+}
+
 type AdaptiveAgentManagerDelivery struct {
 	ID           string
 	RequestID    string

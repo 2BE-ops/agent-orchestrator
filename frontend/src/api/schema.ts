@@ -4215,7 +4215,7 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             /** @enum {string} */
-            outcome: "cancelled" | "superseded" | "needs_human";
+            outcome: "cancelled" | "superseded" | "needs_human" | "selected";
             reason: string;
             requestId: string;
         };
