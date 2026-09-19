@@ -3088,7 +3088,7 @@ export interface paths {
         /** Inspect immutable evaluation history */
         get: operations["listTaskEvaluations"];
         put?: never;
-        /** Collect stored independent evidence for an exact worker result */
+        /** Collect independent evidence for an exact worker result */
         post: operations["evaluateTaskResult"];
         delete?: never;
         options?: never;
@@ -3318,6 +3318,7 @@ export interface components {
         };
         AcceptanceCriterion: {
             artifactPath?: string;
+            artifactSha256?: string;
             checkNames?: string[];
             command?: string[];
             /** @enum {string} */
@@ -5630,6 +5631,21 @@ export interface components {
             /** @description Individual checks in stable order for the selected probe. */
             requirements: components["schemas"]["SystemRequirement"][];
         };
+        TaskArtifactEvidence: {
+            /** Format: int64 */
+            bytes: number;
+            collector: string;
+            criterionId: string;
+            gitBlobId?: string;
+            /** Format: date-time */
+            observedAt: string;
+            path: string;
+            reason: string;
+            sha256?: string;
+            /** @enum {string} */
+            state: "observed" | "missing" | "unavailable" | "unsupported" | "oversized";
+            targetCommit: string;
+        };
         TaskAttempt: {
             actor: components["schemas"]["AdaptiveActor"];
             /** Format: date-time */
@@ -5899,6 +5915,8 @@ export interface components {
             nextCursor?: string;
         };
         TaskObservationEvidence: {
+            artifacts?: components["schemas"]["TaskArtifactEvidence"][];
+            artifactsTruncated?: boolean;
             prs: components["schemas"]["TaskPREvidence"][];
             prsTruncated: boolean;
             reviews: components["schemas"]["TaskReviewEvidence"][];

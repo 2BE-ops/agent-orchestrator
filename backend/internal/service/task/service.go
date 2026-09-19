@@ -31,10 +31,27 @@ type Store interface {
 }
 
 // Manager applies shared validation without starting worker processes.
-type Manager struct{ store Store }
+type Manager struct {
+	store     Store
+	artifacts ports.TaskArtifactCollector
+}
+
+// Option wires optional daemon-owned collectors into the shared service.
+type Option func(*Manager)
+
+// WithArtifactCollector independently reads committed blobs for frozen criteria.
+func WithArtifactCollector(collector ports.TaskArtifactCollector) Option {
+	return func(m *Manager) { m.artifacts = collector }
+}
 
 // New builds the task service over the existing daemon store.
-func New(store Store) *Manager { return &Manager{store: store} }
+func New(store Store, options ...Option) *Manager {
+	m := &Manager{store: store}
+	for _, option := range options {
+		option(m)
+	}
+	return m
+}
 
 // CreateInput authors work with optional criteria; criteria are required to lease.
 type CreateInput struct {

@@ -471,7 +471,8 @@ The shared task service exposes strict evaluation requests and scoped historical
 reads. URL task/attempt scope is checked before collection, and the store repeats
 transactional result/version/actor guards. The public request contains no verdict,
 evidence, criteria or actor fields; exact retries acknowledge the retained snapshot.
-HTTP/CLI collection reads stored facts, without refreshing SCM or starting workers.
+HTTP/CLI collection reads stored SCM facts and explicitly supported local evidence,
+without refreshing SCM or starting workers.
 
 Evaluation observations additionally retain bounded PR metadata, latest existing
 review runs per PR/harness at the target commit, and worker/lease facts under the
@@ -482,6 +483,19 @@ task-specific criteria. Frozen mergeability criteria use exact observed PR heads
 unknown/draft/stale/truncated facts never pass. Reservation time is labeled as
 ongoing until release, not billed execution time or proof of a crash. These fields
 are optional on old snapshots to preserve historical hashes.
+
+Commit-bound artifact collection is a daemon adapter, not worker output. Frozen
+artifact criteria may specify a portable path and expected SHA-256. The shared
+service authorizes a preparation/read and checks exact retry history before Git
+access, then persistence repeats current-result/version/actor fences. Collectors
+run outside SQLite transactions. The adapter uses raw Git tree/blob reads with
+replacement objects, lazy fetching, inherited Git environment and fsmonitor
+disabled; no working-tree/export filters, content execution or repository writes.
+At most 16 regular blobs of 1 MiB each are read within 15 seconds. Missing paths
+or mismatched hashes fail; missing commits, unsupported entries and unavailable
+sources remain inconclusive. Internal collected evidence is excluded from request
+JSON and validated against exact frozen criterion IDs/paths/commit before storage.
+Subprocess output bounds cover io.Copy fast paths as well as direct Write calls.
 
 Manager selection first filters permitted, enabled, compatible types, then
 considers existing Skills before proposing evolution or new types. Persist

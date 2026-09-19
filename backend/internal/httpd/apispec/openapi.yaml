@@ -10117,7 +10117,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/APIError'
           description: Not Implemented
-      summary: Collect stored independent evidence for an exact worker result
+      summary: Collect independent evidence for an exact worker result
       tags:
       - tasks
   /api/v1/tasks/{taskId}/attempts/{attemptId}/evaluations/{evaluationId}:
@@ -10963,6 +10963,8 @@ components:
     AcceptanceCriterion:
       properties:
         artifactPath:
+          type: string
+        artifactSha256:
           type: string
         checkNames:
           items:
@@ -17141,6 +17143,46 @@ components:
       - ready
       - requirements
       type: object
+    TaskArtifactEvidence:
+      properties:
+        bytes:
+          format: int64
+          type: integer
+        collector:
+          type: string
+        criterionId:
+          type: string
+        gitBlobId:
+          type: string
+        observedAt:
+          format: date-time
+          type: string
+        path:
+          type: string
+        reason:
+          type: string
+        sha256:
+          type: string
+        state:
+          enum:
+          - observed
+          - missing
+          - unavailable
+          - unsupported
+          - oversized
+          type: string
+        targetCommit:
+          type: string
+      required:
+      - collector
+      - criterionId
+      - targetCommit
+      - path
+      - bytes
+      - state
+      - reason
+      - observedAt
+      type: object
     TaskAttempt:
       properties:
         actor:
@@ -17867,6 +17909,12 @@ components:
       type: object
     TaskObservationEvidence:
       properties:
+        artifacts:
+          items:
+            $ref: '#/components/schemas/TaskArtifactEvidence'
+          type: array
+        artifactsTruncated:
+          type: boolean
         prs:
           items:
             $ref: '#/components/schemas/TaskPREvidence'

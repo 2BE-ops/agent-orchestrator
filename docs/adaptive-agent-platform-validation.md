@@ -4,6 +4,40 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 13c2a — independent commit-bound artifacts (2026-09-19)
+
+Artifact criteria may freeze a portable path and expected SHA-256. Production task
+evaluation authorizes preparation before invoking the local Git collector outside
+the SQLite transaction, then repeats result/version/actor fences on final write.
+Exact retries return historical evidence before collector access. Collected facts
+are trusted daemon context, excluded from request JSON and validated against the
+frozen criterion/path/commit. No migration is needed; optional fields preserve old
+criteria and evaluation hashes. Legacy artifacts without an expected hash stay
+inconclusive rather than passing arbitrary prose requirements.
+
+The adapter reads raw regular Git blobs, not dirty files or archive/checkout
+filters. Replacement objects, inherited Git variables, lazy fetching and fsmonitor
+are disabled. Nothing is fetched, executed or written into the repository. Bounds:
+16 artifacts, 1 MiB each and 15 seconds overall. Missing paths/hash mismatches fail;
+missing commits, unavailable Git, symlinks, submodules and oversize remain unknown.
+Output limits include io.Copy paths; diff review caught and removed a promoted
+bytes.Buffer.ReadFrom bypass before final verification.
+
+Two real-Git adapter tests, domain verdict matrix and real-SQLite service/collector
+integration PASS. They cover dirty/export-ignored files, literal pathspecs, missing
+commits/paths, symlink objects, oversize/cancellation/count bounds, frozen hashes,
+actor denial before Git access, retry without source access, collector failure and
+result replacement during collection. HTTP task fixtures use the production
+collector option; focused results/evaluations tests PASS (store 1.824s, HTTP 0.680s).
+Full adapter/domain/SQLite (36.809s)/store/task/context/ports suites PASS. Final full
+store 25.329s, HTTP router/spec/envelope and CLI 24.641s PASS. Full controllers
+retain the two recorded Windows failures; full daemon retains its recorded cwd
+cleanup failure. Final adapter regression after the output fix PASS (1.137s).
+API generation, frontend typecheck, backend build and pinned affected-package lint
+PASS (0 issues); final API drift/CLI focused checks PASS. Logs: ignored
+`*stage13c2a*`. Native reviewer provenance, bounded command verification, usage/
+performance and derived completion remain stage 13 work.
+
 ## Stage 13c1 — PR, review and lifecycle observations (2026-09-19)
 
 Evaluations now snapshot up to 16 independently observed PR records, 32 latest

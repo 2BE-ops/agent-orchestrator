@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/taskverify"
 	"github.com/aoagents/agent-orchestrator/backend/internal/config"
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/httpd"
@@ -30,7 +31,7 @@ func adaptiveTaskRouter(t *testing.T) (http.Handler, *sqlite.Store, *tasksvc.Man
 			t.Fatal(err)
 		}
 	}
-	svc := tasksvc.New(s)
+	svc := tasksvc.New(s, tasksvc.WithArtifactCollector(taskverify.Artifacts{}))
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Route("/api/v1", (&controllers.AdaptiveTasksController{Svc: svc}).Register)

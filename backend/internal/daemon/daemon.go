@@ -27,6 +27,7 @@ import (
 	chatdriverregistry "github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/registry"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/runtime/runtimeselect"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/systemexec"
+	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/taskverify"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/telemetry/policyauthority"
 	"github.com/aoagents/agent-orchestrator/backend/internal/autoreview"
 	"github.com/aoagents/agent-orchestrator/backend/internal/browserruntime"
@@ -786,7 +787,7 @@ func Run() error {
 		Reviews:            reviewSvc,
 		Notifications:      notifier,
 		Registry:           registrySvc,
-		AdaptiveTasks:      tasksvc.New(store),
+		AdaptiveTasks:      tasksvc.New(store, tasksvc.WithArtifactCollector(taskverify.Artifacts{})),
 		ProjectKnowledge:   knowledgesvc.New(store),
 		NotificationStream: notificationHub,
 		Push:               pushRegistry,

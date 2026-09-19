@@ -53,11 +53,13 @@ type TaskWorkerEvidence struct {
 // TaskObservationEvidence is copied in the evaluation transaction. Truncation
 // and observation timestamps remain visible; historical reads never recollect it.
 type TaskObservationEvidence struct {
-	PRs              []TaskPREvidence     `json:"prs"`
-	PRsTruncated     bool                 `json:"prsTruncated"`
-	Reviews          []TaskReviewEvidence `json:"reviews"`
-	ReviewsTruncated bool                 `json:"reviewsTruncated"`
-	Worker           TaskWorkerEvidence   `json:"worker"`
+	PRs                []TaskPREvidence       `json:"prs"`
+	PRsTruncated       bool                   `json:"prsTruncated"`
+	Reviews            []TaskReviewEvidence   `json:"reviews"`
+	ReviewsTruncated   bool                   `json:"reviewsTruncated"`
+	Worker             TaskWorkerEvidence     `json:"worker"`
+	Artifacts          []TaskArtifactEvidence `json:"artifacts,omitempty"`
+	ArtifactsTruncated bool                   `json:"artifactsTruncated,omitempty"`
 }
 
 // Validate bounds retained source references and review previews.
@@ -73,6 +75,14 @@ func (e TaskObservationEvidence) Validate() error {
 	for _, review := range e.Reviews {
 		if !resultText(review.RunID, 200, true) || !resultText(review.ReviewID, 200, true) || !resultText(review.PRURL, 2000, true) || len(review.TargetCommit) > 64 || len(review.Harness) > 100 || len(review.Status) > 100 || len(review.Verdict) > 100 || review.BodyPreviewHash != ContextTextHash(review.BodyPreview) || len(review.BodyPreview) > 4096 || review.BodyBytes < 0 {
 			return fmt.Errorf("invalid review evidence")
+		}
+	}
+	if len(e.Artifacts) > 16 {
+		return fmt.Errorf("too many artifact observations")
+	}
+	for _, artifact := range e.Artifacts {
+		if err := artifact.Validate(); err != nil {
+			return err
 		}
 	}
 	return nil

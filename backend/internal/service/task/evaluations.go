@@ -13,7 +13,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 )
 
-// EvaluationInput requests collection of stored independent facts. Callers
+// EvaluationInput requests collection of independent facts. Callers
 // cannot supply criteria, author identity, evidence or a verdict.
 type EvaluationInput struct {
 	ResultID        string `json:"resultId"`
@@ -43,7 +43,7 @@ func evaluationError(err error) error {
 	}
 }
 
-// Evaluate collects stored facts for one exact result after checking URL scope.
+// Evaluate collects independent facts for one exact result after checking scope.
 // It neither starts native work nor changes the task's acceptance criteria.
 func (m *Manager) Evaluate(ctx context.Context, actor domain.AdaptiveActor, taskID, attemptID string, input EvaluationInput) (EvaluationReceipt, error) {
 	var receipt EvaluationReceipt
@@ -62,7 +62,21 @@ func (m *Manager) Evaluate(ctx context.Context, actor domain.AdaptiveActor, task
 	if result.TaskID != taskID || result.AttemptID != attemptID {
 		return receipt, evaluationError(ports.ErrTaskNotFound)
 	}
-	receipt.Evaluation, receipt.Created, err = m.store.EvaluateTaskResult(ctx, domain.TaskEvaluationRequest{ID: uuid.NewString(), ResultID: input.ResultID, ExpectedVersion: input.ExpectedVersion, IdempotencyKey: input.IdempotencyKey, Mutation: domain.TaskMutation{Actor: actor, Reason: input.Reason}})
+	request := domain.TaskEvaluationRequest{ID: uuid.NewString(), ResultID: input.ResultID, ExpectedVersion: input.ExpectedVersion, IdempotencyKey: input.IdempotencyKey, Mutation: domain.TaskMutation{Actor: actor, Reason: input.Reason}}
+	if m.artifacts != nil {
+		preparation, err := m.store.PrepareTaskEvaluation(ctx, request)
+		if err != nil {
+			return receipt, evaluationError(err)
+		}
+		if preparation.Existing != nil {
+			return EvaluationReceipt{Evaluation: *preparation.Existing}, nil
+		}
+		request.Artifacts, err = m.artifacts.Collect(ctx, preparation)
+		if err != nil {
+			return receipt, err
+		}
+	}
+	receipt.Evaluation, receipt.Created, err = m.store.EvaluateTaskResult(ctx, request)
 	return receipt, evaluationError(err)
 }
 

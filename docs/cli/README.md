@@ -131,7 +131,7 @@ and knowledge is not automatically accepted. `ao task results <task-id>
 and previous results intact.
 
 `ao task evaluate <task-id> <attempt-id> --file <path|->` collects an immutable
-assessment of stored independent evidence. Its JSON request contains `resultId`,
+assessment of independent evidence. Its JSON request contains `resultId`,
 `expectedVersion` (zero initially), a stable `idempotencyKey`, and `reason`, with an
 8 KiB limit. Criteria, evidence, author identity and verdict are derived by the
 daemon. An exact retry returns the original snapshot; a fresh assessment requires
@@ -149,6 +149,17 @@ with a known mergeable state. An observed conflict or closed unmerged PR fails;
 unknown, stale or truncated observations cannot pass. Other criterion kinds remain
 inconclusive until their independent collectors are available. Assessment reads do
 not refresh SCM data or change leases or planning.
+
+An `artifact` criterion can freeze `artifactPath` and `artifactSha256`. Collection
+reads the raw regular Git blob at the result's full commit from the worker's
+repository and compares its SHA-256 with the frozen expectation. Dirty files,
+checkout/export filters and worker-reported hashes are excluded. A missing path or
+hash mismatch fails; missing commits, oversized blobs, symlinks, submodules and
+unavailable Git remain inconclusive. Collection reads at most 16 artifacts, each
+at most 1 MiB, within a 15-second total deadline. It does not fetch missing objects,
+execute artifact content or modify the repository. Legacy artifact criteria without
+a frozen hash remain inconclusive. Exact evaluation retries return stored evidence
+before accessing Git, even after the repository becomes unavailable.
 
 Assessments also retain up to 16 PR observations, 32 latest review-run references
 at the target commit, and worker activity/termination/lease facts. Review previews

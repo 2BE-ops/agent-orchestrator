@@ -6,9 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
-	"unicode"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
@@ -36,22 +34,7 @@ func taskEvaluationFromRow(row gen.AdaptiveTaskEvaluation) (domain.TaskEvaluatio
 // changes criteria, or releases a worker's lease.
 func (s *Store) EvaluateTaskResult(ctx context.Context, input domain.TaskEvaluationRequest) (domain.TaskEvaluation, bool, error) {
 	var evaluation domain.TaskEvaluation
-	for _, value := range []string{input.ID, input.ResultID, input.IdempotencyKey} {
-		if strings.TrimSpace(value) == "" || len(value) > 200 || strings.IndexFunc(value, unicode.IsControl) >= 0 {
-			return evaluation, false, ports.ErrTaskInvalid
-		}
-	}
-	if input.ExpectedVersion < 0 || input.ExpectedVersion >= 64 {
-		return evaluation, false, ports.ErrTaskInvalid
-	}
-	if err := validateTaskMutation(input.Mutation); err != nil {
-		return evaluation, false, err
-	}
-	_, requestHash, err := domain.TaskContent(struct {
-		ResultID        string
-		ExpectedVersion int64
-		Mutation        domain.TaskMutation
-	}{input.ResultID, input.ExpectedVersion, input.Mutation})
+	requestHash, err := taskEvaluationRequestHash(input)
 	if err != nil {
 		return evaluation, false, err
 	}
@@ -134,6 +117,17 @@ func (s *Store) EvaluateTaskResult(ctx context.Context, input domain.TaskEvaluat
 		if err != nil {
 			return err
 		}
+		if err := validateCollectedArtifacts(input.Artifacts, result, criteria.Definition); err != nil {
+			return err
+		}
+		observations.Artifacts = input.Artifacts
+		artifactCount := 0
+		for _, criterion := range criteria.Definition.Criteria {
+			if criterion.EvidenceKind == "artifact" && criterion.ArtifactSHA256 != "" {
+				artifactCount++
+			}
+		}
+		observations.ArtifactsTruncated = artifactCount > 16 && len(input.Artifacts) == 16
 		decisions, outcome, reason := domain.EvaluateTaskEvidence(criteria.Definition, result.Definition.ClaimedCommit, checks, truncated, &observations, now)
 		attribution := domain.TaskEvaluationAttribution{AgentType: configuration.AgentType, Skills: []domain.WorkerDefinitionRef{}, Harness: configuration.Effective.Harness, Mode: configuration.Effective.SessionMode, Model: configuration.Effective.Config.Model, Category: revision.Definition.Category, AttemptNumber: attempt.Number, ResultNumber: result.Number, ConfigurationHash: result.ConfigurationHash, ConfigurationSequence: result.ConfigurationSequence}
 		for _, skill := range configuration.Skills {

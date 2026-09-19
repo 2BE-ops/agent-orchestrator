@@ -41,12 +41,13 @@ func (m TaskMutation) ValidatePlanning() error {
 // AcceptanceCriterion gives evaluation an immutable requirement and evidence
 // expectation. Commands are argument vectors; this record does not execute them.
 type AcceptanceCriterion struct {
-	ID           string   `json:"id"`
-	Requirement  string   `json:"requirement"`
-	EvidenceKind string   `json:"evidenceKind" enum:"test,build,lint,ci,mergeability,review,artifact,manual"`
-	Command      []string `json:"command,omitempty"`
-	ArtifactPath string   `json:"artifactPath,omitempty"`
-	CheckNames   []string `json:"checkNames,omitempty"`
+	ID             string   `json:"id"`
+	Requirement    string   `json:"requirement"`
+	EvidenceKind   string   `json:"evidenceKind" enum:"test,build,lint,ci,mergeability,review,artifact,manual"`
+	Command        []string `json:"command,omitempty"`
+	ArtifactPath   string   `json:"artifactPath,omitempty"`
+	ArtifactSHA256 string   `json:"artifactSha256,omitempty"`
+	CheckNames     []string `json:"checkNames,omitempty"`
 }
 
 // AcceptanceCriteria is versioned independently of task planning revisions.
@@ -100,6 +101,9 @@ func (c AcceptanceCriteria) Validate() error {
 		}
 		if item.EvidenceKind == "mergeability" && (len(item.Command) != 0 || item.ArtifactPath != "") {
 			return fmt.Errorf("mergeability uses observed PR facts, not commands or artifacts")
+		}
+		if item.ArtifactSHA256 != "" && (item.EvidenceKind != "artifact" || !ValidContextFilePath(item.ArtifactPath) || !validArtifactHash(item.ArtifactSHA256) || len(item.Command) != 0) {
+			return fmt.Errorf("artifact hash verification requires a portable path, SHA-256 and no command")
 		}
 	}
 	encoded, err := json.Marshal(c)

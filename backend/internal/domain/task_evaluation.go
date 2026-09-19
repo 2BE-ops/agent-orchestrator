@@ -84,6 +84,7 @@ type TaskEvaluationRequest struct {
 	ExpectedVersion int64
 	IdempotencyKey  string
 	Mutation        TaskMutation
+	Artifacts       []TaskArtifactEvidence // Trusted daemon collector output, never request JSON.
 }
 
 // Hash seals evidence, attribution and observation time together.
@@ -112,6 +113,9 @@ func EvaluateTaskEvidence(criteria AcceptanceCriteria, target string, checks []T
 		}
 		if criterion.EvidenceKind == "mergeability" && validEvaluationCommit(target) {
 			decision.Outcome, decision.Reason = evaluateTaskMergeability(target, observations, now)
+		}
+		if criterion.EvidenceKind == "artifact" && validEvaluationCommit(target) {
+			decision.Outcome, decision.Reason = evaluateTaskArtifact(criterion, target, observations, now)
 		}
 		if decision.Outcome == "failed" {
 			outcome = "failed"
