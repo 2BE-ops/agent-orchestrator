@@ -52,6 +52,38 @@ func createAdaptiveTaskHTTP(t *testing.T, router http.Handler) controllers.Adapt
 	return task
 }
 
+func TestAdaptiveTaskReviewPolicyHTTP(t *testing.T) {
+	r, s, _ := adaptiveTaskRouter(t)
+	ctx := context.Background()
+	_, err := s.CreateRegistryEntry(ctx, "reviewer", domain.RegistryAgentType,
+		domain.RegistryMetadata{Name: "Reviewer", Enabled: true},
+		domain.RegistryDefinition{AgentType: &domain.AgentTypeDefinition{Harness: domain.HarnessClaudeCode, Instructions: "Review exact criteria", MaxParallelWorkers: 1}},
+		domain.RegistryMutation{Actor: domain.RegistryActor{Origin: domain.RegistryUser, ID: "human"}, Reason: "Create reviewer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := adaptiveTaskInput()
+	input.Criteria.Criteria = append(input.Criteria.Criteria, domain.AcceptanceCriterion{ID: "review", Requirement: "No blocking findings", EvidenceKind: "review"})
+	input.Criteria.ReviewPolicy = &domain.TaskReviewPolicy{AgentTypeID: "reviewer", Version: 1, DifferentAgentType: true, DifferentHarness: true}
+	w := registryRequest(t, r, http.MethodPost, "/projects/project/tasks", input, http.StatusCreated)
+	var view controllers.AdaptiveTaskResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &view); err != nil || view.Criteria == nil || view.Criteria.Definition.ReviewPolicy == nil || *view.Criteria.Definition.ReviewPolicy != *input.Criteria.ReviewPolicy {
+		t.Fatalf("policy changed across HTTP: %+v %v", view, err)
+	}
+	path := "/tasks/" + view.Task.ID + "/criteria"
+	input.Criteria.ReviewPolicy.Version = 0
+	change := controllers.AdaptiveTaskCriteriaRequest{Criteria: *input.Criteria, ExpectedRevision: 1, Reason: "Invalid floating reviewer"}
+	registryRequest(t, r, http.MethodPost, path, change, http.StatusBadRequest)
+	input.Criteria.ReviewPolicy.Version = 2
+	change.Criteria = *input.Criteria
+	registryRequest(t, r, http.MethodPost, path, change, http.StatusBadRequest)
+	w = registryRequest(t, r, http.MethodGet, path+"/1", nil, http.StatusOK)
+	var retained domain.AcceptanceCriteriaVersion
+	if err := json.Unmarshal(w.Body.Bytes(), &retained); err != nil || retained.Definition.ReviewPolicy == nil || retained.Definition.ReviewPolicy.Version != 1 {
+		t.Fatalf("invalid revision changed retained policy: %+v %v", retained, err)
+	}
+}
+
 type contextReadStore struct {
 	tasksvc.Store
 	snapshot domain.TaskContextSnapshot

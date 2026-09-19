@@ -52,7 +52,8 @@ type AcceptanceCriterion struct {
 
 // AcceptanceCriteria is versioned independently of task planning revisions.
 type AcceptanceCriteria struct {
-	Criteria []AcceptanceCriterion `json:"criteria"`
+	Criteria     []AcceptanceCriterion `json:"criteria"`
+	ReviewPolicy *TaskReviewPolicy     `json:"reviewPolicy,omitempty"`
 }
 
 // Validate bounds review and command expectations before they can be pinned.
@@ -61,7 +62,9 @@ func (c AcceptanceCriteria) Validate() error {
 		return fmt.Errorf("acceptance criteria must contain 1 to 64 requirements")
 	}
 	seen := map[string]bool{}
+	hasReview := false
 	for _, item := range c.Criteria {
+		hasReview = hasReview || item.EvidenceKind == "review"
 		if strings.TrimSpace(item.ID) == "" || len(item.ID) > 100 || seen[item.ID] || strings.TrimSpace(item.Requirement) == "" || len(item.Requirement) > 4000 {
 			return fmt.Errorf("invalid or duplicate acceptance criterion")
 		}
@@ -105,6 +108,14 @@ func (c AcceptanceCriteria) Validate() error {
 		}
 		if item.ArtifactSHA256 != "" && (item.EvidenceKind != "artifact" || !ValidContextFilePath(item.ArtifactPath) || !validArtifactHash(item.ArtifactSHA256) || len(item.Command) != 0) {
 			return fmt.Errorf("artifact hash verification requires a portable path, SHA-256 and no command")
+		}
+	}
+	if c.ReviewPolicy != nil {
+		if !hasReview {
+			return fmt.Errorf("review policy requires a review criterion")
+		}
+		if err := c.ReviewPolicy.Validate(); err != nil {
+			return err
 		}
 	}
 	encoded, err := json.Marshal(c)

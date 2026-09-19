@@ -3302,6 +3302,7 @@ export interface components {
         };
         AcceptanceCriteria: {
             criteria: components["schemas"]["AcceptanceCriterion"][];
+            reviewPolicy?: components["schemas"]["TaskReviewPolicy"];
         };
         AcceptanceCriteriaVersion: {
             actor: components["schemas"]["AdaptiveActor"];
@@ -6000,6 +6001,13 @@ export interface components {
             status: string;
             targetCommit: string;
             verdict: string;
+        };
+        TaskReviewPolicy: {
+            agentTypeId: string;
+            differentAgentType: boolean;
+            differentHarness: boolean;
+            /** Format: int64 */
+            version: number;
         };
         TaskRevision: {
             actor: components["schemas"]["AdaptiveActor"];

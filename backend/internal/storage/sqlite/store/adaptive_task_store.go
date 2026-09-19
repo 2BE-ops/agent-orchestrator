@@ -109,6 +109,9 @@ func insertTaskRevision(ctx context.Context, q *gen.Queries, id string, number, 
 }
 
 func insertTaskCriteria(ctx context.Context, q *gen.Queries, id string, number int64, criteria domain.AcceptanceCriteria, mutation domain.TaskMutation, now time.Time) error {
+	if err := validateTaskReviewPolicy(ctx, q, criteria.ReviewPolicy); err != nil {
+		return err
+	}
 	content, hash, err := domain.TaskContent(criteria)
 	if err != nil {
 		return err

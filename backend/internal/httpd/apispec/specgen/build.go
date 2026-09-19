@@ -200,6 +200,7 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"DomainTaskRevisionRef":                                "TaskRevisionRef",
 	"DomainAcceptanceCriterion":                            "AcceptanceCriterion",
 	"DomainAcceptanceCriteria":                             "AcceptanceCriteria",
+	"DomainTaskReviewPolicy":                               "TaskReviewPolicy",
 	"DomainAcceptanceCriteriaVersion":                      "AcceptanceCriteriaVersion",
 	"DomainTaskAudit":                                      "TaskAudit",
 	"DomainTaskAttempt":                                    "TaskAttempt",

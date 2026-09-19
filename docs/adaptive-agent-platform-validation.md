@@ -4,6 +4,25 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 13c3a — frozen reviewer policy (2026-09-19)
+
+Acceptance criteria optionally pin an exact reviewer Agent Type/version and
+independent-Type/harness requirements. Planning validates enabled Type identity
+and historical version within its existing transaction. Failed pins leave no
+partial task/audit or revision; workers cannot remove review requirements.
+Legacy criteria omit the new field and retain their original hash. A different
+version of the same Type does not satisfy the different-Type requirement.
+
+Domain violation tests, a real-SQLite reservation/revision/registry-edit/reopen
+test, and HTTP create/inspect/reject tests PASS. Full domain (1.051s), SQLite
+(40.152s), store (25.321s), task (1.763s), taskcontext (0.474s), API spec (0.281s)
+and specgen (15.852s) suites PASS. Focused AdaptiveTask HTTP tests PASS (1.480s).
+`npm run api`, `npm run frontend:typecheck`, backend `go build ./...` and pinned
+domain/SQLite/task/controllers/apispec lint PASS (0 issues). Complete staged
+diff inspected; `git diff --cached --check` PASS. Logs: ignored
+`*stage13c3a*`. This is policy authoring/persistence, not yet proof of native
+reviewer consumption; that integration is the next slice. No migration needed.
+
 ## Stage 13c2b — build/test/lint evidence through existing CI (2026-09-19)
 
 The test/build/lint criterion kinds now accept frozen exact check names and reuse
