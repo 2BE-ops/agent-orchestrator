@@ -326,6 +326,28 @@ existing blocked-input protection; automation never injects an approval response
 
 ## Context, knowledge, artifacts and communication
 
+The user's 2026-09-19 amendment adds pre-slice 15.0 (one migration plus domain
+and store) and stage-15 integration. Sensitivity is an ordered lattice:
+`technical` < `engagement` < `mission`. Tasks and ProjectKnowledge entries carry
+classification; immutable Agent Type versions carry `max_context_class`
+clearance. Engagement means per-client/per-target context shared only within
+one engagement, so clearance alone does not authorize cross-engagement sharing.
+
+Context Builder must deterministically refuse higher-class embedding in any
+delegation payload, context manifest or knowledge selection. Authority comes
+from the attempt's pinned Agent Type version/configuration, never the live Type.
+Manifests retain the classification of each sealed item; delegation payloads
+are versioned inspectable artifacts. Technical worker findings/results may flow
+upward into higher-class context. Violation tests must prove these boundaries,
+including live-version changes and cross-engagement isolation, at the same
+level as ownership enforcement; prompts are not enforcement.
+
+Stage 15 adds classification to Manager compatibility filtering and exposes
+Type clearance, task classification and knowledge classification selectors in
+their authoring views. The session inspector displays per-item classifications
+from the sealed manifest. This amendment extends, rather than replaces, the
+existing version, provenance, budget and ownership rules below.
+
 Extend `buildTaskPrompt`/`buildSystemPromptText`; do not assemble business logic in
 React. Context selection includes the pinned task/criteria, parent summary,
 completed dependency contracts, selected accepted knowledge, relevant file
