@@ -15,8 +15,9 @@ import (
 
 // Manager applies governance validation before persistence or native effects.
 type Manager struct {
-	store  ports.AgentManagerStore
-	native NativeRuntime
+	store      ports.AgentManagerStore
+	native     NativeRuntime
+	candidates CandidateAssessor
 }
 
 // New constructs the Manager boundary over the daemon's existing store.

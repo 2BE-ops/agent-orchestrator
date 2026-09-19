@@ -23,6 +23,8 @@ ao agent-manager proposal <project> <request> <proposal>
 ao agent-manager contexts <project> <request>
 ao agent-manager context <project> <request> <context>
 ao agent-manager deliveries <project> <request>
+ao agent-manager candidates <project> <request> --limit 20
+ao agent-manager candidate <project> <request> <type> --version 1
 ```
 
 `configure` is a human governance action. Manager tools cannot grant themselves
@@ -30,6 +32,17 @@ policy permissions. Its API JSON includes `definition`, `expectedRevision` and
 `reason`; origin/actor fields are not accepted. Use revision 0 only for initial
 configuration, then the current configuration's `number`. A stale edit conflicts.
 Configuration edits do not launch a controller or alter running configuration.
+
+`candidates` checks a page of active exact Type versions against the request's
+pinned task requirements. It includes exclusions, such as disabled/protected Types
+or Skills, insufficient clearance, missing explicit capabilities and unavailable
+native configuration. Limits are 1-20; follow `nextCursor` with `--cursor` until
+absent before concluding the registry has no suitable candidate. `candidate`
+checks a specific historical version; a higher-clearance active version cannot
+raise that version's clearance. Project defaults and native provider/capability
+checks use the same registry service as worker launch. These are current
+observations, not persisted decisions or permission to launch. Native protocol v2
+provides both commands; sealed protocol-v1 history retains its original bytes.
 
 `start` is an explicit user-directed native launch under that governance. The
 16 KiB JSON body contains only `id`, `configurationVersion` (1-1000), and `reason`:

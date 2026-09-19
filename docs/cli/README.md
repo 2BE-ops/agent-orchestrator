@@ -444,6 +444,13 @@ its native CLI protocol and bounded transport history. Proposals link to those
 sealed inputs. Unknown delivery is never automatically repeated; a persistent
 conversation retains its engagement and cumulative sensitivity.
 
+`ao agent-manager candidates <project> <request> --limit 20` checks current Type
+and Skill permissions, exact-version clearance, required capabilities and native
+availability. Rejected candidates remain visible. Follow `nextCursor` using
+`--cursor`; one page does not establish that the registry has no eligible Types.
+`candidate <project> <request> <type> --version N` checks an exact historical
+version. These observations do not authorize a launch or apply a selection.
+
 ## Task performance evidence and metrics
 
 ```bash

@@ -1309,6 +1309,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/agent-manager/requests/{requestId}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check a bounded page of Manager candidate compatibility and exclusions */
+        get: operations["listAgentManagerCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/agent-manager/requests/{requestId}/candidates/{agentTypeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check an exact Type version against pinned task requirements */
+        get: operations["checkAgentManagerCandidate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/agent-manager/requests/{requestId}/contexts": {
         parameters: {
             query?: never;
@@ -3925,11 +3959,49 @@ export interface components {
             items: components["schemas"]["AgentManagerAudit"][];
             nextCursor?: string;
         };
+        AgentManagerCandidate: {
+            agentType: components["schemas"]["WorkerDefinitionRef"];
+            /** Format: int64 */
+            bindingRevision?: number;
+            capabilities: string[];
+            catalogFingerprint?: string;
+            config: components["schemas"]["AgentConfig"];
+            eligible: boolean;
+            harness: string;
+            issues: components["schemas"]["AgentManagerCandidateIssue"][];
+            /** @enum {string} */
+            maxContextClass: "technical" | "engagement" | "mission";
+            /** Format: int64 */
+            metadataRevision: number;
+            missingCapabilities: string[];
+            providerBindingId?: string;
+            sessionMode: string;
+            skills: components["schemas"]["AgentManagerCandidateSkill"][];
+        };
+        AgentManagerCandidateIssue: {
+            code: string;
+            /** @enum {string} */
+            state: "invalid" | "unavailable";
+        };
         AgentManagerCandidateReason: {
             agentTypeId: string;
             reason: string;
             /** Format: int64 */
             version: number;
+        };
+        AgentManagerCandidateSkill: {
+            /** Format: int64 */
+            metadataRevision: number;
+            reference: components["schemas"]["WorkerDefinitionRef"];
+        };
+        AgentManagerCandidatesResponse: {
+            items: components["schemas"]["AgentManagerCandidate"][];
+            nextCursor?: string;
+            /** Format: date-time */
+            observedAt: string;
+            requestHash: string;
+            /** @enum {string} */
+            taskClassification: "technical" | "engagement" | "mission";
         };
         AgentManagerConfiguration: {
             actor: components["schemas"]["AdaptiveActor"];
@@ -12391,6 +12463,168 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentManagerRequest"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listAgentManagerCandidates: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentManagerCandidatesResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    checkAgentManagerCandidate: {
+        parameters: {
+            query: {
+                version: number;
+            };
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+                requestId: string;
+                agentTypeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentManagerCandidate"];
                 };
             };
             /** @description Bad Request */

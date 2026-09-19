@@ -71,6 +71,25 @@ type AgentManagerContextsResponse struct {
 	Items []domain.AgentManagerContext `json:"items"`
 }
 
+// AgentManagerCandidatesResponse contains current compatibility observations.
+type AgentManagerCandidatesResponse managersvc.CandidatePage
+
+// AgentManagerCandidateQuery bounds native checks per page.
+type AgentManagerCandidateQuery struct {
+	Cursor string `query:"cursor"`
+	Limit  int    `query:"limit" minimum:"1" maximum:"20" default:"20"`
+}
+
+// AgentManagerCandidateIDParam identifies an exact Type candidate.
+type AgentManagerCandidateIDParam struct {
+	AgentTypeID string `path:"agentTypeId"`
+}
+
+// AgentManagerCandidateVersionQuery requires an immutable Type version.
+type AgentManagerCandidateVersionQuery struct {
+	Version int64 `query:"version" required:"true" minimum:"1"`
+}
+
 // AgentManagerDeliveriesResponse contains at most four native send attempts.
 type AgentManagerDeliveriesResponse struct {
 	Items []domain.AgentManagerDelivery `json:"items"`

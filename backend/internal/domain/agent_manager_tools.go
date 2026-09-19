@@ -18,7 +18,7 @@ type AgentManagerToolPaths struct {
 
 // Validate bounds literal argv/environment values without evaluating a shell.
 func (p AgentManagerToolPaths) Validate() error {
-	if p.SchemaVersion != 1 || strings.TrimSpace(p.Executable) == "" || !utf8.ValidString(p.Executable) || !utf8.ValidString(p.RunFile) || len(p.Executable) > 4096 || strings.IndexFunc(p.Executable, unicode.IsControl) >= 0 || len(p.RunFile) > 4096 || strings.IndexFunc(p.RunFile, unicode.IsControl) >= 0 {
+	if (p.SchemaVersion != 1 && p.SchemaVersion != 2) || strings.TrimSpace(p.Executable) == "" || !utf8.ValidString(p.Executable) || !utf8.ValidString(p.RunFile) || len(p.Executable) > 4096 || strings.IndexFunc(p.Executable, unicode.IsControl) >= 0 || len(p.RunFile) > 4096 || strings.IndexFunc(p.RunFile, unicode.IsControl) >= 0 {
 		return fmt.Errorf("invalid Manager CLI routing paths")
 	}
 	return nil
@@ -35,6 +35,9 @@ func (c AgentManagerContext) toolPrompt() (string, error) {
 	}
 	if !messageIdentity(string(c.ProjectID)) {
 		return "", fmt.Errorf("manager tool input requires project attribution")
+	}
+	if c.Tools.SchemaVersion == 2 {
+		return c.toolPromptV2()
 	}
 	executable := c.Tools.Executable
 	definition := AgentManagerProposalDefinition{SchemaVersion: 1, Action: "select_existing", AgentTypeID: "REPLACE_WITH_PERMITTED_TYPE_ID", AgentTypeVersion: 1, Rationale: "Replace with the evidence for your selection", Candidates: []AgentManagerCandidateReason{}}
@@ -92,4 +95,50 @@ read unrelated project briefs or use a raw worker terminal for coordination.
 
 AO_MANAGER_TOOLS_JSON
 ` + string(encoded), nil
+}
+
+// toolPromptV2 extends the frozen v1 envelope with deterministic candidate tools.
+// Keep both renderers stable so retained input remains hash-verifiable.
+func (c AgentManagerContext) toolPromptV2() (string, error) {
+	paths := *c.Tools
+	paths.SchemaVersion = 1
+	c.Tools = &paths
+	previous, err := c.toolPrompt()
+	if err != nil {
+		return "", err
+	}
+	prefix, encoded, _ := strings.Cut(previous, "AO_MANAGER_TOOLS_JSON\n")
+	var protocol map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(encoded), &protocol); err != nil {
+		return "", err
+	}
+	var commands map[string][]string
+	if err := json.Unmarshal(protocol["commands"], &commands); err != nil {
+		return "", err
+	}
+	commands["candidates"] = []string{paths.Executable, "agent-manager", "candidates", string(c.ProjectID), c.RequestID, "--limit", "20"}
+	commands["candidate"] = []string{paths.Executable, "agent-manager", "candidate", string(c.ProjectID), c.RequestID, "REPLACE_WITH_TYPE_ID", "--version", "1"}
+	protocol["commands"], err = json.Marshal(commands)
+	if err != nil {
+		return "", err
+	}
+	protocol["schemaVersion"] = json.RawMessage(`2`)
+	data, err := json.Marshal(protocol)
+	if err != nil {
+		return "", err
+	}
+	return prefix + `Inspect candidates before selecting. The response includes deterministic exclusions
+for ownership, exact-version clearance, explicit task capabilities and native
+configuration availability. Only eligible candidates can be proposed for application.
+Follow each nextCursor using --cursor as a literal argument; an incomplete page is
+not evidence that no suitable Type exists. Recheck an exact historical version with
+candidate, replacing the Type ID and --version placeholders. Active-version changes
+do not alter historical clearance. Checks are observations, not launch permission;
+AO revalidates accepted choices before dispatch. Compare eligible candidates using
+the sealed optimization preference and task requirements, inspect existing Skills
+before requesting evolution, and retain evidence and rejection reasons in your
+proposal. Capability tags are prerequisites, not a semantic quality ranking.
+
+AO_MANAGER_TOOLS_JSON
+` + string(data), nil
 }

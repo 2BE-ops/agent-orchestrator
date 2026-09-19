@@ -4,6 +4,35 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 15a - deterministic candidate compatibility and native tools (2026-09-19)
+
+Request-scoped candidate pages and exact-version checks reuse the registry/native
+launch validator after static ownership, clearance, Skill and explicit capability
+checks. Tests cover the full three-by-three classification lattice, no native
+probe for prohibited content, a higher-clearance live activation leaving an older
+version ineligible, independent selection permission, protected/disabled Skills,
+capability composition, unknown readiness, provider catalog failure, inherited
+project configuration and storage failure propagation. Pagination tests retain
+exclusions and all 22 candidates across pages, preserve exact task/version pins,
+and reject cross-project, stale-governance and stale-task requests. The native
+protocol-v1 golden remains unchanged; v2 has its own hash and literal-argv tests.
+
+Focused registry PASS (0.967s). Full domain (0.869s), registry (1.985s), Manager
+service (2.193s), router (0.647s), spec (0.357s), specgen (8.054s), envelope
+(0.485s), CLI (19.908s), telemetry (0.409s) and embedded skills (cached) PASS.
+Full HTTP (10.431s) retains only the recorded Windows secure-pairing rename and
+file-URL clone failures; daemon (3.834s) retains its recorded CWD cleanup failure.
+All 40 API-client tests PASS (1.76s), including candidate identity redaction.
+Backend build, frontend typecheck, API regeneration/route parity, affected pinned
+new-diff lint (0 issues) and source/generated/whitespace inspection PASS.
+Initial v2 golden capture, two import-group formatting findings and a telemetry
+test incorrectly passing a query string to a pathname-only helper were corrected.
+Logs: `.cache/adaptive-tests/15a-*`.
+
+These compatibility observations do not apply a semantic selection or launch a
+worker. Persistent decisions and retry feedback are the next stage-15 slice;
+composition/evolution and the remaining classification UI/runtime gates follow.
+
 ## Stage 14e3 - daemon inbox consumer, native protocol and history (2026-09-19)
 
 The daemon starts one bounded Manager inbox consumer after native reconciliation

@@ -3944,6 +3944,153 @@ paths:
       summary: Inspect a sealed routing request
       tags:
       - agent-managers
+  /api/v1/projects/{id}/agent-manager/requests/{requestId}/candidates:
+    get:
+      operationId: listAgentManagerCandidates
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 20
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManagerCandidatesResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Check a bounded page of Manager candidate compatibility and exclusions
+      tags:
+      - agent-managers
+  /api/v1/projects/{id}/agent-manager/requests/{requestId}/candidates/{agentTypeId}:
+    get:
+      operationId: checkAgentManagerCandidate
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: agentTypeId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: version
+        required: true
+        schema:
+          format: int64
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManagerCandidate'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Check an exact Type version against pinned task requirements
+      tags:
+      - agent-managers
   /api/v1/projects/{id}/agent-manager/requests/{requestId}/contexts:
     get:
       operationId: listAgentManagerContexts
@@ -13211,6 +13358,76 @@ components:
       required:
       - items
       type: object
+    AgentManagerCandidate:
+      properties:
+        agentType:
+          $ref: '#/components/schemas/WorkerDefinitionRef'
+        bindingRevision:
+          format: int64
+          type: integer
+        capabilities:
+          items:
+            type: string
+          type: array
+        catalogFingerprint:
+          type: string
+        config:
+          $ref: '#/components/schemas/AgentConfig'
+        eligible:
+          type: boolean
+        harness:
+          type: string
+        issues:
+          items:
+            $ref: '#/components/schemas/AgentManagerCandidateIssue'
+          type: array
+        maxContextClass:
+          enum:
+          - technical
+          - engagement
+          - mission
+          type: string
+        metadataRevision:
+          format: int64
+          type: integer
+        missingCapabilities:
+          items:
+            type: string
+          type: array
+        providerBindingId:
+          type: string
+        sessionMode:
+          type: string
+        skills:
+          items:
+            $ref: '#/components/schemas/AgentManagerCandidateSkill'
+          type: array
+      required:
+      - agentType
+      - metadataRevision
+      - maxContextClass
+      - harness
+      - sessionMode
+      - config
+      - capabilities
+      - skills
+      - missingCapabilities
+      - eligible
+      - issues
+      type: object
+    AgentManagerCandidateIssue:
+      properties:
+        code:
+          type: string
+        state:
+          enum:
+          - invalid
+          - unavailable
+          type: string
+      required:
+      - code
+      - state
+      type: object
     AgentManagerCandidateReason:
       properties:
         agentTypeId:
@@ -13224,6 +13441,42 @@ components:
       - agentTypeId
       - version
       - reason
+      type: object
+    AgentManagerCandidateSkill:
+      properties:
+        metadataRevision:
+          format: int64
+          type: integer
+        reference:
+          $ref: '#/components/schemas/WorkerDefinitionRef'
+      required:
+      - reference
+      - metadataRevision
+      type: object
+    AgentManagerCandidatesResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AgentManagerCandidate'
+          type: array
+        nextCursor:
+          type: string
+        observedAt:
+          format: date-time
+          type: string
+        requestHash:
+          type: string
+        taskClassification:
+          enum:
+          - technical
+          - engagement
+          - mission
+          type: string
+      required:
+      - requestHash
+      - taskClassification
+      - items
+      - observedAt
       type: object
     AgentManagerConfiguration:
       properties:

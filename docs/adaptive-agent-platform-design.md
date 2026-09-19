@@ -643,6 +643,20 @@ planner/selector boundary with scripted test doubles and a production controller
 using AO's configured native harness. Malformed proposals remain unapplied with
 bounded retry or Needs Human; all accepted proposals pass the same services.
 
+Stage 15a adds a shared registry candidate assessor and request-scoped API/CLI.
+It checks exact Type clearance, enabled state, independent selection permission,
+pinned Skill permissions and explicit required capabilities before native probes.
+Capability strings are prerequisites, not semantic ranking. Compatible project
+defaults and native checks reuse worker launch's resolver/checker. Results retain
+Type/Skill content hashes and metadata revisions, effective native choices,
+provider revision and catalog fingerprint, with application-owned exclusion codes
+instead of raw native diagnostics. Pages include rejected Types and use a lookahead
+cursor over the complete registry, with at most 20 native checks per request.
+Explicit historical versions remain assessable without following activation.
+These are live observations, not saved decisions or launch authorization; the
+decision/application transaction must recheck their policy/content pins. Native
+protocol v2 supplies scoped candidate tools while preserving v1 input bytes.
+
 Persist manager policy/status, its controller/conversation binding, work inbox and
 decisions. Reuse the conversation/runtime execution engine. Decide any required
 session-kind extension explicitly with migrations and lifecycle tests; do not

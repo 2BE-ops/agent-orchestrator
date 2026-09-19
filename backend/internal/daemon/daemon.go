@@ -520,6 +520,7 @@ func Run() error {
 	if native, ok := sessMgr.(managersvc.NativeRuntime); ok {
 		managerSvc = managersvc.NewWithRuntime(store, native)
 	}
+	managerSvc.SetCandidateAssessor(registrySvc)
 	if configured, ok := sessMgr.(interface {
 		SetWorkerConfigurationResolver(ports.WorkerConfigurationResolver)
 	}); ok {
@@ -925,7 +926,7 @@ func Run() error {
 					log.Error("Manager CLI routing unavailable", "error", err)
 					return
 				}
-				dispatcher, err := managersvc.NewInboxDispatcher(store, managerSvc, transport, domain.AgentManagerToolPaths{SchemaVersion: 1, Executable: executable, RunFile: cfg.RunFilePath}, log)
+				dispatcher, err := managersvc.NewInboxDispatcher(store, managerSvc, transport, domain.AgentManagerToolPaths{SchemaVersion: 2, Executable: executable, RunFile: cfg.RunFilePath}, log)
 				if err != nil {
 					log.Error("Manager inbox configuration invalid", "error", err)
 					return

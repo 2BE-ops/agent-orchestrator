@@ -80,6 +80,7 @@ func newAgentManagerCommand(ctx *commandContext) *cobra.Command {
 	addAgentManagerInboxCommands(root, ctx)
 	addAgentManagerProposalCommands(root, ctx)
 	addAgentManagerDeliveryCommands(root, ctx)
+	addAgentManagerCandidateCommands(root, ctx)
 	addAgentManagerControllerCommands(root, ctx)
 	return root
 }
