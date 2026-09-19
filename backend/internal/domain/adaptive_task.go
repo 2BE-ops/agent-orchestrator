@@ -85,7 +85,10 @@ func (c AcceptanceCriteria) Validate() error {
 		if item.EvidenceKind == "artifact" && strings.TrimSpace(item.ArtifactPath) == "" {
 			return fmt.Errorf("artifact verification requires a path")
 		}
-		if item.EvidenceKind == "ci" {
+		if item.EvidenceKind == "ci" || len(item.CheckNames) > 0 {
+			if !ciEvidenceKind(item.EvidenceKind) {
+				return fmt.Errorf("check names require CI, test, build or lint evidence")
+			}
 			if len(item.CheckNames) < 1 || len(item.CheckNames) > 16 || len(item.Command) != 0 || item.ArtifactPath != "" {
 				return fmt.Errorf("CI verification requires 1 to 16 exact check names and no command or artifact path")
 			}
@@ -96,8 +99,6 @@ func (c AcceptanceCriteria) Validate() error {
 				}
 				names[name] = true
 			}
-		} else if len(item.CheckNames) != 0 {
-			return fmt.Errorf("check names require CI evidence kind")
 		}
 		if item.EvidenceKind == "mergeability" && (len(item.Command) != 0 || item.ArtifactPath != "") {
 			return fmt.Errorf("mergeability uses observed PR facts, not commands or artifacts")
@@ -114,6 +115,10 @@ func (c AcceptanceCriteria) Validate() error {
 		return fmt.Errorf("acceptance criteria exceed 64 KiB")
 	}
 	return nil
+}
+
+func ciEvidenceKind(kind string) bool {
+	return kind == "ci" || kind == "test" || kind == "build" || kind == "lint"
 }
 
 // TaskDefinition is work intent, independent of any session display status.

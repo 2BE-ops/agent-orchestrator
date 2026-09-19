@@ -64,10 +64,46 @@ func TestTaskCICriteriaPreserveLegacyHashesAndRejectAmbiguousSelectors(t *testin
 		{ID: "ci", Requirement: "Checks", EvidenceKind: "ci"},
 		{ID: "ci", Requirement: "Checks", EvidenceKind: "ci", CheckNames: []string{"test", "test"}},
 		{ID: "ci", Requirement: "Checks", EvidenceKind: "ci", CheckNames: []string{"test"}, Command: []string{"run"}},
-		{ID: "ci", Requirement: "Checks", EvidenceKind: "test", CheckNames: []string{"test"}},
+		{ID: "ci", Requirement: "Checks", EvidenceKind: "review", CheckNames: []string{"test"}},
 	} {
 		if err := (domain.AcceptanceCriteria{Criteria: []domain.AcceptanceCriterion{criterion}}).Validate(); err == nil {
 			t.Fatalf("ambiguous criterion accepted: %+v", criterion)
 		}
+	}
+}
+
+func TestBuildTestAndLintUseIndependentNamedChecks(t *testing.T) {
+	now := time.Now().UTC()
+	commit := strings.Repeat("a", 40)
+	for _, kind := range []string{"test", "build", "lint"} {
+		t.Run(kind, func(t *testing.T) {
+			criteria := domain.AcceptanceCriteria{Criteria: []domain.AcceptanceCriterion{{ID: kind, Requirement: "Named verification succeeds", EvidenceKind: kind, CheckNames: []string{"required-" + kind}}}}
+			if err := criteria.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			check := domain.TaskCICheckEvidence{PRURL: "https://example.test/pr/1", HeadCommit: commit, TargetCommit: commit, Name: "required-" + kind, Status: domain.PRCheckPassed, Conclusion: "success", ObservedAt: now, SnapshotAt: now}
+			for _, tc := range []struct {
+				status domain.PRCheckStatus
+				want   string
+			}{{domain.PRCheckPassed, "passed"}, {domain.PRCheckFailed, "failed"}, {domain.PRCheckInProgress, "inconclusive"}, {domain.PRCheckSkipped, "inconclusive"}} {
+				check.Status = tc.status
+				_, outcome, _ := domain.EvaluateTaskCriteria(criteria, commit, []domain.TaskCICheckEvidence{check}, false, now)
+				if outcome != tc.want {
+					t.Fatalf("%s: %s want %s", tc.status, outcome, tc.want)
+				}
+			}
+			criteria.Criteria[0].Command = []string{"echo", "passed"}
+			if err := criteria.Validate(); err == nil {
+				t.Fatal("ambiguous command/check selector accepted")
+			}
+			criteria.Criteria[0].CheckNames = nil
+			if err := criteria.Validate(); err != nil {
+				t.Fatalf("legacy command criteria invalidated: %v", err)
+			}
+			check.Status = domain.PRCheckPassed
+			if _, outcome, _ := domain.EvaluateTaskCriteria(criteria, commit, []domain.TaskCICheckEvidence{check}, false, now); outcome == "passed" {
+				t.Fatal("unnamed check satisfied legacy command")
+			}
+		})
 	}
 }

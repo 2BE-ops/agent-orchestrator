@@ -108,7 +108,7 @@ func EvaluateTaskEvidence(criteria AcceptanceCriteria, target string, checks []T
 	outcome := "passed"
 	for _, criterion := range criteria.Criteria {
 		decision := TaskCriterionEvaluation{CriterionID: criterion.ID, Outcome: "inconclusive", Reason: "Independent evidence has not been collected for this criterion"}
-		if criterion.EvidenceKind == "ci" && validEvaluationCommit(target) {
+		if ciEvidenceKind(criterion.EvidenceKind) && validEvaluationCommit(target) {
 			decision.Outcome, decision.Reason = evaluateCICriterion(criterion, target, checks, now)
 		}
 		if criterion.EvidenceKind == "mergeability" && validEvaluationCommit(target) {

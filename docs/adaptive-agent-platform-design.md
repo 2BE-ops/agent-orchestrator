@@ -497,6 +497,15 @@ sources remain inconclusive. Internal collected evidence is excluded from reques
 JSON and validated against exact frozen criterion IDs/paths/commit before storage.
 Subprocess output bounds cover io.Copy fast paths as well as direct Write calls.
 
+Build/test/lint evidence reuses the existing SCM check collector: those criterion
+kinds may freeze exact check names, with the same commit/head/snapshot guards as
+CI. This follows mission §§24/28 and the reuse decision above; a separate daemon
+runner for arbitrary project commands is not required to collect these outcomes.
+Command vectors remain inert legacy expectations and cannot be combined with check
+selectors or accepted as proof. The earlier ledger's proposed new command runner
+is replaced by this existing evidence boundary. Recorded CI status is not labeled
+as a locally executed command, exit code or locally measured duration.
+
 Manager selection first filters permitted, enabled, compatible types, then
 considers existing Skills before proposing evolution or new types. Persist
 candidates, rejection reasons, selected versions, policy preference, and rationale.

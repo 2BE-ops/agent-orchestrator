@@ -51,6 +51,33 @@ func evaluationCriteria() domain.AcceptanceCriteria {
 	return domain.AcceptanceCriteria{Criteria: []domain.AcceptanceCriterion{{ID: "ci", Requirement: "Named test and build checks pass", EvidenceKind: "ci", CheckNames: []string{"test", "build"}}}}
 }
 
+func TestTaskEvaluationAttributesBuildTestAndLintChecks(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	criteria := domain.AcceptanceCriteria{}
+	for _, kind := range []string{"build", "test", "lint"} {
+		criteria.Criteria = append(criteria.Criteria, domain.AcceptanceCriterion{ID: kind, Requirement: kind + " job succeeds", EvidenceKind: kind, CheckNames: []string{kind}})
+	}
+	_, result := taskEvaluationFixture(t, s, criteria)
+	missing, _, err := s.EvaluateTaskResult(ctx, evaluationRequest(result, "claims-only", 0))
+	if err != nil || missing.Definition.Outcome != "inconclusive" {
+		t.Fatalf("worker tests became independent evidence: %+v %v", missing, err)
+	}
+	now := time.Now().UTC()
+	pr := domain.PullRequest{URL: "https://example.test/pr/verification", SessionID: result.SessionID, Number: 1, HeadSHA: result.Definition.ClaimedCommit, UpdatedAt: now, ObservedAt: now, CIObservedAt: now}
+	checks := []domain.PullRequestCheck{}
+	for _, kind := range []string{"build", "test", "lint"} {
+		checks = append(checks, domain.PullRequestCheck{Name: kind, CommitHash: result.Definition.ClaimedCommit, Status: domain.PRCheckPassed, Conclusion: "success", CreatedAt: now})
+	}
+	if err := s.WriteSCMObservation(ctx, pr, checks, nil, nil, nil, ports.ReviewWritePreserve); err != nil {
+		t.Fatal(err)
+	}
+	passed, _, err := s.EvaluateTaskResult(ctx, evaluationRequest(result, "independent", 1))
+	if err != nil || passed.Definition.Outcome != "passed" || len(passed.Definition.Criteria) != 3 || passed.Attribution.ConfigurationHash != result.ConfigurationHash {
+		t.Fatalf("missing attributable verification: %+v %v", passed, err)
+	}
+}
+
 func evaluationRequest(result domain.TaskResult, id string, version int64) domain.TaskEvaluationRequest {
 	return domain.TaskEvaluationRequest{ID: id, ResultID: result.ID, ExpectedVersion: version, IdempotencyKey: id, Mutation: domain.TaskMutation{Actor: domain.AdaptiveActor{Kind: "SYSTEM", ID: "evaluator"}, Reason: "Collect independent checks"}}
 }

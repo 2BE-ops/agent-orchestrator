@@ -4,6 +4,27 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 13c2b — build/test/lint evidence through existing CI (2026-09-19)
+
+The test/build/lint criterion kinds now accept frozen exact check names and reuse
+the existing independent CI collector. The same full-commit/current-head/snapshot
+membership, success, missing/pending/skipped and truncation rules apply. Command
+vectors remain inert expectations; ambiguous command-plus-check selectors are
+rejected. Existing command-only criteria and their hashes remain unchanged and do
+not pass from worker claims. Following mission §§24/28 and the reuse decision,
+the earlier proposed separate command executor is replaced by this existing
+evidence boundary; CI results are never labeled as local daemon command execution.
+
+Domain tests cover all three kinds with success/failure/pending/skipped states,
+legacy expectations and ambiguous input. Real-SQLite test proves worker claims
+remain inconclusive until the named independent checks arrive, then retains exact
+configuration and separate criterion attribution. Focused domain/store PASS
+(0.480s/0.454s). Full domain, SQLite (37.804s), store (22.208s), task/context,
+artifact collector and HTTP spec suites PASS. Pinned domain/SQLite lint PASS
+(0 issues) and backend build PASS. No generated contract or UI shape changed.
+Logs: ignored `*stage13c2b*`. Native reviewer Type/criteria provenance, completion
+rules and usage/performance denominators are next.
+
 ## Stage 13c2a — independent commit-bound artifacts (2026-09-19)
 
 Artifact criteria may freeze a portable path and expected SHA-256. Production task

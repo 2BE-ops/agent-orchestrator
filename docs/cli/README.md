@@ -140,10 +140,15 @@ a new key, the latest evaluation number, and the attempt's latest result.
 `ao task evaluation <task-id> <attempt-id> <evaluation-id>` inspects exact evidence,
 source timestamps, frozen criteria, and Type/Skill/model/configuration attribution.
 
-CI criteria use `evidenceKind: "ci"` and one or more exact `checkNames`. Only
+CI criteria use `evidenceKind: "ci"` and one or more exact `checkNames`.
+The `test`, `build` and `lint` kinds can also freeze exact `checkNames` to classify
+their independently observed CI results. Only
 successful checks observed in the retained PR snapshot at the result's exact full
 commit can pass. Missing, pending, cancelled, skipped, mismatched, or truncated
 evidence is inconclusive. Worker-reported tests cannot satisfy these criteria.
+Command-only criteria retain their original description but remain inconclusive
+without supported independent evidence. A check selector and command vector cannot
+be combined; the assessment does not claim the daemon ran a CI job's command.
 `mergeability` criteria require a non-draft PR observed at the exact result commit
 with a known mergeable state. An observed conflict or closed unmerged PR fails;
 unknown, stale or truncated observations cannot pass. Other criterion kinds remain
