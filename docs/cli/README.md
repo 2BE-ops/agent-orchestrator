@@ -411,6 +411,15 @@ permissions remain independent. Stale edits return a conflict. See the embedded
 for all fields and bounds. Governance edits are human actions; the Manager's
 structured tools cannot escalate their own permissions.
 
+`inbox <project>` pages pending routing requests; `requests <project>` includes
+terminal history. `request <project> <request>` inspects exact task, criteria and
+policy references/hashes; `request-resolution` shows a retained receipt or null.
+`enqueue <project> --file routing.json` records a stable retry ID, task ID/revision,
+governance version and reason. `resolve <project> <request> --file resolution.json`
+records cancelled, superseded or Needs Human with a reason. Both writes use bounded
+16 KiB JSON and server-derived authority. They affect routing intent only: native
+launch, task cancellation and ownership release use their own service boundaries.
+
 ## Task performance evidence and metrics
 
 ```bash

@@ -24,11 +24,15 @@ vi.mock("./sentry", () => ({
 const captureMock = vi.mocked(captureRendererEvent);
 const sentryCaptureMock = vi.mocked(captureApiErrorToSentry);
 
-it("redacts Manager project and configuration identities from telemetry routes", () => {
+it("redacts Manager project, configuration and request identities from telemetry routes", () => {
 	expect(normalizeApiOperation("PUT", "/api/v1/projects/private-project/agent-manager")).toBe("PUT /api/v1/projects/:id/agent-manager");
 	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/configurations")).toBe("GET /api/v1/projects/:id/agent-manager/configurations");
 	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/configurations/42")).toBe("GET /api/v1/projects/:id/agent-manager/configurations/:id");
 	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/audit")).toBe("GET /api/v1/projects/:id/agent-manager/audit");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/inbox")).toBe("GET /api/v1/projects/:id/agent-manager/inbox");
+	expect(normalizeApiOperation("POST", "/api/v1/projects/private-project/agent-manager/requests")).toBe("POST /api/v1/projects/:id/agent-manager/requests");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id");
+	expect(normalizeApiOperation("POST", "/api/v1/projects/private-project/agent-manager/requests/private-work/resolution")).toBe("POST /api/v1/projects/:id/agent-manager/requests/:id/resolution");
 });
 
 it("redacts knowledge identities from telemetry routes", () => {

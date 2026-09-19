@@ -22,7 +22,9 @@ func newAgentManagerCommand(ctx *commandContext) *cobra.Command {
 		{"show <project>", "", "Inspect current desired configuration", 1, false},
 		{"configurations <project>", "/configurations", "List immutable governance versions", 1, true},
 		{"configuration <project> <version>", "/configurations", "Inspect an exact retained configuration", 2, false},
-		{"audit <project>", "/audit", "Inspect human policy changes", 1, true},
+		{"audit <project>", "/audit", "Inspect retained governance and work provenance", 1, true},
+		{"inbox <project>", "/inbox", "Inspect pending routing requests", 1, true},
+		{"requests <project>", "/requests", "Inspect retained routing history", 1, true},
 	} {
 		var cursor int64
 		var limit int
@@ -75,6 +77,7 @@ func newAgentManagerCommand(ctx *commandContext) *cobra.Command {
 	}}
 	configure.Flags().StringVar(&file, "file", "", "API request JSON file, or - for stdin (required)")
 	root.AddCommand(configure)
+	addAgentManagerInboxCommands(root, ctx)
 	return root
 }
 

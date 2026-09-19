@@ -4,6 +4,33 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 14c2 — Manager inbox service, API and CLI (2026-09-19)
+
+Six project-scoped HTTP operations expose exact routing requests, pending inbox,
+full history and immutable terminal receipts through the shared Manager service.
+Write bodies are strict 16 KiB JSON; actor/session/origin fields are refused. CLI
+commands remain daemon clients with bounded pages and preserved error envelopes.
+Enqueue and resolution do not launch native sessions or change task run intent.
+Native proposal/context tools remain subsequent work. Generated contracts preserve
+nullable pending resolutions; telemetry templates redact project/request identity.
+
+Focused service (0.502s), HTTP (0.600s), CLI (0.692s) and telemetry (0.340s) PASS;
+additional CLI inbox limit/envelope tests PASS (0.169s). Real SQLite/HTTP tests cover
+exact retry bytes, pinned references, current disabled-policy fences, malformed
+authority/JSON, cross-project reads/resolution, body/page limits, terminal history,
+null pending receipts, no native sessions and unchanged task run intent. Service
+tests deny invalid actors before storage and preserve operational failures.
+
+Full Manager service (0.541s), HTTP router (0.839s), API spec (0.352s), specgen
+(15.543s), envelope (0.707s), CLI (27.953s), telemetry (0.611s) and embedded skill
+assets (0.585s; final catalog edit 0.285s) PASS. Full HTTP controllers FAIL (17.335s)
+only at recorded Windows pairing-rename and file-URL-clone baselines. API generation,
+backend build, frontend typecheck and pinned affected-package lint PASS (0 issues).
+All 40 frontend API-client tests PASS (1.78s). An initial added telemetry test passed
+a query string to a pathname-only helper; corrected the test to the existing caller
+contract, which strips queries before normalization. Source/generated contract,
+nullable response and whitespace review PASS. Logs: `.cache/adaptive-tests/stage14c2-*`.
+
 ## Stage 14c1 — durable Manager inbox (2026-09-19)
 
 Migration 0171 retains immutable routing requests with exact task, criteria and

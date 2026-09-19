@@ -695,6 +695,16 @@ business transaction with audit/CDC, expose bounded project-scoped history, and
 refuse history-losing downgrade. Manager context delivery must subsequently pass
 through the classified Context Builder before native tools receive content.
 
+Stage 14c2 exposes this inbox through the existing Manager service, project-scoped
+HTTP routes and thin CLI. Human write bodies are strict 16 KiB JSON with no actor,
+session or origin fields. Enqueue requires an explicit stable request ID; exact
+retries return the original request/receipt. Pending inbox and full history use
+separate bounded list routes. A null resolution explicitly represents pending
+intent. These public control reads/writes neither deliver native context nor launch
+controllers or workers. Manager native tools use their subsequent generation-fenced
+service path. Generated contracts and telemetry route/command allowlists accompany
+the six new operations; telemetry identifies routes, not projects or request IDs.
+
 Metrics retain denominators and time windows: attempted/completed, first-pass
 completion, revisions, CI failures, review findings, retries, duration and usage
 when measured. Attribute to all pinned Skills without claiming causality.

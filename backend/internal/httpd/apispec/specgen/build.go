@@ -167,6 +167,12 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"DomainAgentManagerDefinition":                         "AgentManagerDefinition",
 	"DomainAgentManagerPolicy":                             "AgentManagerPolicy",
 	"DomainAgentManagerAudit":                              "AgentManagerAudit",
+	"ControllersAgentManagerEnqueueRequest":                "AgentManagerEnqueueRequest",
+	"ControllersAgentManagerResolveRequest":                "AgentManagerResolveRequest",
+	"ControllersAgentManagerRequestsResponse":              "AgentManagerRequestsResponse",
+	"ControllersAgentManagerResolutionResponse":            "AgentManagerResolutionResponse",
+	"DomainAgentManagerRequest":                            "AgentManagerRequest",
+	"DomainAgentManagerRequestResolution":                  "AgentManagerRequestResolution",
 	"ControllersTaskPerformanceGrouping":                   "TaskPerformanceGrouping",
 	"DomainTaskPerformancePage":                            "TaskPerformancePage",
 	"DomainTaskPerformanceAttempt":                         "TaskPerformanceAttempt",
@@ -1668,7 +1674,7 @@ func devOperations() []operation {
 }
 
 func agentManagerOperations() []operation {
-	ops := make([]operation, 0, 5)
+	ops := make([]operation, 0, 11)
 	for _, endpoint := range []struct {
 		method, path, id, summary string
 		request, response         any
@@ -1678,7 +1684,13 @@ func agentManagerOperations() []operation {
 		{http.MethodPut, "/projects/{id}/agent-manager", "configureAgentManager", "Version user governance without launching a controller", controllers.AgentManagerConfigureRequest{}, domain.AgentManagerConfiguration{}, []any{controllers.ProjectIDParam{}}},
 		{http.MethodGet, "/projects/{id}/agent-manager/configurations", "listAgentManagerConfigurations", "Inspect immutable Manager configurations", nil, controllers.AgentManagerConfigurationsResponse{}, []any{controllers.ProjectIDParam{}, controllers.AdaptiveTaskListQuery{}}},
 		{http.MethodGet, "/projects/{id}/agent-manager/configurations/{version}", "getAgentManagerConfiguration", "Inspect an exact retained Manager configuration", nil, domain.AgentManagerConfiguration{}, []any{controllers.ProjectIDParam{}, controllers.AdaptiveTaskVersionParam{}}},
-		{http.MethodGet, "/projects/{id}/agent-manager/audit", "listAgentManagerAudit", "Inspect human governance changes", nil, controllers.AgentManagerAuditResponse{}, []any{controllers.ProjectIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/audit", "listAgentManagerAudit", "Inspect retained Manager governance and work provenance", nil, controllers.AgentManagerAuditResponse{}, []any{controllers.ProjectIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/inbox", "listAgentManagerInbox", "Inspect pending routing references without acknowledging delivery", nil, controllers.AgentManagerRequestsResponse{}, []any{controllers.ProjectIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests", "listAgentManagerRequests", "Inspect retained routing history", nil, controllers.AgentManagerRequestsResponse{}, []any{controllers.ProjectIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodPost, "/projects/{id}/agent-manager/requests", "enqueueAgentManagerRequest", "Queue exact routing intent without launching a controller", controllers.AgentManagerEnqueueRequest{}, domain.AgentManagerRequest{}, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}", "getAgentManagerRequest", "Inspect a sealed routing request", nil, domain.AgentManagerRequest{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/resolution", "getAgentManagerRequestResolution", "Inspect terminal routing receipt or pending state", nil, controllers.AgentManagerResolutionResponse{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}}},
+		{http.MethodPost, "/projects/{id}/agent-manager/requests/{requestId}/resolution", "resolveAgentManagerRequest", "Close routing intent without changing tasks or native ownership", controllers.AgentManagerResolveRequest{}, domain.AgentManagerRequestResolution{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}}},
 	} {
 		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "agent-managers", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{http.StatusOK, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
 	}

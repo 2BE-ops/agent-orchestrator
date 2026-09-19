@@ -27,6 +27,28 @@ import (
 // AgentManagerConfigureRequest changes desired policy at an expected revision.
 type AgentManagerConfigureRequest managersvc.ConfigureInput
 
+// AgentManagerEnqueueRequest pins retryable routing intent without actor fields.
+type AgentManagerEnqueueRequest managersvc.EnqueueInput
+
+// AgentManagerResolveRequest closes only Manager routing intent.
+type AgentManagerResolveRequest managersvc.ResolveInput
+
+// AgentManagerRequestIDParam identifies a retained project routing request.
+type AgentManagerRequestIDParam struct {
+	RequestID string `path:"requestId" required:"true"`
+}
+
+// AgentManagerRequestsResponse pages retained routing references.
+type AgentManagerRequestsResponse struct {
+	Items      []domain.AgentManagerRequest `json:"items"`
+	NextCursor string                       `json:"nextCursor,omitempty"`
+}
+
+// AgentManagerResolutionResponse distinguishes pending work from a terminal receipt.
+type AgentManagerResolutionResponse struct {
+	Resolution *domain.AgentManagerRequestResolution `json:"resolution"`
+}
+
 // AgentManagerConfigurationsResponse pages immutable governance history.
 type AgentManagerConfigurationsResponse struct {
 	Items      []domain.AgentManagerConfiguration `json:"items"`
