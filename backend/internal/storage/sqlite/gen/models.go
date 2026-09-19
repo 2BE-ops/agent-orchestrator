@@ -174,6 +174,23 @@ type AdaptiveAgentManagerRequestResolution struct {
 	CreatedAt time.Time
 }
 
+type AdaptiveExperiment struct {
+	ID               string
+	ProjectID        string
+	Kind             string
+	EntryID          string
+	ControlVersion   int64
+	CandidateVersion int64
+	Hypothesis       string
+	MinimumSamples   int64
+	Status           string
+	Snapshot         string
+	ContentHash      string
+	CreatedAt        time.Time
+	ConcludedAt      sql.NullTime
+	Conclusion       sql.NullString
+}
+
 type AdaptiveOrchestratorPlanReceipt struct {
 	ID             string
 	ProjectID      string
@@ -234,6 +251,24 @@ type AdaptiveProviderBindingAudit struct {
 	Name      string
 	Enabled   int64
 	CreatedAt time.Time
+}
+
+type AdaptiveRecommendation struct {
+	ID           string
+	ProjectID    string
+	Kind         string
+	EntryID      string
+	FromVersion  int64
+	Observation  string
+	SampleSize   int64
+	Proposed     string
+	ProposedHash string
+	Status       string
+	Snapshot     string
+	ContentHash  string
+	CreatedAt    time.Time
+	DecidedAt    sql.NullTime
+	Decision     sql.NullString
 }
 
 type AdaptiveRegistry struct {
