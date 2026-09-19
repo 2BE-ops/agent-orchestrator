@@ -395,6 +395,43 @@ The native reviewer's submission includes `sourceGeneration` in each batch item,
 or `--source-generation` for a single `ao review submit`. A verdict is qualitative
 review evidence; independent task evaluation remains a separate operation.
 
+## Task performance evidence and metrics
+
+```bash
+ao task performance <project> --from 2026-09-01T00:00:00Z --to 2026-10-01T00:00:00Z --limit 20
+ao task metrics <project> --from 2026-09-01T00:00:00Z --to 2026-10-01T00:00:00Z --group-by agent_type_version
+```
+
+These read `/projects/{id}/task-performance` and its `/summary` route through
+the daemon. Windows select attempt **admission** time, inclusive `from` and
+exclusive `to`, at most 366 days. Outcomes and session-wide usage are observed at
+read time; these are not billing-event windows. Evidence pages accept the exact
+returned `--cursor`. Summaries cover at most 1000 attempts in one database
+snapshot; `PERFORMANCE_WINDOW_TOO_LARGE` requires a narrower window. No partial
+summary is returned. Empty cohorts retain zero sample counts.
+
+Group by `agent_type`, `agent_type_version`, `skill`, `skill_version`, `harness`,
+`model`, `category` or `capability`. Overall totals include unseeded reservations
+and mixed configurations. Configuration groups exclude both, reporting separate
+counts; task category/capability groups retain them. Skills and capabilities may
+overlap, so group counts must not be summed into a project total. These are
+observational comparisons; task difficulty, attached Skills and model differences
+remain possible confounders.
+
+`assessedPassed` is historical evaluation evidence, distinct from the current
+completion proof in `ao task show`. First-pass credit requires attempt one,
+result one, and passing first/latest assessments. Retry counts count extra
+attempts once. CI failures count attempts with failed frozen criteria; review
+changes count witnessed native passes requesting changes, not individual prose
+findings. Duration sums and samples include only closed reservations; ongoing
+reservations are separate. Reservation time is not CPU time.
+
+Unknown per-attempt tokens remain null; known zero remains zero. Aggregate token
+sums include only their reported known samples. Native, estimated and unknown
+event counts and incomplete-attempt counts remain visible. Priced cost is the
+priced portion in nanos with its event count, not an observed invoice or an
+estimate for unpriced events. Missing native model names remain unspecified.
+
 ## Manual smoke test
 
 ```bash

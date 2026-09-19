@@ -93,6 +93,8 @@ var legacyActorlessUserCLICommands = map[string]struct{}{
 	"ao task evaluations":       {},
 	"ao task evaluation":        {},
 	"ao task request-review":    {},
+	"ao task performance":       {},
+	"ao task metrics":           {},
 	"ao task reviews":           {},
 	"ao task review":            {},
 	"ao task submit-result":     {},

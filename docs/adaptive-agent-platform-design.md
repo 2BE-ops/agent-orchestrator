@@ -538,6 +538,16 @@ pass means attempt one, result one and both first and latest assessments passed.
 Elapsed reservation time is distinct from CPU/runtime duration. Bounded pages
 retain evidence IDs, the admission window and the observation time.
 
+Aggregate reads use one transaction and a complete cohort of at most 1000
+attempts; larger windows fail explicitly, while paged evidence remains available.
+Overall totals include every attempt. Type/Skill/version/harness/model groups
+exclude mixed and unseeded attempts with distinct counts; category/capability
+groups include them. Skill and capability memberships overlap, so group totals
+are not a project denominator. Metrics retain known-usage samples, priced event
+counts and closed-reservation duration samples. Retries count extra attempts
+once, not the sum of prior attempt numbers. These observational dimensions are
+not experiment allocation or causal comparisons (stage 19).
+
 Stage 13's initial collector snapshots independently observed CI facts under the
 same transaction as evaluation and audit. Migration 0165 preserves assessment,
 frozen criteria/result/context hashes and the exact historical worker activation;

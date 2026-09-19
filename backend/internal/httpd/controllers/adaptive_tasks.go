@@ -18,6 +18,8 @@ import (
 
 // AdaptiveTaskService is shared by human authoring and trusted controller tools.
 type AdaptiveTaskService interface {
+	Performance(context.Context, domain.TaskPerformanceQuery) (domain.TaskPerformancePage, error)
+	PerformanceSummary(context.Context, domain.TaskPerformanceSummaryQuery) (domain.TaskPerformanceSummary, error)
 	Create(context.Context, domain.AdaptiveActor, domain.ProjectID, tasksvc.CreateInput) (tasksvc.View, error)
 	Get(context.Context, string) (tasksvc.View, error)
 	List(context.Context, domain.ProjectID, string, int) ([]tasksvc.View, error)
@@ -53,6 +55,8 @@ func (c *AdaptiveTasksController) Register(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(c.available)
 		r.Get("/projects/{id}/tasks", c.list)
+		r.Get("/projects/{id}/task-performance", c.performance)
+		r.Get("/projects/{id}/task-performance/summary", c.performanceSummary)
 		r.Post("/projects/{id}/tasks", c.create)
 		r.Get("/tasks/{taskId}", c.get)
 		r.Get("/tasks/{taskId}/revisions", c.revisions)

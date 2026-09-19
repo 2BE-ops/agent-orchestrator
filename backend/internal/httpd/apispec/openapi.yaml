@@ -3566,6 +3566,171 @@ paths:
       summary: Inspect immutable coordination and delivery observations
       tags:
       - tasks
+  /api/v1/projects/{id}/task-performance:
+    get:
+      operationId: listTaskPerformance
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: query
+        name: from
+        required: true
+        schema:
+          format: date-time
+          type: string
+      - in: query
+        name: to
+        required: true
+        schema:
+          format: date-time
+          type: string
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskPerformancePage'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Inspect attempt admission cohorts with historical outcomes and session-wide
+        usage
+      tags:
+      - tasks
+  /api/v1/projects/{id}/task-performance/summary:
+    get:
+      operationId: getTaskPerformanceSummary
+      parameters:
+      - description: Project identifier (registry key).
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Project identifier (registry key).
+          type: string
+      - in: query
+        name: from
+        required: true
+        schema:
+          format: date-time
+          type: string
+      - in: query
+        name: to
+        required: true
+        schema:
+          format: date-time
+          type: string
+      - in: query
+        name: groupBy
+        schema:
+          default: agent_type_version
+          enum:
+          - agent_type
+          - agent_type_version
+          - skill
+          - skill_version
+          - harness
+          - model
+          - category
+          - capability
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskPerformanceSummary'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Summarize at most 1000 admitted attempts with sample counts and configuration
+        exclusions
+      tags:
+      - tasks
   /api/v1/projects/{id}/tasks:
     get:
       operationId: listAdaptiveTasks
@@ -18201,6 +18366,334 @@ components:
       - closed
       - draft
       - observedAt
+      type: object
+    TaskPerformanceAttempt:
+      properties:
+        assessedOutcome:
+          enum:
+          - unassessed
+          - passed
+          - failed
+          - inconclusive
+          - superseded
+          type: string
+        attemptId:
+          type: string
+        attemptNumber:
+          format: int64
+          type: integer
+        category:
+          type: string
+        ciFailureObserved:
+          type: boolean
+        configuration:
+          $ref: '#/components/schemas/TaskEvaluationAttribution'
+        createdAt:
+          format: date-time
+          type: string
+        criteriaVersion:
+          format: int64
+          type: integer
+        evaluationId:
+          type: string
+        evaluations:
+          format: int64
+          type: integer
+        firstPassCompleted:
+          type: boolean
+        mixedConfigurations:
+          type: boolean
+        requiredCapabilities:
+          items:
+            type: string
+          type: array
+        reservationElapsedMs:
+          format: int64
+          type: integer
+        reservationOngoing:
+          type: boolean
+        resultId:
+          type: string
+        resultVersions:
+          format: int64
+          type: integer
+        reviewChangesRequested:
+          format: int64
+          type: integer
+        sessionId:
+          type: string
+        taskId:
+          type: string
+        taskRevision:
+          format: int64
+          type: integer
+        usage:
+          $ref: '#/components/schemas/TaskPerformanceUsage'
+      required:
+      - attemptId
+      - taskId
+      - taskRevision
+      - criteriaVersion
+      - attemptNumber
+      - createdAt
+      - category
+      - requiredCapabilities
+      - mixedConfigurations
+      - resultVersions
+      - evaluations
+      - assessedOutcome
+      - firstPassCompleted
+      - ciFailureObserved
+      - reviewChangesRequested
+      - reservationElapsedMs
+      - reservationOngoing
+      - usage
+      type: object
+    TaskPerformanceGroup:
+      properties:
+        key:
+          type: string
+        metrics:
+          $ref: '#/components/schemas/TaskPerformanceMetrics'
+        name:
+          type: string
+        version:
+          format: int64
+          type: integer
+      required:
+      - key
+      - name
+      - metrics
+      type: object
+    TaskPerformanceMetrics:
+      properties:
+        assessedFailed:
+          format: int64
+          type: integer
+        assessedPassed:
+          format: int64
+          type: integer
+        attempts:
+          format: int64
+          type: integer
+        ciFailureAttempts:
+          format: int64
+          type: integer
+        closedReservationElapsedMs:
+          format: int64
+          type: integer
+        closedReservationSamples:
+          format: int64
+          type: integer
+        firstPassCompleted:
+          format: int64
+          type: integer
+        inconclusive:
+          format: int64
+          type: integer
+        mixedConfigurationAttempts:
+          format: int64
+          type: integer
+        ongoingReservations:
+          format: int64
+          type: integer
+        resultRevisions:
+          format: int64
+          type: integer
+        retryAttempts:
+          format: int64
+          type: integer
+        reviewChangesRequested:
+          format: int64
+          type: integer
+        superseded:
+          format: int64
+          type: integer
+        unassessed:
+          format: int64
+          type: integer
+        unseededAttempts:
+          format: int64
+          type: integer
+        usage:
+          $ref: '#/components/schemas/TaskPerformanceUsageTotals'
+      required:
+      - attempts
+      - assessedPassed
+      - assessedFailed
+      - inconclusive
+      - unassessed
+      - superseded
+      - firstPassCompleted
+      - resultRevisions
+      - retryAttempts
+      - ciFailureAttempts
+      - reviewChangesRequested
+      - closedReservationSamples
+      - closedReservationElapsedMs
+      - ongoingReservations
+      - unseededAttempts
+      - mixedConfigurationAttempts
+      - usage
+      type: object
+    TaskPerformancePage:
+      properties:
+        from:
+          format: date-time
+          type: string
+        items:
+          items:
+            $ref: '#/components/schemas/TaskPerformanceAttempt'
+          type: array
+        nextCursor:
+          type: string
+        observedAt:
+          format: date-time
+          type: string
+        to:
+          format: date-time
+          type: string
+      required:
+      - items
+      - from
+      - to
+      - observedAt
+      type: object
+    TaskPerformanceSummary:
+      properties:
+        excludedMixedConfigurationAttempts:
+          format: int64
+          type: integer
+        excludedUnseededAttempts:
+          format: int64
+          type: integer
+        from:
+          format: date-time
+          type: string
+        groupBy:
+          enum:
+          - agent_type
+          - agent_type_version
+          - skill
+          - skill_version
+          - harness
+          - model
+          - category
+          - capability
+          type: string
+        groups:
+          items:
+            $ref: '#/components/schemas/TaskPerformanceGroup'
+          type: array
+        observedAt:
+          format: date-time
+          type: string
+        to:
+          format: date-time
+          type: string
+        total:
+          $ref: '#/components/schemas/TaskPerformanceMetrics'
+      required:
+      - groupBy
+      - from
+      - to
+      - observedAt
+      - total
+      - groups
+      - excludedMixedConfigurationAttempts
+      - excludedUnseededAttempts
+      type: object
+    TaskPerformanceUsage:
+      properties:
+        estimatedEvents:
+          format: int64
+          type: integer
+        events:
+          format: int64
+          type: integer
+        incomplete:
+          type: boolean
+        inputTokens:
+          type:
+          - "null"
+          - integer
+        nativeReportedEvents:
+          format: int64
+          type: integer
+        outputTokens:
+          type:
+          - "null"
+          - integer
+        pricedCostNanos:
+          format: int64
+          type: integer
+        pricedEvents:
+          format: int64
+          type: integer
+        scope:
+          type: string
+        unknownEvents:
+          format: int64
+          type: integer
+      required:
+      - scope
+      - events
+      - nativeReportedEvents
+      - estimatedEvents
+      - unknownEvents
+      - inputTokens
+      - outputTokens
+      - pricedEvents
+      - pricedCostNanos
+      - incomplete
+      type: object
+    TaskPerformanceUsageTotals:
+      properties:
+        estimatedEvents:
+          format: int64
+          type: integer
+        events:
+          format: int64
+          type: integer
+        incompleteAttempts:
+          format: int64
+          type: integer
+        inputTokens:
+          format: int64
+          type: integer
+        knownInputSamples:
+          format: int64
+          type: integer
+        knownOutputSamples:
+          format: int64
+          type: integer
+        nativeReportedEvents:
+          format: int64
+          type: integer
+        outputTokens:
+          format: int64
+          type: integer
+        pricedCostNanos:
+          format: int64
+          type: integer
+        pricedEvents:
+          format: int64
+          type: integer
+        unknownEvents:
+          format: int64
+          type: integer
+      required:
+      - events
+      - nativeReportedEvents
+      - estimatedEvents
+      - unknownEvents
+      - incompleteAttempts
+      - knownInputSamples
+      - inputTokens
+      - knownOutputSamples
+      - outputTokens
+      - pricedEvents
+      - pricedCostNanos
       type: object
     TaskResult:
       properties:

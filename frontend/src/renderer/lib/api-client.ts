@@ -64,6 +64,8 @@ const ROUTE_TEMPLATES = [
 	"/api/v1/sessions/{sessionId}/worker-executions",
 	"/api/v1/sessions/{sessionId}/worker-executions/{executionId}",
 	"/api/v1/projects/{id}/tasks",
+	"/api/v1/projects/{id}/task-performance",
+	"/api/v1/projects/{id}/task-performance/summary",
 	"/api/v1/tasks/{taskId}",
 	"/api/v1/tasks/{taskId}/revisions",
 	"/api/v1/tasks/{taskId}/revisions/{version}",

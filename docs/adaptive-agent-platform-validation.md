@@ -4,6 +4,41 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 13d2b — grouped metrics and performance API/CLI (2026-09-19)
+
+One consistent transaction summarizes up to 1000 admitted attempts by Type,
+Type version, Skill, Skill version, harness, model, category or capability. Total
+counts retain unseeded/mixed work; configuration groups expose exclusions. Skill
+and capability overlap is explicit. Historical assessed passes, first-pass rules,
+result revisions, retry/CI/review counts, closed duration samples and known-usage
+denominators remain distinct. Oversized cohorts, duplicate identities and numeric
+overflow cannot yield partial metrics. No score or causal comparison is stored.
+
+New daemon evidence/summary routes, `ao task performance`/`ao task metrics`, typed
+OpenAPI/frontend contracts and telemetry route templates use the shared service.
+Windows/cursors/groups are validated; unsupported or repeated API parameters fail
+instead of being silently ignored. HTTP/CLI error envelopes and request IDs are
+retained. Raw evidence shows null counters separately from zero; totals show
+known sample and priced-event counts. CLI documentation explains all denominators.
+
+Focused domain/store/task/CLI PASS (0.691s/0.925s/0.550s/0.356s). Full domain
+(1.477s), ports (0.414s), SQLite (48.744s), store (31.634s), task (2.370s), CLI
+(29.836s), telemetry metadata (0.660s), HTTP router (0.799s), API spec (0.370s),
+specgen (15.246s) and envelope (0.621s) PASS. Full HTTP controllers FAIL (21.849s)
+only at known Windows `TestBridgeStatusConcurrentSecurePairing` and
+`TestProjectsAPI_Clone`; new performance HTTP integration passes with real SQLite.
+API generation, backend build, frontend typecheck, 39 frontend API-client tests
+(1.61s), pinned affected lint (0 issues) and diff/whitespace inspection PASS.
+Final full CLI after aligning zero-time validation PASS (17.045s).
+
+A frontend test initially passed a query string to the pathname-only telemetry
+normalizer; its caller already strips queries with `URL.pathname`. The test now
+matches that contract; no unrelated telemetry behavior was changed. Initial lint
+requested command slice capacity; fixed before the final lint pass. Logs are
+ignored `.cache/adaptive-tests/stage13d2b-*`. This completes stage 13 foundations;
+desktop performance, live providers, scheduler and recovery integration remain
+their later stages. No new migration or desktop authoring flow is added here.
+
 ## Stage 13d2a — attempt performance evidence (2026-09-19)
 
 The SQLite projection reads bounded admission cohorts in one transaction, retaining

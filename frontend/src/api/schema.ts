@@ -1223,6 +1223,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/task-performance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect attempt admission cohorts with historical outcomes and session-wide usage */
+        get: operations["listTaskPerformance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/task-performance/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Summarize at most 1000 admitted attempts with sample counts and configuration exclusions */
+        get: operations["getTaskPerformanceSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/tasks": {
         parameters: {
             query?: never;
@@ -6002,6 +6036,149 @@ export interface components {
             /** Format: date-time */
             observedAt: string;
             url: string;
+        };
+        TaskPerformanceAttempt: {
+            /** @enum {string} */
+            assessedOutcome: "unassessed" | "passed" | "failed" | "inconclusive" | "superseded";
+            attemptId: string;
+            /** Format: int64 */
+            attemptNumber: number;
+            category: string;
+            ciFailureObserved: boolean;
+            configuration?: components["schemas"]["TaskEvaluationAttribution"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            criteriaVersion: number;
+            evaluationId?: string;
+            /** Format: int64 */
+            evaluations: number;
+            firstPassCompleted: boolean;
+            mixedConfigurations: boolean;
+            requiredCapabilities: string[];
+            /** Format: int64 */
+            reservationElapsedMs: number;
+            reservationOngoing: boolean;
+            resultId?: string;
+            /** Format: int64 */
+            resultVersions: number;
+            /** Format: int64 */
+            reviewChangesRequested: number;
+            sessionId?: string;
+            taskId: string;
+            /** Format: int64 */
+            taskRevision: number;
+            usage: components["schemas"]["TaskPerformanceUsage"];
+        };
+        TaskPerformanceGroup: {
+            key: string;
+            metrics: components["schemas"]["TaskPerformanceMetrics"];
+            name: string;
+            /** Format: int64 */
+            version?: number;
+        };
+        TaskPerformanceMetrics: {
+            /** Format: int64 */
+            assessedFailed: number;
+            /** Format: int64 */
+            assessedPassed: number;
+            /** Format: int64 */
+            attempts: number;
+            /** Format: int64 */
+            ciFailureAttempts: number;
+            /** Format: int64 */
+            closedReservationElapsedMs: number;
+            /** Format: int64 */
+            closedReservationSamples: number;
+            /** Format: int64 */
+            firstPassCompleted: number;
+            /** Format: int64 */
+            inconclusive: number;
+            /** Format: int64 */
+            mixedConfigurationAttempts: number;
+            /** Format: int64 */
+            ongoingReservations: number;
+            /** Format: int64 */
+            resultRevisions: number;
+            /** Format: int64 */
+            retryAttempts: number;
+            /** Format: int64 */
+            reviewChangesRequested: number;
+            /** Format: int64 */
+            superseded: number;
+            /** Format: int64 */
+            unassessed: number;
+            /** Format: int64 */
+            unseededAttempts: number;
+            usage: components["schemas"]["TaskPerformanceUsageTotals"];
+        };
+        TaskPerformancePage: {
+            /** Format: date-time */
+            from: string;
+            items: components["schemas"]["TaskPerformanceAttempt"][];
+            nextCursor?: string;
+            /** Format: date-time */
+            observedAt: string;
+            /** Format: date-time */
+            to: string;
+        };
+        TaskPerformanceSummary: {
+            /** Format: int64 */
+            excludedMixedConfigurationAttempts: number;
+            /** Format: int64 */
+            excludedUnseededAttempts: number;
+            /** Format: date-time */
+            from: string;
+            /** @enum {string} */
+            groupBy: "agent_type" | "agent_type_version" | "skill" | "skill_version" | "harness" | "model" | "category" | "capability";
+            groups: components["schemas"]["TaskPerformanceGroup"][];
+            /** Format: date-time */
+            observedAt: string;
+            /** Format: date-time */
+            to: string;
+            total: components["schemas"]["TaskPerformanceMetrics"];
+        };
+        TaskPerformanceUsage: {
+            /** Format: int64 */
+            estimatedEvents: number;
+            /** Format: int64 */
+            events: number;
+            incomplete: boolean;
+            inputTokens: null | number;
+            /** Format: int64 */
+            nativeReportedEvents: number;
+            outputTokens: null | number;
+            /** Format: int64 */
+            pricedCostNanos: number;
+            /** Format: int64 */
+            pricedEvents: number;
+            scope: string;
+            /** Format: int64 */
+            unknownEvents: number;
+        };
+        TaskPerformanceUsageTotals: {
+            /** Format: int64 */
+            estimatedEvents: number;
+            /** Format: int64 */
+            events: number;
+            /** Format: int64 */
+            incompleteAttempts: number;
+            /** Format: int64 */
+            inputTokens: number;
+            /** Format: int64 */
+            knownInputSamples: number;
+            /** Format: int64 */
+            knownOutputSamples: number;
+            /** Format: int64 */
+            nativeReportedEvents: number;
+            /** Format: int64 */
+            outputTokens: number;
+            /** Format: int64 */
+            pricedCostNanos: number;
+            /** Format: int64 */
+            pricedEvents: number;
+            /** Format: int64 */
+            unknownEvents: number;
         };
         TaskResult: {
             attemptId: string;
@@ -11120,6 +11297,169 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskMessageResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    listTaskPerformance: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskPerformancePage"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getTaskPerformanceSummary: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                groupBy?: "agent_type" | "agent_type_version" | "skill" | "skill_version" | "harness" | "model" | "category" | "capability";
+            };
+            header?: never;
+            path: {
+                /** @description Project identifier (registry key). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskPerformanceSummary"];
                 };
             };
             /** @description Bad Request */

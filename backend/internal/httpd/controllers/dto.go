@@ -93,6 +93,17 @@ type TaskMessagesResponse struct {
 	NextCursor string               `json:"nextCursor,omitempty"`
 }
 
+// TaskPerformanceWindow selects attempt admissions, not usage billing events.
+type TaskPerformanceWindow struct {
+	From time.Time `query:"from" required:"true"`
+	To   time.Time `query:"to" required:"true"`
+}
+
+// TaskPerformanceGrouping selects a historical dimension for a complete cohort.
+type TaskPerformanceGrouping struct {
+	GroupBy string `query:"groupBy" default:"agent_type_version" enum:"agent_type,agent_type_version,skill,skill_version,harness,model,category,capability"`
+}
+
 // TaskReviewRunParam identifies a retained native review pass.
 type TaskReviewRunParam struct {
 	RunID string `path:"runId"`
