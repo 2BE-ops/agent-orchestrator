@@ -17,10 +17,10 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite/sqlitetest"
 )
 
-func taskResultFixture(t *testing.T, s *sqlite.Store, seal bool) (domain.TaskResultSubmission, domain.TaskContextSnapshot, domain.TaskLease) {
+func taskResultFixture(t *testing.T, s *sqlite.Store, seal bool, acceptance ...domain.AcceptanceCriteria) (domain.TaskResultSubmission, domain.TaskContextSnapshot, domain.TaskLease) {
 	t.Helper()
 	ctx := context.Background()
-	snapshot, lease := taskContextFixture(t, s)
+	snapshot, lease := taskContextFixture(t, s, acceptance...)
 	if seal {
 		if err := s.SaveTaskContext(ctx, lease.TaskLeaseToken, snapshot); err != nil {
 			t.Fatal(err)
@@ -292,6 +292,10 @@ func TestTaskResultAttributesEffectiveConfigurationAfterInterfaceChange(t *testi
 	result, _, err := s.SubmitTaskResult(ctx, input)
 	if err != nil || result.ConfigurationHash != execution.Configuration.ContentHash || result.ConfigurationSequence != sequence || result.ContextHash != contextSnapshot.ContentHash || result.NativeGeneration != rec.Metadata.ControllerGeneration {
 		t.Fatalf("wrong segment attribution: %+v %v", result, err)
+	}
+	performance := performanceAttempt(t, s, result.AttemptID)
+	if !performance.MixedConfigurations || performance.Configuration == nil || performance.Configuration.ConfigurationHash != result.ConfigurationHash || performance.Configuration.ConfigurationSequence != sequence || performance.Configuration.Mode != domain.SessionModeChat {
+		t.Fatalf("performance lost mixed configuration attribution: %+v", performance)
 	}
 	conversation, err := s.CreateConversation(ctx, "result-conversation", domain.ConversationScopeSession, rec.ProjectID, rec.ID, time.Now().UTC())
 	if err != nil {

@@ -522,6 +522,22 @@ must use the same predicate inside their reservation transaction, not trust a
 prior API read. Historical performance must distinguish assessed success from
 this current completion projection.
 
+Performance cohorts use attempt admission time, with outcomes and native usage
+observed at read time. Each attempt is one denominator unit even if it has many
+result revisions or evaluations. Unseeded reservations remain visible without
+invented configuration attribution. The configuration is the latest result's
+exact pinned configuration, or the original launch when no result exists;
+activation history flags mixed attempts, including subsequent rollbacks. Native
+usage remains session-wide and cannot be assigned to one epoch in mixed work.
+Missing counters remain null; known zero is distinct. Priced cost is a partial
+sum when not every event is priced, with native/estimated/unknown event counts.
+Integer overflow fails the read rather than returning partial or zero totals.
+Historical CI failure counts attempts with a failed frozen criterion decision;
+review changes count witnessed native review passes, not prose findings. First
+pass means attempt one, result one and both first and latest assessments passed.
+Elapsed reservation time is distinct from CPU/runtime duration. Bounded pages
+retain evidence IDs, the admission window and the observation time.
+
 Stage 13's initial collector snapshots independently observed CI facts under the
 same transaction as evaluation and audit. Migration 0165 preserves assessment,
 frozen criteria/result/context hashes and the exact historical worker activation;

@@ -4,6 +4,32 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 13d2a — attempt performance evidence (2026-09-19)
+
+The SQLite projection reads bounded admission cohorts in one transaction, retaining
+unseeded attempts, exact historical configuration/result/assessment identities,
+mixed configuration flags, witnessed review changes, historical CI failures and
+first-pass evidence. Usage comes from existing native accounting; unknown tokens
+stay null, priced event counts accompany partial cost, and overflow returns an
+error without partial rows. Duration measures reservation time and distinguishes
+ongoing ownership. This adds queries/domain/store only, without a migration.
+
+Focused performance/configuration tests PASS (0.710s). Full ports (0.394s), SQLite
+(27.490s), store (13.919s) and sqlitetest (1.110s) PASS. A new domain boundary test
+caught control characters in cursors; after fixing validation, full domain/task
+PASS (0.552s/1.761s). Final full store/task after lint fixes PASS (13.029s/0.897s).
+Tests also cover cohort boundaries/cursors/project isolation, retained identity
+after disable/reopen, first-pass rules, result corrections, evaluation retries,
+mixed interface changes, native review launch witnesses, zero/missing/estimated
+usage and integer overflow. sqlc generation, backend build and pinned affected
+lint PASS (0 issues). Complete diff/whitespace inspection PASS.
+
+The first combined command used the nonexistent `service/tasksvc` directory;
+the corrected task suite passed as above. That failed invocation is not labeled
+passed. Existing Windows full-suite/race gaps remain recorded below. Ignored
+logs: `.cache/adaptive-tests/stage13d2a-*`. Aggregates/API/CLI follow in 13d2b;
+performance desktop views remain stage 22 and live validation stage 25.
+
 ## Stage 13d1 — derived current task completion (2026-09-19)
 
 Task reads now expose current completion evidence IDs/reason and a completed

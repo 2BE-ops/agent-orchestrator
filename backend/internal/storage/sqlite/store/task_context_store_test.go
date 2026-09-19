@@ -35,10 +35,10 @@ func sealContext(t *testing.T, snapshot *domain.TaskContextSnapshot) {
 	snapshot.ContentHash = snapshot.Hash()
 }
 
-func taskContextFixture(t *testing.T, s *sqlite.Store) (domain.TaskContextSnapshot, domain.TaskLease) {
+func taskContextFixture(t *testing.T, s *sqlite.Store, acceptance ...domain.AcceptanceCriteria) (domain.TaskContextSnapshot, domain.TaskLease) {
 	t.Helper()
 	ctx := context.Background()
-	seed, lease := taskExecutionSeed(t, s)
+	seed, lease := taskExecutionSeed(t, s, acceptance...)
 	op := domain.TaskExecutionOperation{ID: "context-native", SessionID: seed.ID, Lease: lease.TaskLeaseToken, SourceOwner: seed.ControllerOwner(), Kind: "dispatch", CreatedAt: lease.HeartbeatAt}
 	if _, err := s.BeginTaskExecution(ctx, op); err != nil {
 		t.Fatal(err)

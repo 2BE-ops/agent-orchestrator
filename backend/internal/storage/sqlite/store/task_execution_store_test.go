@@ -15,10 +15,16 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite/sqlitetest"
 )
 
-func taskExecutionSeed(t *testing.T, s *sqlite.Store) (domain.SessionRecord, domain.TaskLease) {
+func taskExecutionSeed(t *testing.T, s *sqlite.Store, criteria ...domain.AcceptanceCriteria) (domain.SessionRecord, domain.TaskLease) {
 	t.Helper()
 	seedProject(t, s, "project")
-	createTask(t, s, "work", taskDefinition())
+	frozen := taskCriteria()
+	if len(criteria) > 0 {
+		frozen = criteria[0]
+	}
+	if _, err := s.CreateAdaptiveTask(context.Background(), "work", "project", taskDefinition(), &frozen, taskMutation(0)); err != nil {
+		t.Fatal(err)
+	}
 	_, lease := reserveTask(t, s, "attempt", "work")
 	rec, snapshot := workerSnapshot(t, s)
 	rec.ProjectID = "project"
