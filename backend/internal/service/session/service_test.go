@@ -3199,6 +3199,11 @@ func TestSpawnEmitsTelemetryOnSuccess(t *testing.T) {
 	if ev.ProjectID == nil || *ev.ProjectID != "mer" || ev.SessionID == nil || *ev.SessionID != "mer-9" {
 		t.Fatalf("event ids = %+v", ev)
 	}
+	// With no GitHub identity resolver wired, the handle degrades to anonymous and
+	// the carrier event omits github_actor entirely.
+	if _, ok := ev.Payload["github_actor"]; ok {
+		t.Fatalf("payload should omit github_actor without a resolver: %#v", ev.Payload)
+	}
 }
 
 func TestSpawnEmitsTelemetryOnFailure(t *testing.T) {
