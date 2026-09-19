@@ -635,6 +635,19 @@ Generic session API/service spawn cannot create this role. Stage 14's subsequent
 policy, inbox and native controller slices provide its dedicated admission path
 and restore behavior using existing session/conversation engines.
 
+Stage 14a2 separates desired Manager governance from native ownership. A project
+has immutable numbered configurations containing an exact controller Agent Type
+version, a sealed historical Type reference, bounded optimization/creation/inbox
+policy and user provenance. Configuration edits use compare-and-swap and retain
+audit/CDC atomically; they never launch a session or rewrite a running controller.
+Only human authority can change governing policy. Creation is opt-in and remains
+subject to both these quotas and each registry entry's independent permissions
+when actions are implemented. A disabled Type can still be referenced when
+disabling the Manager; retained history remains inspectable after registry edits.
+Migration 0169 refuses downgrade over retained policy history. Native controller
+admission will resolve the exact pinned Type through existing worker configuration
+and session engines rather than introducing another provider execution engine.
+
 Metrics retain denominators and time windows: attempted/completed, first-pass
 completion, revisions, CI failures, review findings, retries, duration and usage
 when measured. Attribute to all pinned Skills without claiming causality.

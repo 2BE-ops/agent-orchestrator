@@ -4,6 +4,27 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 14a2 — versioned Manager governance (2026-09-19)
+
+Migration 0169 adds project Manager configuration history, user provenance and
+transactional audit/CDC. Exact controller Type versions and bounded policies are
+sealed; disabled Types do not destroy history or prevent disabling governance.
+Only human-authored CAS changes are accepted. Configuration has no native launch
+effects. Quotas are retained policy, not a claim of implemented selection/actions.
+
+Tests exercise default creation denial, invalid bounds, forged Manager/worker/
+orchestrator/system authority, borrowed session identity, eight competing writers,
+stale edits, missing references, reopen, immutable rows and injected audit failure
+with complete policy/CDC rollback. Migration tests preserve prior CDC, permit empty
+down/up, reject unknown events and refuse downgrade over retained policy history
+atomically, with integrity/foreign-key checks. Initial focused tests exposed the
+missing CDC CHECK vocabulary; the additive guarded migration fixes it.
+
+Full domain (0.772s), ports (0.337s), SQLite (37.593s), store (17.187s), SQLite test
+helpers (1.172s) and CDC (1.103s) PASS. Backend build and pinned affected-package lint
+PASS (0 issues). sqlc regenerated from queries/migration. Complete diff/whitespace
+review precedes commit. Logs: ignored `.cache/adaptive-tests/stage14a2-*`.
+
 ## Stage 14a1 — distinct Agent Manager identity (2026-09-19)
 
 Migration 0168 transactionally widens the session-kind CHECK using the existing

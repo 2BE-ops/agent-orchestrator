@@ -12,6 +12,33 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 )
 
+type AdaptiveAgentManager struct {
+	ProjectID string
+	Revision  int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type AdaptiveAgentManagerAudit struct {
+	Seq                  int64
+	ProjectID            string
+	ConfigurationVersion int64
+	Action               string
+	Actor                string
+	Reason               string
+	CreatedAt            time.Time
+}
+
+type AdaptiveAgentManagerConfiguration struct {
+	ProjectID        string
+	Number           int64
+	AgentTypeID      string
+	AgentTypeVersion int64
+	Snapshot         string
+	ContentHash      string
+	CreatedAt        time.Time
+}
+
 type AdaptiveProviderBinding struct {
 	ID        string
 	Name      string
