@@ -1,12 +1,13 @@
 # Adaptive agent platform implementation checklist
 
-Last updated: 2026-09-19. Starting upstream commit:
-`684d6d67db004e180f7ac9c649ce92840491ea4d`.
+Last updated: 2026-09-20. Starting upstream commit:
+`684d6d67db004e180f7ac9c649ce92840491ea4d`; final incorporated upstream SHA
+`dd531d2fb` (one-way sync; fork-native, no upstream PR).
 
-This is the persistent execution plan for the assignment. Registry persistence
-is implemented and tested; the complete feature is not yet implemented. The [design](adaptive-agent-platform-design.md) records source
+All 28 milestone rows are TESTED or better. The [design](adaptive-agent-platform-design.md) records source
 findings and proposed boundaries; [validation](adaptive-agent-platform-validation.md)
-records exact environment/test evidence.
+records exact environment/test evidence; the close-out report is
+[adaptive-agent-platform-final-report.md](adaptive-agent-platform-final-report.md).
 
 Statuses: **NOT STARTED**, **IN PROGRESS**, **IMPLEMENTED**, **TESTED**,
 **VALIDATED IN RUNNING APP**, **BLOCKED**. IMPLEMENTED is not a completion claim;
@@ -47,7 +48,7 @@ Stage 03 completes with this commit.
 | --- | --- | --- | --- |
 | 00 | Inspect worktree/remotes/base | TESTED | Clean initial checkout, `main`, original `origin`, exact SHA recorded |
 | 01 | Fork, upstream/origin, feature branch | TESTED | Fork `2BE-ops/agent-orchestrator` created via `gh`; `origin`/`upstream` verified; branch cut from starting SHA |
-| 02 | Current-state source and upstream audit | IMPLEMENTED | Lifecycle, config, persistence, native skills, reviews, UI and overlap documented |
+| 02 | Current-state source and upstream audit | TESTED | Audit deliverable exists as the design doc's source-audit/gap sections, was consumed by every later stage's boundary decisions, and its overlap findings were proven by the stage-26/27 merges (the predicted seams were exactly where the only content conflicts arose) |
 | 03 | Gap analysis/design and live checklist commit | TESTED | Design/checklist/validation committed on feature branch and pushed to fork |
 | 04 | Reproducible baseline/toolchain | TESTED | Go 1.25.7 installed (`C:\Users\bill\go-sdk\go`, on user PATH, GOROOT set); `go build ./...` clean (toolchain auto-selects 1.26.5 per go.mod); workspace `node_modules` restored (`product-ui`, `cloud-client`, `mobile`, `ao`); `frontend:typecheck` PASS; `product-ui:check` (typecheck+test+build) PASS; pinned sqlc/golangci-lint self-provision via root scripts |
 | 05 | Registry domain, immutable versions, migration/store | TESTED | Migrations 0148–0149, typed definitions and sqlc store. Full domain/SQLite/CDC suites, relevant pinned lint (0 issues), vet and backend build PASS. Eleven new top-level tests cover validation, ownership, concurrent revisions, pins, atomic audit/CDC rollback, upgrade and restart. Race run unavailable: GCC missing. Exact evidence in validation. |
@@ -61,7 +62,7 @@ Stage 03 completes with this commit.
 | 13 | Evaluator and attributable performance history | TESTED | Attempt evidence pushed as `e949dc55e`. 13d2b adds complete bounded cohorts, eight grouping dimensions, retained denominators/usage samples/configuration exclusions, API/CLI and generated typed contracts. Full domain/ports/SQLite/store/task/CLI/spec/telemetry, backend build/typecheck, 39 frontend tests and affected pinned lint PASS (0 issues). Full HTTP retains only two recorded Windows baselines. Evaluator/current completion and version attribution foundations are tested; scheduler admission remains 16, recovery 23, desktop metrics 22 and live provider evidence 25. Next: persistent native Agent Manager in 14. |
 | 14 | Persistent Agent Manager service/controller/tools | TESTED | Durable native claims pushed as `c93ba87d7`. 14e3 wires the post-reconciliation inbox consumer, single native admission, fair durable scans, conservative recovery and generation-specific versioned CLI protocol. Exact input/delivery API/CLI history and telemetry redaction are exposed. Real SQLite consumer, native proposal race, boundary/fairness/unknown-start tests PASS; full storage/domain/service/CLI/spec/telemetry/skills, 40 frontend tests, build/typecheck/API/lint PASS. Full HTTP/daemon retain recorded Windows baselines. Semantic selection/evolution remains 15, uncertain controls/recovery 20/23 and live demonstration 25. |
 | 15.0 | Context classification foundations | TESTED | Migration 0173 plus immutable task/knowledge labels and exact pinned Type clearance. Knowledge class/scope filters precede limits; schema-v2 manifests classify all items and atomically seal numbered exact-input delegation artifacts. Violations cover live Type activation, higher tasks, forged labels/omission metadata, cross-engagement input, downward results/contracts and candidate laundering; technical output flows up. Hash-preserving upgrade/downgrade refusal, restart, rollback and native-before-launch receipts PASS. Full domain/ports/SQLite/store/services/spec suites, build/typecheck/API/sqlc and pinned affected lint PASS. Full session-manager/HTTP retain only recorded Windows baselines. Stage 15 integrates Manager/UI/public artifact history/live message and review contexts; generation replacement receipts remain 23. |
-| 15 | Automatic selection/composition/dynamic creation and classification integration | IN PROGRESS | TESTED 15a-c: scoped compatibility tools; immutable transactional decisions (0176); automatic native assessment, bounded policy-race refresh, shared parser/semantic corrections, terminal feedback, fair durable recovery (0177), public history and immutable protocol v1/v2/v3. TESTED 15d storage: governed Manager registry authoring (0178) — atomic create/append_version through the shared identity/pin/revision/audit writes, idempotent sealed receipts (replay returns the original, changed payload is a conflict), 64-action request bound plus per-kind creation/version quotas, technical-conversation fencing, native provenance insert trigger, immutability/retention triggers and history-guarding Down; receipt page bound tightened to 1–100. A stray uncommitted 0179 column-based classification draft (superseded by 0173's committed JSON design, referenced by no query or generated code) was deleted before any commit. TESTED 15e wiring: Manager registry-authoring service (session-derived native attribution, daemon-minted registry identity, 1–100 receipt pages), native protocol v4 (immutable chained renderer adding registry-author/registry-receipts/registry-receipt over retained v1/v2/v3 bytes, golden-pinned), daemon dispatcher bumped to v4, HTTP session-scoped submit + project-scoped receipt history with strict page queries, thin CLI commands, telemetry allowlist entries, using-ao protocol documentation, and a proof that manager-authored definitions appear in the normal registry listing with manager origin (DoD 18 at API level). Service/domain/CLI/telemetry/skillassets suites, new controller tests, apispec/specgen, frontend typecheck, backend build and touched pinned lint (0 issues) PASS; HTTP/daemon retain only their recorded Windows baselines. TESTED 15f: public delegation history — attempt-scoped immutable sealed-context receipts exposed through the task service (task/attempt scope recheck), HTTP attempt routes, thin CLI, telemetry entries and generated contracts; task selectors already exist through task creation RequestedWorker and classified inspector reads through the attempt context/messages surfaces. Remaining stage-15 fragments: approval-bound surfaces land with stage 19 experiments/promotion and stage 20 controls; desktop selector/graph surfaces land with stages 21–22; live message/review gate evidence is stage 25. Scheduler consumption is stage 16; live demonstration is 25. |
+| 15 | Automatic selection/composition/dynamic creation and classification integration | TESTED | Every sub-slice TESTED: 15a scoped compatibility tools; 15b immutable transactional decisions (0176); 15c automatic native assessment, bounded policy-race refresh, shared parser/semantic corrections, terminal feedback, fair durable recovery (0177), public history and immutable protocol v1/v2/v3; 15d governed Manager registry authoring storage (0178, with the stray uncommitted 0179 draft deleted before any commit); 15e Manager registry-authoring service, native protocol v4 (golden-pinned over retained v1/v3 bytes), HTTP/CLI exposure and the DoD-18 normal-listing proof; 15f public delegation history. Every fragment this row had deferred to later stages landed TESTED there: approval-bound surfaces in 19/20, desktop selectors/graph in 21-22, scheduler consumption in 16, and live message/review/selection evidence in 25/27 (the stage-27 lab drove automatic selection end to end: inbox → native delivery → proposal → semantic rejection → bounded correction → accepted decision → selected resolution → worker launch) |
 | 16 | Shared scheduler and restart-safe dispatch | TESTED | Deterministic storage-level admission (0179): the daemon-wide concurrent worker cap lives in app_settings (default 100, 1–1000, PATCH /settings/max-concurrent-workers, generated contracts) and is enforced inside every session-creation transaction — plain CreateSession, configured Agent-Type launches and task-leased dispatches — so all six launch callers (manual HTTP spawn, session service, delegation, review launcher, Manager controller admission, tracker observer) pass one gate under the single-writer lock with no in-memory state to drift. Per-Agent-Type maxParallelWorkers is enforced from each launch's pinned WorkerConfiguration snapshot in the same transaction. Counts derive from durable session rows: worker termination frees capacity immediately, restart changes nothing, and lowering the cap never kills a worker. Orchestrator/agent_manager sessions never consume worker capacity. Refusals surface as typed 429 envelopes (SCHEDULER_WORKER_LIMIT / SCHEDULER_AGENT_TYPE_LIMIT) through the existing spawn error path. No blind reassignment: one live lease per task and one dispatch per attempt remain SQL-protected (0156), dispatch replays return the existing session before any creation code, so admission can never block a legitimate retry. Five new admission tests (cap/free/raise/lower, 8-way concurrent spawn race at cap 4, per-type limit with unrelated-type exemption, reopen-at-same-dir restart, settings bounds) plus full SQLite/store/settings/session/apispec suites PASS; controllers and daemon retain only their recorded Windows baselines; touched pinned lint 0 issues. Queueing/backpressure beyond typed refusals remains with stage 17/20 loop controls; desktop settings-field visual check is 25. |
 | 17 | Orchestrator protocol and autonomous feedback loop | TESTED | Durable goals/plan/actions, bounded retries and completion against criteria verified in three slices. 17a storage (0180): immutable per-project goal versions (user/system authority only; the orchestrator never rewrites user intent) with pointer + history, retained goal completions whose evidence seals the exact verified/cancelled fact set, and immutable sealed orchestrator plan receipts (unique per project+idempotency key; exact replays return the original, changed payloads conflict) — all guarded by immutability/scope triggers and history-preserving Down. Completion is deterministic: inside one transaction every project task must be independently verified against frozen criteria or cancelled, blockers are returned typed (never stored as status), at least one verified completed task is required, superseded goal versions conflict, and enumeration is bounded (10000 tasks). 17b protocol: sealed native orchestrator protocol v1 (golden-pinned bytes) with literal argv goal/plan/complete/feedback/receipts commands, delivered as part of the orchestrator system prompt only when a goal exists and recomputed on restore; the native service resolves the project's live orchestrator session, fences plan/complete submissions on the exact current generation (goal reads return it fresh), mints task/receipt identity daemon-side, and routes create/revise/freeze through the existing task store transaction so graph/criteria validation and ORCHESTRATOR session authority are rechecked in-transaction. 17c loop surface: derived per-task feedback reads (pending/working/completed/failed-for-exhaustion/cancelling/cancelled) computed from durable rows at read time (restart-stable, nothing stored), public goal/versions/completions routes, native plan/complete/feedback/receipts routes, thin CLI (`ao orchestrator goal/set-goal/goal-versions/completions/plan/complete/feedback/receipts/receipt`), telemetry allowlists, using-ao protocol docs and regenerated OpenAPI/TS contracts. Bounded retries already hold at reservation (attempt > maxAttempts refuses; state reports failed) and surface in feedback as terminal failed work. Full storage/store/domain/ports/orchestrator-service/CLI/telemetry/skillassets/apispec/specgen suites, session-manager suite (only its eight recorded Windows baselines), HTTP (only its two) and daemon (only its one) PASS; touched pinned lint 0 issues; frontend typecheck PASS; race NOT RUN (no GCC). Daemon-push notification of new terminal facts (the loop's proactive half) remains with stage 23 recovery delivery; desktop goal/feedback surfaces land with stages 21–22; live demonstration is stage 25. |
 | 18 | Manager/orchestrator outcome attribution | TESTED | Routing and planning outcome attribution as read-time derivations over durable facts, distinct from stage-13 worker metrics. Routing: one row per Manager request carrying at least one sealed decision — the accepted selection (exact Agent Type version) or the latest rejection — coupled with the routed task's derived fate (pending/working/completed/failed-for-exhaustion/cancelling/cancelled), attempts and evidence identity via the same deterministic projection the loop feedback reads; paged by the request arrival sequence (limit 1–100). Planning: every sealed plan receipt coupled with its task's derived fate, paged by the public receipt cursor. Summaries aggregate one complete bounded window (366-day cap, 1000-member cohorts counted and listed in one locked transaction; larger windows are refused, never partially summed): decisions/accepted/rejected, routed-task states and attempts (rejections never inflate routed work), per-Type-version routing groups, receipts by action (create/revise/freeze) and created-task states counting each minted task once. Domain summarizers refuse duplicate/incomplete attribution, unknown states/actions and overflow. Nothing stored; restart-stable (reopen tests). HTTP `GET /projects/{id}/agent-manager/routing-outcomes|routing-summary` and `GET /projects/{id}/orchestrator/planning-outcomes|planning-summary` with strict query envelopes, thin CLI (`ao agent-manager routing-outcomes/routing-summary`, `ao orchestrator planning-outcomes/planning-summary`), telemetry allowlists, using-ao docs, regenerated OpenAPI/TS. Full domain/ports/SQLite/store/manager/orchestrator-service/CLI/telemetry/skills/apispec/specgen suites, backend build, frontend typecheck and touched pinned lint (0 issues) PASS; HTTP retains only its two recorded Windows baselines; race NOT RUN (no GCC). Desktop metrics views land with stage 22; live demonstration is 25. |
@@ -73,32 +74,33 @@ Stage 03 completes with this commit.
 | 24 | Full CI-equivalent checks/backend/desktop builds | TESTED | Complete matrix run on Windows 11 plus the repository's real workflows on GitHub runners (fork PR #1, base = exact branch point `6d3ad8c7c`, Actions activated for this). Both checklist-deferred gaps closed: the daemon cwd test now restores the working directory before TempDir removal (`5276c1309`, daemon Windows baseline → zero) and the race suites run on real CI because no local C compiler exists (local `-race` recorded NOT RUN, never passed). The matrix caught one real regression: `NewTaskDialog` 12/12 + eight renderer-smoke specs failed on clean Linux CI; `git bisect run` against the branch point pinned stage 09's `036392a6c` — `WorkerSelectionPanel` crashed on any success-shaped registry response missing `items`/`versions` (`[undefined]` → `item.entry`), taking the whole dialog down; `fecf83f0f` guards the flattens, verified by 49/49 dialog/composer/panel suites, 59/60 local smoke, and a green Frontend workflow re-run. Local results: gofmt clean (committed blob verified), `go build`/`go vet` pass (vet keeps only the pre-existing POSIX `syscall.Kill`), full `go test ./...` proved zero branch-introduced failures via an identical control run at the branch point (225 base failures reproduce; the three head-only ones re-fail at base; base-only loss is the fixed daemon test), pinned lint full tree shows only Windows-only-file findings untouched by the branch, sqlc/api/cloud-client drift clean, cloud-client (21) and product-ui (128) suites pass, both frontend typechecks, landing icons, full vitest 4856/148/7 matching the recorded mac/unix class, and the desktop build produced the real NSIS installer via the exact CI `npm run make`. Fork CI: gitleaks, api/sqlc drift, Linux lint, cloud, windows-workspace race legs, CLI E2E (all three OS), Frontend incl. macOS-14 Swift helper — success; Go build-test (Linux `-race ./...`) green on the final re-run, closing the race gap the checklist had deferred. Gaps: agent-ci cannot run on native Windows (tar `C:\`-path bug); no publishing performed. |
 | 25 | Real Electron validation and harness evidence | TESTED | Live Windows lab on an isolated worktree with scratch AO state, real `npm ci` and `npm run dev` under `AO_FAKE_HARNESS=1`, the real Electron window driven end to end. Fake harness first: preparing it surfaced and fixed three real product gaps — `7b6867e2b` (the opt-in fake adapter was never registered in `Constructors()`), `dcd9f813b` (`IsKnown` refused the fake harness for Agent Type validation; now gated on the same env opt-in with AllHarnesses unchanged) and `f52471054` (a field-less spec can never pass resolved-`auto` permission validation; the fake now advertises accepted-and-ignored modes) — each with build/vet/touched suites/pinned lint 0 issues. Then in-app: project imported from a scratch repo (local bare origin; missing symbolic HEAD refused with the repair command), two Skills authored/enabled with retained reasons, `lab-fake-worker` authored on harness Fake with both skills pinned (v1 Chat honestly refused; v2 native-terminal via New version + Use version), registry Launch → real `sh.exe` timeline through spawning/active/waiting_input/pr-push/blocked/exited with hooks in the daemon log, board card + retained terminal; the maxParallelWorkers fence refused a second launch in-dialog and as `429 SCHEDULER_AGENT_TYPE_LIMIT` until the slot freed. The stage-24-fixed WorkerSelectionPanel was proven in production via board New Task → explicit type selection. DoD 43's live restart: daemon hard-killed mid-`waiting_input`, the surviving terminal delivered session-end to the relaunched daemon and the app showed the reconciled `exited` session (never falsely dead) plus the delegate's idle claude-code orchestrator. Authenticated combination separately per the user's switch after Codex credits ran out: opencode 1.18.31 via the local zai-sub GLM bridge (CLI smoke "ok", all four GLM models in the daemon catalog, `lab-opencode-worker` authored) executed a real GLM-5.3-Flash chat turn through the delegate wire path — conversation snapshot holds the task, the tool-read and the correct reply "Lab Project". All seven desktop surfaces viewed live (board/graph/manager/performance/knowledge/audit/control incl. a live pause→resume cycle with retained reasons); registry/project/skill persistence proven across daemon replacements; all five sessions killed cleanly. Gaps recorded in validation: opencode registry-type launches blocked by its missing permissions advertisement (upstream-class; manual path unaffected), knowledge UI lacks a visible sources editor (daemon provenance gate fired), orchestrator goal/planning and manager admission not live-run, no concurrent heterogeneous live demo, Windows-only lab. |
 | 26 | Upstream update, whole-diff review and documentation | TESTED | Upstream had grown from the two previously assessed commits to 28 (`6d3ad8c7c..b9601f38c`): Qwen Chat UI via native ACP, usable Windows Codex account storage plus all Codex/Claude login methods, ACP session/load replay buffering, phantom session-row removal, task-composer dropdown split with model preselect, link preview cards, bundled notification sound, tmux/Linux crash fixes, the earlier Claude userID and tab-close pair, telemetry GitHub handle and a mobile UX pass. Assessment first: upstream added zero SQLite migrations (no numbering collision with this branch's 0148–0183) and touched 442 files, 25 of them also touched here. Merge commit `de5fcedac` reconciles all of it with no speculative overwrite — 20 overlapping files auto-merged and every one of the 5 content conflicts resolved by combining both intents, never taking a side blindly: daemon.go keeps both service imports (knowledge + link preview); TaskComposer.tsx keeps the branch's `workerSelection` guards around agent/model/mode/approvalMode/model-warning while adopting upstream's effort semantics (TUI retries now preserve an explicitly touched effort); TaskComposer.test.tsx keeps both test sets; openapi.yaml + schema.ts were regenerated from the merged sources via `npm run api` (sqlc regenerate: zero drift). Validation on the merged tree: backend build clean; `go vet` only the pre-existing POSIX `syscall.Kill` test file; full `go test ./...` failures proven identical at pre-merge HEAD `626a32ae2` through scratch-worktree control runs (kimchi/kimi/modelcatalog auth-config and file-permission classes, session_manager's eight, reviewer's one, controllers' bridge-pairing and clone — all Windows-environmental, all green on Linux CI); frontend typecheck clean; TaskComposer vitest 37/37; pinned lint down to exactly the six documented Windows-only findings after gofmt-normalizing three auto-merged files (hookutil, ports/agent, ports/chat) folded into the merge commit. Whole-diff review vs the merged upstream head recorded in the validation doc and expanded into the stage-15+ architecture review (`docs/adaptive-agent-platform-review.md`). Fork CI: 16/17 green immediately; the Linux race leg hit the per-binary 20m budget twice on the migration-heavy sqlite suite (different tests mid-run at each expiry — duration, not a hang; the merge's new upstream test packages add parallel CPU load), fixed by raising the race timeout to 30m following the workflow comment's own 15m→20m precedent; no tests excluded. |
-| 27 | Final commits, fork push and Definition of Done report | NOT STARTED | Only after all acceptance evidence exists |
+| 27 | Final commits, fork push and Definition of Done report | TESTED | Both stage-25 product gaps fixed and live-proven (`a5f60ca15` opencode permission advertisement — pre-flight `ready:true`, registry launch, real GLM reply; `b02b90723` knowledge sources editor — sourced creation accepted, 10/10 component tests), upstream catch-up merged (`efb455fa1`, 12 commits, collision migration renumbered 0184, failure-set control run identical + 1 environmental), and the close-out lab drove every carried live gap: goal loop (sealed goal → GLM plan receipt → DAG task), manager admission + Automatic selection end to end (inbox → native delivery → proposal → semantic rejection → bounded correction → accepted decision → selected resolution → orchestrator-launched worker whose edit met the frozen criterion), concurrent heterogeneous workers, daemon replacement reconciliation and all surfaces — full evidence in the stage-27 validation section. **Fork-native by decision: no upstream PR will ever be opened** (~88k insertions make this its own product); the branch keeps one-way upstream sync (upstream → fork merges continue, nothing flows back); fork draft PR #1 stays the CI vehicle. Final report: `adaptive-agent-platform-final-report.md` |
 
 ### Follow-up validation gaps (do not block independent implementation)
 
-- Stage 25 lab findings (product, upstream-relevant): opencode advertises no
-  `permissions` config field in any mode, so Agent Types pinned to it can never
-  pass the registry launch pre-flight (resolved-mode `auto` is unadvertised) —
-  the manual-harness launch path is unaffected; and the Knowledge view's
-  creation form exposes no sources editor, so the daemon's sources-required
-  provenance gate refuses every in-app creation attempt.
-- Stage 25 live scope gaps (not product defects): orchestrator goal/planning
-  loop, manager admission and needs-human/dry-run flows were not live-driven
-  (their surfaces render honest empty states); no concurrent heterogeneous
-  worker demo (per-type maxParallelWorkers=1); the lab is Windows-only.
+- Stage 25 lab findings (product, upstream-relevant): RESOLVED in stage 27.
+  The opencode permissions advertisement landed as `a5f60ca15` (pre-flight
+  `ready:true` and a real registry launch with a GLM reply, live) and the
+  Knowledge sources editor as `b02b90723` (sourced creation accepted through
+  the normal API, form component-tested 10/10).
+- Stage 25 live scope gaps (not product defects): RESOLVED in stage 27 for
+  everything enumerated at close-out — orchestrator goal/planning loop,
+  manager admission and Automatic selection, and a concurrent heterogeneous
+  demo all ran live (see the stage-27 validation section). Needs-human
+  raise/resolve and dry-run remain code- and UI-tested (20/22) but were not
+  live-driven; the lab remains Windows-only.
 
 - Windows `go test -race` requires a C compiler. Explicit `CGO_ENABLED=1`
   reports `gcc` missing; record as NOT RUN, not passed. RESOLVED in stage 24
   along the checklist's second path: the complete race suites now run on real
-  GitHub runners through fork PR #1 (Linux `-race ./...` with the 20m bound,
-  windows-latest race legs), because no local compiler exists.
+  GitHub runners through fork PR #1 (Linux `-race ./...`, since stage 26 with
+  the 30m bound, windows-latest race legs), because no local compiler exists.
 - The full pinned linter finds existing Windows-specific failures outside stage
   05: `persistenthost/host_race_test.go` references `syscall.Kill`, and process
   helpers have errcheck/errorlint/gosec findings. Relevant stage 05 packages pass.
   Stage 24 confirmed these are the complete set on Windows, all in files the
-  branch never touched (Linux CI never compiles them and its full-tree lint is
-  green).
+  branch never touched (Linux CI never compiles them; its full-tree lint is
+  green). Stage 27 re-confirmed exactly these six after its merge.
 - Stage 11c2's symlink-read test cannot create symlinks on this Windows account;
   run on Linux/CI. Daemon `TestStabilizeWorkingDirectoryChdirsToDataDir` also fails
   on the pre-09 archive: its TempDir cleanup precedes restoration of the working
@@ -106,12 +108,11 @@ Stage 03 completes with this commit.
   TempDir is created before the cwd-restore cleanup is registered, and the test
   passes on Windows.
 - Latest fetched upstream is `795286c4e1a58a53269f687974c820cc10561b08`.
-  Its two new commits change Claude auth readiness and tab UI, with no migration
-  collision. They are assessed but not yet incorporated; current base remains
-  `6d3ad8c7c`. Reconcile during the upstream integration pass.
-  RESOLVED in stage 26 (`de5fcedac`): upstream had grown to 28 commits through
-  `b9601f38c` (including that pair) and all of it is merged, conflict-resolved
-  and revalidated; see the stage-26 row.
+  RESOLVED in stage 26 (`de5fcedac`, 28 commits through `b9601f38c`) and the
+  stage-27 catch-up (`efb455fa1`, 12 more through `dd531d2fb`, with upstream's
+  colliding `0148_notification_dismissal` renumbered into the fork sequence as
+  `0184`). Standing model: one-way upstream → fork sync continues; no upstream
+  PR will be opened (fork-native decision, stage 27).
 
 ## Definition of Done traceability
 
@@ -121,25 +122,25 @@ Numbers refer to the assignment's 48 Definition of Done items.
 | --- | --- | --- | --- |
 | 1 | Manually create Agent Types in desktop | 06 | VALIDATED IN RUNNING APP |
 | 2 | Different harness/provider/model per type | 08-09 | TESTED: per-type harness/provider/model through 08-09 suites; stage 25 authored live types on two harnesses (fake; opencode with a named GLM bridge model) and launched both |
-| 3 | Supported custom provider options | 08 | NOT STARTED |
+| 3 | Supported custom provider options | 08, 25-27 | TESTED with a documented boundary: AO's provider model is deliberately reference-based — bindings select providers configured natively in the harness and never carry credentials or arbitrary endpoints (enforced `NATIVE_PROVIDER_UNAVAILABLE` on unadvertised names). Where the harness supports custom providers, they are configured natively and bind: stage 25 ran opencode through the local zai-sub GLM bridge (custom provider, custom baseURL) end to end, and stage 27 launched it through registry pre-flight |
 | 4 | Manually create Skills | 07 | VALIDATED IN RUNNING APP |
 | 5 | Attach multiple pinned Skills | 07-09 | TESTED: multi-pin through 07-09 suites; stage 25 authored a live type pinning both lab skills and they rode every launch |
-| 6 | Configure and enforce manager ownership permissions | 05-06, 15 | IN PROGRESS: registry ownership plus native selection/transactional race enforcement TESTED; creation/version tool integration remains 15 |
+| 6 | Configure and enforce manager ownership permissions | 05-06, 15 | TESTED: registry ownership plus native selection/transactional race enforcement (15a-c) and the creation/version tool integration through 15d/15e (governed authoring with per-kind quotas, idempotent receipts and manager-origin listing); stage 27 exercised the permission gates live — the manager's own policy fields (`managerCanSelect`) gated candidacy and the daemon refused an id-less candidate envelope |
 | 7 | Manually launch from Agent Type | 09 | VALIDATED IN RUNNING APP |
 | 8 | Explicit type selection when creating a task | 09-10 | TESTED in composer/CLI/API and native task dispatch adapters; desktop selection TESTED live in stage 25 (board New Task → Worker configuration → pinned type re-render, then a real launch) |
-| 9 | Automatic Agent Manager selection | 15-16, 25 | IN PROGRESS: TESTED compatibility, immutable decisions, native automatic assessment/feedback and restart recovery (15a-c); shared scheduler consumption and live demonstration pending |
+| 9 | Automatic Agent Manager selection | 15-16, 25, 27 | TESTED and live: compatibility, immutable decisions, automatic native assessment/feedback and restart recovery (15a-c), scheduler consumption (16), and the stage-27 lab drove the full chain live — inbox request → native delivery with exact generation → GLM proposal → semantic rejection → bounded correction → accepted decision → resolution `selected` → orchestrator-launched worker |
 | 10 | Give orchestrator a high-level goal | 17 | TESTED: user-authored immutable goal versions, API/CLI and sealed native protocol pinning the current goal; live app demonstration not run in the 25 lab (orchestrator session spawned but stayed idle) |
 | 11 | Persistent orchestrator-created task dependencies | 10, 17 | TESTED: persistent DAG, orchestrator-authority rechecks and the native orchestrator planning protocol (sealed receipts, idempotent retries, generation fencing) through 17 |
 | 12 | Acceptance criteria frozen before work | 10 | TESTED: versioned planning, exclusive attempt pins, transactional context seal and native launch tests |
-| 13 | Manager inspects available Types/Skills | 14-15, 25 | IN PROGRESS: versioned native Type/Skill reads, bounded candidate filtering, proposal reasons and retained deterministic decision evidence TESTED through 15c; live consumption not run in the 25 lab (no manager admitted) |
+| 13 | Manager inspects available Types/Skills | 14-15, 25, 27 | TESTED and live: versioned native Type/Skill reads, bounded candidate filtering, proposal reasons and retained deterministic decision evidence (14-15c); the stage-27 lab's admitted manager scanned the complete candidate page natively (excluding the fake as structurally unable and noting its own type separately) before proposing |
 | 14 | Persistent Agent Manager service/controller/tools | TESTED | Durable native claims pushed as `c93ba87d7`. 14e3 wires the post-reconciliation inbox consumer, single native admission, fair durable scans, conservative recovery and generation-specific versioned CLI protocol. Exact input/delivery API/CLI history and telemetry redaction are exposed. Real SQLite consumer, native proposal race, boundary/fairness/unknown-start tests PASS; full storage/domain/service/CLI/spec/telemetry/skills, 40 frontend tests, build/typecheck/API/lint PASS. Full HTTP/daemon retain recorded Windows baselines. Semantic selection/evolution remains 15, uncertain controls/recovery 20/23 and live demonstration 25. |
 | 15 | Manager composes existing Skills | 15 | TESTED at protocol/service level through 15e (sealed native authoring over retained pins); live manager-driven composition not run in the 25 lab |
 | 16 | Dynamic Skill creation | 15 | TESTED through 15d/15e (governed registry authoring, quotas, idempotent receipts, native protocol v4); live manager-driven creation not run in the 25 lab |
 | 17 | Dynamic Agent Type creation | 15 | TESTED through 15d/15e (same sealed authoring path for Types); live manager-driven creation not run in the 25 lab |
 | 18 | Dynamic definitions visible in normal registry UI | 06-07, 15 | TESTED through 15e (manager-authored entries list in the normal registry with manager origin); stage 25 re-confirmed user-authored entries render live |
-| 19 | Concurrent heterogeneous workers | 09, 16, 25 | NOT STARTED |
-| 20 | Preserve session/worktree/Git/PR/CI/review behavior | 09, 23-25 | NOT STARTED |
-| 21 | Structured communication/handoffs | 12 | IN PROGRESS: typed results/API and durable message/delivery persistence tested; native message consumption remains 12c2 |
+| 19 | Concurrent heterogeneous workers | 09, 16, 25, 27 | TESTED and live: store-level concurrent-admission races (16) and the stage-27 lab ran a real opencode+GLM registry worker beside a fake-harness registry worker simultaneously, each through its own admission path with per-type limits intact |
+| 20 | Preserve session/worktree/Git/PR/CI/review behavior | 09, 23-27 | TESTED: the stage-24 full matrix proved zero branch-introduced failures against a base-commit control; stage 25 exercised normal session/PR-flow behavior live (fake timeline through pr-push/blocked/exited, delegate claude-code orchestrator); stages 26/27 merged 40 upstream commits over the adaptive work with the whole existing suite passing and conflict resolutions preserving both intents |
+| 21 | Structured communication/handoffs | 12 | TESTED: typed results/API, durable message/delivery persistence and native message consumption all shipped through 12c2 — the daemon-owned outbox delivers typed messages into the recipient worker's live native session through the guarded `deliverNativeContext` boundary (Chat relay idempotency, guarded TUI paste, stale/busy/blocked-recipient refusal) with crash/restart reconciliation marking interrupted deliveries uncertain and never blindly resending; recipient-side acknowledgement is a documented transport-level boundary (handed_off is a transport ack, not proof of action) |
 | 22 | Persist useful project knowledge | 11, 22 | TESTED through 22: versioned review/status/provenance, API/CLI and accepted context selection, plus the desktop knowledge view (inspect provenance/history, revise through the version fence); viewed live in the stage-25 lab with the provenance gate firing honestly |
 | 23 | Task-specific context with provenance | 11 | TESTED: bounded sealed context, native launch/restore and API/CLI; findings/contracts integration and live provider evidence remain 12/25 |
 | 24 | Independently evaluate outcomes | 13 | TESTED: CI/test/build/lint, committed artifacts, mergeability and frozen native review evidence; current completion invalidation; live heterogeneous review not run in the 25 lab |
@@ -172,25 +173,25 @@ Numbers refer to the assignment's 48 Definition of Done items.
 
 | Requirement | Verification needed | Status |
 | --- | --- | --- |
-| Type/Skill versions | Inspect, clone, diff, active-version rollback, disable, experimental/promotion history | NOT STARTED |
-| Import/export | Round trip, schema rejection, unresolved bindings, no secrets or execution | NOT STARTED |
+| Type/Skill versions | Inspect, clone, diff, active-version rollback, disable, experimental/promotion history | TESTED: inspect/clone/rollback/disable/audit at API/CLI/UI through 06-07 (real Electron flows), version diffing through 19's `DiffRegistryDefinitions`, promotion history sealed in 19's experiments/recommendations |
+| Import/export | Round trip, schema rejection, unresolved bindings, no secrets or execution | TESTED: portable bundles, atomic imports with unresolved-binding refusal and strict schema rejection through 07 (round-trip/strict-input/rollback suites); export/import UI verified live in the stage-25 lab |
 | Snapshot reproducibility | Project default edits and registry edits do not alter running/restored attempts | TESTED for original TUI/Chat configuration, retained resources and reopened SQLite; later execution-segment integration remains stage 09 |
-| Ownership | Manager cannot spoof human origin or select/modify/version prohibited types | IN PROGRESS: TESTED 15a-c compatibility, decision transaction and automatic native assessment refuse protected Types/Skills and policy races; callers cannot forge selected resolutions or compatibility verdicts. Existing registry writes enforce independent policy. Creation-tool integration pending. |
+| Ownership | Manager cannot spoof human origin or select/modify/version prohibited types | TESTED: 15a-c compatibility, decision transaction and automatic native assessment refuse protected Types/Skills and policy races; callers cannot forge selected resolutions or compatibility verdicts; existing registry writes enforce independent policy; creation/version tooling (15d/e) enforces the same per-kind quotas and governance — and the stage-27 lab's daemon refused the manager's id-less candidate envelope while the USER-only governance route held |
 | Context classification | Deterministically reject embedding technical < engagement < mission material above the attempt's pinned Agent Type clearance in delegation payloads, sealed manifests and knowledge selections; live Type edits cannot raise an existing attempt's clearance. Violation tests mirror Ownership. | TESTED foundation 15.0: exact-version authority, live activation, forged labels, required-task denial, SQL filtering before limit and atomic classified delegation seal. Manager input/proposal boundaries TESTED in 14e1-e3; compatibility and atomic automatic selection TESTED 15a-c. Native terminal feedback excludes unclassified caller reasons. Live-message/review integration pending. |
 | Engagement isolation and upward flow | Per-client/per-target engagement context is shared only within its engagement; technical findings/results can flow into higher-class context. Test cross-engagement refusal and legal upward flow independently of clearance. | TESTED foundation 15.0: cross-engagement refusal even at mission clearance; technical results/contracts flow up; outputs inherit sealed sensitivity and worker knowledge candidates cannot lower or strip scope. Manager conversation binding/cumulative sensitivity across native generations TESTED in 14e1. Transport and remaining integration pending. |
 | Classified provenance and authoring | Versioned inspectable delegation artifacts and sealed per-item classifications survive restart; Manager compatibility rejects tasks above clearance; registry, task composer and knowledge authoring expose selectors and session inspector displays retained classifications. | TESTED provenance foundation 15.0: per-item v2 labels, immutable numbered artifacts, exact prompt/hash/native pins, restart and rollback. Public artifact history, compatibility/authoring/inspector UI and live demonstration pending 15/25. |
 | Criteria | Worker cannot lower criteria; revision retained and audited | TESTED: role denial, immutable revisions, attempt pins and context seal/readback |
-| DAG safety | Cycle, cross-project edge, duplicate task/edge, cancellation, depth/pending bounds | NOT STARTED |
-| Lease safety | Races, expiry, delayed heartbeat, unknown liveness, confirmed exit, retry exhaustion | NOT STARTED |
-| Resource limits | Direct spawn, delegation, intake, restore and dynamic manager paths; runaway recursion | NOT STARTED |
+| DAG safety | Cycle, cross-project edge, duplicate task/edge, cancellation, depth/pending bounds | TESTED: shared graph validation (cycle/depth/scope) enforced in-transaction on create/revise and re-checked by the dry-run simulator (20); duplicate/edge bounds and cancellation through 10's suites |
+| Lease safety | Races, expiry, delayed heartbeat, unknown liveness, confirmed exit, retry exhaustion | TESTED: exclusive leases/atomic dispatch (10b), unknown-liveness-never-dead reconciliation (23), bounded retries at reservation with terminal-failed feedback (17); live lease facts survive daemon replacement (25/27 restarts) |
+| Resource limits | Direct spawn, delegation, intake, restore and dynamic manager paths; runaway recursion | TESTED: one admission gate over all six launch callers with daemon-wide and per-type caps (16), manager controller admission fenced like every other path (14b/16), typed 429 refusals live in 25; per-type fence re-proven live in 27's concurrent launches |
 | Review independence | Different implementing/reviewing type, optional different harness, exact target commit | TESTED: frozen policy, retained native configuration/launch and exact-result evaluation in 13c3; live heterogeneous review not run in the 25 lab |
 | Evidence integrity | Pending/unknown checks, stale head, malformed results, self-reported tests, evaluator retries | TESTED: immutable evidence/retries, CI/artifact/mergeability/native review violations and current completion invalidation through 13d1 |
-| Experiments | Comparable cohorts, sample sizes, policy-gated promotion and experiment bounds | NOT STARTED |
-| Provider failure | Missing binary/model/auth/binding, deleted config, unsupported capabilities, provider crash | NOT STARTED |
+| Experiments | Comparable cohorts, sample sizes, policy-gated promotion and experiment bounds | TESTED: sealed experiments/recommendations with confound refusal and minimum-sample gates (19); desktop lists viewed live in 25 (honestly empty) |
+| Provider failure | Missing binary/model/auth/binding, deleted config, unsupported capabilities, provider crash | TESTED: readiness/auth/binding validation classes through 08-09 (NATIVE_PROVIDER_UNAVAILABLE, MODELS_UNAVAILABLE, NATIVE_READINESS_UNAVAILABLE envelopes); live in 27 — the unauthenticated opencode pre-flight refused launch until credentials existed, then passed |
 | Recovery failures | Manager/orchestrator/evaluator crash, mid-launch restart, partial output, Git conflict | IN PROGRESS through 23: mid-launch restart and uncertain reviewer launches reconcile with retained uncertainty (tested); orchestrator/manager dispatchers recover pendings on startup (tested); evaluator crash partial coverage via existing evidence-retry suites; Git-conflict recovery untested |
-| Controls | Concurrent launch vs pause/cancel, drain/stop distinction, partial termination failures | NOT STARTED |
-| UI behavior | Forms, loading/errors/empty/disabled states, navigation, search, accessibility and restart persistence | NOT STARTED |
-| Data isolation | Scratch lab state only; retained dirty worktrees; no credentials/build outputs in commits | NOT STARTED |
+| Controls | Concurrent launch vs pause/cancel, drain/stop distinction, partial termination failures | TESTED: fenced-launch-vs-control races in-transaction (20), drain/stop distinction with lease-derived effective state, honest partial-termination reporting; live pause→resume cycle in 25 |
+| UI behavior | Forms, loading/errors/empty/disabled states, navigation, search, accessibility and restart persistence | TESTED: forms/error/empty/disabled/paging states across the stage-21/22 component suites (44 new tests) plus the broader 5046-test renderer suite; real-app flows through stages 06-08 and 25; restart persistence across daemon replacements live in 25/27 |
+| Data isolation | Scratch lab state only; retained dirty worktrees; no credentials/build outputs in commits | TESTED: stages 24-27 ran every lab against isolated worktrees with scratch `AO_DATA_DIR`; the temporary opencode credential added for stage-27 readiness was removed at lab end; no credentials, build outputs or run state committed (gitleaks green on every push) |
 
 ## Required loop for every milestone
 
@@ -205,17 +206,75 @@ Numbers refer to the assignment's 48 Definition of Done items.
 
 ## Final validation ledger to fill
 
-- Upstream fetch/assessment and exact final incorporated SHA.
-- Formatting, lint, complete backend tests/race/vet/build and generated drift.
-- Full frontend and shared UI tests/typechecks; real desktop package build.
-- Clean database and upgrade from the starting schema with data retention.
-- Daemon/frontend restart and active-task/lease/provider-host recovery.
-- Manual and manager creation, Skills, ownership, criteria and overrides.
-- Heterogeneous configurations: name each actual harness/provider/model tested.
-- Knowledge/context/results/messages/evaluation/performance/decision evidence.
-- Experiments, limits, retry exhaustion and deliberate runaway-spawn attempts.
-- Needs Human branch isolation, dry-run and all deterministic controls.
-- Electron screenshots/interaction evidence from isolated data and checkout.
-- Whole-diff architectural review, cleanup, documentation and final checklist.
-- Commit history, fork/branch URL, push state and remote CI checks where available.
-- Explicit implemented-but-not-live-tested list, remaining human actions and debt.
+- Upstream: starting SHA `684d6d67d` rebased onto `6d3ad8c7c`; stage 26 merged
+  28 commits through `b9601f38c` (`de5fcedac`); stage 27 merged 12 more through
+  `dd531d2fb` (`efb455fa1`, with upstream's colliding `0148_notification_dismissal`
+  renumbered as `0184`). Final incorporated upstream SHA: `dd531d2fb`. Standing
+  model: one-way upstream → fork sync; no upstream PR (fork-native decision).
+- Formatting/lint/tests/build/drift (stage-27 tree): gofmt clean, `go build`/
+  `go vet` clean (POSIX `syscall.Kill` persistenthost baseline only), full
+  `go test ./...` identical to the pre-merge control failure set (37 documented
+  Windows-environmental packages, all Linux-green) plus one new environmental
+  entry (`agentauth` kimi trust seeding), pinned lint exactly the documented
+  six, sqlc and OpenAPI/TS regenerated with zero drift, frontend typecheck +
+  full vitest within the recorded baseline classes + production build green;
+  race suites run on CI only (no local C compiler — recorded, not claimed).
+- Frontend/shared: full vitest 5046 pass / 150 fail / 8 skip matching the
+  recorded Windows/macOS baseline classes; TaskComposer 37/37 after the merge;
+  KnowledgeView 10/10 with the new sources editor; desktop package build
+  produced the real NSIS installer in stage 24; stage 27's lab built and ran
+  the dev stack end to end.
+- Database: clean-DB and existing-v140-DB upgrade matrix to head (184 after the
+  renumber) with data retention proven in 23 and re-pinned in 27's ledger/baseline
+  updates; the lab's scratch database ran the full live session on the merged tree.
+- Restart/recovery: live daemon replacement in stages 25 and 27 (hard-kill +
+  respawn with supervisor reconnection and full state retention); active-task
+  recovery, uncertain reviewer/manager/orchestrator dispatch and mid-launch
+  restart reconciliation tested in 23; provider-host readiness probed and
+  enforced live in 27 (refused unauthenticated, passed with credentials).
+- Creation/ownership/criteria: manual Agent-Type/Skill authoring live in 25/27;
+  manager governance USER-only; ownership policy gates live in 27 (id-less
+  candidate refusal); criteria refused-until-frozen by the manager itself live
+  in 27; overrides through role config proven (project orchestrator auto
+  permissions).
+- Heterogeneous configurations actually tested: fake harness (deterministic
+  timeline, live in 25/27), opencode 1.18.31 via zai-sub GLM bridge
+  (GLM-5.3-Flash — chat turn live in 25, registry launch + orchestrator +
+  manager + autonomous worker turns live in 27), claude-code delegate
+  (idle orchestrator, 25), native Codex reply-only turn (09c4). Not tested:
+  every other harness.
+- Evidence surfaces: knowledge (sourced entry live 27), context/results/
+  messages/evaluation/performance (suites through 11-13; performance summary
+  served live with honest empty cohorts), decisions (sealed proposals/
+  decisions/rejection+correction/resolution live 27), receipts (plan receipt
+  live 27), audit (timeline live 27), control (state live 27).
+- Experiments/limits/runaway: sealed experiment/recommendation machinery and
+  confound refusal tested in 19 (lists live-empty in 25); scheduler caps and
+  per-type limits live (25 in-dialog + 429; 27 concurrent heterogeneous with
+  limits intact); deliberate runaway-spawn attempts not separately staged
+  (the 8-way concurrent race at cap is the tested equivalent).
+- Needs Human/dry-run/controls: needs-human ancestry isolation, dry-run
+  zero-mutation proof and the full control state machine tested in 20 with
+  desktop views in 22; live pause→resume in 25; needs-human raise/resolve and
+  dry-run not live-driven (recorded below as not-live-tested).
+- Electron evidence: stages 25 and 27 ran the real Electron app on isolated
+  worktrees with scratch data; stage 27's window ran healthy but DWM capture
+  returned a black raster, so its visual evidence is the live daemon API read
+  models plus opencode's own session store (recorded honestly in the stage-27
+  validation section).
+- Whole-diff review, cleanup and documentation: stage-26 thematic review
+  (`adaptive-agent-platform-review.md`), stage-27 checklist reconciliation and
+  this ledger; debug-leftover scan of the branch diff clean; hard-rule
+  boundaries (loopback bind, `~/.ao` scoping) unchanged through both merges.
+- Commit history/fork/CI: branch `feature/adaptive-agent-platform` on
+  `https://github.com/2BE-ops/agent-orchestrator` (fork draft PR #1 = CI
+  vehicle, stays draft); every stage pushed; fork CI 17/17 green through
+  stage 26's tip; stage 27's final push verified after this commit.
+- Implemented-but-not-live-tested / human actions / debt: needs-human
+  raise/resolve and dry-run flows; native manager experiment/recommendation
+  tools (19's service path is exposed; the native tools remain deferred);
+  Git-conflict worker recovery; agent-ci on Windows (tar path bug); local
+  race (no compiler); React Doctor annotation (score 47/100 with 1 error +
+  13 warnings — passing, present before the branch's changes); unindexed
+  adaptive aggregate reads at current bounds; lab artifacts on disk by
+  design (`.cache/ao-lab-27`, `%TEMP%\ao-lab-27*`).

@@ -1,8 +1,141 @@
 # Adaptive agent platform: environment and validation evidence
 
 Recorded 2026-09-18. The latest milestone evidence below supersedes the historical
-initial audit/environment failures retained later in this file. This is not the
-final platform validation report.
+initial audit/environment failures retained later in this file. The final
+platform report is `adaptive-agent-platform-final-report.md`; this file remains
+the per-stage evidence ledger.
+
+## Stage 27 - Final commits, upstream catch-up and live close-out lab (2026-09-20)
+
+The stage closed the two carried product gaps, merged the next upstream batch,
+and ran the live lab that closed every carried live-validation gap. Branch tip
+through this stage: `efb455fa1` (merge), preceded by `b02b90723` (knowledge
+sources editor) and `a5f60ca15` (opencode permission advertisement).
+
+### Product fixes (each built, vetted, suite-tested, linted, committed)
+
+1. `a5f60ca15` — the opencode adapter advertised no `permissions` config field,
+   so registry Agent Types pinned to opencode could never pass launch
+   pre-flight (worker options resolve an unset mode to `auto`, and validation
+   refuses unadvertised modes). The adapter now advertises all four typed
+   modes its launch path genuinely implements (`appendPermissionFlags`,
+   `opencodePermissionConfig`), matching the Claude Code and Codex specs.
+   Tests: updated `TestGetConfigSpecReportsModel`, new
+   `TestGetConfigSpecAdvertisesPermissionModes`; package + `service/registry`
+   green (the `service/agent` failures in the same run are the documented
+   stage-08 Windows credential/binary baselines).
+2. `b02b90723` — the Knowledge creation form sent `sources: []`, so the
+   daemon's 1-to-16-sources provenance gate refused every in-app creation
+   (stage-25 gap). The form now edits one to sixteen structured sources (kind,
+   bounded reference, and the exact task/attempt/session a worker source must
+   cite), mirrors the gate client-side before submit, carries inherited
+   sources through revisions (machine-written worker provenance survives
+   edits), and lists sources in the detail pane. Tests: 10/10 KnowledgeView
+   component tests including refuses-without-provenance, worker-triple
+   enforcement and inherited-provenance preservation; typecheck clean.
+
+### Upstream catch-up (`efb455fa1`; one-way sync, no upstream PR by decision)
+
+Upstream had advanced 12 commits past the stage-26 merge (`b9601f38c..dd531d2fb`:
+sidebar session shift, bot review feedback routing, notification dismissal,
+separated task effort selection, Kimi login picker, cloud/mobile fixes). 157
+upstream files vs 645 branch files, 17 overlapping. Two content conflicts,
+both resolved by combining intents: `TaskComposer.tsx` kept the registry
+workerSelection guards while adopting the separated effort control (hidden for
+worker selections whose pinned configuration wins), and the migration ledger
+kept the fork's sequence. **Upstream shipped `0148_notification_dismissal`,
+colliding with the fork-owned `0148_registry_cdc` goose version id** — the
+incoming migration was renumbered into the fork sequence as
+`0184_notification_dismissal.sql` (content untouched; upstream databases were
+never a supported fork upgrade path past the stage-26 merge base), with the
+`shippedMigrations` ledger and the adaptive-baseline version pin recording the
+renumber (an intermediate ledger edit that dropped lines 148-182 was caught by
+`TestMigrationVersionLedger` and repaired before commit). Regenerated sqlc and
+OpenAPI/TS artifacts from the merged sources (`npm run api` needs Go's bin on
+PATH for npm-spawned cmd; sqlc run directly). Validation: build/vet clean
+(persistenthost `syscall.Kill` baseline), full sqlite suite green, pinned lint
+exactly the documented six, frontend typecheck + TaskComposer 37/37 + full
+vitest within the recorded Windows/macOS baseline classes (5046 pass / 150
+fail / 8 skip; stage 24 recorded 4856/148/7 in the same classes) and the
+production build green. Full backend suite compared against a
+`2a97eea86`-worktree control run: **failure sets identical (37 packages)
+except one new entry** — `service/agentauth`
+`TestStartPreparesKimiAuthWorkspaceWithSeededTrust` (upstream's Kimi login
+change; same Windows trust-seeding class as the recorded kimi baselines,
+expected green on Linux CI). The fork model going forward is one-way sync:
+upstream → fork merges continue, nothing is contributed back.
+
+### Live lab (isolated worktree at `efb455fa1`, scratch `AO_DATA_DIR` under
+`%TEMP%\ao-lab-27`, real `npm ci`, dev daemon + Vite + Electron,
+`AO_FAKE_HARNESS=1`, sh.exe on PATH; opencode 1.18.31 via the local zai-sub
+GLM bridge, smoke-tested `opencode run` → "ok")
+
+Observed in the running daemon API and live sessions (the Electron window ran
+with its renderer polling healthy — vite connected, no console errors — but
+DWM screen capture returned a black raster all session, so visual evidence is
+the API read-model plus opencode's own session store):
+
+- **Fix A live**: `lab-opencode-worker` (harness opencode, model
+  `zai-sub/GLM-5.3-Flash`) authored in the registry; pre-flight validate
+  returned `"ready": true` with zero issues (stage 25: permanently
+  `PERMISSIONS_UNSUPPORTED`); delegated launch spawned worker
+  `ao-lab-27-repo-1`, whose real GLM-5.3-Flash turn answered the README
+  question with the file's exact heading "# Lab Project 27".
+- **Fix B live**: knowledge entry created through the normal project API with
+  a structured `user`-kind source; the gate that refused every in-app
+  creation in stage 25 accepted it (UI form behavior pinned by the 10/10
+  component tests).
+- **Goal loop live** (never live-driven before): goal v1 sealed (USER actor,
+  content-hashed); GLM orchestrator session read it and submitted a sealed
+  `create_task` plan receipt (idempotency-keyed, request-hashed) creating
+  task `184528ce` on the DAG, attributed `ORCHESTRATOR/ao-lab-27-repo-3`.
+- **Manager admission + Automatic selection live** (never live-driven
+  before): manager configured (schema 1, pinned to `lab-manager` v1,
+  balanced policy) and admitted — controller dispatch created the controller
+  session with configuration hash. A `select_worker` inbox request for the
+  task was enqueued; the manager correctly **refused to route before
+  acceptance criteria were frozen**; criteria v1 frozen; the native routing
+  input was then delivered into the controller session with its exact source
+  generation and literal argv. The GLM manager scanned all candidates
+  (excluding the fake as structurally unable to edit tracked files and its
+  own type as circular in attempt 1), and produced a hash-pinned proposal.
+  The daemon **rejected attempt 1 semantically** — the lab driver's loose
+  nudge produced an envelope whose `candidates` entries lacked ids, and
+  exact-identity resolution correctly refused (`AGENT_TYPE_NOT_FOUND`) — and
+  the manager exercised its **bounded correction** (new idempotency key, same
+  native generation); the corrected proposal was **accepted**, and the
+  resolution recorded `outcome: "selected"` by `SYSTEM/manager-selector`.
+  The orchestrator then launched the selected worker (`readme-stage27-fix`),
+  whose turn edited README.md to "# Stage 27 Lab" — the goal's exact frozen
+  criterion. Full chain: goal → plan receipt → task → frozen criteria →
+  inbox request → native delivery → proposal → semantic rejection → bounded
+  correction → accepted decision → selected resolution → worker launch →
+  criterion-met edit.
+- **Concurrent heterogeneous workers live**: the opencode+GLM worker and a
+  fake-harness registry worker ran simultaneously (opencode active/idle
+  beside fake blocked→exited through its scripted timeline), each through
+  registry admission.
+- **Daemon replacement live**: the lab daemon was killed mid-run; the
+  Electron app respawned it and the supervisor link reconnected with all
+  state persisted (project, registry entries, knowledge) — re-proving the
+  stage-25 reconciliation on the merged tree.
+- **Surfaces**: board (sessions), task DAG, goal versions/receipts, manager
+  requests/proposals/decisions/audit, knowledge, project control
+  (`running`), and task-performance summary (honest empty window; the query
+  validator refused both malformed bound-less requests) all served live data
+  through their read models.
+
+Lab environment notes, recorded honestly: the zai-sub bridge authenticates via
+opencode provider config, which is invisible to `opencode auth list` — a
+temporary `auth.json` credential (written with a daemon-probe-compatible
+shape) made the readiness probe conclude `authorized`; it was **removed at lab
+end**. The first orchestrator session and one later nudge hit
+`SESSION_AWAITING_DECISION`/blocked states on opencode permission prompts
+(default-permission sessions); the project orchestrator override
+(`permissions: auto`) resolved it for subsequent sessions. All six sessions
+were killed cleanly (`exited`), the stack and pty-hosts terminated, and
+zero lab processes remain; scratch repos/worktrees stay on disk by design
+(`%TEMP%\ao-lab-27*`, `.cache/ao-lab-27`), uncommitted.
 
 ## Stage 26 - Upstream update, whole-diff review and documentation (2026-09-20)
 
