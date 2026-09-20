@@ -166,3 +166,18 @@ WHERE dismissed_at IS NULL;
 DELETE FROM notifications
 WHERE dismissed_at IS NOT NULL
   AND resolved_at IS NOT NULL;
+
+-- Read before dismissal so the delete response and live event keep the row's
+-- original unread state. Clients use that state to decrement their badge.
+-- name: GetNotificationForDismissal :one
+SELECT *
+FROM notifications
+WHERE id = ?
+  AND dismissed_at IS NULL;
+
+-- name: DismissNotification :execrows
+UPDATE notifications
+SET dismissed_at = CURRENT_TIMESTAMP,
+    status = 'read'
+WHERE id = ?
+  AND dismissed_at IS NULL;
