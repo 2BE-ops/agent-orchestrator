@@ -36,7 +36,7 @@ function definition(overrides: Record<string, unknown> = {}) {
 		engagementId: "engagement-1",
 		kind: "architecture",
 		pinned: true,
-		sources: [],
+		sources: [{ kind: "user", reference: "Design review 2026-09-12" }],
 		status: "accepted",
 		taskIds: ["task-1"],
 		tags: ["backend"],
@@ -91,10 +91,81 @@ describe("KnowledgeView", () => {
 		await userEvent.type(screen.getByLabelText("Title"), "Deploys require green CI");
 		await userEvent.type(screen.getByLabelText("Content"), "Never merge with a red check.");
 		await userEvent.type(screen.getByLabelText(/Reason/), "Postmortem action");
+		await userEvent.type(screen.getByLabelText("Source 1 reference"), "Deploy postmortem 2026-09-18");
 		await userEvent.click(screen.getByRole("button", { name: "Record knowledge" }));
 		await waitFor(() => expect(api.create).toHaveBeenCalledWith("proj", {
-			definition: expect.objectContaining({ title: "Deploys require green CI", content: "Never merge with a red check.", kind: "architecture", status: "candidate" }),
+			definition: expect.objectContaining({
+				title: "Deploys require green CI",
+				content: "Never merge with a red check.",
+				kind: "architecture",
+				status: "candidate",
+				sources: [{ kind: "user", reference: "Deploy postmortem 2026-09-18" }],
+			}),
 			reason: "Postmortem action",
+		}));
+	});
+
+	it("refuses to record knowledge without provenance", async () => {
+		mount();
+		await userEvent.click(await screen.findByRole("button", { name: "New knowledge" }));
+		await userEvent.type(screen.getByLabelText("Title"), "Deploys require green CI");
+		await userEvent.type(screen.getByLabelText("Content"), "Never merge with a red check.");
+		await userEvent.type(screen.getByLabelText(/Reason/), "Postmortem action");
+		expect(screen.getByRole("button", { name: "Record knowledge" })).toBeDisabled();
+		await userEvent.type(screen.getByLabelText("Source 1 reference"), "Deploy postmortem 2026-09-18");
+		expect(screen.getByRole("button", { name: "Record knowledge" })).toBeEnabled();
+	});
+
+	it("requires worker provenance to cite its exact task, attempt and session", async () => {
+		mount();
+		await userEvent.click(await screen.findByRole("button", { name: "New knowledge" }));
+		await userEvent.type(screen.getByLabelText("Title"), "Boundary holds under load");
+		await userEvent.type(screen.getByLabelText("Content"), "The queue never bypasses review.");
+		await userEvent.type(screen.getByLabelText(/Reason/), "Load run");
+		await userEvent.selectOptions(screen.getByLabelText("Source 1 kind"), "worker");
+		await userEvent.type(screen.getByLabelText("Source 1 reference"), "Worker observed the invariant");
+		expect(screen.getByRole("button", { name: "Record knowledge" })).toBeDisabled();
+		await userEvent.type(screen.getByLabelText("Source 1 task"), "task-7");
+		await userEvent.type(screen.getByLabelText("Source 1 attempt"), "attempt-9");
+		await userEvent.type(screen.getByLabelText("Source 1 session"), "session-4");
+		expect(screen.getByRole("button", { name: "Record knowledge" })).toBeEnabled();
+		await userEvent.click(screen.getByRole("button", { name: "Record knowledge" }));
+		await waitFor(() => expect(api.create).toHaveBeenCalledWith("proj", {
+			definition: expect.objectContaining({
+				sources: [{ kind: "worker", reference: "Worker observed the invariant", taskId: "task-7", attemptId: "attempt-9", sessionId: "session-4" }],
+			}),
+			reason: "Load run",
+		}));
+	});
+
+	it("carries inherited worker provenance through a revision", async () => {
+		api.list.mockResolvedValue({
+			items: [entry({
+				version: {
+					knowledgeId: "know-1",
+					number: 3,
+					definition: definition({
+						sources: [{ kind: "worker", reference: "Worker observed the invariant", taskId: "task-7", attemptId: "attempt-9", sessionId: "session-4", commit: "a".repeat(40) }],
+					}),
+					contentHash: "abc123",
+					actor: { id: "local-user", kind: "USER" },
+					reason: "Confirmed after the incident review",
+					createdAt: "2026-09-15T09:00:00.000Z",
+				},
+			})],
+			nextCursor: "",
+		});
+		mount();
+		await userEvent.click(await screen.findByText("Review queue is the only service boundary"));
+		await userEvent.click(await screen.findByRole("button", { name: "Revise" }));
+		await userEvent.type(screen.getByLabelText(/Reason/), "Tightened wording");
+		await userEvent.click(screen.getByRole("button", { name: "Save revision" }));
+		await waitFor(() => expect(api.revise).toHaveBeenCalledWith("know-1", {
+			definition: expect.objectContaining({
+				sources: [{ kind: "worker", reference: "Worker observed the invariant", taskId: "task-7", attemptId: "attempt-9", sessionId: "session-4", commit: "a".repeat(40) }],
+			}),
+			expectedVersion: 3,
+			reason: "Tightened wording",
 		}));
 	});
 

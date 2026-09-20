@@ -9,6 +9,7 @@ import {
 	reviseProjectKnowledge,
 	type KnowledgeDefinition,
 	type KnowledgeEntry,
+	type KnowledgeSource,
 } from "../lib/adaptive-api";
 import { apiErrorMessage } from "../lib/api-client";
 import { cn } from "../lib/utils";
@@ -67,6 +68,7 @@ type Draft = {
 	status: KnowledgeDefinition["status"];
 	confidence: KnowledgeDefinition["confidence"];
 	reason: string;
+	sources: KnowledgeSource[];
 };
 
 const emptyDraft: Draft = {
@@ -76,7 +78,23 @@ const emptyDraft: Draft = {
 	status: "candidate",
 	confidence: "medium",
 	reason: "",
+	sources: [{ kind: "user", reference: "" }],
 };
+
+// Mirrors the daemon's provenance gate: 1 to 16 sources, each with a kind it
+// recognizes and a non-empty bounded reference, and worker provenance tied to
+// its exact task, attempt and session.
+function sourceValid(source: KnowledgeSource): boolean {
+	const knownKinds = ["user", "worker", "file", "artifact", "external"];
+	if (!knownKinds.includes(source.kind)) return false;
+	if (source.reference.trim() === "" || source.reference.length > 2000) return false;
+	if (source.kind === "worker" && (!source.taskId || !source.attemptId || !source.sessionId)) return false;
+	return true;
+}
+
+function sourcesValid(sources: KnowledgeSource[]): boolean {
+	return sources.length >= 1 && sources.length <= 16 && sources.every(sourceValid);
+}
 
 function definitionOf(draft: Draft, previous: KnowledgeDefinition | undefined): KnowledgeDefinition {
 	return {
@@ -88,7 +106,7 @@ function definitionOf(draft: Draft, previous: KnowledgeDefinition | undefined): 
 		status: draft.status,
 		confidence: draft.confidence,
 		pinned: previous?.pinned ?? false,
-		sources: previous?.sources ?? [],
+		sources: draft.sources,
 		taskIds: previous?.taskIds,
 		tags: previous?.tags,
 		supersededBy: previous?.supersededBy,
@@ -111,7 +129,10 @@ function KnowledgeForm({
 	heading: string;
 }) {
 	const { t } = useTranslation();
-	const valid = draft.title.trim() !== "" && draft.content.trim() !== "" && draft.reason.trim() !== "";
+	const valid = draft.title.trim() !== "" && draft.content.trim() !== "" && draft.reason.trim() !== "" && sourcesValid(draft.sources);
+	const setSource = (index: number, patch: Partial<KnowledgeSource>) => {
+		setDraft({ ...draft, sources: draft.sources.map((source, i) => (i === index ? { ...source, ...patch } : source)) });
+	};
 	return (
 		<form
 			className="space-y-3 rounded-lg border border-border p-4"
@@ -158,6 +179,73 @@ function KnowledgeForm({
 				<span className="text-muted-foreground">{t("knowledge.reason", "Reason (recorded with the revision)")}</span>
 				<Input value={draft.reason} onChange={(event) => setDraft({ ...draft, reason: event.target.value })} />
 			</label>
+			<fieldset className="grid gap-2 text-sm">
+				<legend className="text-muted-foreground">{t("knowledge.sources", "Sources (provenance, at least one)")}</legend>
+				{draft.sources.map((source, index) => (
+					<div key={index} className="grid gap-2 rounded-md border border-border p-3">
+						<div className="grid gap-2 sm:grid-cols-[10rem_1fr_auto]">
+							<select
+								className={fieldClass}
+								value={source.kind}
+								aria-label={t("knowledge.sourceKind", "Source {{index}} kind", { index: index + 1 })}
+								onChange={(event) => setSource(index, { kind: event.target.value as KnowledgeSource["kind"] })}
+							>
+								{(["user", "worker", "file", "artifact", "external"] as const).map((kind) => (
+									<option key={kind} value={kind}>{kind}</option>
+								))}
+							</select>
+							<Input
+								value={source.reference}
+								maxLength={2000}
+								aria-label={t("knowledge.sourceReference", "Source {{index}} reference", { index: index + 1 })}
+								onChange={(event) => setSource(index, { reference: event.target.value })}
+							/>
+							<Button
+								type="button"
+								variant="outline"
+								disabled={draft.sources.length <= 1}
+								aria-label={t("knowledge.removeSource", "Remove source {{index}}", { index: index + 1 })}
+								onClick={() => setDraft({ ...draft, sources: draft.sources.filter((_, i) => i !== index) })}
+							>
+								{t("knowledge.removeSourceButton", "Remove")}
+							</Button>
+						</div>
+						{source.kind === "worker" ? (
+							<div className="grid gap-2 sm:grid-cols-3">
+								<Input
+									value={source.taskId ?? ""}
+									maxLength={200}
+									placeholder={t("knowledge.sourceTask", "Task ID")}
+									aria-label={t("knowledge.sourceTaskAria", "Source {{index}} task", { index: index + 1 })}
+									onChange={(event) => setSource(index, { taskId: event.target.value })}
+								/>
+								<Input
+									value={source.attemptId ?? ""}
+									maxLength={200}
+									placeholder={t("knowledge.sourceAttempt", "Attempt ID")}
+									aria-label={t("knowledge.sourceAttemptAria", "Source {{index}} attempt", { index: index + 1 })}
+									onChange={(event) => setSource(index, { attemptId: event.target.value })}
+								/>
+								<Input
+									value={source.sessionId ?? ""}
+									maxLength={200}
+									placeholder={t("knowledge.sourceSession", "Session ID")}
+									aria-label={t("knowledge.sourceSessionAria", "Source {{index}} session", { index: index + 1 })}
+									onChange={(event) => setSource(index, { sessionId: event.target.value })}
+								/>
+							</div>
+						) : null}
+					</div>
+				))}
+				<Button
+					type="button"
+					variant="outline"
+					disabled={draft.sources.length >= 16}
+					onClick={() => setDraft({ ...draft, sources: [...draft.sources, { kind: "file", reference: "" }] })}
+				>
+					{t("knowledge.addSource", "Add source")}
+				</Button>
+			</fieldset>
 			<Button type="submit" disabled={!valid || busy}>{busy ? t("knowledge.saving", "Saving…") : submitLabel}</Button>
 		</form>
 	);
@@ -234,6 +322,17 @@ function KnowledgeDetail({ entry, onEdit }: { entry: KnowledgeEntry; onEdit: () 
 							<dd>{(definition.tags ?? []).join(", ")}</dd>
 						</>
 					) : null}
+					<dt className="text-muted-foreground">{t("knowledge.sources", "Sources (provenance, at least one)")}</dt>
+					<dd>
+						<ul className="grid gap-1">
+							{definition.sources.map((source, index) => (
+								<li key={index} className="font-mono text-xs">
+									{source.kind}: {source.reference}
+									{source.taskId ? ` · ${source.taskId}` : ""}
+								</li>
+							))}
+						</ul>
+					</dd>
 					<dt className="text-muted-foreground">{t("knowledge.updated", "Updated")}</dt>
 					<dd>{formatWhen(entry.knowledge.updatedAt)}</dd>
 					<dt className="text-muted-foreground">{t("knowledge.contentHash", "Content hash")}</dt>
@@ -305,6 +404,7 @@ export function KnowledgeView({ projectId }: { projectId: string }) {
 			status: entry.version.definition.status,
 			confidence: entry.version.definition.confidence,
 			reason: "",
+			sources: entry.version.definition.sources.map((source) => ({ ...source })),
 		});
 	};
 	const startCreate = () => {

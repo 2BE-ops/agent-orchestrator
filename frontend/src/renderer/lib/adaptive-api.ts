@@ -29,6 +29,7 @@ export type OrchestratorPlanningSummary = components["schemas"]["DomainOrchestra
 export type KnowledgeEntry = components["schemas"]["KnowledgeView"];
 export type KnowledgeVersion = components["schemas"]["KnowledgeVersion"];
 export type KnowledgeDefinition = components["schemas"]["KnowledgeDefinition"];
+export type KnowledgeSource = components["schemas"]["KnowledgeSource"];
 export type ProjectControlView = components["schemas"]["DomainProjectControlView"];
 export type TaskNeedsHumanItem = components["schemas"]["DomainTaskNeedsHuman"];
 export type AgentManagerAuditEntry = components["schemas"]["AgentManagerAudit"];
