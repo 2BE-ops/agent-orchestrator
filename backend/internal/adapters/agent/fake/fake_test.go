@@ -404,3 +404,41 @@ func TestFullLifecycleSpawnToTermination(t *testing.T) {
 		t.Fatalf("terminal state = %q, want %q (not an incidental idle)", final.Activity.State, domain.ActivityExited)
 	}
 }
+
+// TestGetConfigSpecAdvertisesPermissionModes pins the launch-gate contract:
+// worker-option resolution defaults an unset permission mode to "auto", and
+// registry launch validation refuses a harness whose config spec does not
+// advertise the resolved mode. The timeline never prompts, so the spec must
+// list every typed mode as accepted-and-ignored.
+func TestGetConfigSpecAdvertisesPermissionModes(t *testing.T) {
+	spec, err := New().GetConfigSpec(context.Background())
+	if err != nil {
+		t.Fatalf("GetConfigSpec: %v", err)
+	}
+	var field *ports.ConfigField
+	for i := range spec.Fields {
+		if spec.Fields[i].Key == "permissions" {
+			field = &spec.Fields[i]
+		}
+	}
+	if field == nil {
+		t.Fatalf("config spec has no permissions field: %+v", spec.Fields)
+	}
+	for _, mode := range []ports.PermissionMode{
+		ports.PermissionModeDefault,
+		ports.PermissionModeAcceptEdits,
+		ports.PermissionModeAuto,
+		ports.PermissionModeBypassPermissions,
+	} {
+		found := false
+		for _, option := range field.Enum {
+			if option == string(mode) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("permissions field does not advertise %q; launches resolved to that mode would be refused", mode)
+		}
+	}
+}
