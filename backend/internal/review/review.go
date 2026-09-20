@@ -676,7 +676,9 @@ func (e *Engine) resetReviewerRuntimeLocked(ctx stdctx.Context, workerID domain.
 // RestoreReviewer relaunches the reviewer terminal for a restored worker when
 // that worker already has review history. It does not create review_run rows or
 // start a review; explicit trigger remains the only path that starts review
-// work.
+// work. A still-running pinned task review is reconciled first: its live pane
+// keeps the sealed context, a provably dead launch settles as retained
+// uncertainty, and unknown liveness keeps the run instead of assuming death.
 func (e *Engine) RestoreReviewer(ctx stdctx.Context, workerID domain.SessionID) (RestoreReviewerResult, error) {
 	if workerID == "" {
 		return RestoreReviewerResult{}, fmt.Errorf("%w: worker session id is required", ErrInvalid)
@@ -716,8 +718,37 @@ func (e *Engine) restoreReviewerLocked(
 		return RestoreReviewerResult{}, err
 	}
 	for _, row := range reviewRows {
-		if latestReviewHasTaskScope(runs, row.Harness) {
-			return RestoreReviewerResult{}, fmt.Errorf("%w: pinned task reviewer needs native-context reconciliation before restore", ErrInvalid)
+		pinned := runningTaskScopedRuns(runs, row.Harness)
+		if len(pinned) == 0 {
+			continue
+		}
+		// Reconcile the retained native launch instead of substituting an idle
+		// pane for its sealed context. A provably live pane keeps its pinned
+		// run; a provably dead one settles as retained uncertainty. Unknown
+		// liveness — a failed probe or an uncertain launch that never obtained
+		// a pane handle — is never proof of death, so it keeps the run and
+		// refuses until the review is cancelled explicitly.
+		if row.ReviewerHandleID == "" {
+			return RestoreReviewerResult{}, fmt.Errorf("%w: pinned task reviewer for harness %s has no pane to reconcile; cancel its review run explicitly", ErrInvalid, row.Harness)
+		}
+		alive, probeErr := e.launcher.Alive(ctx, row.ReviewerHandleID)
+		if probeErr != nil {
+			return RestoreReviewerResult{}, fmt.Errorf("%w: pinned task reviewer liveness for harness %s is unknown: %w", ErrInvalid, row.Harness, probeErr)
+		}
+		if alive {
+			return RestoreReviewerResult{}, fmt.Errorf("%w: pinned task reviewer for harness %s is still active; its sealed context stays with the live pane", ErrInvalid, row.Harness)
+		}
+		const reason = "Pinned native reviewer did not survive the daemon restart; its launch outcome is uncertain and no result was submitted"
+		if err := e.failRunningRestoredRuns(ctx, pinned, reason); err != nil {
+			return RestoreReviewerResult{}, err
+		}
+		for i := range runs {
+			for _, settled := range pinned {
+				if runs[i].ID == settled.ID {
+					runs[i].Status = domain.ReviewRunFailed
+					runs[i].Body = reason
+				}
+			}
 		}
 	}
 	if err := e.destroyOtherReviewerHandles(ctx, workerID, harness, reviewRows); err != nil {

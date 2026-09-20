@@ -49,6 +49,19 @@ func latestReviewHasTaskScope(runs []domain.ReviewRun, harness domain.ReviewerHa
 	return latest != nil && latest.TaskScope != ""
 }
 
+// runningTaskScopedRuns reports the pinned native review passes for a harness
+// that are still running. Their sealed task context fences idle restore until
+// reconciliation settles them; finished pinned passes no longer block it.
+func runningTaskScopedRuns(runs []domain.ReviewRun, harness domain.ReviewerHarness) []domain.ReviewRun {
+	filtered := make([]domain.ReviewRun, 0)
+	for _, run := range runs {
+		if run.Harness == harness && run.Status == domain.ReviewRunRunning && run.TaskScope != "" {
+			filtered = append(filtered, run)
+		}
+	}
+	return filtered
+}
+
 func reviewRunsForTaskScope(runs []domain.ReviewRun, frozen *domain.TaskReviewContext) []domain.ReviewRun {
 	scope := ""
 	if frozen != nil {
