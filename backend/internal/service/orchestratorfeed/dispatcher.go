@@ -47,7 +47,7 @@ func New(store Store, orchestrators Orchestrators, transport ports.OrchestratorN
 		logger = slog.Default()
 	}
 	return &Dispatcher{store: store, orchestrators: orchestrators, transport: transport,
-		newID: func() string { return uuid.NewString() }, now: func() time.Time { return time.Now().UTC() }, log: logger}
+		newID: uuid.NewString, now: func() time.Time { return time.Now().UTC() }, log: logger}
 }
 
 // Run first settles notices a previous daemon run never resolved, then scans

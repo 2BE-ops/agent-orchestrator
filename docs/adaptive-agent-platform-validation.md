@@ -4,6 +4,113 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 23 - Failure/recovery integration and upgrade matrix (2026-09-20)
+
+The stage consolidates the recovery deferrals accumulated by stages 9, 12, 13,
+14, 15.0 and 17 into four tested slices on `feature/adaptive-agent-platform`.
+
+### What was built
+
+- **Orchestrator loop push (17's deferred proactive half).** Migration 0183
+  adds `adaptive_orchestrator_notices`: an immutable journal of terminal task
+  facts pushed to the project's live orchestrator session, unique on
+  (project, task, fact, anchor) so one durable fact identity is journalled and
+  delivered at most once; triggers enforce the exact project-task scope,
+  pending-only insert, settle-once resolution and retained history (a guarded
+  Down refuses to discard journal rows). `ports.OrchestratorNoticeStore` +
+  `OrchestratorNoticeTransport` expose a bounded store and a session-manager
+  transport that reuses `deliverNativeContext` under a new exclusive
+  `orchestrator_notice` operation kind (Chat delivery-key dedup included).
+  `service/orchestratorfeed.Dispatcher` follows the task-message pattern:
+  startup reconciliation marks interrupted pendings uncertain and never resends
+  them, candidate projects page 16 per cycle behind an in-memory fairness
+  cursor, only projects whose live orchestrator resolves (`LiveOrchestrator`
+  added to the orchestrator service) derive feedback (bounded to 300 facts per
+  project per cycle), terminal facts anchor on the sealed result identity
+  (completed), the attempt-exhausted revision (failed) or the cancellation
+  revision (cancelled), the fact prompt is explicitly authority-free and points
+  at the native feedback command, invalid transport observations settle as
+  uncertain, and the final resolution commits on a detached-context deadline so
+  a lost acknowledgement can never cause a second native write. Daemon wiring
+  follows the manager-inbox block with its own shutdown wait.
+- **Replacement-generation instruction journaling (12/15.0/17 deferrals).**
+  `AppendTaskDelegation` copies the retained snapshot's exact system prompt and
+  task prompt into a new immutable delegation version bound to the restore
+  execution operation: same context hash, same configuration hash, same
+  classification, a fresh receipt hash binding the new generation. Replaying
+  one operation returns its existing receipt (unique per execution receipt),
+  the version space stays bounded at 1000, only restore-kind operations of the
+  same session and attempt may journal, unreserved operations are refused by
+  the 0173 delegation scope trigger, and legacy schema-v1 contexts stay
+  unjournalled rather than inventing instructions they never retained. Both
+  restore paths journal — Chat `resumeChatController` (including surviving
+  Chat host adoption) and the TUI relaunch — inside `restoreTaskContext`,
+  after the sealed-scope fence and before any native side effect, so sealed
+  context is never rewritten and a stale generation cannot refresh its
+  identity (the reviewer submission fence on `frozen.LaunchID` was already in
+  place and is unchanged).
+- **Pinned task reviewer reconciliation (13c3 deferral).** `restoreReviewerLocked`
+  no longer blanket-refuses task-scoped history. Running pinned passes are
+  reconciled per harness: a provably live pane keeps its run and restore
+  refuses (the sealed context stays with the live pane), a provably dead
+  launch settles the run failed with explicit retained-uncertainty wording and
+  the normal idle pane restores, and unknown liveness — a failed probe or an
+  uncertain launch that never obtained a pane handle — keeps the run and
+  refuses with a diagnostic pointing at explicit cancellation, honouring the
+  repo-wide never-treat-unknown-as-dead rule. Finished pinned passes no longer
+  block idle restore; the launcher-level refusal of `TaskContext` on the
+  generic restore path (no live-configuration substitution for retained task
+  context) is retained and now has its own regression test.
+- **Upgrade matrix.** `migrate_upgrade_matrix_test.go`: an existing v140
+  pre-adaptive database with seeded project data upgrades to head (183),
+  retaining the data, initializing scheduler and dispatch defaults
+  (`max_concurrent_workers` 100, all three dispatch cursors), accepting new
+  adaptive writes (task + notice journal) and keeping them across a full
+  close/reopen; a clean database reaches the identical baseline. The shipped
+  migration ledger gained the 0183 entry.
+
+### Findings
+
+- The store's notice journal mints the pending state itself (callers never
+  supply it), mirroring how the daemon mints identities elsewhere; the SQL
+  trigger independently refuses any non-pending insert.
+- sqlc typed the candidate-project cursor parameter as nullable (sessions'
+  project ids are nullable); the store converts through a local cursor and
+  skips nil rows, and the `COALESCE(MAX(...))` delegation query needed an
+  explicit INTEGER cast to infer int64 — matching the changelog idiom.
+- Delegation test fixtures must settle the original dispatch execution before
+  a restore operation can reserve the same exclusive lease, and dispatch-kind
+  reservations must predate the fixture lease's expiry (its anchor is
+  2026-09-18 with a one-minute TTL); anchoring operation timestamps to the
+  lease window matches the production restore flow.
+- `TestLauncherSpawnPrependsNodeRuntimeForNodeShimReviewer` fails on HEAD
+  before any stage-23 change (verified by stash) — same POSIX-shim class the
+  stage-13c3 sweep recorded. `go vet` similarly fails only in the pre-existing
+  `persistenthost/host_race_test.go` (`syscall.Kill`, POSIX-only) on Windows.
+
+### Test evidence
+
+- New: 4 notice store tests, 5 orchestratorfeed dispatcher tests, 3 delegation
+  append store tests, the session_manager restore test's replacement-receipt
+  assertions (both TUI and Chat subtests), 4 reviewer reconciliation tests +
+  1 launcher refusal test, 2 upgrade-matrix tests — all PASS.
+- Adjacent full suites PASS: `internal/storage/sqlite` (including the new
+  ledger entry), `.../store`, domain, ports, orchestrator, orchestratorfeed,
+  review (except the pre-existing POSIX shim failure), service/review,
+  service/taskcontext, service/task, cli, httpd, apispec, specgen, daemon
+  source build. session_manager retains exactly its eight recorded Windows
+  baselines; controllers their two; daemon its one; service tree retains the
+  recorded stage-08 service/agent environment class.
+- `go build ./...` PASS; `go vet ./...` clean except the pre-existing
+  persistenthost POSIX file; pinned golangci-lint v2.12.2 over every touched
+  package (domain, ports, orchestrator, orchestratorfeed, sqlite tree,
+  session_manager, review, daemon): 0 issues after one unlambda and two
+  goimports fixes. `npm run sqlc` clean. No API shape changed, so no OpenAPI
+  regeneration was required. Race run NOT RUN (no GCC on this Windows host).
+- Live daemon/desktop restart with active workers, real provider recovery and
+  the full stage-23 matrix in the running app remain stage 25; stage 24 runs
+  the complete CI-equivalent sweep.
+
 ## Stage 22 - Performance, knowledge, audit and control-center UI (2026-09-19)
 
 Desktop surfaces completing the adaptive read pattern (typed-client lib,
