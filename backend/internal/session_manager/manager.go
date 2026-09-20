@@ -335,6 +335,7 @@ type Store interface {
 	ListWorkspaceRepos(ctx context.Context, projectID string) ([]domain.WorkspaceRepoRecord, error)
 	CreateSession(ctx context.Context, rec domain.SessionRecord) (domain.SessionRecord, error)
 	UpdateSession(ctx context.Context, rec domain.SessionRecord) error
+	UpdateSessionModel(ctx context.Context, id domain.SessionID, model string) (bool, error)
 	UpdateBrowserCapabilityVerifier(ctx context.Context, id domain.SessionID, expected domain.SessionControllerOwner, verifier string) (bool, error)
 	GetSession(ctx context.Context, id domain.SessionID) (domain.SessionRecord, bool, error)
 	ListSessions(ctx context.Context, project domain.ProjectID) ([]domain.SessionRecord, error)
@@ -2661,6 +2662,12 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 	agentConfig := restoredAgentConfig(rec, project.Config)
 	if snapshot != nil {
 		agentConfig = snapshot.Effective.Config
+	} else if model := strings.TrimSpace(rec.Metadata.Model); model != "" {
+		// A non-empty model picked in ChatUI is a durable session-level choice
+		// and must win over the project default for every harness on a TUI
+		// rebuild. Workers are excluded: their model is owned by the durable
+		// worker configuration surfaced in the snapshot.
+		agentConfig.Model = model
 	}
 	if snapshot == nil && rec.Metadata.Permissions != "" {
 		agentConfig.Permissions = rec.Metadata.Permissions
@@ -2828,6 +2835,27 @@ func (m *Manager) getRecord(ctx context.Context, id domain.SessionID) (domain.Se
 		return domain.SessionRecord{}, fmt.Errorf("get %s: %w", id, ErrNotFound)
 	}
 	return rec, nil
+}
+
+// PersistChatModel records the model the user picked in ChatUI onto the
+// session before the next prompt routes. The durable, API-visible session
+// metadata is the exact source a TUI rebuild reads to refresh the model, so a
+// later interface transition back to TUI keeps the same selection instead of
+// reverting to the project's configured default. Model-only writes never touch
+// the conversation or spawn a new provider session, so history is preserved.
+func (m *Manager) PersistChatModel(ctx context.Context, id domain.SessionID, model string) error {
+	want := strings.TrimSpace(model)
+	if want == "" {
+		return nil
+	}
+	updated, err := m.store.UpdateSessionModel(ctx, id, want)
+	if err != nil {
+		return fmt.Errorf("persist chat model %s: %w", id, err)
+	}
+	if !updated {
+		return fmt.Errorf("persist chat model %s: %w", id, ErrNotFound)
+	}
+	return nil
 }
 
 // SaveAndTeardownAll captures uncommitted work and tears down every live

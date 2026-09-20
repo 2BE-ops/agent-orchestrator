@@ -830,6 +830,11 @@ func (m *Manager) preflightInterfaceTarget(
 	config := effectiveAgentConfig(rec.Harness, rec.Kind, project.Config)
 	if snapshot != nil {
 		config = snapshot.Effective.Config
+	} else if model := strings.TrimSpace(rec.Metadata.Model); model != "" {
+		// Refresh the model from the session's own persisted selection so the
+		// preflight validates the exact restore command the rebuild will run
+		// (ChatUI model changes must survive the handoff).
+		config.Model = model
 	}
 	var cmd []string
 	if transition.NativeConversationID == "" {
