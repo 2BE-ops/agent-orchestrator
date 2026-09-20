@@ -104,8 +104,11 @@ func assertAdaptiveBaseline(t *testing.T, queryRow func(string, ...any) *sql.Row
 	if err := queryRow(`SELECT max(version_id) FROM goose_db_version`).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 183 {
-		t.Fatalf("database at version %d, want 183", version)
+	// 0184 is the renumbered upstream notification_dismissal migration that
+	// arrived after the fork had claimed 0148–0183 (see the shippedMigrations
+	// ledger); the fork sequence remains unique and contiguous.
+	if version != 184 {
+		t.Fatalf("database at version %d, want 184", version)
 	}
 	var workers int
 	if err := queryRow(`SELECT max_concurrent_workers FROM app_settings`).Scan(&workers); err != nil || workers != 100 {

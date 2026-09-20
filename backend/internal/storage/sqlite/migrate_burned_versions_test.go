@@ -188,6 +188,11 @@ var shippedMigrations = map[int64]string{
 	181: "0181_evolution_experiments.sql",
 	182: "0182_project_controls.sql",
 	183: "0183_orchestrator_notices.sql",
+	// Upstream shipped 0148_notification_dismissal after this fork had already
+	// claimed 0148–0183; the merge renumbers it into the fork's sequence as
+	// 0184 so goose's unique version ids hold (upstream databases were never a
+	// supported fork upgrade path past the stage-26 merge base).
+	184: "0184_notification_dismissal.sql",
 }
 
 // burnedVersion reports version numbers that must never be (re)used: they

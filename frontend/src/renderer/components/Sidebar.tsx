@@ -63,6 +63,7 @@ import {
 	type WorkspaceSession,
 	type WorkspaceSummary,
 	sortedWorkerSessions,
+	resolveNextNavigationAfterSessionKill,
 	workerSessions,
 	CLOUD_PROJECT_KIND,
 	STANDALONE_PROJECT_KIND,
@@ -404,6 +405,11 @@ function SessionStatusDot({ session }: { session: WorkspaceSession }) {
 	);
 }
 
+export {
+	resolveNextNavigationAfterSessionKill,
+	type NextSessionNavigation,
+} from "../types/workspace";
+
 // Built on shadcn's sidebar primitives (components/ui/sidebar): the provider in
 // _shell owns the persistent open state. Collapsed sidebars move fully off-canvas.
 export function Sidebar({
@@ -665,6 +671,20 @@ export function Sidebar({
 		[workspaces],
 	);
 
+	const handlePinnedSessionKilled = useCallback(
+		(killedSession: WorkspaceSession) => {
+			if (selection.activeSessionId !== killedSession.id) return;
+			const workspace = workspaces.find((w) => w.id === killedSession.workspaceId);
+			const nextRoute = resolveNextNavigationAfterSessionKill(workspace, killedSession.id);
+			if (nextRoute.target === "session") {
+				selection.goSession(killedSession.workspaceId, nextRoute.sessionId);
+			} else {
+				selection.goProject(killedSession.workspaceId);
+			}
+		},
+		[selection, workspaces],
+	);
+
 	return (
 		// Pinned sidebars start below shell chrome.
 		<SidebarRoot
@@ -784,6 +804,7 @@ export function Sidebar({
 									session={session}
 									active={selection.activeSessionId === session.id}
 									layoutSettled={layoutSettled}
+									onKilled={handlePinnedSessionKilled}
 									onOpenSession={selection.goSession}
 								/>
 								))}
@@ -1120,6 +1141,18 @@ const ProjectItem = memo(function ProjectItem({
 	const openSession = useCallback((sessionId: string) => {
 		selection.goSession(workspace.id, sessionId);
 	}, [selection, workspace.id]);
+	const handleSessionKilled = useCallback(
+		(killedSession: WorkspaceSession) => {
+			if (selection.activeSessionId !== killedSession.id) return;
+			const nextRoute = resolveNextNavigationAfterSessionKill(workspace, killedSession.id, sessions);
+			if (nextRoute.target === "session") {
+				selection.goSession(workspace.id, nextRoute.sessionId);
+			} else {
+				selection.goProject(workspace.id);
+			}
+		},
+		[selection, sessions, workspace],
+	);
 	// The project's live orchestrator (if any) backs the hover Orchestrator
 	// button: navigate to it when present, otherwise spawn one first.
 	const orchestrator = newestActiveOrchestrator(workspace.sessions);
@@ -1485,6 +1518,7 @@ const ProjectItem = memo(function ProjectItem({
 															session={session}
 															active={selection.activeSessionId === session.id}
 															disableLayout
+															onKilled={handleSessionKilled}
 															onOpen={() => openSession(session.id)}
 														/>
 													))}
@@ -1514,6 +1548,7 @@ const ProjectItem = memo(function ProjectItem({
 																	layoutDependency={sessionLayoutDependency}
 																	listIsDragging={sessionDragging}
 																	dropTransitionDisabled={dropTransitionDisabledId === session.id}
+																	onKilled={handleSessionKilled}
 																	onOpen={openSession}
 																/>
 															))}
@@ -1579,15 +1614,17 @@ const PinnedSessionRow = memo(function PinnedSessionRow({
 	session,
 	active,
 	layoutSettled,
+	onKilled,
 	onOpenSession,
 }: {
 	session: WorkspaceSession;
 	active: boolean;
 	layoutSettled: boolean;
+	onKilled?: (session: WorkspaceSession) => void;
 	onOpenSession: (projectId: string, sessionId: string) => void;
 }) {
 	const onOpen = useCallback(() => onOpenSession(session.workspaceId, session.id), [onOpenSession, session.id, session.workspaceId]);
-	return <SessionRow session={session} active={active} disableLayout={!layoutSettled} indented={false} onOpen={onOpen} />;
+	return <SessionRow session={session} active={active} disableLayout={!layoutSettled} indented={false} onKilled={onKilled} onOpen={onOpen} />;
 });
 
 // A session row inside its project's drag context. The Pinned section renders
@@ -1600,6 +1637,7 @@ const SortableSessionRow = memo(function SortableSessionRow({
 	layoutDependency,
 	listIsDragging,
 	dropTransitionDisabled,
+	onKilled,
 	onOpen,
 }: {
 	session: WorkspaceSession;
@@ -1609,6 +1647,7 @@ const SortableSessionRow = memo(function SortableSessionRow({
 	layoutDependency: string;
 	listIsDragging: boolean;
 	dropTransitionDisabled: boolean;
+	onKilled?: (session: WorkspaceSession) => void;
 	onOpen: (sessionId: string) => void;
 }) {
 	const { isDragging, listeners, setActivatorNodeRef, setNodeRef, transform, transition } = useSortable({
@@ -1618,6 +1657,7 @@ const SortableSessionRow = memo(function SortableSessionRow({
 		<SessionRow
 			session={session}
 			active={active}
+			onKilled={onKilled}
 			onOpen={() => {
 				if (!consumeDragClick(session.id)) onOpen(session.id);
 			}}
@@ -1651,6 +1691,7 @@ function SessionRow({
 	layoutDependency,
 	listIsDragging = false,
 	disableLayout = false,
+	onKilled,
 	onOpen,
 	reorder,
 }: {
@@ -1661,6 +1702,7 @@ function SessionRow({
 	listIsDragging?: boolean;
 	/** Project drags pause nested session projection work. */
 	disableLayout?: boolean;
+	onKilled?: (session: WorkspaceSession) => void;
 	onOpen: () => void;
 	/** Present only for rows inside a reorderable project list. */
 	reorder?: SessionReorder;
@@ -1819,6 +1861,7 @@ function SessionRow({
 					    space while idle, then reveal without changing the row footprint. */}
 					<SessionActions
 						isDragging={Boolean(reorder?.isDragging)}
+						onKilled={onKilled}
 						session={session}
 					/>
 				</div>
@@ -1854,14 +1897,29 @@ const SessionMessageAge = memo(function SessionMessageAge({ session }: { session
 const SessionActions = memo(function SessionActions({
 	session,
 	isDragging,
+	onKilled,
 }: {
 	session: WorkspaceSession;
 	isDragging: boolean;
+	onKilled?: (session: WorkspaceSession) => void;
 }) {
 	const { t } = useTranslation();
 	const { mutate: pinSession } = usePinSession();
 	const { mutate: unpinSession } = useUnpinSession();
-	const { mutate: terminateSession, isPending: isKilling } = useTerminateSession();
+	// Optimistic: navigate + drop the row as soon as kill starts (onMutate),
+	// not after the daemon round-trip.
+	const onKilledRef = useRef(onKilled);
+	onKilledRef.current = onKilled;
+	const { mutate: terminateSession, isPending: isKilling } = useTerminateSession({
+		onOptimistic: (killed) => {
+			onKilledRef.current?.(killed);
+		},
+	});
+
+	const handleKill = (event: React.MouseEvent) => {
+		event.stopPropagation();
+		terminateSession(session);
+	};
 
 	return (
 		<div
@@ -1908,10 +1966,7 @@ const SessionActions = memo(function SessionActions({
 							aria-label={t("shell.killSession")}
 							className={cn(SESSION_ACTION_CLASS, "hover:text-destructive focus-visible:text-destructive")}
 							disabled={isKilling}
-							onClick={(event) => {
-								event.stopPropagation();
-								terminateSession(session);
-							}}
+							onClick={handleKill}
 							type="button"
 						>
 							<Trash2 aria-hidden="true" />
