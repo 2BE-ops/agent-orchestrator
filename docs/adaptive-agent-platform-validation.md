@@ -4,6 +4,113 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 24 - Full CI-equivalent checks, backend/desktop builds (2026-09-20)
+
+The stage ran the repository's complete validation matrix against the branch tip
+and closed the two gaps the checklist had explicitly deferred into stage 24. Two
+commits resulted: `5276c1309` (daemon test cleanup ordering) and `fecf83f0f`
+(regression fix found by the matrix); the evidence below was gathered across
+`a4af97158`/`5276c1309`/`fecf83f0f`.
+
+### Deferred gap 1: daemon cleanup ordering (closed)
+
+`TestStabilizeWorkingDirectoryChdirsToDataDir` registered its cwd restore via
+`t.Cleanup` **before** creating the `t.TempDir`, so the TempDir removal (registered
+later, runs first) fired while the process still occupied the directory and Windows
+refused the deletion. `5276c1309` creates the TempDir first so the restore runs
+before removal; the test passes on Windows and the daemon package's recorded
+Windows baseline drops from one failure to zero. The other two `os.Chdir` test
+sites (`cli/dev_test.go`, `cli/spawn_test.go`) already derive their directory from
+an earlier TempDir call and needed no change.
+
+### Deferred gap 2: race suites without a C compiler (closed via real CI)
+
+No C compiler exists on this Windows host (`gcc`, `clang`, `zig`, mingw all
+absent), so local `go test -race` remains impossible — recorded as NOT RUN
+locally, never as passed. Instead the fork's GitHub Actions was activated
+(workflows were present but never indexed; re-applying the Actions permissions
+via the API indexed them) and draft PR #1 (2BE-ops, base = the exact branch
+point `6d3ad8c7c`) now runs the repository's real workflows on the branch:
+`go test -race -timeout=20m ./...` on ubuntu-latest, the full-tree
+golangci-lint v2.12.2 on Linux, sqlc/api drift, the windows-latest race legs,
+the macOS-14 Swift helper job, the Playwright-container renderer smoke, and the
+CLI E2E container + ubuntu/macos/windows matrix. The local `npx
+@redwoodjs/agent-ci run --all` cannot substitute: run-local-ci's cache step
+invokes GNU tar with `C:\` paths, which MSYS tar parses as a remote host —
+tool limitation on native Windows, recorded as a gap.
+
+### Regression the matrix caught (fixed in `fecf83f0f`)
+
+The fork's frontend CI failed `NewTaskDialog.test.tsx` 12/12 (ubuntu, clean
+runner) and eight renderer-smoke specs whose only shared step is opening the
+New Task dialog, while upstream `main`'s same workflow was green. Local
+reproduction pinned the mechanism: the smoke page snapshot showed the renderer
+error boundary with "Cannot read properties of undefined (reading 'entry')".
+`WorkerSelectionPanel` (added by stage 09, `036392a6c` — confirmed by `git
+bisect run` between the branch point and tip, with the base worktree running
+the single-file oracle) flattened `useInfiniteQuery` pages without guarding
+each page's `items`/`versions`, so any success-shaped response missing them
+flattened to `[undefined]` and `entries.find((item) => item.entry.id …)`
+crashed during render — taking the entire dialog and renderer down. Production
+never sends that shape (typed contract, real daemon), which is why every
+stage-09→23 suite passed: `TaskComposer.test.tsx` had its mocks updated by
+stage 09 while `NewTaskDialog.test.tsx`'s blanket default GET mock was missed,
+and the smoke specs' generic `page.route` fulfillment answers registry paths
+with a non-registry body. The fix guards both flattens with `?? []` so a
+malformed payload degrades to an empty worker list; the existing blanket mock
+now doubles as the malformed-response regression test. Verified locally:
+NewTaskDialog/TaskComposer/WorkerSelectionPanel suites 49/49, renderer smoke
+59/60 (the one remaining failure is a Windows-local strict-mode ambiguity in
+`smoke-t0.spec.ts` — two "Help" buttons, titlebar vs settings nav, the
+titlebar one not rendered in CI's container — unrelated to the branch), and
+the full renderer suite baseline improved from 17 files/161 tests failing to
+15 files/148 tests (the recorded mac/unix release-tooling class remains).
+The stage-21 note calling this failure "pre-existing" was wrong: its stash
+proof only covered stage 21's uncommitted work, not stages 9-20; the
+base-commit control run in this stage is the authoritative pre-existence
+method and now backs every claim below.
+
+### Local matrix results (Windows 11, Go 1.25.7, Node 24)
+
+| Check | Result |
+| --- | --- |
+| `gofmt -l .` (CI step 1 equivalent) | CLEAN (one worktree line-ending flag on `state_test.go`; committed blob verified gofmt-clean via `git show \| gofmt -d`) |
+| `go build ./...` | PASS |
+| `go vet ./...` | clean except the pre-existing POSIX-only `syscall.Kill` in `persistenthost/host_race_test.go` |
+| `go test ./... -count=1` (complete, first full-tree run on this host) | 233 failing tests across 38 packages; **control run at the branch point `6d3ad8c7c` (same machine, same command, isolated worktree) reproduces 225 of them plus the three that appeared head-only — all three re-fail at base under the same invocation, proving zero branch-introduced failures**; the only base-only failure is the daemon cwd test this stage fixed |
+| golangci-lint v2.12.2 full tree | 6 findings + 1 typecheck error, all in Windows-only `_windows.go`/POSIX-test files (`processalive`, `conpty/ptyregistry`, `runfile`, `persistenthost`), none touched by the branch — Linux CI (which never compiles those files) is the authoritative full-tree lint and passed |
+| `npm run sqlc` + drift | CLEAN (no gen diff, no untracked gen files) |
+| `npm run api` + drift | CLEAN (openapi.yaml and schema.ts both byte-identical) |
+| packages/cloud-client | generate drift CLEAN, typecheck, 21 tests, `npm pack --dry-run` PASS |
+| packages/product-ui | typecheck, 128 tests, pack PASS |
+| frontend `typecheck` + `typecheck:e2e` | PASS |
+| landing `npm ci` + `icons:check` | PASS |
+| `npx vitest run` (full) | 322/337 files; 4856 pass / 148 fail / 7 skip after `fecf83f0f` — failing class matches the recorded baseline (macOS signing/DMG/blockmap/mac-differential updater, Unix symlink helpers, main-process socket/file class); NewTaskDialog now passes |
+| renderer smoke (local Playwright, dev:web started manually because `dev:web`'s `VITE_NO_ELECTRON=1` prefix cannot run under Windows cmd) | 59/60 PASS after the fix |
+| Desktop build `npm run make` (exact CI build-artifacts command, win32 leg) | PASS — `out/make/Agent Orchestrator Setup 0.13.0.exe` produced, all forge hooks green; WorkOS/feed-verify guards are publishing-time checks and were not applicable (no publish performed, per the one-publisher rule) |
+| `npx @redwoodjs/agent-ci run --all` | NOT RUNNABLE on native Windows (run-local-ci tar `C:\`-path bug); fork CI substitutes |
+
+### Fork CI outcomes (real GitHub runners, PR #1 on 2BE-ops)
+
+First run (`5276c1309`): gitleaks, api-drift, sqlc-drift, lint (Linux full
+tree), cloud-build-test, windows-workspace race legs, CLI E2E (container +
+ubuntu/macos/windows), Frontend mac-update-helper (macOS-14, Swift state
+tests) — all success; Frontend `test` and `renderer-smoke` failed on the
+regression above, and that run's Go build-test was cancelled mid-flight by the
+PR concurrency rule when the fix was pushed. Re-run on `fecf83f0f` (final
+state): **every workflow green** — Go all six jobs including build-test
+(`go test -race -timeout=20m ./...` on ubuntu-latest, the complete race suite
+this stage exists to provide), Frontend (test, renderer-smoke,
+mac-update-helper), CLI E2E (container + all three native OS), gitleaks. No
+secrets, no publishing; the PR is a validation vehicle only and stays draft.
+
+### Remainder
+
+Stage 25 (live in-app validation with a real daemon/desktop restart and active
+workers) and stage 26-27 (upstream reconciliation, final handover) are
+untouched. The Windows-local agent-ci gap stands; race coverage remains CI-only
+by design until a compiler exists locally.
+
 ## Stage 23 - Failure/recovery integration and upgrade matrix (2026-09-20)
 
 The stage consolidates the recovery deferrals accumulated by stages 9, 12, 13,
