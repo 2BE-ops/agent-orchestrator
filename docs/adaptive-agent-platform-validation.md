@@ -114,6 +114,18 @@ domain/registry-service suites, pinned lint 0 issues; the daemon/httpd
 Windows baselines and the two pre-existing registry-footprint environmental
 subtests (`pi`, `omp` — proven at clean HEAD) are unchanged.
 
+**Fork CI on the stage-25 commits (`85457f2ae..5edda98c6`):** every workflow
+green, including the Go build-test (Linux `-race ./...`) over the three
+fake-harness fixes. One flake was observed and characterized:
+`cloud-build-test` failed once with a data race in
+`TestCheckpointBridgeSafetyNetFires` (`cloud/cmd/ao-worker`, a module no
+branch commit touches; green on the stage-24 run) and passed on the
+`--failed` rerun with no code change — a pre-existing timing-window race in
+the upstream cloud module, recorded here for the upstream pass. The same
+module's `TestReservedAgentTerminalBuffersEarlyInputAndResize` also cannot
+run on Windows locally ("file type does not support deadline"), matching the
+recorded Windows-baseline pattern.
+
 **Recorded gaps:** opencode registry-type launches blocked by the missing
 permissions advertisement (upstream-relevant; manual path unaffected);
 knowledge creation needs a sources editor in the UI form (or the field is
