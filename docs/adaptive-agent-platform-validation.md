@@ -4,6 +4,126 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
+## Stage 25 - Real Electron validation and harness evidence (2026-09-20)
+
+Live in-app validation on Windows 11 against an isolated lab: a dedicated
+worktree at the stage-24 tip (advanced per fix below), a real `npm ci`,
+`npm run dev` (dev daemon + Vite renderer + Electron) with fully scratch
+state (`AO_DATA_DIR`/`AO_DEV_ELECTRON_DIR`/`AO_RUN_FILE` under
+`%TEMP%\ao-lab-25`), `AO_FAKE_HARNESS=1`, Git's `sh.exe` on the daemon PATH
+and `ELECTRON_ENABLE_LOGGING=1`. The real Electron window was driven end to
+end; every claim below was observed in the running app or its live daemon
+API, not inferred from code.
+
+**Fake-harness prerequisites surfaced three real product gaps, each fixed,
+tested and committed during the stage:**
+
+1. `7b6867e2b` — the opt-in fake adapter was never registered: `Constructors()`
+   omitted it, so no daemon anywhere could resolve the harness its own
+   migration 0026 allows. The adapter is now appended when the shared
+   `AO_FAKE_HARNESS` truthy gate is set (mirroring the adapter's AuthStatus
+   gate), keeping every default inventory byte-identical; new registry tests
+   pin default-omitted, opted-in-included-last and non-truthy-refused.
+2. `dcd9f813b` — `domain` refused to validate a fake-harness Agent Type:
+   `RegistryDefinition.Validate` requires `Harness.IsKnown()` and
+   `AllHarnesses` deliberately excluded the fake. `IsKnown` now accepts
+   `HarnessFake` only under the same env gate (AllHarnesses still omits it,
+   so no enumeration lists it); domain tests pin the gate from both sides
+   plus the Agent Type validation path, and the fake package's two POSIX-path
+   test assumptions were made separator/extension-aware.
+3. `f52471054` — launch validation could never pass for a field-less harness:
+   `ResolveWorkerOptions` defaults an unset permission mode to `auto`, and
+   `checkConfiguration` refuses modes the native config does not advertise;
+   the fake inherited `agentbase.Base`'s empty spec. The fake now advertises a
+   `permissions` enum of every typed mode as accepted-and-ignored (the
+   timeline never prompts), with a test pinning the launch-gate contract.
+   Each fix was validated with build/vet, the touched suites and pinned
+   golangci-lint v2.12.2 (0 issues), then the lab was relaunched on it.
+
+**Flows exercised in the running app (fake harness first):** project import
+from a scratch git repo with a local bare origin (the importer's GitHub-remote
+preparation step is bypassed by any configured origin; a bare repo without a
+symbolic HEAD is refused with the exact repair command, which resolves it);
+two Skills authored through the registry editor with reasons retained and
+enabled via the audited Enable action (revision 2); the Agent Type
+`lab-fake-worker` authored with harness **Fake** (listed in the harness
+dropdown, readiness "Fake appears signed in · ready"), both Skills pinned,
+v1 saved then v2 (native-terminal session interface via New version + Use
+version) after v1's Chat interface was honestly refused ("this harness has
+no Chat driver"); registry Launch worker → project `proj` → real spawn:
+session `proj-1` on harness `fake` ran the full deterministic timeline
+(spawning → active → waiting_input → active+pr-push → blocked → exited) with
+a real `sh.exe` process, per-phase `ao hooks` posts in the daemon log, branch
+`ao/proj-1/root`, a board card in Building with the fake badge, and the
+terminal retained. The limit fence proved itself live: a second launch was
+refused both in-dialog and by the daemon (`429 SCHEDULER_AGENT_TYPE_LIMIT`)
+until the slot-holding session was killed ("freed":true).
+
+**Explicit-selection task path (stage-24's fixed panel in production):** the
+board's New Task dialog → Worker configuration combobox → `lab-fake-worker
+· v2` re-rendered the dialog with the pinned type, both skills and harness
+facts — the exact `WorkerSelectionPanel` flatten path guarded by `fecf83f0f`.
+
+**Live daemon/desktop restart with an active worker (DoD 43's deferred
+half):** a delegated fake worker (`proj-3`) was started and the daemon
+hard-killed while it sat in `waiting_input`; the surviving terminal kept
+running the timeline and delivered its `session-end` to the relaunched
+daemon, so after the full app restart the session read `exited` with
+retained terminal and was never falsely marked dead; the delegate path also
+materialized a `claude-code` orchestrator session (`proj-4`, idle) and the
+restarted board showed the reconciled card, archive and orchestrator badge.
+Earlier restarts additionally proved registry/project/skill persistence
+across daemon replacement ("Jump back right in").
+
+**Authenticated combination, separately (per the user's direction after the
+Codex credits ran out):** opencode 1.18.31 with the machine's local
+`zai-sub` bridge (`127.0.0.1:8317`, GLM-5.3-Flash/5.3/5.2/5-Turbo) was
+smoke-tested at the CLI first (`opencode run` → "ok"), all four GLM models
+flow into the daemon's opencode catalog, and `lab-opencode-worker`
+(harness opencode, model `zai-sub/GLM-5.3-Flash`) was authored in the
+registry. Its registry-type launch is currently blocked by an upstream-class
+gap — opencode advertises no `permissions` field in any mode, so the same
+resolved-mode validation that motivated fix 3 refuses it (the manual-harness
+path skips that pre-flight) — so the authenticated turn ran through the
+delegate wire path the manual New Task dialog uses: session `proj-5`
+(harness `opencode`, mode **chat**, branch `ao/proj-5/root`) executed a real
+GLM turn whose conversation snapshot contains the task, GLM's tool-read of
+README.md and the correct reply **"Lab Project"**.
+
+**Desktop surfaces viewed live:** board (session cards, archive, orchestrator
+badge, notifications), Task graph (renders with its honest empty intent
+state — delegation spawns worker sessions, not graph tasks), Agent Manager
+(worker population "1 active" with harness attribution; controller and
+routing-decision empty states), Performance (full cohort/routing/planning
+summaries, admission window, group-by), Knowledge (list/filters/detail; a
+creation attempt was honestly refused by the daemon's provenance gate —
+"knowledge requires 1 to 16 sources" — the visible form offers no sources
+editor), Audit (policy timeline + task audit picker), Control Center (state
+machine running → paused → running with required reasons, retained actors
+USER/local-user, Pause/Drain/Stop/Resume enabling correctly, Needs Human,
+Experiments, Recommendations, Cancel work scope).
+
+**Session log:** proj-1 fake (registry launch, timeline complete), proj-2
+fake (board New Task, killed to free the limit), proj-3 fake (delegated,
+survived a mid-`waiting_input` daemon kill), proj-4 claude-code (delegate's
+idle orchestrator), proj-5 opencode+GLM chat (real model turn); all killed
+cleanly at the end. The lab worktree (`.cache/ao-lab-25`, detached at
+`f52471054`), scratch data and the older `.cache/ao-adaptive-lab` remain on
+disk for inspection; local suites: `go build`, `go vet`, fake/registry/
+domain/registry-service suites, pinned lint 0 issues; the daemon/httpd
+Windows baselines and the two pre-existing registry-footprint environmental
+subtests (`pi`, `omp` — proven at clean HEAD) are unchanged.
+
+**Recorded gaps:** opencode registry-type launches blocked by the missing
+permissions advertisement (upstream-relevant; manual path unaffected);
+knowledge creation needs a sources editor in the UI form (or the field is
+below the fold); the orchestrator goal/planning loop was not live-run (the
+claude-code orchestrator stayed idle; graph/Knowledge/routing views
+therefore show honest empty states); concurrent heterogeneous workers were
+not live-demonstrated (maxParallelWorkers=1 per type); manager admission,
+needs-human branch isolation and dry-run were not live-driven; macOS/Linux
+lab repetition not performed (Windows-only lab).
+
 ## Stage 24 - Full CI-equivalent checks, backend/desktop builds (2026-09-20)
 
 The stage ran the repository's complete validation matrix against the branch tip
