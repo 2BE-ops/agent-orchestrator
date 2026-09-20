@@ -89,9 +89,31 @@ func (p *Plugin) Manifest() adapters.Manifest {
 	}
 }
 
-// GetConfigSpec reports opencode's optional provider/model override.
+// GetConfigSpec reports opencode's optional provider/model override and the
+// permission modes its launch path implements. The permissions field is not
+// optional cosmetics: worker-option resolution defaults an unset mode to
+// "auto", and registry launch validation refuses a harness whose config spec
+// does not advertise the resolved mode — without this field every registry
+// launch of an opencode Agent Type is permanently invalid. Every listed mode
+// is genuinely implemented (see appendPermissionFlags and
+// opencodePermissionConfig), unlike the fake harness's accepted-and-ignored set.
 func (p *Plugin) GetConfigSpec(ctx context.Context) (ports.ConfigSpec, error) {
-	return agentbase.ModelConfigSpec(ctx, "Model override passed to `opencode --model`.")
+	spec, err := agentbase.ModelConfigSpec(ctx, "Model override passed to `opencode --model`.")
+	if err != nil {
+		return ports.ConfigSpec{}, err
+	}
+	spec.Fields = append(spec.Fields, ports.ConfigField{
+		Key:         "permissions",
+		Type:        ports.ConfigFieldEnum,
+		Description: "Mapped onto OpenCode's own approval handling.",
+		Enum: []string{
+			string(ports.PermissionModeDefault),
+			string(ports.PermissionModeAcceptEdits),
+			string(ports.PermissionModeAuto),
+			string(ports.PermissionModeBypassPermissions),
+		},
+	})
+	return spec, nil
 }
 
 // GetLaunchCommand builds the argv to start a new interactive opencode session.

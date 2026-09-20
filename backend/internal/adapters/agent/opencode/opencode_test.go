@@ -569,8 +569,48 @@ func TestGetConfigSpecReportsModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(spec.Fields) != 1 || spec.Fields[0].Key != "model" {
+	if len(spec.Fields) != 2 || spec.Fields[0].Key != "model" {
 		t.Fatalf("unexpected config fields: %#v", spec.Fields)
+	}
+}
+
+// TestGetConfigSpecAdvertisesPermissionModes pins the launch-gate contract:
+// worker-option resolution defaults an unset permission mode to "auto", and
+// registry launch validation refuses a harness whose config spec does not
+// advertise the resolved mode. Every typed mode is implemented by the launch
+// path, so all four must be listed.
+func TestGetConfigSpecAdvertisesPermissionModes(t *testing.T) {
+	plugin := &Plugin{}
+
+	spec, err := plugin.GetConfigSpec(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var field *ports.ConfigField
+	for i := range spec.Fields {
+		if spec.Fields[i].Key == "permissions" {
+			field = &spec.Fields[i]
+		}
+	}
+	if field == nil {
+		t.Fatalf("config spec has no permissions field: %+v", spec.Fields)
+	}
+	for _, mode := range []ports.PermissionMode{
+		ports.PermissionModeDefault,
+		ports.PermissionModeAcceptEdits,
+		ports.PermissionModeAuto,
+		ports.PermissionModeBypassPermissions,
+	} {
+		found := false
+		for _, option := range field.Enum {
+			if option == string(mode) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("permissions field does not advertise %q; launches resolved to that mode would be refused", mode)
+		}
 	}
 }
 
