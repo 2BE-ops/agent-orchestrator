@@ -38,7 +38,28 @@ func (c *AgentsController) Register(r chi.Router) {
 	r.Post("/agents/readiness/ensure", c.ensureReadiness)
 	r.Post("/agents/{agent}/probe", c.probe)
 	r.Get("/agents/{agent}/models", c.models)
+	r.Get("/agents/{agent}/configuration", c.configuration)
 	r.Post("/agents/{agent}/models/refresh", c.refreshModels)
+}
+
+func (c *AgentsController) configuration(w http.ResponseWriter, r *http.Request) {
+	catalog, ok := c.Catalog.(interface {
+		Configuration(context.Context, string, domain.SessionMode) (agentsvc.Configuration, error)
+	})
+	if !ok {
+		apispec.NotImplemented(w, r, "GET", "/api/v1/agents/{agent}/configuration")
+		return
+	}
+	mode := r.URL.Query().Get("mode")
+	if mode == "" {
+		mode = string(domain.SessionModeTUI)
+	}
+	result, err := catalog.Configuration(r.Context(), chi.URLParam(r, "agent"), domain.SessionMode(mode))
+	if err != nil {
+		envelope.WriteError(w, r, err)
+		return
+	}
+	envelope.WriteJSON(w, http.StatusOK, result)
 }
 
 func (c *AgentsController) readiness(w http.ResponseWriter, r *http.Request) {

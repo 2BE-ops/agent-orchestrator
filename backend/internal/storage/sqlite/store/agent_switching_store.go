@@ -563,6 +563,9 @@ func (s *Store) ActivateAgentSwitchTarget(ctx context.Context, activation domain
 	if n != 1 {
 		return false, nil
 	}
+	if err := switchWorkerHarnessExecution(ctx, q, activation.SessionID, activation.SwitchID, activation.ActivatedAt); err != nil {
+		return false, fmt.Errorf("activate worker harness configuration: %w", err)
+	}
 	if err := tx.Commit(); err != nil {
 		return false, fmt.Errorf("activate agent switch target %s: commit: %w", activation.SwitchID, err)
 	}
@@ -684,6 +687,9 @@ func (s *Store) ActivateChatAgentSwitchTarget(ctx context.Context, activation do
 	}
 	if n != 1 {
 		return false, nil
+	}
+	if err := switchWorkerHarnessExecution(ctx, q, activation.SessionID, activation.SwitchID, activation.ActivatedAt); err != nil {
+		return false, fmt.Errorf("activate worker Chat harness configuration: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return false, fmt.Errorf("activate Chat agent switch target %s: commit: %w", activation.SwitchID, err)

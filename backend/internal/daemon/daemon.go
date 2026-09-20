@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	chatdriverregistry "github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/registry"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/runtime/runtimeselect"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/systemexec"
+	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/taskverify"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/telemetry/policyauthority"
 	"github.com/aoagents/agent-orchestrator/backend/internal/autoreview"
 	"github.com/aoagents/agent-orchestrator/backend/internal/browserruntime"
@@ -49,16 +51,28 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/runfile"
 	agentsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agent"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/agentauth"
+	managersvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agentmanager"
 	browsersvc "github.com/aoagents/agent-orchestrator/backend/internal/service/browser"
 	chatsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/chat"
+	controlsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/control"
 	devimportsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/devimport"
+	evolutionsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/evolution"
 	importsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/importer"
+	knowledgesvc "github.com/aoagents/agent-orchestrator/backend/internal/service/knowledge"
+	linkpreviewsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/linkpreview"
 	notificationsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/notification"
+	orchestratorsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/orchestrator"
+	"github.com/aoagents/agent-orchestrator/backend/internal/service/orchestratorfeed"
 	prsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/pr"
 	projectsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/project"
+	registrysvc "github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
+	sessionsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/session"
 	settingssvc "github.com/aoagents/agent-orchestrator/backend/internal/service/settings"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systemcheck"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systeminstall"
+	tasksvc "github.com/aoagents/agent-orchestrator/backend/internal/service/task"
+	"github.com/aoagents/agent-orchestrator/backend/internal/service/taskcontext"
+	"github.com/aoagents/agent-orchestrator/backend/internal/service/taskmessage"
 	usagesvc "github.com/aoagents/agent-orchestrator/backend/internal/service/usage"
 	"github.com/aoagents/agent-orchestrator/backend/internal/skillassets"
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite"
@@ -325,8 +339,11 @@ func Run() error {
 	messenger := newSessionMessenger(store, runtimeAdapter, log)
 	lifecycleMessenger := newModeAwareMessenger()
 	notificationHub := notify.NewHub()
-	notifier := notificationsvc.New(notificationsvc.Deps{Store: store})
-	notificationWriter := notify.New(notify.Deps{Store: store, Publisher: notificationHub})
+	notificationBarrier := &sync.Mutex{}
+	notifier := notificationsvc.New(notificationsvc.Deps{
+		Store: store, Publisher: notificationHub, Barrier: notificationBarrier, Logger: log,
+	})
+	notificationWriter := notify.New(notify.Deps{Store: store, Publisher: notificationHub, Barrier: notificationBarrier})
 	// Resolution transitions that happened while the daemon was down never
 	// reached lifecycle, so re-check open notifications against the durable
 	// session/PR facts before serving. Best-effort: a failure here only leaves
@@ -445,6 +462,18 @@ func Run() error {
 			}
 			agentSvc.ObserveActiveCodexAccountCapacity(observation)
 		},
+		// A model the user picked in ChatUI must land on the session before the
+		// next prompt routes, so a later TUI rebuild resumes with the same model
+		// instead of reverting to the project default.
+		OnModelChanged: func(sessionID domain.SessionID, model string) {
+			if sessMgr == nil {
+				return
+			}
+			if err := sessMgr.PersistChatModel(ctx, sessionID, model); err != nil {
+				log.Warn("persist ChatUI model on session failed; a TUI rebuild may resume with a different model",
+					"sessionID", sessionID, "model", model, "error", err)
+			}
+		},
 	})
 
 	codexModelDriver := codexappserver.New(codexagent.New(), log)
@@ -480,7 +509,8 @@ func Run() error {
 	}
 	codexOperationGate := codexops.NewGate()
 	agentDeps := agentsvc.Deps{
-		Cache: store, Discoverer: modelDiscoverer, Projects: store, Sessions: store, Context: ctx, Logger: log,
+		ChatConfiguration: chatSvc,
+		Cache:             store, Discoverer: modelDiscoverer, Projects: store, Sessions: store, Context: ctx, Logger: log,
 		CodexAccountRoot:       filepath.Join(cfg.StateDir, "harnesses", "codex", "accounts"),
 		CodexPendingRoot:       filepath.Join(cfg.StateDir, "harnesses", "codex", "pending-accounts"),
 		CodexSwitchStagingRoot: filepath.Join(cfg.StateDir, "harnesses", "codex", "switch-staging"),
@@ -493,6 +523,9 @@ func Run() error {
 	}
 	agentSvc = agentsvc.NewWithDeps(agentDeps)
 	agentSvc.WarmModelCatalogs(ctx)
+	registrySvc := registrysvc.NewWithNative(store, agentSvc)
+	registrySvc.SetSessionDefaults(settingsSvc)
+	chatSvc.SetWorkerConfigurationResolver(registrySvc)
 
 	sessionSvc, reviewSvc, wiredSessMgr, err := startSession(ctx, cfg, runtimeAdapter, store, lcStack.LCM, messenger, telemetrySink, agents, agentSvc, managedPreview, browserBroker, browserAuthority, chatLauncher{svc: chatSvc}, settingsSvc, policyCoordinator, tracker, codexOperationGate, log)
 	if err != nil {
@@ -505,6 +538,21 @@ func Run() error {
 	}
 	sessionSvc.SetChatProviderPreserver(chatSvc.PreservesProviderOnRestart)
 	sessMgr = wiredSessMgr
+	managerSvc := managersvc.New(store)
+	if native, ok := sessMgr.(managersvc.NativeRuntime); ok {
+		managerSvc = managersvc.NewWithRuntime(store, native)
+	}
+	managerSvc.SetCandidateAssessor(registrySvc)
+	if configured, ok := sessMgr.(interface {
+		SetWorkerConfigurationResolver(ports.WorkerConfigurationResolver)
+	}); ok {
+		configured.SetWorkerConfigurationResolver(registrySvc)
+	}
+	if configured, ok := sessMgr.(interface {
+		SetTaskContextBuilder(ports.TaskContextBuilder)
+	}); ok {
+		configured.SetTaskContextBuilder(taskcontext.New(store))
+	}
 	if tunable, ok := sessMgr.(interface {
 		SetModelCatalog(interface {
 			Models(context.Context, string, string, bool) (ports.AgentModelCatalog, error)
@@ -569,7 +617,7 @@ func Run() error {
 	// lifetime — see internal/service/shellterm.
 	shellTermSvc := startShellTerminals(ctx, cfg, runtimeAdapter, store, projectSvc, sessionSvc, log)
 	systemChecks.SetGitHubAuthTerminalOpener(shellTermSvc)
-	agentAuthSvc := agentauth.NewWithAgentResolver(hostCommands, agentSvc, shellTermSvc)
+	agentAuthSvc := agentauth.NewWithAgentResolver(hostCommands, agentSvc, shellTermSvc, cfg.DataDir)
 	agentSvc.SetCodexAccountLoginTerminalOpener(shellTermSvc)
 	// Late-bound so Kill/Cleanup close a session's scoped shells before its
 	// worktree is torn down (shellTermSvc cannot exist before sessMgr does; see
@@ -766,6 +814,13 @@ func Run() error {
 		PRs:                prActions,
 		Reviews:            reviewSvc,
 		Notifications:      notifier,
+		Registry:           registrySvc,
+		AdaptiveTasks:      tasksvc.New(store, tasksvc.WithArtifactCollector(taskverify.Artifacts{}), tasksvc.WithNativeReviews(registrySvc, reviewSvc)),
+		OrchestratorGoals:  orchestratorsvc.New(store),
+		AgentManagers:      managerSvc,
+		Evolution:          evolutionsvc.New(store),
+		Control:            controlsvc.New(store, controlsvc.WithTerminator(sessionKillTerminator{svc: sessionSvc})),
+		ProjectKnowledge:   knowledgesvc.New(store),
 		NotificationStream: notificationHub,
 		Push:               pushRegistry,
 		Presence:           presenceTracker,
@@ -791,6 +846,7 @@ func Run() error {
 			},
 		}),
 		Browser:             browserService,
+		LinkPreview:         linkpreviewsvc.New(nil),
 		PreviewServer:       managedPreview,
 		SessionCapabilities: browserAuthority,
 		AgentSwitchPolicy:   policyCoordinator,
@@ -858,6 +914,10 @@ func Run() error {
 	}
 
 	var startupReconcileDone <-chan struct{}
+	var taskMessagesDone <-chan struct{}
+	var managerInboxDone <-chan struct{}
+	var orchestratorNoticesDone <-chan struct{}
+	var managerDecisionsDone <-chan struct{}
 	runErr := srv.RunWithReady(ctx, func() {
 		// Agent-readiness warming is advisory and idempotent, and request paths
 		// lazily Ensure on demand. Kick it here, after the listener is live, so its
@@ -866,6 +926,66 @@ func Run() error {
 		agentSvc.WarmReadiness()
 		done := make(chan struct{})
 		startupReconcileDone = done
+		decisionsDone := make(chan struct{})
+		managerDecisionsDone = decisionsDone
+		go func() {
+			defer close(decisionsDone)
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+			}
+			managersvc.NewDecisionDispatcher(store, managerSvc, log).Run(ctx)
+		}()
+		if transport, ok := sessMgr.(ports.TaskMessageTransport); ok {
+			messagesDone := make(chan struct{})
+			taskMessagesDone = messagesDone
+			go func() {
+				defer close(messagesDone)
+				select {
+				case <-ctx.Done():
+					return
+				case <-done:
+				}
+				taskmessage.New(store, transport, log).Run(ctx)
+			}()
+		}
+		if transport, ok := sessMgr.(ports.AgentManagerTransport); ok {
+			inboxDone := make(chan struct{})
+			managerInboxDone = inboxDone
+			go func() {
+				defer close(inboxDone)
+				select {
+				case <-ctx.Done():
+					return
+				case <-done:
+				}
+				executable, err := os.Executable()
+				if err != nil {
+					log.Error("Manager CLI routing unavailable", "error", err)
+					return
+				}
+				dispatcher, err := managersvc.NewInboxDispatcher(store, managerSvc, transport, domain.AgentManagerToolPaths{SchemaVersion: 4, Executable: executable, RunFile: cfg.RunFilePath}, log)
+				if err != nil {
+					log.Error("Manager inbox configuration invalid", "error", err)
+					return
+				}
+				dispatcher.Run(ctx)
+			}()
+		}
+		if noticeTransport, ok := sessMgr.(ports.OrchestratorNoticeTransport); ok {
+			noticeDone := make(chan struct{})
+			orchestratorNoticesDone = noticeDone
+			go func() {
+				defer close(noticeDone)
+				select {
+				case <-ctx.Done():
+					return
+				case <-done:
+				}
+				orchestratorfeed.New(store, orchestratorsvc.New(store), noticeTransport, log).Run(ctx)
+			}()
+		}
 		go func() {
 			defer close(done)
 			if reconcileErr := reconcilePersistentChatHosts(ctx, cfg.DataDir, store); reconcileErr != nil {
@@ -891,6 +1011,42 @@ func Run() error {
 	// via defer) avoids the LIFO trap where a Stop() that blocks on ctx-cancel
 	// runs before the cancel: a non-signal exit path would hang otherwise.
 	stop()
+	if managerDecisionsDone != nil {
+		decisionStopCtx, decisionStopCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		select {
+		case <-managerDecisionsDone:
+		case <-decisionStopCtx.Done():
+			log.Error("Manager decision recovery shutdown timed out; proposals remain retained")
+		}
+		decisionStopCancel()
+	}
+	if managerInboxDone != nil {
+		inboxStopCtx, inboxStopCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		select {
+		case <-managerInboxDone:
+		case <-inboxStopCtx.Done():
+			log.Error("Manager inbox shutdown timed out; retained claims require reconciliation")
+		}
+		inboxStopCancel()
+	}
+	if taskMessagesDone != nil {
+		messageStopCtx, messageStopCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		select {
+		case <-taskMessagesDone:
+		case <-messageStopCtx.Done():
+			log.Error("task message dispatcher shutdown timed out; retained claims require reconciliation")
+		}
+		messageStopCancel()
+	}
+	if orchestratorNoticesDone != nil {
+		noticeStopCtx, noticeStopCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		select {
+		case <-orchestratorNoticesDone:
+		case <-noticeStopCtx.Done():
+			log.Error("orchestrator notice dispatcher shutdown timed out; pending notices require reconciliation")
+		}
+		noticeStopCancel()
+	}
 	if agentSwitchDispatcher != nil {
 		dispatcherStopContext, dispatcherStopCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 		if err := agentSwitchDispatcher.Stop(dispatcherStopContext); err != nil {
@@ -998,4 +1154,16 @@ func stabilizeWorkingDirectory(dataDir string) error {
 		return fmt.Errorf("daemon working directory: chdir %s: %w", dataDir, err)
 	}
 	return nil
+}
+
+// sessionKillTerminator adapts the session service's kill to the control
+// surface: cancel-all requests worker termination through the normal kill
+// services and reports each request without claiming it succeeded.
+type sessionKillTerminator struct {
+	svc *sessionsvc.Service
+}
+
+func (t sessionKillTerminator) Kill(ctx context.Context, id domain.SessionID) error {
+	_, err := t.svc.Kill(ctx, id)
+	return err
 }

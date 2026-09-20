@@ -12,6 +12,7 @@ import { agentSwitchVisibility } from "./agent-switch-visibility";
 import { codexAccountsQueryKey, writeCodexAccounts } from "../hooks/codex-accounts-state";
 import type { components } from "../../api/schema";
 import { editorHandoffQueryKey, editorHandoffQueryRoot } from "../hooks/useEditorHandoff";
+import { registryQueryRoot, workerExecutionsQueryRoot } from "./registry-api";
 
 export type EventTransport = {
 	connect: () => () => void;
@@ -38,6 +39,7 @@ const CDC_EVENT_TYPES = [
 	"pr_review_thread_resolved",
 	"review_run_created",
 	"review_run_updated",
+	"registry_changed",
 ] as const;
 
 /**
@@ -57,7 +59,10 @@ export function createEventTransport(queryClient: QueryClient): EventTransport {
 			const pendingConversationSessions = new Set<string>();
 			const pendingInterfaceTransitionSessions = new Set<string>();
 			const pendingEditorHandoffSessions = new Set<string>();
+			const pendingWorkerExecutionSessions = new Set<string>();
+			let allWorkerExecutionsInvalidationPending = false;
 			let workspaceInvalidationPending = false;
+			let registryInvalidationPending = false;
 			let allConversationsInvalidationPending = false;
 			let allEditorHandoffsInvalidationPending = false;
 			let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -100,6 +105,17 @@ export function createEventTransport(queryClient: QueryClient): EventTransport {
 			// it immediately without waiting out a full window.
 			let lastFlushAt = Number.NEGATIVE_INFINITY;
 			const flushPending = () => {
+				if (allWorkerExecutionsInvalidationPending) {
+					invalidate(workerExecutionsQueryRoot);
+					allWorkerExecutionsInvalidationPending = false;
+				} else {
+					for (const sessionId of pendingWorkerExecutionSessions) invalidate([...workerExecutionsQueryRoot, sessionId]);
+				}
+				pendingWorkerExecutionSessions.clear();
+				if (registryInvalidationPending) {
+					invalidate(registryQueryRoot);
+					registryInvalidationPending = false;
+				}
 				if (allConversationsInvalidationPending) {
 					invalidate(conversationQueryRoot);
 					allConversationsInvalidationPending = false;
@@ -133,6 +149,7 @@ export function createEventTransport(queryClient: QueryClient): EventTransport {
 			const refreshWorkspaces = (event?: Event) => {
 				if (disposed) return;
 				let conversationOnly = false;
+				let registryOnly = false;
 				if (event === undefined) {
 					// A lifecycle refresh -- reconnect, daemon status change, base-URL change --
 					// carries no event, so we cannot know which conversations moved. Normally the
@@ -141,6 +158,8 @@ export function createEventTransport(queryClient: QueryClient): EventTransport {
 					// the header reporting that clamp, so refresh every conversation instead of
 					// leaving an open chat frozen on its pre-gap snapshot.
 					allConversationsInvalidationPending = true;
+					registryInvalidationPending = true;
+					allWorkerExecutionsInvalidationPending = true;
 					allEditorHandoffsInvalidationPending = true;
 				}
 				if (event && "data" in event) {
@@ -160,8 +179,14 @@ export function createEventTransport(queryClient: QueryClient): EventTransport {
 								? (decoded.payload as {
 										conversationId?: unknown;
 										interfaceTransitionId?: unknown;
+										workerExecutionSequence?: unknown;
+										workerNativeChangeId?: unknown;
 								  })
 								: undefined;
+						if (decoded.type === "registry_changed") {
+							registryInvalidationPending = true;
+							registryOnly = true;
+						}
 						if (
 							typeof decoded.sessionId === "string" &&
 							decoded.sessionId &&
@@ -182,6 +207,11 @@ export function createEventTransport(queryClient: QueryClient): EventTransport {
 						if (
 							decoded.type === "session_updated" &&
 							typeof decoded.sessionId === "string" &&
+							(typeof payload?.workerExecutionSequence === "number" || typeof payload?.workerNativeChangeId === "string")
+						) pendingWorkerExecutionSessions.add(decoded.sessionId);
+						if (
+							decoded.type === "session_updated" &&
+							typeof decoded.sessionId === "string" &&
 							decoded.sessionId &&
 							typeof payload?.conversationId !== "string" &&
 							typeof payload?.interfaceTransitionId !== "string"
@@ -193,7 +223,7 @@ export function createEventTransport(queryClient: QueryClient): EventTransport {
 						// cannot target a conversation cache precisely.
 					}
 				}
-				if (!conversationOnly) workspaceInvalidationPending = true;
+				if (!conversationOnly && !registryOnly) workspaceInvalidationPending = true;
 				// A busy stream must not postpone visible updates until traffic
 				// stops, and the first event after a quiet period must not wait out
 				// a full window either. Flush on the leading edge when the last

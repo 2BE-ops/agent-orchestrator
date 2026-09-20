@@ -50,21 +50,23 @@ type modelCatalogCall struct {
 // Service owns normalized harness readiness and the unchanged model catalog.
 // Consumers share coordinator checks instead of probing adapters directly.
 type Service struct {
-	agents        []agentregistry.HarnessAgent
-	readiness     *readinessCoordinator
-	cache         ports.AgentModelCatalogCache
-	discoverer    ports.AgentModelDiscoverer
-	projects      ProjectLookup
-	sessions      SessionUsageLookup
-	resolverMu    map[string]*sync.Mutex
-	modelCallMu   sync.Mutex
-	modelCalls    map[string]*modelCatalogCall
-	codexAccounts *codexAccountManager
-	codexSwitches *codexAccountSwitchCoordinator
+	agents            []agentregistry.HarnessAgent
+	readiness         *readinessCoordinator
+	cache             ports.AgentModelCatalogCache
+	discoverer        ports.AgentModelDiscoverer
+	projects          ProjectLookup
+	sessions          SessionUsageLookup
+	resolverMu        map[string]*sync.Mutex
+	modelCallMu       sync.Mutex
+	modelCalls        map[string]*modelCatalogCall
+	codexAccounts     *codexAccountManager
+	codexSwitches     *codexAccountSwitchCoordinator
+	chatConfiguration ChatConfiguration
 }
 
 // Deps contains optional durable dependencies for the agent catalog service.
 type Deps struct {
+	ChatConfiguration      ChatConfiguration
 	Cache                  ports.AgentModelCatalogCache
 	Discoverer             ports.AgentModelDiscoverer
 	Projects               ProjectLookup
@@ -126,6 +128,7 @@ func NewWithDeps(deps Deps) *Service {
 		)
 	}
 	svc.sessions = deps.Sessions
+	svc.chatConfiguration = deps.ChatConfiguration
 	return svc
 }
 

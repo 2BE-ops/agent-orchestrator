@@ -69,6 +69,8 @@ type ReviewRun struct {
 	// AutoInjectReview snapshots the session policy when this result is first
 	// recorded. Later toggle changes must not rewrite or deliver this run.
 	AutoInjectReview bool `json:"autoInjectReview"`
+	// TaskScope identifies separately inspectable frozen adaptive review context.
+	TaskScope string `json:"taskScope,omitempty"`
 }
 
 // ReviewTriggerSource identifies who initiated a review pass.

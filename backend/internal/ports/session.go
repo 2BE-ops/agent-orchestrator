@@ -16,8 +16,17 @@ var ErrActivityProjectionContention = errors.New("activity projection contention
 // SpawnConfig is the request to start a new session: which project/issue, which
 // agent harness, and the branch/prompt the agent launches with.
 type SpawnConfig struct {
-	ProjectID domain.ProjectID
-	IssueID   domain.IssueID
+	// TaskLease is trusted scheduler context. Public spawn JSON cannot acquire
+	// or impersonate task ownership through this field.
+	TaskLease *domain.TaskLeaseToken
+	// ManagerController is dedicated daemon admission, never public spawn JSON.
+	ManagerController *domain.AgentManagerControllerToken
+	// WorkerSelection opts into immutable registry launch configuration. Actor is
+	// trusted server context and is never decoded from a public request body.
+	WorkerSelection *domain.WorkerSelection
+	WorkerActor     domain.RegistryActor
+	ProjectID       domain.ProjectID
+	IssueID         domain.IssueID
 	// ParentSessionID identifies the AO orchestrator that requested this worker
 	// through `ao spawn`. The daemon validates this reference and derives any
 	// inherited settings itself; callers never supply an inherited policy.

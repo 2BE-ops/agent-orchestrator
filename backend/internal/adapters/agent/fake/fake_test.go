@@ -46,8 +46,10 @@ func TestGetLaunchCommandIsScriptedTimeline(t *testing.T) {
 		t.Fatal(err)
 	}
 	// argv[0] must be the RESOLVED shell path (what Manager.Spawn validates), not
-	// a bare "sh" — see ResolveBinary / #2692 review.
-	if len(cmd) != 3 || cmd[1] != "-lc" || !strings.HasSuffix(cmd[0], "sh") || !strings.Contains(cmd[0], "/") {
+	// a bare "sh" — see ResolveBinary / #2692 review. Windows resolves to
+	// sh.exe with backslash separators, so the shape check stays separator- and
+	// extension-aware instead of assuming a POSIX path.
+	if len(cmd) != 3 || cmd[1] != "-lc" || !isResolvedShellPath(cmd[0]) {
 		t.Fatalf("launch command shape = %#v, want [<resolved sh path> -lc <script>]", cmd)
 	}
 
@@ -86,9 +88,24 @@ func TestResolveBinaryReturnsResolvedShellPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveBinary: unexpected error: %v", err)
 	}
-	if !strings.HasSuffix(got, "sh") || !strings.Contains(got, "/") {
+	if !isResolvedShellPath(got) {
 		t.Fatalf("ResolveBinary = %q, want an absolute resolved sh path", got)
 	}
+}
+
+// isResolvedShellPath reports whether path names a concrete shell executable
+// (never a bare "sh"): absolute, carrying a separator, and ending in sh with
+// the platform's executable extension when one applies (sh on POSIX, sh.exe on
+// Windows).
+func isResolvedShellPath(path string) bool {
+	if !filepath.IsAbs(path) {
+		return false
+	}
+	if !strings.ContainsRune(path, '/') && !strings.ContainsRune(path, '\\') {
+		return false
+	}
+	name := strings.ToLower(filepath.Base(path))
+	return name == "sh" || strings.TrimSuffix(name, filepath.Ext(name)) == "sh"
 }
 
 // When no runnable sh is on PATH (Windows / stripped PATH), the fake must report
@@ -385,5 +402,43 @@ func TestFullLifecycleSpawnToTermination(t *testing.T) {
 	}
 	if final.Activity.State != domain.ActivityExited {
 		t.Fatalf("terminal state = %q, want %q (not an incidental idle)", final.Activity.State, domain.ActivityExited)
+	}
+}
+
+// TestGetConfigSpecAdvertisesPermissionModes pins the launch-gate contract:
+// worker-option resolution defaults an unset permission mode to "auto", and
+// registry launch validation refuses a harness whose config spec does not
+// advertise the resolved mode. The timeline never prompts, so the spec must
+// list every typed mode as accepted-and-ignored.
+func TestGetConfigSpecAdvertisesPermissionModes(t *testing.T) {
+	spec, err := New().GetConfigSpec(context.Background())
+	if err != nil {
+		t.Fatalf("GetConfigSpec: %v", err)
+	}
+	var field *ports.ConfigField
+	for i := range spec.Fields {
+		if spec.Fields[i].Key == "permissions" {
+			field = &spec.Fields[i]
+		}
+	}
+	if field == nil {
+		t.Fatalf("config spec has no permissions field: %+v", spec.Fields)
+	}
+	for _, mode := range []ports.PermissionMode{
+		ports.PermissionModeDefault,
+		ports.PermissionModeAcceptEdits,
+		ports.PermissionModeAuto,
+		ports.PermissionModeBypassPermissions,
+	} {
+		found := false
+		for _, option := range field.Enum {
+			if option == string(mode) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("permissions field does not advertise %q; launches resolved to that mode would be refused", mode)
+		}
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
+	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	"github.com/aoagents/agent-orchestrator/backend/internal/storage/sqlite/gen"
 )
 
@@ -136,16 +137,23 @@ func (s *Store) UpdateReviewActivity(ctx context.Context, id string, state domai
 	return n > 0, nil
 }
 
-// InsertReviewRun records a new review pass. A unique-constraint hit on the
-// (session_id, pr_url, target_sha) index (migration 0020) is surfaced as the sentinel
-// domain.ErrDuplicateReviewRun so the engine can fall back to the existing run.
+// InsertReviewRun records a normal review pass in the legacy empty task scope.
+// A unique-constraint hit is surfaced as domain.ErrDuplicateReviewRun so the
+// engine can fall back to the existing same-head/harness pass.
 func (s *Store) InsertReviewRun(ctx context.Context, r domain.ReviewRun) error {
+	if r.TaskScope != "" {
+		return fmt.Errorf("%w: task review requires atomic context insertion", ports.ErrTaskInvalid)
+	}
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
+	return insertReviewRun(ctx, s.qw, r)
+}
+
+func insertReviewRun(ctx context.Context, q *gen.Queries, r domain.ReviewRun) error {
 	if r.TriggerSource == "" {
 		r.TriggerSource = domain.ReviewTriggerManual
 	}
-	err := s.qw.InsertReviewRun(ctx, gen.InsertReviewRunParams{
+	err := q.InsertReviewRun(ctx, gen.InsertReviewRunParams{
 		ID:               r.ID,
 		ReviewID:         r.ReviewID,
 		SessionID:        r.SessionID,
@@ -160,6 +168,7 @@ func (s *Store) InsertReviewRun(ctx context.Context, r domain.ReviewRun) error {
 		GithubReviewID:   r.GithubReviewID,
 		CreatedAt:        r.CreatedAt,
 		AutoInjectReview: r.AutoInjectReview,
+		TaskScope:        r.TaskScope,
 	})
 	if isSQLiteUnique(err) {
 		return fmt.Errorf("insert review run for session %s pr %s sha %s: %w", r.SessionID, r.PRURL, r.TargetSHA, domain.ErrDuplicateReviewRun)
@@ -403,6 +412,7 @@ func reviewRunFromRow(r gen.ReviewRun) domain.ReviewRun {
 		CreatedAt:        r.CreatedAt,
 		DeliveredAt:      deliveredAt,
 		AutoInjectReview: r.AutoInjectReview,
+		TaskScope:        r.TaskScope,
 	}
 }
 

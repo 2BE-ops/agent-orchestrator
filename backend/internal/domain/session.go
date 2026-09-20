@@ -13,13 +13,14 @@ type (
 	IssueID string
 )
 
-// SessionKind distinguishes a worker session from an orchestrator session.
+// SessionKind separates implementation workers, project planning and agent management.
 type SessionKind string
 
 // Session kinds.
 const (
 	KindWorker       SessionKind = "worker"
 	KindOrchestrator SessionKind = "orchestrator"
+	KindAgentManager SessionKind = "agent_manager"
 )
 
 // ConversationCheckpointState records which main-turn boundaries AO has

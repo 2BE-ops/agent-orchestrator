@@ -65,6 +65,176 @@ Every product command resolves to a daemon HTTP route. Run `ao <command>
 | `ao browser ...`                    | `GET /api/v1/browser/status`, `POST /api/v1/browser/commands` |
 | `ao hooks <agent> <event>`          | `POST /api/v1/sessions/{id}/activity` (hidden) |
 
+### Project knowledge
+
+`ao knowledge list <project> --status accepted --search "service boundary"`
+searches current knowledge; `show <id>`, `versions <id>` and
+`version <id> <number>` inspect provenance and immutable review history.
+`create <project> --file <path>` accepts `definition` and `reason`; `revise <id>
+--file <path>` also requires `expectedVersion`. Definitions include `title`,
+`kind`, `content`, `status`, `confidence`, `pinned` and `sources`. A source has
+`kind` and `reference`, plus task/attempt/session or content/commit hashes when
+applicable. File/stdin requests are bounded to 128 KiB.
+
+Review status is `candidate`, `accepted`, `invalidated`, `superseded` or `deleted`.
+Only accepted knowledge can be pinned. Set `deleted` in a revision to withdraw
+future selection while retaining exact historical versions for provenance.
+Superseded knowledge must reference an accepted exact `supersededBy` ID/version.
+
+### Persistent task planning
+
+`ao task show <id>` includes derived planning/execution state, cancellation
+intent and retained lease facts. `ao task intents <id>` pages control history.
+`ao task set-intent <id> --file <path>` accepts `intent` (`run` or `cancel`),
+`expectedRevision`, `expectedVersion` (zero initially), and `reason`. Cancellation
+blocks new admissions for the task and its descendants; active ownership remains
+reserved for lifecycle cleanup. A `cancelling` state is not proof a worker stopped.
+
+`ao task context <task-id> <attempt-id>` inspects the exact sealed prompt,
+versioned sources, hashes, byte/token estimates and omission reasons. It returns
+404 until context is sealed; inspection never launches work or reads files.
+Task definitions may include up to 16 portable workspace-relative `contextFiles`.
+The builder combines frozen task/criteria/dependencies, parent planning, explicit
+regular text files and up to 32 accepted relevant knowledge records. Pinned
+knowledge ranks before task links, category tags and general project facts.
+Candidate, invalidated and unrelated claims are excluded. Known credential paths,
+symlinks, unavailable, oversized and binary files are recorded as omitted.
+Type/Skill content remains linked to the exact worker configuration and resources.
+Default inline input is limited to 192 KiB and 48 Ki estimated tokens including
+system instructions; token estimates use four UTF-8 bytes per token. Restoration
+retains the original context after knowledge or file changes.
+
+`ao task submit-result <session-id> --file <path>` submits a JSON request with
+`sourceGeneration`, a stable `idempotencyKey`, `expectedVersion` (zero initially)
+and `definition`. The source generation must match the submitting worker's native
+execution. The daemon derives its attempt, actor, configuration and context; these
+cannot be supplied as author tags. Request JSON is limited to 512 KiB; the result
+definition is limited to 256 KiB and 16 corrections per attempt. Reuse a key only
+for an exact retry; corrections use a new key and the last result version.
+
+Reserved TUI and Chat workers receive executable/argv and JSON examples in their
+sealed launch context. These instructions count toward the prompt budget and
+retain the reserved native generation. Ownership conflicts preserve output for
+recovery; historical instructions cannot refresh themselves to a new owner.
+
+A definition has `schemaVersion: 1`, `claimedOutcome` (`completed`, `partial` or
+`blocked`), `summary` and `implementation`, plus optional `claimedCommit` (full Git
+object ID) and the collections `decisions`, `assumptions`, `interfaces`, `tests`,
+`findings`, `unresolvedIssues`, `recommendedFollowUp` and `knowledgeCandidates`.
+Tests contain `command`, `outcome` (`passed`, `failed`, `not_run`, `unknown`) and
+`details`; interfaces contain `name`, `contract` and workspace-relative `files`.
+Knowledge candidates contain `title`, `kind`, `content`, `confidence` and `tags`.
+These are worker claims awaiting independent evaluation; commands are not executed
+and knowledge is not automatically accepted. `ao task results <task-id>
+<attempt-id>` pages claim history; `ao task result <task-id> <attempt-id>
+<result-id>` reads an exact submission. Malformed submissions leave native output
+and previous results intact.
+
+`ao task evaluate <task-id> <attempt-id> --file <path|->` collects an immutable
+assessment of independent evidence. Its JSON request contains `resultId`,
+`expectedVersion` (zero initially), a stable `idempotencyKey`, and `reason`, with an
+8 KiB limit. Criteria, evidence, author identity and verdict are derived by the
+daemon. An exact retry returns the original snapshot; a fresh assessment requires
+a new key, the latest evaluation number, and the attempt's latest result.
+`ao task evaluations <task-id> <attempt-id>` pages up to 64 assessments per attempt;
+`ao task evaluation <task-id> <attempt-id> <evaluation-id>` inspects exact evidence,
+source timestamps, frozen criteria, and Type/Skill/model/configuration attribution.
+
+CI criteria use `evidenceKind: "ci"` and one or more exact `checkNames`.
+The `test`, `build` and `lint` kinds can also freeze exact `checkNames` to classify
+their independently observed CI results. Only
+successful checks observed in the retained PR snapshot at the result's exact full
+commit can pass. Missing, pending, cancelled, skipped, mismatched, or truncated
+evidence is inconclusive. Worker-reported tests cannot satisfy these criteria.
+Command-only criteria retain their original description but remain inconclusive
+without supported independent evidence. A check selector and command vector cannot
+be combined; the assessment does not claim the daemon ran a CI job's command.
+`mergeability` criteria require a non-draft PR observed at the exact result commit
+with a known mergeable state. An observed conflict or closed unmerged PR fails;
+unknown, stale or truncated observations cannot pass. Other criterion kinds remain
+inconclusive until their independent collectors are available. Assessment reads do
+not refresh SCM data or change leases or planning.
+
+An `artifact` criterion can freeze `artifactPath` and `artifactSha256`. Collection
+reads the raw regular Git blob at the result's full commit from the worker's
+repository and compares its SHA-256 with the frozen expectation. Dirty files,
+checkout/export filters and worker-reported hashes are excluded. A missing path or
+hash mismatch fails; missing commits, oversized blobs, symlinks, submodules and
+unavailable Git remain inconclusive. Collection reads at most 16 artifacts, each
+at most 1 MiB, within a 15-second total deadline. It does not fetch missing objects,
+execute artifact content or modify the repository. Legacy artifact criteria without
+a frozen hash remain inconclusive. Exact evaluation retries return stored evidence
+before accessing Git, even after the repository becomes unavailable.
+
+Assessments also retain up to 16 PR observations, 32 latest review-run references
+at the target commit, and worker activity/termination/lease facts. Review previews
+are capped at 4 KiB with a preview hash, original byte count and truncation flag.
+Review verdicts are qualitative evidence; a generic approval cannot satisfy frozen
+task criteria. Reservation elapsed time includes waiting and is explicitly marked
+ongoing until lease release. Termination alone does not identify a worker crash.
+
+`ao task send-message <session-id> --file <path|->` persists structured coordination.
+Its request contains `sourceGeneration`, a stable `idempotencyKey`, and a
+`definition` with `schemaVersion: 1`, `kind`, `targetTaskId`, `subject`, `body` and
+`correlationId`. Supported kinds are `finding`, `question`, `answer`, `blocker`,
+`handoff`, `interface_contract`, `review_request` and `dependency_update`. A target
+must be another task in the same project. It need not have a worker yet. Replies
+include `replyToId` and retain the original thread and task pair; an answer must
+reply to a question. An optional `resultId` must belong to the sending attempt.
+An `interface_contract` includes an `interface` object with `name`, `contract` and
+workspace-relative `files`. All content remains attributed worker claims.
+
+Message requests are capped at 64 KiB, definitions at 32 KiB, history at 256 messages
+per attempt and 10,000 per project. Exact retries return the same stored message.
+`ao task messages <project> [--task <task-id>] [--cursor <sequence>] [--limit <n>]`
+reads the shared timeline; the task filter includes both sent and received messages.
+`ao task message <project> <message-id>` reads exact content and delivery history.
+An empty delivery history means no native send has been reserved. `dispatching`
+means reserved, `handed_off` means transport acceptance, `not_sent` means proven
+undelivered and `uncertain` requires reconciliation. These observations never mean
+the recipient has read the message or accepted a proposed interface. Only proven
+undelivered messages permit another automatic send, with at most four attempts.
+
+`ao task` (alias `ao tasks`) authors work independently of worker sessions and
+returns JSON. `create <project> --file <path>` accepts the task API body:
+
+```json
+{
+  "definition": {
+    "title": "Add regression coverage",
+    "brief": "Cover the reported failure and retain verification evidence.",
+    "category": "testing",
+    "priority": 0,
+    "dependencies": [],
+    "requiredCapabilities": [],
+    "maxAttempts": 3
+  },
+  "criteria": {
+    "criteria": [{
+      "id": "regression",
+      "requirement": "The regression test passes against the implementation.",
+      "evidenceKind": "test",
+      "command": ["go", "test", "./..."]
+    }]
+  },
+  "reason": "Plan the requested regression fix"
+}
+```
+
+Use `--file -` for stdin. Input is one JSON object, bounded to 256 KiB. Optional
+`definition.requestedWorker` uses the same `agentTypeId`, `version` and `overrides`
+as manual worker launch. Criteria may be omitted while planning but must be
+persisted before leasing. Commands in criteria describe expected verification;
+authoring a task does not execute them or launch a worker.
+
+Use `list <project>`, `show <id>`, `revisions <id>`, `revision <id> <version>`,
+`criteria <id> <version>`, `audit <id>` and `attempts <id>` to inspect work.
+List/history commands support `--cursor` and `--limit 1..100` (default 20).
+`revise <id> --file <path>` accepts `definition`, `expectedRevision` and `reason`;
+`set-criteria <id> --file <path>` accepts `criteria`, `expectedRevision` and
+`reason`. Both append history. Existing attempts retain their frozen task and
+criteria versions. Actor identity is assigned by the daemon.
+
 `ao agent ls` asks the daemon to ensure display readiness, then prints the
 existing table or legacy JSON projection. The daemon alone decides whether a
 native check is needed. `--refresh` is a deprecated compatibility flag that
@@ -116,6 +286,15 @@ native history and compaction.
 `AO_SESSION_ID`. From an orchestrator or external shell, pass the target
 explicitly with `ao session claim-pr <session-id> <pr-ref>`. The explicit form
 remains supported for backward compatibility and cross-session coordination.
+
+Both `ao session claim-pr` and `ao spawn --claim-pr` claim ownership metadata
+only. The claim step does not check out a branch or change HEAD, so
+`branchChanged: false` renders as `checkout: not performed; workspace unchanged`
+without asserting that HEAD matches the provider PR. `ao session claim-pr --json`
+preserves that field; `spawn` has no JSON mode. Verify the branch and HEAD before
+editing or pushing. Automatic checkout is deferred until exact-head verification,
+takeover, concurrent provider changes, and worktree preservation can be handled
+together.
 
 If `--agent` / `--harness` is omitted, `ao spawn` uses the resolved project's
 `worker.agent` config. Before spawning, the CLI performs one targeted launch
@@ -201,6 +380,129 @@ The CLI and daemon share the same environment-driven config:
 | `AO_DISABLE_GPU`      | unset (off)          | Skip Chromium hardware acceleration; escape hatch for broken Linux GPU drivers.                |
 
 The daemon always binds `127.0.0.1`.
+
+## Task review requests and evidence
+
+An attempt's acceptance criteria can pin `reviewPolicy.agentTypeId` and `version`,
+with `differentAgentType` and `differentHarness` requirements. Request review of
+an exact submitted result using a JSON file containing `{"resultId":"..."}`:
+
+```bash
+ao task request-review <task-id> <attempt-id> --file review-request.json
+ao task reviews <task-id> <attempt-id> <result-id>
+ao task review <task-id> <attempt-id> <run-id>
+```
+
+The daemon resolves that pinned Type and its Skills, seals the criteria and native
+configuration, and launches through the existing reviewer service. History is
+bounded to 64 passes per result; inspection shows the retained payload and native
+launch witness even after registry edits. Active and approved scopes are reused.
+An uncertain launch remains reserved for reconciliation. New admission still
+requires the pinned Type and native configuration to be available.
+
+The native reviewer's submission includes `sourceGeneration` in each batch item,
+or `--source-generation` for a single `ao review submit`. A verdict is qualitative
+review evidence; independent task evaluation remains a separate operation.
+
+## Agent Manager governance
+
+`ao agent-manager configure <project> --file manager.json` versions desired
+human-owned policy through the daemon. It does not launch a controller or change
+a running controller's pins. `show`, `configurations`, `configuration <project>
+<version>` and `audit` inspect the current policy and immutable history as JSON.
+History/audit accept `--cursor` and `--limit` (1–100).
+
+`start <project> --file start.json` explicitly starts the configured native Manager
+with a stable `id`, exact `configurationVersion` and `reason`. An exact retry reads
+retained admission and never authorizes another native launch. `current <project>`
+reports reserved ownership (or null); `controller <project> <controller-id>` reads
+an exact retained admission and session binding. A pending native operation requires
+reconciliation, not another start ID. Native mode and configuration come from the
+pinned Type; starting the controller does not itself launch task workers.
+
+The request contains `definition`, `expectedRevision` (0 only initially) and a
+reason. The definition pins an exact Agent Type version and carries explicit,
+bounded creation/inbox/retry policy. Creation is opt-in; entry-level ownership
+permissions remain independent. Stale edits return a conflict. See the embedded
+[Manager command contract](../../backend/internal/skillassets/using-ao/commands/agent-manager.md)
+for all fields and bounds. Governance edits are human actions; the Manager's
+structured tools cannot escalate their own permissions.
+
+`inbox <project>` pages pending routing requests; `requests <project>` includes
+terminal history. `request <project> <request>` inspects exact task, criteria and
+policy references/hashes; `request-resolution` shows a retained receipt or null.
+`enqueue <project> --file routing.json` records a stable retry ID, task ID/revision,
+governance version and reason. `resolve <project> <request> --file resolution.json`
+records cancelled, superseded or Needs Human with a reason. Both writes use bounded
+16 KiB JSON and server-derived authority. They affect routing intent only: native
+launch, task cancellation and ownership release use their own service boundaries.
+
+`propose <session-id> <request> --file proposal-envelope.json` submits a native
+Manager's `sourceGeneration`, `idempotencyKey` and exact `raw` output. It preserves
+malformed/empty output for bounded correction and rejects stale or unrelated native
+sources. Receipts acknowledge persistence, not applied selection. `proposals
+<project> <request>` and `proposal <project> <request> <proposal>` expose the retained
+output/parser history independently of live ownership. The embedded contract above
+documents the versioned inner protocol and envelope bounds.
+
+Manager inbox consumption starts after daemon native reconciliation. Eligible
+queued work can admit the configured Manager; uncertain ownership is retained.
+`ao agent-manager contexts <project> <request>`, `context <project> <request>
+<context>` and `deliveries <project> <request>` expose exact classified input,
+its native CLI protocol and bounded transport history. Proposals link to those
+sealed inputs. Unknown delivery is never automatically repeated; a persistent
+conversation retains its engagement and cumulative sensitivity.
+
+`ao agent-manager candidates <project> <request> --limit 20` checks current Type
+and Skill permissions, exact-version clearance, required capabilities and native
+availability. Rejected candidates remain visible. Follow `nextCursor` using
+`--cursor`; one page does not establish that the registry has no eligible Types.
+`candidate <project> <request> <type> --version N` checks an exact historical
+version. These observations do not authorize a launch or apply a selection.
+
+Native `propose` responses now include a retained `decision` when assessment
+finishes and a `routingOutcome` code when routing closes. Rejected assessments
+allow corrections within the shared parser/semantic budget; `selected` records a
+validated configuration choice without claiming a worker launch. Inspect history
+with `decisions <project> <request>` or `decision <project> <request> <proposal>`.
+The daemon resumes unassessed native output after restart without resending input.
+
+## Task performance evidence and metrics
+
+```bash
+ao task performance <project> --from 2026-09-01T00:00:00Z --to 2026-10-01T00:00:00Z --limit 20
+ao task metrics <project> --from 2026-09-01T00:00:00Z --to 2026-10-01T00:00:00Z --group-by agent_type_version
+```
+
+These read `/projects/{id}/task-performance` and its `/summary` route through
+the daemon. Windows select attempt **admission** time, inclusive `from` and
+exclusive `to`, at most 366 days. Outcomes and session-wide usage are observed at
+read time; these are not billing-event windows. Evidence pages accept the exact
+returned `--cursor`. Summaries cover at most 1000 attempts in one database
+snapshot; `PERFORMANCE_WINDOW_TOO_LARGE` requires a narrower window. No partial
+summary is returned. Empty cohorts retain zero sample counts.
+
+Group by `agent_type`, `agent_type_version`, `skill`, `skill_version`, `harness`,
+`model`, `category` or `capability`. Overall totals include unseeded reservations
+and mixed configurations. Configuration groups exclude both, reporting separate
+counts; task category/capability groups retain them. Skills and capabilities may
+overlap, so group counts must not be summed into a project total. These are
+observational comparisons; task difficulty, attached Skills and model differences
+remain possible confounders.
+
+`assessedPassed` is historical evaluation evidence, distinct from the current
+completion proof in `ao task show`. First-pass credit requires attempt one,
+result one, and passing first/latest assessments. Retry counts count extra
+attempts once. CI failures count attempts with failed frozen criteria; review
+changes count witnessed native passes requesting changes, not individual prose
+findings. Duration sums and samples include only closed reservations; ongoing
+reservations are separate. Reservation time is not CPU time.
+
+Unknown per-attempt tokens remain null; known zero remains zero. Aggregate token
+sums include only their reported known samples. Native, estimated and unknown
+event counts and incomplete-attempt counts remain visible. Priced cost is the
+priced portion in nanos with its event count, not an observed invoice or an
+estimate for unpriced events. Missing native model names remain unspecified.
 
 ## Manual smoke test
 

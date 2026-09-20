@@ -12,13 +12,521 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	agentsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agent"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/agentauth"
+	managersvc "github.com/aoagents/agent-orchestrator/backend/internal/service/agentmanager"
+	controlsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/control"
+	knowledgesvc "github.com/aoagents/agent-orchestrator/backend/internal/service/knowledge"
 	projectsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/project"
+	registrysvc "github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
 	sessionsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/session"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systemcheck"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/systeminstall"
+	tasksvc "github.com/aoagents/agent-orchestrator/backend/internal/service/task"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/mobilebridge"
 )
+
+// AgentManagerConfigureRequest changes desired policy at an expected revision.
+type AgentManagerConfigureRequest managersvc.ConfigureInput
+
+// AgentManagerStartRequest identifies exact, retryable native admission.
+type AgentManagerStartRequest managersvc.ControllerStartInput
+
+// AgentManagerControllerResponse reports admission and native-operation facts.
+type AgentManagerControllerResponse managersvc.ControllerState
+
+// AgentManagerStartResponse acknowledges admission; retries only inspect state.
+type AgentManagerStartResponse struct {
+	State   AgentManagerControllerResponse `json:"state"`
+	Created bool                           `json:"created"`
+}
+
+// AgentManagerCurrentControllerResponse distinguishes absent reserved ownership.
+type AgentManagerCurrentControllerResponse struct {
+	State *AgentManagerControllerResponse `json:"state"`
+}
+
+// AgentManagerControllerIDParam identifies retained project controller admission.
+type AgentManagerControllerIDParam struct {
+	ControllerID string `path:"controllerId"`
+}
+
+// AgentManagerEnqueueRequest pins retryable routing intent without actor fields.
+type AgentManagerEnqueueRequest managersvc.EnqueueInput
+
+// AgentManagerResolveRequest closes only Manager routing intent.
+type AgentManagerResolveRequest managersvc.ResolveInput
+
+// AgentManagerProposalRequest wraps bounded raw output and its native retry key.
+type AgentManagerProposalRequest managersvc.ProposalInput
+
+// AgentManagerProposalResponse includes retained output and deterministic feedback.
+type AgentManagerProposalResponse managersvc.ProposalReceipt
+
+// AgentManagerProposalsResponse contains the bounded native correction history.
+type AgentManagerProposalsResponse struct {
+	Items []domain.AgentManagerProposal `json:"items"`
+}
+
+// AgentManagerRegistryRequest wraps native authoring output and its retry key.
+type AgentManagerRegistryRequest managersvc.RegistryActionInput
+
+// AgentManagerRegistryResponse includes the sealed authoring receipt and target.
+type AgentManagerRegistryResponse managersvc.RegistryActionReceipt
+
+// AgentManagerRegistryReceiptsResponse contains a request's retained receipts.
+type AgentManagerRegistryReceiptsResponse struct {
+	Items       []domain.AgentManagerRegistryReceipt `json:"items"`
+	NextAfterID string                               `json:"nextAfterId,omitempty"`
+}
+
+// AgentManagerRegistryReceiptQuery bounds retained receipt pages.
+type AgentManagerRegistryReceiptQuery struct {
+	AfterID string `query:"afterId"`
+	Limit   int    `query:"limit" minimum:"1" maximum:"100" default:"20"`
+}
+
+// AgentManagerRegistryReceiptIDParam identifies one sealed authoring receipt.
+type AgentManagerRegistryReceiptIDParam struct {
+	ReceiptID string `path:"receiptId"`
+}
+
+// AgentManagerDecisionsResponse contains at most five immutable assessments.
+type AgentManagerDecisionsResponse struct {
+	Items []domain.AgentManagerDecision `json:"items"`
+}
+
+// AgentManagerDecisionResponse is null for output without a retained assessment.
+type AgentManagerDecisionResponse struct {
+	Decision *domain.AgentManagerDecision `json:"decision"`
+}
+
+// AgentManagerContextsResponse contains at most 32 sealed routing inputs.
+type AgentManagerContextsResponse struct {
+	Items []domain.AgentManagerContext `json:"items"`
+}
+
+// AgentManagerCandidatesResponse contains current compatibility observations.
+type AgentManagerCandidatesResponse managersvc.CandidatePage
+
+// AgentManagerCandidateQuery bounds native checks per page.
+type AgentManagerCandidateQuery struct {
+	Cursor string `query:"cursor"`
+	Limit  int    `query:"limit" minimum:"1" maximum:"20" default:"20"`
+}
+
+// AgentManagerCandidateIDParam identifies an exact Type candidate.
+type AgentManagerCandidateIDParam struct {
+	AgentTypeID string `path:"agentTypeId"`
+}
+
+// AgentManagerCandidateVersionQuery requires an immutable Type version.
+type AgentManagerCandidateVersionQuery struct {
+	Version int64 `query:"version" required:"true" minimum:"1"`
+}
+
+// AgentManagerDeliveriesResponse contains at most four native send attempts.
+type AgentManagerDeliveriesResponse struct {
+	Items []domain.AgentManagerDelivery `json:"items"`
+}
+
+// AgentManagerContextIDParam identifies an exact immutable input artifact.
+type AgentManagerContextIDParam struct {
+	ContextID string `path:"contextId"`
+}
+
+// AgentManagerProposalIDParam identifies exact retained native output.
+type AgentManagerProposalIDParam struct {
+	ProposalID string `path:"proposalId"`
+}
+
+// AgentManagerRequestIDParam identifies a retained project routing request.
+type AgentManagerRequestIDParam struct {
+	RequestID string `path:"requestId" required:"true"`
+}
+
+// AgentManagerRequestsResponse pages retained routing references.
+type AgentManagerRequestsResponse struct {
+	Items      []domain.AgentManagerRequest `json:"items"`
+	NextCursor string                       `json:"nextCursor,omitempty"`
+}
+
+// AgentManagerResolutionResponse distinguishes pending work from a terminal receipt.
+type AgentManagerResolutionResponse struct {
+	Resolution *domain.AgentManagerRequestResolution `json:"resolution"`
+}
+
+// AgentManagerConfigurationsResponse pages immutable governance history.
+type AgentManagerConfigurationsResponse struct {
+	Items      []domain.AgentManagerConfiguration `json:"items"`
+	NextCursor string                             `json:"nextCursor,omitempty"`
+}
+
+// AgentManagerAuditResponse pages user policy provenance.
+type AgentManagerAuditResponse struct {
+	Items      []domain.AgentManagerAudit `json:"items"`
+	NextCursor string                     `json:"nextCursor,omitempty"`
+}
+
+// KnowledgeIDParam identifies a retained project claim.
+type KnowledgeIDParam struct {
+	KnowledgeID string `path:"knowledgeId"`
+}
+
+// KnowledgeListQuery searches current content with a bounded page.
+type KnowledgeListQuery struct {
+	Cursor string `query:"cursor"`
+	Limit  int    `query:"limit" minimum:"1" maximum:"100" default:"20"`
+	Status string `query:"status" enum:"candidate,accepted,invalidated,superseded,deleted"`
+	Kind   string `query:"kind" enum:"architecture,convention,interface,constraint,pitfall,failed_approach,file_relationship,external_behavior,question"`
+	Search string `query:"search"`
+}
+
+// KnowledgeCreateRequest contains editable claims, never actor authority.
+type KnowledgeCreateRequest knowledgesvc.CreateInput
+
+// KnowledgeReviseRequest appends an audited revision using an optimistic fence.
+type KnowledgeReviseRequest knowledgesvc.RevisionInput
+
+// KnowledgeResponse pairs identity and the exact current version.
+type KnowledgeResponse knowledgesvc.View
+
+// KnowledgeListResponse is one project search page.
+type KnowledgeListResponse struct {
+	Items      []knowledgesvc.View `json:"items"`
+	NextCursor string              `json:"nextCursor,omitempty"`
+}
+
+// KnowledgeVersionsResponse pages immutable knowledge history.
+type KnowledgeVersionsResponse struct {
+	Items      []domain.KnowledgeVersion `json:"items"`
+	NextCursor string                    `json:"nextCursor,omitempty"`
+}
+
+// AdaptiveTaskIDParam identifies persistent work independently of a session.
+type AdaptiveTaskIDParam struct {
+	TaskID string `path:"taskId"`
+}
+
+// AdaptiveTaskAttemptParam identifies one retained worker attempt.
+type AdaptiveTaskAttemptParam struct {
+	AttemptID string `path:"attemptId"`
+}
+
+// TaskMessageIDParam identifies immutable project coordination.
+type TaskMessageIDParam struct {
+	MessageID string `path:"messageId"`
+}
+
+// TaskMessageFilterQuery optionally selects messages sent or received by a task.
+type TaskMessageFilterQuery struct {
+	TaskID string `query:"taskId" required:"false"`
+}
+
+// TaskMessageSubmitRequest supplies generation-fenced, bounded coordination.
+type TaskMessageSubmitRequest tasksvc.MessageInput
+
+// TaskMessageSubmitResponse acknowledges storage before native delivery.
+type TaskMessageSubmitResponse tasksvc.MessageReceipt
+
+// TaskMessageResponse exposes content and observed transport history separately.
+type TaskMessageResponse tasksvc.MessageView
+
+// TaskMessagesResponse pages the shared project message timeline.
+type TaskMessagesResponse struct {
+	Items      []domain.TaskMessage `json:"items"`
+	NextCursor string               `json:"nextCursor,omitempty"`
+}
+
+// TaskPerformanceWindow selects attempt admissions, not usage billing events.
+type TaskPerformanceWindow struct {
+	From time.Time `query:"from" required:"true"`
+	To   time.Time `query:"to" required:"true"`
+}
+
+// TaskPerformanceGrouping selects a historical dimension for a complete cohort.
+type TaskPerformanceGrouping struct {
+	GroupBy string `query:"groupBy" default:"agent_type_version" enum:"agent_type,agent_type_version,skill,skill_version,harness,model,category,capability"`
+}
+
+// TaskReviewRunParam identifies a retained native review pass.
+type TaskReviewRunParam struct {
+	RunID string `path:"runId"`
+}
+
+// TaskReviewRequest selects a result, never reviewer configuration or authority.
+type TaskReviewRequest tasksvc.ReviewInput
+
+// TaskReviewResponse exposes exactly what one native reviewer received.
+type TaskReviewResponse tasksvc.ReviewView
+
+// TaskReviewsResponse lists the bounded review history for a result.
+type TaskReviewsResponse struct {
+	Items []domain.ReviewRun `json:"items"`
+}
+
+// TaskEvaluationIDParam identifies an immutable independent assessment.
+type TaskEvaluationIDParam struct {
+	EvaluationID string `path:"evaluationId"`
+}
+
+// TaskEvaluateRequest selects a result and retry identity, never a verdict.
+type TaskEvaluateRequest tasksvc.EvaluationInput
+
+// TaskEvaluateResponse retains independently collected facts and attribution.
+type TaskEvaluateResponse tasksvc.EvaluationReceipt
+
+// TaskEvaluationsResponse pages historical assessment snapshots.
+type TaskEvaluationsResponse struct {
+	Items      []domain.TaskEvaluation `json:"items"`
+	NextCursor string                  `json:"nextCursor,omitempty"`
+}
+
+// TaskDelegationNumberParam selects one sealed-context receipt.
+type TaskDelegationNumberParam struct {
+	Number int64 `path:"number" required:"true" minimum:"1" maximum:"1000"`
+}
+
+// TaskResultIDParam identifies one immutable worker submission.
+type TaskResultIDParam struct {
+	ResultID string `path:"resultId"`
+}
+
+// TaskResultSubmitRequest contains generation-fenced worker claims.
+type TaskResultSubmitRequest tasksvc.ResultInput
+
+// TaskResultSubmitResponse acknowledges persistence, not successful evaluation.
+type TaskResultSubmitResponse tasksvc.ResultReceipt
+
+// TaskResultsResponse pages immutable claim corrections within one attempt.
+type TaskResultsResponse struct {
+	Items      []domain.TaskResult `json:"items"`
+	NextCursor string              `json:"nextCursor,omitempty"`
+}
+
+// TaskDelegationsResponse pages immutable sealed-context receipts.
+type TaskDelegationsResponse struct {
+	Items      []domain.TaskDelegation `json:"items"`
+	NextCursor string                  `json:"nextCursor,omitempty"`
+}
+
+// AdaptiveTaskVersionParam selects immutable task or criteria history.
+type AdaptiveTaskVersionParam struct {
+	Version int64 `path:"version" minimum:"1"`
+}
+
+// AdaptiveTaskListQuery bounds project pages and chronological history.
+type AdaptiveTaskListQuery struct {
+	Cursor string `query:"cursor"`
+	Limit  int    `query:"limit" minimum:"1" maximum:"100" default:"20"`
+}
+
+// OutcomeSequencePageQuery bounds sequence-keyed attribution pages (the
+// routing-outcome family keys pages on the decision arrival sequence).
+type OutcomeSequencePageQuery struct {
+	After int64 `query:"after" minimum:"0"`
+	Limit int   `query:"limit" minimum:"1" maximum:"100" default:"20"`
+}
+
+// OutcomeIDPageQuery bounds id-keyset attribution pages (the planning-outcome
+// family keys pages on the public receipt cursor).
+type OutcomeIDPageQuery struct {
+	AfterID string `query:"afterId"`
+	Limit   int    `query:"limit" minimum:"1" maximum:"100" default:"20"`
+}
+
+// OutcomeWindowQuery bounds attribution summaries: routing and planning
+// aggregate one complete from/to window with neither bound defaulted.
+type OutcomeWindowQuery struct {
+	From time.Time `query:"from" required:"true"`
+	To   time.Time `query:"to" required:"true"`
+}
+
+// AdaptiveTaskCreateRequest contains authorable fields, never actor identity.
+type AdaptiveTaskCreateRequest tasksvc.CreateInput
+
+// AdaptiveTaskReviseRequest requires an optimistic revision fence and reason.
+type AdaptiveTaskReviseRequest tasksvc.RevisionInput
+
+// AdaptiveTaskCriteriaRequest versions acceptance without rewriting attempts.
+type AdaptiveTaskCriteriaRequest tasksvc.CriteriaInput
+
+// AdaptiveTaskIntentRequest changes admission intent, retaining active ownership.
+type AdaptiveTaskIntentRequest tasksvc.IntentInput
+
+// AdaptiveTaskIntentsResponse is explicit control history in version order.
+type AdaptiveTaskIntentsResponse struct {
+	Items      []domain.TaskIntent `json:"items"`
+	NextCursor string              `json:"nextCursor,omitempty"`
+}
+
+// AdaptiveTaskResponse exposes exact planning alongside current lease facts.
+type AdaptiveTaskResponse tasksvc.View
+
+// AdaptiveTaskListResponse is one stable project-scoped page.
+type AdaptiveTaskListResponse struct {
+	Items      []tasksvc.View `json:"items"`
+	NextCursor string         `json:"nextCursor,omitempty"`
+}
+
+// AdaptiveTaskRevisionsResponse is a chronological page of retained planning.
+type AdaptiveTaskRevisionsResponse struct {
+	Items      []domain.TaskRevision `json:"items"`
+	NextCursor string                `json:"nextCursor,omitempty"`
+}
+
+// AdaptiveTaskAuditResponse is durable semantic history, not the CDC replay log.
+type AdaptiveTaskAuditResponse struct {
+	Items      []domain.TaskAudit `json:"items"`
+	NextCursor string             `json:"nextCursor,omitempty"`
+}
+
+// AdaptiveTaskAttemptsResponse includes exact pins and immutable worker links.
+type AdaptiveTaskAttemptsResponse struct {
+	Items      []tasksvc.AttemptView `json:"items"`
+	NextCursor string                `json:"nextCursor,omitempty"`
+}
+
+// RegistryIDParam identifies an Agent Type or authored Skill.
+type RegistryIDParam struct {
+	ID string `path:"id"`
+}
+
+// ProviderBindingResponse exposes a native reference without credential state.
+type ProviderBindingResponse struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Harness   string    `json:"harness"`
+	Provider  string    `json:"provider"`
+	ProjectID string    `json:"projectId"`
+	Enabled   bool      `json:"enabled"`
+	Revision  int64     `json:"revision"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ProviderBindingListResponse contains stable paginated local references.
+type ProviderBindingListResponse struct {
+	Items      []ProviderBindingResponse `json:"items"`
+	NextCursor string                    `json:"nextCursor,omitempty"`
+}
+
+// ProviderBindingAuditResponse exposes one immutable human change.
+type ProviderBindingAuditResponse struct {
+	Sequence  int64     `json:"sequence"`
+	BindingID string    `json:"bindingId"`
+	Revision  int64     `json:"revision"`
+	Action    string    `json:"action"`
+	ActorID   string    `json:"actorId"`
+	Reason    string    `json:"reason"`
+	Name      string    `json:"name"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// ProviderBindingAuditListResponse bounds the immutable authoring history.
+type ProviderBindingAuditListResponse struct {
+	Events     []ProviderBindingAuditResponse `json:"events"`
+	NextCursor string                         `json:"nextCursor,omitempty"`
+}
+
+func providerBindingResponse(binding domain.ProviderBinding) ProviderBindingResponse {
+	return ProviderBindingResponse{ID: binding.ID, Name: binding.Name, Harness: string(binding.Harness), Provider: binding.Provider, ProjectID: binding.ProjectID, Enabled: binding.Enabled, Revision: binding.Revision, CreatedAt: binding.CreatedAt, UpdatedAt: binding.UpdatedAt}
+}
+
+// RegistryVersionParam selects immutable configuration history.
+type RegistryVersionParam struct {
+	Version int64 `path:"version" minimum:"1"`
+}
+
+// RegistryListQuery bounds all registry pages. Version/audit cursors are numeric.
+type RegistryListQuery struct {
+	Cursor string `query:"cursor,omitempty"`
+	Limit  int    `query:"limit,omitempty" minimum:"1" maximum:"200"`
+}
+
+// RegistryEntryResponse is mutable metadata plus stable ownership provenance.
+type RegistryEntryResponse struct {
+	ID            string                  `json:"id"`
+	Kind          string                  `json:"kind" enum:"agent_type,skill"`
+	Origin        string                  `json:"origin" enum:"USER,AGENT_MANAGER,SYSTEM"`
+	CreatedBy     string                  `json:"createdBy"`
+	Metadata      domain.RegistryMetadata `json:"metadata"`
+	Revision      int64                   `json:"revision"`
+	ActiveVersion int64                   `json:"activeVersion"`
+	CreatedAt     time.Time               `json:"createdAt"`
+	UpdatedAt     time.Time               `json:"updatedAt"`
+}
+
+// RegistryVersionResponse is an immutable definition and its provenance.
+type RegistryVersionResponse struct {
+	EntryID       string                    `json:"entryId"`
+	Number        int64                     `json:"number"`
+	ParentVersion int64                     `json:"parentVersion"`
+	Definition    domain.RegistryDefinition `json:"definition"`
+	ContentHash   string                    `json:"contentHash"`
+	Origin        string                    `json:"origin" enum:"USER,AGENT_MANAGER,SYSTEM"`
+	CreatedBy     string                    `json:"createdBy"`
+	Reason        string                    `json:"reason"`
+	CreatedAt     time.Time                 `json:"createdAt"`
+}
+
+// RegistryViewResponse combines metadata and the pinned active version.
+type RegistryViewResponse struct {
+	Entry   RegistryEntryResponse   `json:"entry"`
+	Version RegistryVersionResponse `json:"version"`
+}
+
+// RegistryImportResponse identifies new disabled records and unresolved setup.
+type RegistryImportResponse struct {
+	Root           RegistryViewResponse    `json:"root"`
+	ImportedSkills []RegistryEntryResponse `json:"importedSkills"`
+	Requirements   []string                `json:"requirements"`
+}
+
+// RegistryListResponse contains one stable ID-ordered page.
+type RegistryListResponse struct {
+	Items      []RegistryViewResponse `json:"items"`
+	NextCursor string                 `json:"nextCursor,omitempty"`
+}
+
+// RegistryVersionsResponse contains a bounded version history page.
+type RegistryVersionsResponse struct {
+	Versions   []RegistryVersionResponse `json:"versions"`
+	NextCursor string                    `json:"nextCursor,omitempty"`
+}
+
+// RegistryAuditResponse records a semantic action independent of CDC retention.
+type RegistryAuditResponse struct {
+	Sequence      int64     `json:"sequence"`
+	EntryID       string    `json:"entryId"`
+	Revision      int64     `json:"revision"`
+	VersionNumber int64     `json:"versionNumber"`
+	Action        string    `json:"action"`
+	Origin        string    `json:"origin" enum:"USER,AGENT_MANAGER,SYSTEM"`
+	ActorID       string    `json:"actorId"`
+	Reason        string    `json:"reason"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
+// RegistryAuditListResponse contains a bounded chronological audit page.
+type RegistryAuditListResponse struct {
+	Events     []RegistryAuditResponse `json:"events"`
+	NextCursor string                  `json:"nextCursor,omitempty"`
+}
+
+func registryEntryResponse(entry domain.RegistryEntry) RegistryEntryResponse {
+	return RegistryEntryResponse{ID: entry.ID, Kind: string(entry.Kind), Origin: string(entry.Origin), CreatedBy: entry.CreatedBy,
+		Metadata: entry.Metadata, Revision: entry.Revision, ActiveVersion: entry.ActiveVersion, CreatedAt: entry.CreatedAt, UpdatedAt: entry.UpdatedAt}
+}
+
+func registryVersionResponse(version domain.RegistryVersion) RegistryVersionResponse {
+	return RegistryVersionResponse{EntryID: version.EntryID, Number: version.Number, ParentVersion: version.ParentVersion,
+		Definition: version.Definition.NormalizeLists(), ContentHash: version.ContentHash, Origin: string(version.Actor.Origin), CreatedBy: version.Actor.ID, Reason: version.Reason, CreatedAt: version.CreatedAt}
+}
+
+func registryViewResponse(view registrysvc.View) RegistryViewResponse {
+	return RegistryViewResponse{Entry: registryEntryResponse(view.Entry), Version: registryVersionResponse(view.Version)}
+}
 
 // HTTP response envelopes for the projects surface — the SINGLE definition of
 // each wire shape. The handlers encode these (envelope.WriteJSON), and
@@ -282,6 +790,7 @@ type ListSessionsResponse struct {
 
 // SpawnSessionRequest is the body of POST /api/v1/sessions.
 type SpawnSessionRequest struct {
+	WorkerSelection *domain.WorkerSelection `json:"workerSelection,omitempty"`
 	// ProjectID is omitted for a standalone worker session.
 	ProjectID domain.ProjectID `json:"projectId,omitempty"`
 	IssueID   domain.IssueID   `json:"issueId,omitempty"`
@@ -330,6 +839,31 @@ type AttachmentInput struct {
 // SessionResponse is the { session } body shared by session reads and updates.
 type SessionResponse struct {
 	Session SessionView `json:"session"`
+}
+
+// WorkerConfigurationResponse retains exact launch provenance. Null denotes a
+// session launched without an Agent Type, not a missing or failed lookup.
+type WorkerConfigurationResponse struct {
+	Configuration *domain.WorkerConfiguration `json:"configuration"`
+}
+
+// WorkerExecutionResponse exposes exact immutable configuration change facts.
+type WorkerExecutionResponse struct {
+	Execution domain.WorkerExecution `json:"execution"`
+}
+
+// WorkerExecutionHistoryResponse includes a bounded page and current configuration.
+type WorkerExecutionHistoryResponse sessionsvc.WorkerExecutionPage
+
+// WorkerExecutionQuery bounds chronological configuration history.
+type WorkerExecutionQuery struct {
+	Cursor *int64 `query:"cursor,omitempty" minimum:"0"`
+	Limit  *int   `query:"limit,omitempty" minimum:"1" maximum:"100"`
+}
+
+// WorkerExecutionIDParam identifies a configuration change within its session.
+type WorkerExecutionIDParam struct {
+	ExecutionID string `path:"executionId"`
 }
 
 // SpawnSessionResponse includes ephemeral measurements of the final assembled
@@ -618,9 +1152,11 @@ func (r *SetSessionAutoReviewRequest) UnmarshalJSON(data []byte) error {
 
 // SetSessionPreviewRequest is the body of POST /api/v1/sessions/{sessionId}/preview.
 // An empty url asks the daemon to autodetect a static entry point in the
-// session workspace; a non-empty url is used verbatim as the preview target.
+// session workspace; a non-empty url is resolved as a workspace file when
+// possible and otherwise retained as an external target.
 type SetSessionPreviewRequest struct {
-	URL string `json:"url,omitempty" description:"Preview target URL. When empty, the daemon autodetects a static entry point in the session workspace."`
+	URL                  string `json:"url,omitempty" description:"Preview target URL. When empty, the daemon autodetects a static entry point in the session workspace."`
+	RequireWorkspaceFile bool   `json:"requireWorkspaceFile,omitempty" description:"Reject the target unless it resolves to an existing file in the session workspace."`
 }
 
 // StartPreviewServerRequest selects one named entry from .ao/launch.json. The
@@ -864,11 +1400,12 @@ type SendSessionMessageResponse struct {
 // DelegateTaskRequest is the body of POST /api/v1/orchestrators/delegate.
 // An omitted agent tells the orchestrator to use the project's worker default.
 type DelegateTaskRequest struct {
-	ProjectID domain.ProjectID    `json:"projectId"`
-	Brief     string              `json:"brief" maxLength:"16384"`
-	Agent     domain.AgentHarness `json:"agent,omitempty" enum:"claude-code,codex,aider,opencode,grok,droid,amp,agy,crush,cursor,qwen,copilot,goose,auggie,continue,devin,cline,kimi,muse,kiro,kilocode,vibe,pi,kimchi,omp,prime-agent,autohand,fake"`
-	Model     string              `json:"model,omitempty" maxLength:"256"`
-	Effort    *string             `json:"effort,omitempty" maxLength:"64"`
+	WorkerSelection *domain.WorkerSelection `json:"workerSelection,omitempty"`
+	ProjectID       domain.ProjectID        `json:"projectId"`
+	Brief           string                  `json:"brief" maxLength:"16384"`
+	Agent           domain.AgentHarness     `json:"agent,omitempty" enum:"claude-code,codex,aider,opencode,grok,droid,amp,agy,crush,cursor,qwen,copilot,goose,auggie,continue,devin,cline,kimi,muse,kiro,kilocode,vibe,pi,kimchi,omp,prime-agent,autohand,fake"`
+	Model           string                  `json:"model,omitempty" maxLength:"256"`
+	Effort          *string                 `json:"effort,omitempty" maxLength:"64"`
 	// ApprovalMode is an optional per-session override. The UI uses the explicit
 	// bypass value only after the user accepts an approval-less Chat fallback.
 	ApprovalMode domain.PermissionMode `json:"approvalMode,omitempty" enum:"default,accept-edits,auto,bypass-permissions"`
@@ -1192,6 +1729,9 @@ type SpawnOrchestratorRequest struct {
 	// idempotent ensure returns the existing orchestrator unchanged, and a clean
 	// replacement inherits the existing orchestrator's currently committed mode.
 	Mode domain.SessionMode `json:"mode,omitempty" enum:"chat,tui"`
+	// ApprovalMode is an optional per-session override. The UI uses the explicit
+	// bypass value only after the user accepts an approval-less Chat fallback.
+	ApprovalMode domain.PermissionMode `json:"approvalMode,omitempty" enum:"default,accept-edits,auto,bypass-permissions"`
 }
 
 // SpawnOrchestratorResponse is the body of POST /api/v1/orchestrators.
@@ -1441,6 +1981,14 @@ type AgentModelsRefreshQuery struct {
 // AgentModelsResponse is the normalized model picker for one agent.
 type AgentModelsResponse = ports.AgentModelCatalog
 
+// AgentConfigurationResponse exposes declared adapter fields and mode support.
+type AgentConfigurationResponse = agentsvc.Configuration
+
+// AgentConfigurationQuery selects which mode's capabilities to inspect.
+type AgentConfigurationQuery struct {
+	Mode string `query:"mode,omitempty" enum:"tui,chat"`
+}
+
 // AgentModelInfo is one selectable model or agent-owned mode.
 type AgentModelInfo = ports.AgentModelInfo
 
@@ -1665,6 +2213,14 @@ type MarkAllNotificationsReadResponse struct {
 	UpdatedCount  int64                  `json:"updatedCount" description:"Number of notifications changed from unread to read."`
 }
 
+// ClearNotificationsResponse is the body of DELETE /api/v1/notifications.
+type ClearNotificationsResponse struct {
+	ClearedCount  int64  `json:"clearedCount" description:"Number of notifications deleted."`
+	ClearID       string `json:"clearId" description:"Identifier shared with the ordered notification_cleared stream event."`
+	ClearEpoch    string `json:"clearEpoch" description:"Daemon epoch for ordering notification clears across one daemon lifetime."`
+	ClearSequence int64  `json:"clearSequence" description:"Monotonic notification-clear sequence within clearEpoch."`
+}
+
 // ImportStatusResponse is the body of GET /api/v1/import: whether a legacy AO
 // install is available to import, and the root the daemon would read from.
 type ImportStatusResponse struct {
@@ -1734,6 +2290,23 @@ type EndpointsResponse struct {
 type IdentityResponse struct {
 	HostID     string `json:"hostId"`
 	APIVersion int    `json:"apiVersion"`
+}
+
+// LinkPreviewQuery selects the external page to unfurl.
+type LinkPreviewQuery struct {
+	URL string `query:"url" description:"Absolute http(s) URL of the page to preview."`
+}
+
+// LinkPreviewResponse is the body of GET /api/v1/link-preview (200). Only URL
+// is guaranteed; every other field is omitted when the page does not provide
+// it, so the renderer renders whatever subset arrived.
+type LinkPreviewResponse struct {
+	URL         string `json:"url"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	ImageURL    string `json:"imageUrl,omitempty"`
+	SiteName    string `json:"siteName,omitempty"`
+	FaviconURL  string `json:"faviconUrl,omitempty"`
 }
 
 // MobileStatusResponse is the body of the Connect Mobile status/enable/disable/
@@ -2479,6 +3052,10 @@ type SettingsResponse struct {
 	// CloudControlPlaneURL is the cloud control plane base URL; empty when no
 	// control plane is configured.
 	CloudControlPlaneURL string `json:"cloudControlPlaneUrl"`
+	// MaxConcurrentWorkers caps simultaneously running worker sessions. It is
+	// enforced transactionally at session creation; lowering it never kills a
+	// running worker.
+	MaxConcurrentWorkers int `json:"maxConcurrentWorkers" minimum:"1" maximum:"1000"`
 }
 
 // AgentInstallerCatalogResponse is the body of GET /api/v1/agents/installers.
@@ -2495,6 +3072,12 @@ type UpdateSessionInterfaceRequest struct {
 type UpdateCloudOfferingRequest struct {
 	// Enabled turns the cloud offering on or off for this machine's user.
 	Enabled *bool `json:"enabled"`
+}
+
+// UpdateMaxConcurrentWorkersRequest changes the daemon-wide worker cap.
+type UpdateMaxConcurrentWorkersRequest struct {
+	// MaxConcurrentWorkers applies to session creation from now on (1-1000).
+	MaxConcurrentWorkers int `json:"maxConcurrentWorkers" minimum:"1" maximum:"1000"`
 }
 
 // capabilityNames lists the abilities a provider has, sorted so a client sees a
@@ -2578,4 +3161,176 @@ type MuteDeviceRequest struct {
 // routes.
 type InstallIDParam struct {
 	InstallID string `path:"installId" description:"The device's stable install id."`
+}
+
+// SetProjectGoalRequest is the body of POST /api/v1/projects/{id}/goal.
+type SetProjectGoalRequest struct {
+	Goal   string `json:"goal" description:"The project's high-level goal wording."`
+	Reason string `json:"reason" description:"Why this goal wording is recorded."`
+}
+
+// ProjectGoalResponse is the { goal } envelope for goal reads and writes.
+type ProjectGoalResponse struct {
+	Goal domain.ProjectGoalVersion `json:"goal"`
+}
+
+// ProjectGoalVersionsResponse pages immutable goal history.
+type ProjectGoalVersionsResponse struct {
+	Items     []domain.ProjectGoalVersion `json:"items"`
+	NextAfter int64                       `json:"nextAfter,omitempty"`
+}
+
+// ProjectGoalCompletionsResponse pages retained goal completions.
+type ProjectGoalCompletionsResponse struct {
+	Items       []domain.ProjectGoalCompletion `json:"items"`
+	NextAfterID string                         `json:"nextAfterId,omitempty"`
+}
+
+// ProjectGoalCompletionResponse returns one verified completion decision.
+type ProjectGoalCompletionResponse struct {
+	Completion domain.ProjectGoalCompletion `json:"completion"`
+	Created    bool                         `json:"created"`
+}
+
+// NativeOrchestratorGoalResponse is the live read an orchestrator session
+// starts each planning cycle from.
+type NativeOrchestratorGoalResponse struct {
+	Goal             domain.ProjectGoalVersion `json:"goal"`
+	SourceGeneration string                    `json:"sourceGeneration"`
+	SessionID        domain.SessionID          `json:"sessionId"`
+}
+
+// OrchestratorPlanRequest is the body of POST /api/v1/projects/{id}/orchestrator/plan.
+type OrchestratorPlanRequest struct {
+	SourceGeneration string                        `json:"sourceGeneration"`
+	IdempotencyKey   string                        `json:"idempotencyKey"`
+	Action           domain.OrchestratorPlanAction `json:"action"`
+}
+
+// OrchestratorPlanResponse returns one sealed planning receipt.
+type OrchestratorPlanResponse struct {
+	Receipt domain.OrchestratorPlanReceipt `json:"receipt"`
+	Created bool                           `json:"created"`
+}
+
+// OrchestratorCompleteRequest is the body of POST /api/v1/projects/{id}/orchestrator/complete.
+type OrchestratorCompleteRequest struct {
+	SourceGeneration string `json:"sourceGeneration"`
+	GoalVersion      int64  `json:"goalVersion"`
+	Summary          string `json:"summary"`
+	Reason           string `json:"reason"`
+}
+
+// OrchestratorPlanReceiptsResponse pages retained planning receipts.
+type OrchestratorPlanReceiptsResponse struct {
+	Items       []domain.OrchestratorPlanReceipt `json:"items"`
+	NextAfterID string                           `json:"nextAfterId,omitempty"`
+}
+
+// OrchestratorPlanReceiptResponse returns one retained planning receipt.
+type OrchestratorPlanReceiptResponse struct {
+	Receipt domain.OrchestratorPlanReceipt `json:"receipt"`
+}
+
+// ProjectFeedbackResponse pages derived per-task loop facts.
+type ProjectFeedbackResponse struct {
+	Items     []domain.ProjectFeedbackItem `json:"items"`
+	NextAfter string                       `json:"nextAfter,omitempty"`
+}
+
+// ManagerRoutingOutcomesResponse pages routing decisions coupled with the
+// read-time fate of each routed task.
+type ManagerRoutingOutcomesResponse struct {
+	Items     []domain.ManagerRoutingOutcome `json:"items"`
+	NextAfter int64                          `json:"nextAfter,omitempty"`
+}
+
+// ManagerRoutingSummaryResponse aggregates one complete routing cohort.
+type ManagerRoutingSummaryResponse struct {
+	Summary domain.ManagerRoutingSummary `json:"summary"`
+}
+
+// OrchestratorPlanningOutcomesResponse pages planning receipts coupled with the
+// read-time fate of their tasks.
+type OrchestratorPlanningOutcomesResponse struct {
+	Items       []domain.OrchestratorPlanningOutcome `json:"items"`
+	NextAfterID string                               `json:"nextAfterId,omitempty"`
+}
+
+// OrchestratorPlanningSummaryResponse aggregates one complete planning cohort.
+type OrchestratorPlanningSummaryResponse struct {
+	Summary domain.OrchestratorPlanningSummary `json:"summary"`
+}
+
+// ProjectControlResponse returns one project's stored and derived control.
+type ProjectControlResponse struct {
+	View domain.ProjectControlView `json:"view"`
+}
+
+// ProjectCancelWorkResponse reports exactly what one bulk cancel did.
+type ProjectCancelWorkResponse struct {
+	Cancel controlsvc.CancelResult `json:"cancel"`
+}
+
+// ProjectNeedsHumanResponse pages a project's open human requests.
+type ProjectNeedsHumanResponse struct {
+	Items       []domain.TaskNeedsHuman `json:"items"`
+	NextAfterID string                  `json:"nextAfterId,omitempty"`
+}
+
+// TaskNeedsHumanResponse returns one raised or resolved request.
+type TaskNeedsHumanResponse struct {
+	NeedsHuman domain.TaskNeedsHuman `json:"needsHuman"`
+}
+
+// DryRunResponse returns one read-only plan simulation.
+type DryRunResponse struct {
+	Verdict domain.DryRunVerdict `json:"verdict"`
+}
+
+// EvolutionExperimentResponse returns one sealed experiment with any conclusion.
+type EvolutionExperimentResponse struct {
+	Experiment domain.EvolutionExperiment `json:"experiment"`
+}
+
+// EvolutionExperimentsResponse pages sealed experiments by stable ID cursor.
+type EvolutionExperimentsResponse struct {
+	Items       []domain.EvolutionExperiment `json:"items"`
+	NextAfterID string                       `json:"nextAfterId,omitempty"`
+}
+
+// EvolutionEvidenceResponse returns both comparable cohorts for one window.
+type EvolutionEvidenceResponse struct {
+	Evidence domain.EvolutionEvidence `json:"evidence"`
+}
+
+// EvolutionDefinitionDiffResponse returns one complete version diff.
+type EvolutionDefinitionDiffResponse struct {
+	Diff domain.RegistryDefinitionDiff `json:"diff"`
+}
+
+// EvolutionRecommendationResponse returns one sealed recommendation.
+type EvolutionRecommendationResponse struct {
+	Recommendation domain.EvolutionRecommendation `json:"recommendation"`
+}
+
+// EvolutionRecommendationsResponse pages sealed recommendations.
+type EvolutionRecommendationsResponse struct {
+	Items       []domain.EvolutionRecommendation `json:"items"`
+	NextAfterID string                           `json:"nextAfterId,omitempty"`
+}
+
+// EvolutionExperimentIDParam selects one sealed experiment.
+type EvolutionExperimentIDParam struct {
+	ExperimentID string `path:"experimentId" description:"The sealed experiment id."`
+}
+
+// EvolutionRecommendationIDParam selects one sealed recommendation.
+type EvolutionRecommendationIDParam struct {
+	RecommendationID string `path:"recommendationId" description:"The sealed recommendation id."`
+}
+
+// OrchestratorReceiptIDParam selects one sealed planning receipt.
+type OrchestratorReceiptIDParam struct {
+	ReceiptID string `path:"receiptId" description:"The retained planning receipt id."`
 }

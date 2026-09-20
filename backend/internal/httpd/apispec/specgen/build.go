@@ -15,10 +15,14 @@ import (
 	openapi "github.com/swaggest/openapi-go"
 	"github.com/swaggest/openapi-go/openapi31"
 
+	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/httpd/controllers"
 	"github.com/aoagents/agent-orchestrator/backend/internal/httpd/envelope"
+	controlsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/control"
+	evolutionsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/evolution"
 	importsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/importer"
 	projectsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/project"
+	registrysvc "github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
 )
 
 // Build reflects the Go contract types and the operation registry below into
@@ -58,6 +62,7 @@ func Build() ([]byte, error) {
 		*(&openapi31.Server{URL: "http://127.0.0.1:3001"}).WithDescription("Local daemon (loopback only)"),
 	}
 	r.Spec.Tags = []openapi31.Tag{
+		*(&openapi31.Tag{Name: "registry"}).WithDescription("Versioned Agent Types and authored Skills"),
 		*(&openapi31.Tag{Name: "agents"}).WithDescription(
 			"Supported and locally runnable agent adapters"),
 		*(&openapi31.Tag{Name: "projects"}).WithDescription(
@@ -86,6 +91,8 @@ func Build() ([]byte, error) {
 			"Target-isolated desktop browser runtime (loopback only)"),
 		*(&openapi31.Tag{Name: "system"}).WithDescription(
 			"Local machine readiness checks the desktop app runs before showing the board"),
+		*(&openapi31.Tag{Name: "link-preview"}).WithDescription(
+			"Server-side unfurl of external links for the CSP-locked renderer"),
 	}
 
 	for _, op := range operations() {
@@ -143,6 +150,213 @@ func schemaName(_ reflect.Type, defaultName string) string {
 // by projectOperations(). Add an entry when a new contract type is introduced;
 // the drift test fails until the spec is regenerated, which flags the gap.
 var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names include reset-credit contracts; no credential value is stored here.
+	"ControllersAdaptiveTaskIDParam":                       "AdaptiveTaskIDParam",
+	"ControllersAdaptiveTaskAttemptParam":                  "AdaptiveTaskAttemptParam",
+	"DomainTaskContextSnapshot":                            "TaskContextSnapshot",
+	"DomainContextBudget":                                  "ContextBudget",
+	"DomainContextSource":                                  "ContextSource",
+	"ControllersTaskResultIDParam":                         "TaskResultIDParam",
+	"ControllersTaskEvaluationIDParam":                     "TaskEvaluationIDParam",
+	"ControllersTaskEvaluateRequest":                       "TaskEvaluateRequest",
+	"ControllersTaskEvaluateResponse":                      "TaskEvaluateResponse",
+	"ControllersTaskEvaluationsResponse":                   "TaskEvaluationsResponse",
+	"DomainTaskEvaluation":                                 "TaskEvaluation",
+	"DomainTaskEvaluationDefinition":                       "TaskEvaluationDefinition",
+	"DomainTaskEvaluationAttribution":                      "TaskEvaluationAttribution",
+	"ControllersTaskPerformanceWindow":                     "TaskPerformanceWindow",
+	"ControllersSetProjectGoalRequest":                     "SetProjectGoalRequest",
+	"ControllersProjectGoalResponse":                       "ProjectGoalResponse",
+	"ControllersProjectGoalVersionsResponse":               "ProjectGoalVersionsResponse",
+	"ControllersProjectGoalCompletionsResponse":            "ProjectGoalCompletionsResponse",
+	"ControllersProjectGoalCompletionResponse":             "ProjectGoalCompletionResponse",
+	"ControllersNativeOrchestratorGoalResponse":            "NativeOrchestratorGoalResponse",
+	"ControllersOrchestratorPlanRequest":                   "OrchestratorPlanRequest",
+	"ControllersOrchestratorPlanResponse":                  "OrchestratorPlanResponse",
+	"ControllersOrchestratorCompleteRequest":               "OrchestratorCompleteRequest",
+	"ControllersOrchestratorPlanReceiptsResponse":          "OrchestratorPlanReceiptsResponse",
+	"ControllersOrchestratorPlanReceiptResponse":           "OrchestratorPlanReceiptResponse",
+	"ControllersProjectFeedbackResponse":                   "ProjectFeedbackResponse",
+	"ControllersManagerRoutingOutcomesResponse":            "ManagerRoutingOutcomesResponse",
+	"ControllersEvolutionExperimentResponse":               "EvolutionExperimentResponse",
+	"ControllersProjectControlResponse":                    "ProjectControlResponse",
+	"ControllersProjectCancelWorkResponse":                 "ProjectCancelWorkResponse",
+	"ControllersProjectNeedsHumanResponse":                 "ProjectNeedsHumanResponse",
+	"ControllersTaskNeedsHumanResponse":                    "TaskNeedsHumanResponse",
+	"ControllersDryRunResponse":                            "DryRunResponse",
+	"ControllersEvolutionExperimentsResponse":              "EvolutionExperimentsResponse",
+	"ControllersEvolutionEvidenceResponse":                 "EvolutionEvidenceResponse",
+	"ControllersEvolutionDefinitionDiffResponse":           "EvolutionDefinitionDiffResponse",
+	"ControllersEvolutionRecommendationResponse":           "EvolutionRecommendationResponse",
+	"ControllersEvolutionRecommendationsResponse":          "EvolutionRecommendationsResponse",
+	"ControllersManagerRoutingSummaryResponse":             "ManagerRoutingSummaryResponse",
+	"ControllersOrchestratorPlanningOutcomesResponse":      "OrchestratorPlanningOutcomesResponse",
+	"ControllersOrchestratorPlanningSummaryResponse":       "OrchestratorPlanningSummaryResponse",
+	"ControllersOrchestratorReceiptIDParam":                "OrchestratorReceiptIDParam",
+	"DomainProjectGoalVersion":                             "ProjectGoalVersion",
+	"DomainProjectGoalCompletion":                          "ProjectGoalCompletion",
+	"DomainProjectGoalEvidence":                            "ProjectGoalEvidence",
+	"DomainProjectGoalEvidenceTask":                        "ProjectGoalEvidenceTask",
+	"DomainOrchestratorPlanAction":                         "OrchestratorPlanAction",
+	"DomainOrchestratorPlanReceipt":                        "OrchestratorPlanReceipt",
+	"DomainOrchestratorPlanOutcome":                        "OrchestratorPlanOutcome",
+	"DomainProjectFeedbackItem":                            "ProjectFeedbackItem",
+	"ControllersAgentManagerConfigureRequest":              "AgentManagerConfigureRequest",
+	"ControllersAgentManagerConfigurationsResponse":        "AgentManagerConfigurationsResponse",
+	"ControllersAgentManagerAuditResponse":                 "AgentManagerAuditResponse",
+	"DomainAgentManagerConfiguration":                      "AgentManagerConfiguration",
+	"DomainAgentManagerDefinition":                         "AgentManagerDefinition",
+	"DomainAgentManagerPolicy":                             "AgentManagerPolicy",
+	"DomainAgentManagerAudit":                              "AgentManagerAudit",
+	"ControllersAgentManagerEnqueueRequest":                "AgentManagerEnqueueRequest",
+	"ControllersAgentManagerResolveRequest":                "AgentManagerResolveRequest",
+	"ControllersAgentManagerRequestsResponse":              "AgentManagerRequestsResponse",
+	"ControllersAgentManagerResolutionResponse":            "AgentManagerResolutionResponse",
+	"DomainAgentManagerRequest":                            "AgentManagerRequest",
+	"DomainAgentManagerRequestResolution":                  "AgentManagerRequestResolution",
+	"ControllersAgentManagerProposalRequest":               "AgentManagerProposalRequest",
+	"ControllersAgentManagerProposalResponse":              "AgentManagerProposalResponse",
+	"ControllersAgentManagerProposalsResponse":             "AgentManagerProposalsResponse",
+	"DomainAgentManagerProposal":                           "AgentManagerProposal",
+	"ControllersAgentManagerContextsResponse":              "AgentManagerContextsResponse",
+	"ControllersAgentManagerDeliveriesResponse":            "AgentManagerDeliveriesResponse",
+	"DomainAgentManagerContext":                            "AgentManagerContext",
+	"ControllersAgentManagerCandidatesResponse":            "AgentManagerCandidatesResponse",
+	"DomainAgentManagerCandidate":                          "AgentManagerCandidate",
+	"DomainAgentManagerCandidateSkill":                     "AgentManagerCandidateSkill",
+	"DomainAgentManagerCandidateIssue":                     "AgentManagerCandidateIssue",
+	"DomainAgentManagerDecision":                           "AgentManagerDecision",
+	"ControllersAgentManagerDecisionsResponse":             "AgentManagerDecisionsResponse",
+	"ControllersAgentManagerDecisionResponse":              "AgentManagerDecisionResponse",
+	"DomainAgentManagerDelivery":                           "AgentManagerDelivery",
+	"DomainAgentManagerToolPaths":                          "AgentManagerToolPaths",
+	"DomainAgentManagerProposalDefinition":                 "AgentManagerProposalDefinition",
+	"DomainAgentManagerCandidateReason":                    "AgentManagerCandidateReason",
+	"ControllersAgentManagerStartRequest":                  "AgentManagerStartRequest",
+	"ControllersAgentManagerStartResponse":                 "AgentManagerStartResponse",
+	"ControllersAgentManagerControllerResponse":            "AgentManagerControllerResponse",
+	"ControllersAgentManagerCurrentControllerResponse":     "AgentManagerCurrentControllerResponse",
+	"DomainAgentManagerController":                         "AgentManagerController",
+	"DomainAgentManagerControllerDispatch":                 "AgentManagerControllerDispatch",
+	"DomainAgentManagerExecutionOperation":                 "AgentManagerExecutionOperation",
+	"ControllersTaskPerformanceGrouping":                   "TaskPerformanceGrouping",
+	"DomainTaskPerformancePage":                            "TaskPerformancePage",
+	"DomainTaskPerformanceAttempt":                         "TaskPerformanceAttempt",
+	"DomainTaskPerformanceUsage":                           "TaskPerformanceUsage",
+	"DomainTaskPerformanceSummary":                         "TaskPerformanceSummary",
+	"DomainTaskPerformanceGroup":                           "TaskPerformanceGroup",
+	"DomainTaskPerformanceMetrics":                         "TaskPerformanceMetrics",
+	"DomainTaskPerformanceUsageTotals":                     "TaskPerformanceUsageTotals",
+	"DomainTaskCriterionEvaluation":                        "TaskCriterionEvaluation",
+	"DomainTaskCICheckEvidence":                            "TaskCICheckEvidence",
+	"DomainTaskObservationEvidence":                        "TaskObservationEvidence",
+	"DomainTaskPREvidence":                                 "TaskPREvidence",
+	"DomainTaskReviewEvidence":                             "TaskReviewEvidence",
+	"DomainTaskReviewAttribution":                          "TaskReviewAttribution",
+	"DomainTaskReviewTarget":                               "TaskReviewTarget",
+	"DomainTaskCompletion":                                 "TaskCompletion",
+	"DomainTaskWorkerEvidence":                             "TaskWorkerEvidence",
+	"DomainTaskArtifactEvidence":                           "TaskArtifactEvidence",
+	"ControllersTaskResultSubmitRequest":                   "TaskResultSubmitRequest",
+	"ControllersTaskResultSubmitResponse":                  "TaskResultSubmitResponse",
+	"ControllersTaskResultsResponse":                       "TaskResultsResponse",
+	"DomainTaskResult":                                     "TaskResult",
+	"DomainTaskResultDefinition":                           "TaskResultDefinition",
+	"DomainTaskInterfaceClaim":                             "TaskInterfaceClaim",
+	"DomainTaskTestClaim":                                  "TaskTestClaim",
+	"DomainTaskKnowledgeCandidate":                         "TaskKnowledgeCandidate",
+	"ControllersTaskMessageIDParam":                        "TaskMessageIDParam",
+	"ControllersTaskMessageFilterQuery":                    "TaskMessageFilterQuery",
+	"ControllersTaskMessageSubmitRequest":                  "TaskMessageSubmitRequest",
+	"ControllersTaskMessageSubmitResponse":                 "TaskMessageSubmitResponse",
+	"ControllersTaskMessageResponse":                       "TaskMessageResponse",
+	"ControllersTaskMessagesResponse":                      "TaskMessagesResponse",
+	"DomainTaskMessage":                                    "TaskMessage",
+	"DomainTaskMessageDefinition":                          "TaskMessageDefinition",
+	"DomainTaskMessageDelivery":                            "TaskMessageDelivery",
+	"ControllersAdaptiveTaskVersionParam":                  "AdaptiveTaskVersionParam",
+	"ControllersAdaptiveTaskListQuery":                     "AdaptiveTaskListQuery",
+	"ControllersAdaptiveTaskCreateRequest":                 "AdaptiveTaskCreateRequest",
+	"ControllersAdaptiveTaskReviseRequest":                 "AdaptiveTaskReviseRequest",
+	"ControllersAdaptiveTaskCriteriaRequest":               "AdaptiveTaskCriteriaRequest",
+	"ControllersAdaptiveTaskResponse":                      "AdaptiveTaskResponse",
+	"ControllersAdaptiveTaskListResponse":                  "AdaptiveTaskListResponse",
+	"ControllersAdaptiveTaskRevisionsResponse":             "AdaptiveTaskRevisionsResponse",
+	"ControllersAdaptiveTaskAuditResponse":                 "AdaptiveTaskAuditResponse",
+	"ControllersAdaptiveTaskAttemptsResponse":              "AdaptiveTaskAttemptsResponse",
+	"DomainAdaptiveActor":                                  "AdaptiveActor",
+	"DomainAdaptiveTask":                                   "AdaptiveTask",
+	"DomainTaskDefinition":                                 "TaskDefinition",
+	"DomainTaskRevision":                                   "TaskRevision",
+	"DomainTaskRevisionRef":                                "TaskRevisionRef",
+	"DomainAcceptanceCriterion":                            "AcceptanceCriterion",
+	"DomainAcceptanceCriteria":                             "AcceptanceCriteria",
+	"DomainTaskReviewPolicy":                               "TaskReviewPolicy",
+	"DomainTaskReviewReceipt":                              "TaskReviewReceipt",
+	"DomainTaskReviewContext":                              "TaskReviewContext",
+	"DomainTaskReviewSnapshot":                             "TaskReviewSnapshot",
+	"ControllersTaskReviewRequest":                         "TaskReviewRequest",
+	"ControllersTaskReviewResponse":                        "TaskReviewResponse",
+	"ControllersTaskReviewsResponse":                       "TaskReviewsResponse",
+	"DomainAcceptanceCriteriaVersion":                      "AcceptanceCriteriaVersion",
+	"DomainTaskAudit":                                      "TaskAudit",
+	"DomainTaskAttempt":                                    "TaskAttempt",
+	"DomainTaskLease":                                      "TaskLease",
+	"DomainTaskLeaseToken":                                 "TaskLeaseToken",
+	"DomainTaskWorkerDispatch":                             "TaskWorkerDispatch",
+	"TaskView":                                             "AdaptiveTaskView",
+	"TaskAttemptView":                                      "TaskAttemptView",
+	"TaskState":                                            "AdaptiveTaskState",
+	"DomainTaskIntent":                                     "TaskIntent",
+	"DomainTaskExecutionOperation":                         "TaskExecutionOperation",
+	"ControllersAdaptiveTaskIntentRequest":                 "AdaptiveTaskIntentRequest",
+	"ControllersAdaptiveTaskIntentsResponse":               "AdaptiveTaskIntentsResponse",
+	"ControllersKnowledgeCreateRequest":                    "KnowledgeCreateRequest",
+	"ControllersKnowledgeReviseRequest":                    "KnowledgeReviseRequest",
+	"ControllersKnowledgeResponse":                         "KnowledgeResponse",
+	"ControllersKnowledgeListResponse":                     "KnowledgeListResponse",
+	"ControllersKnowledgeVersionsResponse":                 "KnowledgeVersionsResponse",
+	"KnowledgeView":                                        "KnowledgeView",
+	"DomainProjectKnowledge":                               "ProjectKnowledge",
+	"DomainKnowledgeVersion":                               "KnowledgeVersion",
+	"DomainKnowledgeDefinition":                            "KnowledgeDefinition",
+	"DomainKnowledgeSource":                                "KnowledgeSource",
+	"DomainKnowledgeVersionRef":                            "KnowledgeVersionRef",
+	"ControllersRegistryIDParam":                           "RegistryIDParam",
+	"ControllersRegistryVersionParam":                      "RegistryVersionParam",
+	"ControllersRegistryListQuery":                         "RegistryListQuery",
+	"ControllersRegistryEntryResponse":                     "RegistryEntryResponse",
+	"ControllersRegistryVersionResponse":                   "RegistryVersionResponse",
+	"ControllersRegistryViewResponse":                      "RegistryViewResponse",
+	"ControllersRegistryListResponse":                      "RegistryListResponse",
+	"ControllersRegistryVersionsResponse":                  "RegistryVersionsResponse",
+	"ControllersRegistryAuditResponse":                     "RegistryAuditResponse",
+	"ControllersRegistryAuditListResponse":                 "RegistryAuditListResponse",
+	"DomainRegistryMetadata":                               "RegistryMetadata",
+	"DomainRegistryPolicy":                                 "RegistryPolicy",
+	"DomainRegistryDefinition":                             "RegistryDefinition",
+	"DomainAgentTypeDefinition":                            "AgentTypeDefinition",
+	"DomainSkillDefinition":                                "SkillDefinition",
+	"DomainSkillVersionRef":                                "SkillVersionRef",
+	"DomainSkillResource":                                  "SkillResource",
+	"RegistryCreateInput":                                  "RegistryCreateInput",
+	"RegistryVersionInput":                                 "RegistryVersionInput",
+	"RegistryMetadataInput":                                "RegistryMetadataInput",
+	"RegistryActivateInput":                                "RegistryActivateInput",
+	"RegistryCloneInput":                                   "RegistryCloneInput",
+	"RegistryImportInput":                                  "RegistryImportInput",
+	"RegistryBindingCreateInput":                           "ProviderBindingCreateInput",
+	"RegistryBindingUpdateInput":                           "ProviderBindingUpdateInput",
+	"RegistryCheckInput":                                   "RegistryCheckInput",
+	"RegistryConfigurationCheck":                           "RegistryConfigurationCheck",
+	"RegistryConfigurationIssue":                           "RegistryConfigurationIssue",
+	"ControllersProviderBindingResponse":                   "ProviderBindingResponse",
+	"ControllersProviderBindingListResponse":               "ProviderBindingListResponse",
+	"ControllersProviderBindingAuditResponse":              "ProviderBindingAuditResponse",
+	"ControllersProviderBindingAuditListResponse":          "ProviderBindingAuditListResponse",
+	"RegistryPortableBundle":                               "PortableRegistryBundle",
+	"RegistryPortableAgentType":                            "PortableAgentType",
+	"RegistryPortableSkill":                                "PortableSkill",
+	"ControllersRegistryImportResponse":                    "RegistryImportResponse",
 	"ControllersSettingsResponse":                          "SettingsResponse",
 	"ControllersDesktopWorkspaceLocationResponse":          "DesktopWorkspaceLocationResponse",
 	"ControllersUpdateSessionInterfaceRequest":             "UpdateSessionInterfaceRequest",
@@ -221,6 +435,22 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"ControllersListSessionsResponse":                     "ListSessionsResponse",
 	"ControllersSpawnSessionRequest":                      "SpawnSessionRequest",
 	"ControllersSpawnSessionResponse":                     "SpawnSessionResponse",
+	"ControllersWorkerConfigurationResponse":              "WorkerConfigurationResponse",
+	"DomainWorkerConfiguration":                           "WorkerConfiguration",
+	"DomainConversationSettings":                          "WorkerNativeSettings",
+	"ControllersWorkerExecutionHistoryResponse":           "WorkerExecutionHistoryResponse",
+	"ControllersWorkerExecutionResponse":                  "WorkerExecutionResponse",
+	"SessionWorkerExecutionSummary":                       "WorkerExecutionSummary",
+	"DomainWorkerExecution":                               "WorkerExecution",
+	"DomainWorkerExecutionActivation":                     "WorkerExecutionActivation",
+	"DomainRegistryActor":                                 "RegistryActor",
+	"DomainWorkerNativeOption":                            "WorkerNativeOption",
+	"DomainWorkerNativeChange":                            "WorkerNativeChange",
+	"DomainWorkerSelection":                               "WorkerSelection",
+	"DomainWorkerOverrides":                               "WorkerOverrides",
+	"DomainWorkerDefinitionRef":                           "WorkerDefinitionRef",
+	"DomainWorkerSkillSnapshot":                           "WorkerSkillSnapshot",
+	"DomainProviderBinding":                               "WorkerProviderReference",
 	"ControllersSessionResponse":                          "SessionResponse",
 	"ControllersSessionPreviewResponse":                   "SessionPreviewResponse",
 	"ControllersSetSessionPreviewRequest":                 "SetSessionPreviewRequest",
@@ -358,6 +588,8 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"ControllersListAgentAuthPlansResponse":       "ListAgentAuthPlansResponse",
 	"ControllersStartAgentAuthResponse":           "StartAgentAuthResponse",
 	"PortsAgentModelCatalog":                      "AgentModelsResponse",
+	"AgentConfiguration":                          "AgentConfigurationResponse",
+	"AgentConfigurationField":                     "AgentConfigurationField",
 	"PortsAgentModelInfo":                         "AgentModelInfo",
 	"ControllersListNotificationsQuery":           "ListNotificationsQuery",
 	"ControllersNotificationStreamQuery":          "NotificationStreamQuery",
@@ -369,6 +601,7 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"ControllersNotificationEnvelope":             "NotificationEnvelope",
 	"ControllersMarkAllNotificationsReadRequest":  "MarkAllNotificationsReadRequest",
 	"ControllersMarkAllNotificationsReadResponse": "MarkAllNotificationsReadResponse",
+	"ControllersClearNotificationsResponse":       "ClearNotificationsResponse",
 	"ControllersUsageHookMetadata":                "UsageHookMetadata",
 	"ControllersListUsageSessionsQuery":           "ListUsageSessionsQuery",
 	"ControllersEstimatedCostResponse":            "EstimatedCostResponse",
@@ -425,6 +658,8 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"MobilebridgeTunnelStatus":         "MobileTunnelStatus",
 	"ControllersIdentityResponse":      "IdentityResponse",
 	"ControllersEndpointsResponse":     "EndpointsResponse",
+	"ControllersLinkPreviewQuery":      "LinkPreviewQuery",
+	"ControllersLinkPreviewResponse":   "LinkPreviewResponse",
 	"ControllersMobileDeviceResponse":  "MobileDeviceResponse",
 	"ControllersMobileDevicesResponse": "MobileDevicesResponse",
 	"ControllersMuteDeviceRequest":     "MuteDeviceRequest",
@@ -503,6 +738,12 @@ func requiredFromJSONTag(p jsonschema.InterceptPropParams) error {
 	if !p.Processed || p.ParentSchema == nil {
 		return nil
 	}
+	// Immutable task definitions preserve historical nil versus empty arrays
+	// in their content hashes. Respect explicit wire nullability after the
+	// default nonNullableSlices normalization used by presentation DTOs.
+	if p.Field.Type.Kind() == reflect.Slice && p.Field.Tag.Get("nullable") == "true" {
+		p.PropertySchema.Type = &jsonschema.Type{SliceOfSimpleTypeValues: []jsonschema.SimpleType{jsonschema.Array, jsonschema.Null}}
+	}
 	jsonTag := p.Field.Tag.Get("json")
 	if jsonTag == "" || jsonTag == "-" {
 		return nil
@@ -553,6 +794,13 @@ func operations() []operation {
 	ops = append(ops, prOperations()...)
 	ops = append(ops, reviewOperations()...)
 	ops = append(ops, notificationOperations()...)
+	ops = append(ops, registryOperations()...)
+	ops = append(ops, adaptiveTaskOperations()...)
+	ops = append(ops, orchestratorGoalOperations()...)
+	ops = append(ops, agentManagerOperations()...)
+	ops = append(ops, evolutionOperations()...)
+	ops = append(ops, controlOperations()...)
+	ops = append(ops, projectKnowledgeOperations()...)
 	ops = append(ops, usageOperations()...)
 	ops = append(ops, pushOperations()...)
 	ops = append(ops, importOperations()...)
@@ -564,7 +812,28 @@ func operations() []operation {
 	ops = append(ops, systemOperations()...)
 	ops = append(ops, identityOperations()...)
 	ops = append(ops, endpointsOperations()...)
+	ops = append(ops, linkPreviewOperations()...)
 	return ops
+}
+
+// linkPreviewOperations declares the server-side link unfurl. Must stay 1:1
+// with the routes LinkPreviewController.Register mounts (enforced by the
+// parity test).
+func linkPreviewOperations() []operation {
+	return []operation{
+		{
+			method: http.MethodGet, path: "/api/v1/link-preview", id: "getLinkPreview", tag: "link-preview",
+			summary:    "Fetch link-preview metadata (Open Graph) for an external URL",
+			pathParams: []any{controllers.LinkPreviewQuery{}},
+			resps: []respUnit{
+				{http.StatusOK, controllers.LinkPreviewResponse{}},
+				{http.StatusBadRequest, envelope.APIError{}},
+				{http.StatusNotFound, envelope.APIError{}},
+				{http.StatusBadGateway, envelope.APIError{}},
+				{http.StatusNotImplemented, envelope.APIError{}},
+			},
+		},
+	}
 }
 
 // endpointsOperations declares the phone's endpoint refresh. Not under
@@ -751,6 +1020,17 @@ func shellTerminalOperations() []operation {
 			method: http.MethodPatch, path: "/api/v1/settings/cloud-offering", id: "updateCloudOffering", tag: "settings",
 			summary: "Turn the cloud offering on or off for this machine",
 			reqBody: controllers.UpdateCloudOfferingRequest{},
+			resps: []respUnit{
+				{http.StatusOK, controllers.SettingsResponse{}},
+				{http.StatusBadRequest, envelope.APIError{}},
+				{http.StatusInternalServerError, envelope.APIError{}},
+				{http.StatusNotImplemented, envelope.APIError{}},
+			},
+		},
+		{
+			method: http.MethodPatch, path: "/api/v1/settings/max-concurrent-workers", id: "updateMaxConcurrentWorkers", tag: "settings",
+			summary: "Cap how many workers may run simultaneously",
+			reqBody: controllers.UpdateMaxConcurrentWorkersRequest{},
 			resps: []respUnit{
 				{http.StatusOK, controllers.SettingsResponse{}},
 				{http.StatusBadRequest, envelope.APIError{}},
@@ -1109,6 +1389,12 @@ func shellTerminalOperations() []operation {
 
 func agentOperations() []operation {
 	return []operation{
+		{
+			method: http.MethodGet, path: "/api/v1/agents/{agent}/configuration", id: "getAgentConfiguration", tag: "agents",
+			summary:    "Inspect declared adapter fields and mode-specific native capabilities",
+			pathParams: []any{controllers.AgentIDParam{}, controllers.AgentConfigurationQuery{}},
+			resps:      []respUnit{{http.StatusOK, controllers.AgentConfigurationResponse{}}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}},
+		},
 		{
 			method: http.MethodGet, path: "/api/v1/agents/auth-plans", id: "listAgentAuthPlans", tag: "agents",
 			summary: "Return display-safe native authentication plans for supported agents",
@@ -1490,6 +1776,233 @@ func devOperations() []operation {
 	}
 }
 
+func orchestratorGoalOperations() []operation {
+	ops := make([]operation, 0, 12)
+	for _, endpoint := range []struct {
+		method, path, id, summary string
+		request, response         any
+		status                    int
+		params                    []any
+	}{
+		{http.MethodGet, "/projects/{id}/goal", "getProjectGoal", "Read the project's current high-level goal", nil, controllers.ProjectGoalResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodPost, "/projects/{id}/goal", "setProjectGoal", "Record a new user-authored goal version", controllers.SetProjectGoalRequest{}, controllers.ProjectGoalResponse{}, http.StatusCreated, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/goal/versions", "listProjectGoalVersions", "List immutable goal history", nil, controllers.ProjectGoalVersionsResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/goal/completions", "listProjectGoalCompletions", "List retained verified goal completions", nil, controllers.ProjectGoalCompletionsResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/orchestrator/goal", "getNativeOrchestratorGoal", "Read the current goal plus the live orchestrator generation", nil, controllers.NativeOrchestratorGoalResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodPost, "/projects/{id}/orchestrator/plan", "submitOrchestratorPlan", "Execute one sealed native planning action as the project's live orchestrator", controllers.OrchestratorPlanRequest{}, controllers.OrchestratorPlanResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodPost, "/projects/{id}/orchestrator/complete", "submitOrchestratorComplete", "Submit a native goal-completion assessment verified against durable task facts", controllers.OrchestratorCompleteRequest{}, controllers.ProjectGoalCompletionResponse{}, http.StatusCreated, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/orchestrator/feedback", "listProjectFeedback", "Read derived per-task loop facts without storing any status", nil, controllers.ProjectFeedbackResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/orchestrator/receipts", "listOrchestratorPlanReceipts", "List sealed native planning receipts", nil, controllers.OrchestratorPlanReceiptsResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/orchestrator/receipts/{receiptId}", "getOrchestratorPlanReceipt", "Inspect one sealed native planning receipt", nil, controllers.OrchestratorPlanReceiptResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.OrchestratorReceiptIDParam{}}},
+		{http.MethodGet, "/projects/{id}/orchestrator/planning-outcomes", "listOrchestratorPlanningOutcomes", "Read planning receipts coupled with the derived fate of their tasks", nil, controllers.OrchestratorPlanningOutcomesResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.OutcomeIDPageQuery{}}},
+		{http.MethodGet, "/projects/{id}/orchestrator/planning-summary", "getOrchestratorPlanningSummary", "Aggregate one complete bounded planning cohort", nil, controllers.OrchestratorPlanningSummaryResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.OutcomeWindowQuery{}}},
+	} {
+		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "orchestrator", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
+	}
+	return ops
+}
+
+func agentManagerOperations() []operation {
+	ops := make([]operation, 0, 16)
+	for _, endpoint := range []struct {
+		method, path, id, summary string
+		request, response         any
+		params                    []any
+	}{
+		{http.MethodGet, "/projects/{id}/agent-manager", "getAgentManager", "Inspect desired Manager governance", nil, domain.AgentManagerConfiguration{}, []any{controllers.ProjectIDParam{}}},
+		{http.MethodPut, "/projects/{id}/agent-manager", "configureAgentManager", "Version user governance without launching a controller", controllers.AgentManagerConfigureRequest{}, domain.AgentManagerConfiguration{}, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/configurations", "listAgentManagerConfigurations", "Inspect immutable Manager configurations", nil, controllers.AgentManagerConfigurationsResponse{}, []any{controllers.ProjectIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/configurations/{version}", "getAgentManagerConfiguration", "Inspect an exact retained Manager configuration", nil, domain.AgentManagerConfiguration{}, []any{controllers.ProjectIDParam{}, controllers.AdaptiveTaskVersionParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/audit", "listAgentManagerAudit", "Inspect retained Manager governance and work provenance", nil, controllers.AgentManagerAuditResponse{}, []any{controllers.ProjectIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodPost, "/projects/{id}/agent-manager/controllers", "startAgentManagerController", "Admit a configured native Manager once or inspect its exact retry", controllers.AgentManagerStartRequest{}, controllers.AgentManagerStartResponse{}, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/controller", "getCurrentAgentManagerController", "Inspect reserved ownership without inferring native liveness", nil, controllers.AgentManagerCurrentControllerResponse{}, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/controllers/{controllerId}", "getAgentManagerController", "Inspect retained admission and native dispatch facts", nil, controllers.AgentManagerControllerResponse{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerControllerIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/inbox", "listAgentManagerInbox", "Inspect pending routing references without acknowledging delivery", nil, controllers.AgentManagerRequestsResponse{}, []any{controllers.ProjectIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests", "listAgentManagerRequests", "Inspect retained routing history", nil, controllers.AgentManagerRequestsResponse{}, []any{controllers.ProjectIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodPost, "/projects/{id}/agent-manager/requests", "enqueueAgentManagerRequest", "Queue exact routing intent for the native Manager", controllers.AgentManagerEnqueueRequest{}, domain.AgentManagerRequest{}, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}", "getAgentManagerRequest", "Inspect a sealed routing request", nil, domain.AgentManagerRequest{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/resolution", "getAgentManagerRequestResolution", "Inspect terminal routing receipt or pending state", nil, controllers.AgentManagerResolutionResponse{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}}},
+		{http.MethodPost, "/projects/{id}/agent-manager/requests/{requestId}/resolution", "resolveAgentManagerRequest", "Close routing intent without changing tasks or native ownership", controllers.AgentManagerResolveRequest{}, domain.AgentManagerRequestResolution{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/proposals", "listAgentManagerProposals", "Inspect bounded native proposal and correction history", nil, controllers.AgentManagerProposalsResponse{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/contexts", "listAgentManagerContexts", "Inspect bounded classified native input history", nil, controllers.AgentManagerContextsResponse{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/decisions", "listAgentManagerDecisions", "Inspect retained deterministic assessments of native proposals", nil, controllers.AgentManagerDecisionsResponse{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/decisions/{proposalId}", "getAgentManagerDecision", "Inspect an exact immutable assessment or pending status", nil, controllers.AgentManagerDecisionResponse{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}, controllers.AgentManagerProposalIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/routing-outcomes", "listAgentManagerRoutingOutcomes", "Read routing decisions coupled with the derived fate of their routed tasks", nil, controllers.ManagerRoutingOutcomesResponse{}, []any{controllers.ProjectIDParam{}, controllers.OutcomeSequencePageQuery{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/routing-summary", "getAgentManagerRoutingSummary", "Aggregate one complete bounded routing-decision cohort", nil, controllers.ManagerRoutingSummaryResponse{}, []any{controllers.ProjectIDParam{}, controllers.OutcomeWindowQuery{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/candidates", "listAgentManagerCandidates", "Check a bounded page of Manager candidate compatibility and exclusions", nil, controllers.AgentManagerCandidatesResponse{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}, controllers.AgentManagerCandidateQuery{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/candidates/{agentTypeId}", "checkAgentManagerCandidate", "Check an exact Type version against pinned task requirements", nil, domain.AgentManagerCandidate{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}, controllers.AgentManagerCandidateIDParam{}, controllers.AgentManagerCandidateVersionQuery{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/contexts/{contextId}", "getAgentManagerContext", "Inspect exact sealed input and native tool instructions", nil, domain.AgentManagerContext{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}, controllers.AgentManagerContextIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/deliveries", "listAgentManagerDeliveries", "Inspect native send attempts and uncertain outcomes", nil, controllers.AgentManagerDeliveriesResponse{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/proposals/{proposalId}", "getAgentManagerProposal", "Inspect exact native output and parser outcome", nil, domain.AgentManagerProposal{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}, controllers.AgentManagerProposalIDParam{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/registry-receipts", "listAgentManagerRegistryReceipts", "Inspect a request's sealed Manager registry authoring receipts", nil, controllers.AgentManagerRegistryReceiptsResponse{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}, controllers.AgentManagerRegistryReceiptQuery{}}},
+		{http.MethodGet, "/projects/{id}/agent-manager/requests/{requestId}/registry-receipts/{receiptId}", "getAgentManagerRegistryReceipt", "Inspect one sealed Manager registry authoring receipt", nil, domain.AgentManagerRegistryReceipt{}, []any{controllers.ProjectIDParam{}, controllers.AgentManagerRequestIDParam{}, controllers.AgentManagerRegistryReceiptIDParam{}}},
+		{http.MethodPost, "/sessions/{sessionId}/agent-manager/requests/{requestId}/proposals", "submitAgentManagerProposal", "Retain generation-fenced native output and assess routing without launching a worker", controllers.AgentManagerProposalRequest{}, controllers.AgentManagerProposalResponse{}, []any{controllers.SessionIDParam{}, controllers.AgentManagerRequestIDParam{}}},
+		{http.MethodPost, "/sessions/{sessionId}/agent-manager/requests/{requestId}/registry-actions", "submitAgentManagerRegistryAction", "Create or version registry definitions through governed native authoring without activation", controllers.AgentManagerRegistryRequest{}, controllers.AgentManagerRegistryResponse{}, []any{controllers.SessionIDParam{}, controllers.AgentManagerRequestIDParam{}}},
+	} {
+		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "agent-managers", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{http.StatusOK, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
+	}
+	return ops
+}
+
+func evolutionOperations() []operation {
+	ops := make([]operation, 0, 11)
+	for _, endpoint := range []struct {
+		method, path, id, summary string
+		request, response         any
+		status                    int
+		params                    []any
+	}{
+		{http.MethodPost, "/projects/{id}/experiments", "createEvolutionExperiment", "Seal one pinned control/candidate comparison", evolutionsvc.ExperimentInput{}, controllers.EvolutionExperimentResponse{}, http.StatusCreated, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/experiments", "listEvolutionExperiments", "Page sealed experiments by stable ID cursor", nil, controllers.EvolutionExperimentsResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.OutcomeIDPageQuery{}}},
+		{http.MethodGet, "/projects/{id}/experiments/{experimentId}", "getEvolutionExperiment", "Inspect one sealed experiment with any conclusion", nil, controllers.EvolutionExperimentResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionExperimentIDParam{}}},
+		{http.MethodGet, "/projects/{id}/experiments/{experimentId}/evidence", "getEvolutionExperimentEvidence", "Derive both comparable cohorts for one admission window", nil, controllers.EvolutionEvidenceResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionExperimentIDParam{}}},
+		{http.MethodPost, "/projects/{id}/experiments/{experimentId}/conclude", "concludeEvolutionExperiment", "Seal the terminal decision with recomputed evidence and the policy path", evolutionsvc.ConclusionInput{}, controllers.EvolutionExperimentResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionExperimentIDParam{}}},
+		{http.MethodGet, "/projects/{id}/experiments/{experimentId}/diff", "getEvolutionExperimentDiff", "Read the immutable field diff between the pinned versions", nil, controllers.EvolutionDefinitionDiffResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionExperimentIDParam{}}},
+		{http.MethodPost, "/projects/{id}/recommendations", "createEvolutionRecommendation", "Persist one improvement proposal with a sealed proposed definition", evolutionsvc.RecommendationInput{}, controllers.EvolutionRecommendationResponse{}, http.StatusCreated, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/recommendations", "listEvolutionRecommendations", "Page sealed recommendations by stable ID cursor", nil, controllers.EvolutionRecommendationsResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.OutcomeIDPageQuery{}}},
+		{http.MethodGet, "/projects/{id}/recommendations/{recommendationId}", "getEvolutionRecommendation", "Inspect one sealed recommendation with any decision", nil, controllers.EvolutionRecommendationResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionRecommendationIDParam{}}},
+		{http.MethodPost, "/projects/{id}/recommendations/{recommendationId}/decide", "decideEvolutionRecommendation", "Seal the one-time dismissal or adoption decision", evolutionsvc.DecisionInput{}, controllers.EvolutionRecommendationResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionRecommendationIDParam{}}},
+		{http.MethodGet, "/projects/{id}/recommendations/{recommendationId}/diff", "getEvolutionRecommendationDiff", "Read the inspectable diff from the sealed version to the proposal", nil, controllers.EvolutionDefinitionDiffResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.EvolutionRecommendationIDParam{}}},
+	} {
+		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "evolution", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
+	}
+	return ops
+}
+
+func controlOperations() []operation {
+	ops := make([]operation, 0, 7)
+	for _, endpoint := range []struct {
+		method, path, id, summary string
+		request, response         any
+		status                    int
+		params                    []any
+	}{
+		{http.MethodGet, "/projects/{id}/control", "getProjectControl", "Read the stored control state and its derived effective state", nil, controllers.ProjectControlResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodPost, "/projects/{id}/control", "setProjectControl", "Pause, resume, drain or stop one project deterministically", controlsvc.StateInput{}, controllers.ProjectControlResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodPost, "/projects/{id}/control/cancel-work", "cancelProjectWork", "Cancel pending or all work and report requested terminations", controlsvc.CancelInput{}, controllers.ProjectCancelWorkResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/projects/{id}/needs-human", "listProjectNeedsHuman", "Page the project's open requests for human input", nil, controllers.ProjectNeedsHumanResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.OutcomeIDPageQuery{}}},
+		{http.MethodPost, "/projects/{id}/dry-run", "dryRunProjectPlan", "Simulate an autonomous plan with writes and launches disabled", domain.DryRunRequest{}, controllers.DryRunResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}}},
+		{http.MethodPost, "/tasks/{taskId}/needs-human", "raiseTaskNeedsHuman", "Record one structured request for human input on a task", controlsvc.NeedsHumanInput{}, controllers.TaskNeedsHumanResponse{}, http.StatusCreated, []any{controllers.AdaptiveTaskIDParam{}}},
+		{http.MethodPost, "/tasks/{taskId}/needs-human/resolve", "resolveTaskNeedsHuman", "Close the pending request exactly once with the human decision", controlsvc.ResolveInput{}, controllers.TaskNeedsHumanResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}}},
+	} {
+		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "control", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
+	}
+	return ops
+}
+
+func projectKnowledgeOperations() []operation {
+	ops := make([]operation, 0, 6)
+	for _, endpoint := range []struct {
+		method, path, id, summary string
+		request, response         any
+		status                    int
+		params                    []any
+	}{
+		{http.MethodGet, "/projects/{id}/knowledge", "listProjectKnowledge", "Search current project knowledge", nil, controllers.KnowledgeListResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.KnowledgeListQuery{}}},
+		{http.MethodPost, "/projects/{id}/knowledge", "createProjectKnowledge", "Record a project claim and its provenance", controllers.KnowledgeCreateRequest{}, controllers.KnowledgeResponse{}, http.StatusCreated, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/knowledge/{knowledgeId}", "getProjectKnowledge", "Inspect a project claim including withdrawn history", nil, controllers.KnowledgeResponse{}, http.StatusOK, []any{controllers.KnowledgeIDParam{}}},
+		{http.MethodGet, "/knowledge/{knowledgeId}/versions", "listKnowledgeVersions", "Inspect immutable knowledge review history", nil, controllers.KnowledgeVersionsResponse{}, http.StatusOK, []any{controllers.KnowledgeIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodPost, "/knowledge/{knowledgeId}/versions", "reviseProjectKnowledge", "Edit, accept, invalidate, supersede or withdraw a claim", controllers.KnowledgeReviseRequest{}, domain.KnowledgeVersion{}, http.StatusCreated, []any{controllers.KnowledgeIDParam{}}},
+		{http.MethodGet, "/knowledge/{knowledgeId}/versions/{version}", "getKnowledgeVersion", "Inspect exact historical knowledge", nil, domain.KnowledgeVersion{}, http.StatusOK, []any{controllers.KnowledgeIDParam{}, controllers.AdaptiveTaskVersionParam{}}},
+	} {
+		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "knowledge", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
+	}
+	return ops
+}
+
+func adaptiveTaskOperations() []operation {
+	ops := make([]operation, 0, 10)
+	for _, endpoint := range []struct {
+		method, path, id, summary string
+		request, response         any
+		status                    int
+		params                    []any
+	}{
+		{http.MethodGet, "/projects/{id}/tasks", "listAdaptiveTasks", "List project work intent", nil, controllers.AdaptiveTaskListResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/projects/{id}/task-performance", "listTaskPerformance", "Inspect attempt admission cohorts with historical outcomes and session-wide usage", nil, domain.TaskPerformancePage{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.TaskPerformanceWindow{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/projects/{id}/task-performance/summary", "getTaskPerformanceSummary", "Summarize at most 1000 admitted attempts with sample counts and configuration exclusions", nil, domain.TaskPerformanceSummary{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.TaskPerformanceWindow{}, controllers.TaskPerformanceGrouping{}}},
+		{http.MethodPost, "/projects/{id}/tasks", "createAdaptiveTask", "Create work intent and optional acceptance criteria", controllers.AdaptiveTaskCreateRequest{}, controllers.AdaptiveTaskResponse{}, http.StatusCreated, []any{controllers.ProjectIDParam{}}},
+		{http.MethodGet, "/tasks/{taskId}", "getAdaptiveTask", "Inspect current planning and exclusive lease facts", nil, controllers.AdaptiveTaskResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}}},
+		{http.MethodGet, "/tasks/{taskId}/revisions", "listTaskRevisions", "List immutable task planning history", nil, controllers.AdaptiveTaskRevisionsResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodPost, "/tasks/{taskId}/revisions", "reviseAdaptiveTask", "Append a planning revision without changing historical attempts", controllers.AdaptiveTaskReviseRequest{}, domain.TaskRevision{}, http.StatusCreated, []any{controllers.AdaptiveTaskIDParam{}}},
+		{http.MethodGet, "/tasks/{taskId}/revisions/{version}", "getTaskRevision", "Inspect exact historical planning", nil, domain.TaskRevision{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskVersionParam{}}},
+		{http.MethodPost, "/tasks/{taskId}/criteria", "reviseTaskCriteria", "Version acceptance criteria for future work", controllers.AdaptiveTaskCriteriaRequest{}, domain.TaskRevision{}, http.StatusCreated, []any{controllers.AdaptiveTaskIDParam{}}},
+		{http.MethodGet, "/tasks/{taskId}/criteria/{version}", "getTaskCriteria", "Inspect exact historical acceptance criteria", nil, domain.AcceptanceCriteriaVersion{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskVersionParam{}}},
+		{http.MethodGet, "/tasks/{taskId}/audit", "listTaskAudit", "Inspect durable planning and ownership actions", nil, controllers.AdaptiveTaskAuditResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/tasks/{taskId}/attempts", "listTaskAttempts", "Inspect frozen attempts and worker associations", nil, controllers.AdaptiveTaskAttemptsResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/tasks/{taskId}/attempts/{attemptId}/context", "getTaskContext", "Inspect exact sealed worker input and provenance", nil, domain.TaskContextSnapshot{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskAttemptParam{}}},
+		{http.MethodGet, "/tasks/{taskId}/attempts/{attemptId}/results", "listTaskResults", "Inspect immutable worker claims and corrections", nil, controllers.TaskResultsResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskAttemptParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/tasks/{taskId}/attempts/{attemptId}/results/{resultId}", "getTaskResult", "Inspect exact historical worker claims", nil, domain.TaskResult{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskAttemptParam{}, controllers.TaskResultIDParam{}}},
+		{http.MethodGet, "/tasks/{taskId}/attempts/{attemptId}/delegations", "listTaskDelegations", "Inspect immutable sealed-context delegation receipts", nil, controllers.TaskDelegationsResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskAttemptParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/tasks/{taskId}/attempts/{attemptId}/delegations/{number}", "getTaskDelegation", "Inspect one exact sealed-context delegation receipt", nil, domain.TaskDelegation{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskAttemptParam{}, controllers.TaskDelegationNumberParam{}}},
+		{http.MethodPost, "/tasks/{taskId}/attempts/{attemptId}/evaluations", "evaluateTaskResult", "Collect independent evidence for an exact worker result", controllers.TaskEvaluateRequest{}, controllers.TaskEvaluateResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskAttemptParam{}}},
+		{http.MethodPost, "/tasks/{taskId}/attempts/{attemptId}/reviews", "requestTaskReview", "Request native review using the frozen acceptance policy", controllers.TaskReviewRequest{}, domain.TaskReviewReceipt{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskAttemptParam{}}},
+		{http.MethodGet, "/tasks/{taskId}/attempts/{attemptId}/results/{resultId}/reviews", "listTaskReviews", "Inspect bounded native review history for an exact result", nil, controllers.TaskReviewsResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskAttemptParam{}, controllers.TaskResultIDParam{}}},
+		{http.MethodGet, "/tasks/{taskId}/attempts/{attemptId}/reviews/{runId}", "getTaskReview", "Inspect sealed reviewer configuration, criteria and native launch evidence", nil, controllers.TaskReviewResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskAttemptParam{}, controllers.TaskReviewRunParam{}}},
+		{http.MethodGet, "/tasks/{taskId}/attempts/{attemptId}/evaluations", "listTaskEvaluations", "Inspect immutable evaluation history", nil, controllers.TaskEvaluationsResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskAttemptParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodGet, "/tasks/{taskId}/attempts/{attemptId}/evaluations/{evaluationId}", "getTaskEvaluation", "Inspect exact evaluation evidence and worker attribution", nil, domain.TaskEvaluation{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskAttemptParam{}, controllers.TaskEvaluationIDParam{}}},
+		{http.MethodPost, "/sessions/{sessionId}/task-results", "submitTaskResult", "Submit bounded generation-fenced worker claims", controllers.TaskResultSubmitRequest{}, controllers.TaskResultSubmitResponse{}, http.StatusOK, []any{controllers.SessionIDParam{}}},
+		{http.MethodPost, "/sessions/{sessionId}/task-messages", "submitTaskMessage", "Persist typed worker coordination before native delivery", controllers.TaskMessageSubmitRequest{}, controllers.TaskMessageSubmitResponse{}, http.StatusOK, []any{controllers.SessionIDParam{}}},
+		{http.MethodGet, "/projects/{id}/task-messages", "listTaskMessages", "Inspect the shared project coordination timeline", nil, controllers.TaskMessagesResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.AdaptiveTaskListQuery{}, controllers.TaskMessageFilterQuery{}}},
+		{http.MethodGet, "/projects/{id}/task-messages/{messageId}", "getTaskMessage", "Inspect immutable coordination and delivery observations", nil, controllers.TaskMessageResponse{}, http.StatusOK, []any{controllers.ProjectIDParam{}, controllers.TaskMessageIDParam{}}},
+		{http.MethodGet, "/tasks/{taskId}/intents", "listTaskIntents", "Inspect audited admission and cancellation instructions", nil, controllers.AdaptiveTaskIntentsResponse{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}, controllers.AdaptiveTaskListQuery{}}},
+		{http.MethodPost, "/tasks/{taskId}/intents", "changeTaskIntent", "Request run or cancellation intent without releasing worker ownership", controllers.AdaptiveTaskIntentRequest{}, domain.TaskIntent{}, http.StatusOK, []any{controllers.AdaptiveTaskIDParam{}}},
+	} {
+		ops = append(ops, operation{method: endpoint.method, path: "/api/v1" + endpoint.path, id: endpoint.id, tag: "tasks", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
+	}
+	return ops
+}
+
+func registryOperations() []operation {
+	ops := make([]operation, 0, 30)
+	for _, endpoint := range []struct {
+		method, path, id, summary string
+		request, response         any
+		status                    int
+		params                    []any
+	}{
+		{http.MethodGet, "/api/v1/provider-bindings", "listProviderBindings", "List local native provider references", nil, controllers.ProviderBindingListResponse{}, http.StatusOK, []any{controllers.RegistryListQuery{}}},
+		{http.MethodPost, "/api/v1/provider-bindings", "createProviderBinding", "Create a reusable native provider reference", registrysvc.BindingCreateInput{}, controllers.ProviderBindingResponse{}, http.StatusCreated, nil},
+		{http.MethodGet, "/api/v1/provider-bindings/{id}", "getProviderBinding", "Inspect a local native provider reference", nil, controllers.ProviderBindingResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}}},
+		{http.MethodPatch, "/api/v1/provider-bindings/{id}", "updateProviderBinding", "Rename or disable a local provider reference", registrysvc.BindingUpdateInput{}, controllers.ProviderBindingResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}}},
+		{http.MethodGet, "/api/v1/provider-bindings/{id}/audit", "listProviderBindingAudit", "Inspect native provider reference history", nil, controllers.ProviderBindingAuditListResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}, controllers.RegistryListQuery{}}},
+		{http.MethodPost, "/api/v1/agent-types/{id}/validate", "validateAgentType", "Check an exact version's native configuration and readiness", registrysvc.CheckInput{}, registrysvc.ConfigurationCheck{}, http.StatusOK, []any{controllers.RegistryIDParam{}}},
+	} {
+		ops = append(ops, operation{method: endpoint.method, path: endpoint.path, id: endpoint.id, tag: "registry", summary: endpoint.summary, reqBody: endpoint.request, pathParams: endpoint.params, resps: []respUnit{{endpoint.status, endpoint.response}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}})
+	}
+	for _, resource := range []struct{ path, name string }{{"/api/v1/agent-types", "AgentType"}, {"/api/v1/skills", "Skill"}} {
+		for _, endpoint := range []struct {
+			method, suffix, verb, summary string
+			request, response             any
+			status                        int
+			params                        []any
+		}{
+			{http.MethodGet, "", "list", "List definitions", nil, controllers.RegistryListResponse{}, http.StatusOK, []any{controllers.RegistryListQuery{}}},
+			{http.MethodPost, "", "create", "Create a definition and first version", registrysvc.CreateInput{}, controllers.RegistryViewResponse{}, http.StatusCreated, nil},
+			{http.MethodPost, "/import", "import", "Import a portable bundle as new disabled definitions", registrysvc.ImportInput{}, controllers.RegistryImportResponse{}, http.StatusCreated, nil},
+			{http.MethodGet, "/{id}/versions/{version}/export", "export", "Export a pinned portable bundle without local bindings", nil, registrysvc.PortableBundle{}, http.StatusOK, []any{controllers.RegistryIDParam{}, controllers.RegistryVersionParam{}}},
+			{http.MethodGet, "/{id}", "get", "Inspect the active definition", nil, controllers.RegistryViewResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}}},
+			{http.MethodPatch, "/{id}", "update", "Update metadata and ownership policy", registrysvc.MetadataInput{}, controllers.RegistryEntryResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}}},
+			{http.MethodPost, "/{id}/clone", "clone", "Clone a pinned definition", registrysvc.CloneInput{}, controllers.RegistryViewResponse{}, http.StatusCreated, []any{controllers.RegistryIDParam{}}},
+			{http.MethodGet, "/{id}/versions", "listVersions", "List immutable versions", nil, controllers.RegistryVersionsResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}, controllers.RegistryListQuery{}}},
+			{http.MethodPost, "/{id}/versions", "appendVersion", "Append an inactive version", registrysvc.VersionInput{}, controllers.RegistryVersionResponse{}, http.StatusCreated, []any{controllers.RegistryIDParam{}}},
+			{http.MethodGet, "/{id}/versions/{version}", "getVersion", "Inspect an exact version", nil, controllers.RegistryVersionResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}, controllers.RegistryVersionParam{}}},
+			{http.MethodPost, "/{id}/activate", "activateVersion", "Activate or roll back to an immutable version", registrysvc.ActivateInput{}, controllers.RegistryEntryResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}}},
+			{http.MethodGet, "/{id}/audit", "listAudit", "Inspect durable authoring history", nil, controllers.RegistryAuditListResponse{}, http.StatusOK, []any{controllers.RegistryIDParam{}, controllers.RegistryListQuery{}}},
+		} {
+			ops = append(ops, operation{method: endpoint.method, path: resource.path + endpoint.suffix,
+				id: endpoint.verb + resource.name, tag: "registry", summary: endpoint.summary,
+				pathParams: endpoint.params, reqBody: endpoint.request,
+				resps: []respUnit{{endpoint.status, endpoint.response},
+					{http.StatusBadRequest, envelope.APIError{}}, {http.StatusForbidden, envelope.APIError{}},
+					{http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}},
+					{http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}},
+			})
+		}
+	}
+	return ops
+}
+
 func notificationOperations() []operation {
 	return []operation{
 		{
@@ -1517,6 +2030,17 @@ func notificationOperations() []operation {
 			},
 		},
 		{
+			method: http.MethodDelete, path: "/api/v1/notifications/{id}", id: "deleteNotification", tag: "notifications",
+			summary:    "Delete a notification",
+			pathParams: []any{controllers.NotificationIDParam{}},
+			resps: []respUnit{
+				{http.StatusOK, controllers.NotificationEnvelope{}},
+				{http.StatusNotFound, envelope.APIError{}},
+				{http.StatusInternalServerError, envelope.APIError{}},
+				{http.StatusNotImplemented, envelope.APIError{}},
+			},
+		},
+		{
 			method: http.MethodPost, path: "/api/v1/notifications/read-all", id: "markAllNotificationsRead", tag: "notifications",
 			summary: "Mark notifications read",
 			reqBody: controllers.MarkAllNotificationsReadRequest{},
@@ -1529,7 +2053,7 @@ func notificationOperations() []operation {
 		},
 		{
 			method: http.MethodGet, path: "/api/v1/notifications/stream", id: "streamNotifications", tag: "notifications",
-			summary:    "Stream created notifications",
+			summary:    "Stream notification changes",
 			pathParams: []any{controllers.NotificationStreamQuery{}},
 			resps: []respUnit{
 				{http.StatusOK, ""},
@@ -1537,6 +2061,15 @@ func notificationOperations() []operation {
 				{http.StatusNotImplemented, envelope.APIError{}},
 			},
 			contentTypes: map[int]string{http.StatusOK: "text/event-stream"},
+		},
+		{
+			method: http.MethodDelete, path: "/api/v1/notifications", id: "clearNotifications", tag: "notifications",
+			summary: "Clear all notifications",
+			resps: []respUnit{
+				{http.StatusOK, controllers.ClearNotificationsResponse{}},
+				{http.StatusInternalServerError, envelope.APIError{}},
+				{http.StatusNotImplemented, envelope.APIError{}},
+			},
 		},
 	}
 }
@@ -1846,6 +2379,9 @@ func projectOperations() []operation {
 
 func sessionOperations() []operation {
 	return []operation{
+		{method: http.MethodGet, path: "/api/v1/sessions/{sessionId}/worker-configuration", id: "getWorkerConfiguration", tag: "sessions", summary: "Read the immutable worker launch configuration", pathParams: []any{controllers.SessionIDParam{}}, resps: []respUnit{{http.StatusOK, controllers.WorkerConfigurationResponse{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}},
+		{method: http.MethodGet, path: "/api/v1/sessions/{sessionId}/worker-executions", id: "listWorkerExecutions", tag: "sessions", summary: "Read active configuration and bounded execution history", pathParams: []any{controllers.SessionIDParam{}, controllers.WorkerExecutionQuery{}}, resps: []respUnit{{http.StatusOK, controllers.WorkerExecutionHistoryResponse{}}, {http.StatusBadRequest, envelope.APIError{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusConflict, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}},
+		{method: http.MethodGet, path: "/api/v1/sessions/{sessionId}/worker-executions/{executionId}", id: "getWorkerExecution", tag: "sessions", summary: "Read exact retained execution change content", pathParams: []any{controllers.SessionIDParam{}, controllers.WorkerExecutionIDParam{}}, resps: []respUnit{{http.StatusOK, controllers.WorkerExecutionResponse{}}, {http.StatusNotFound, envelope.APIError{}}, {http.StatusInternalServerError, envelope.APIError{}}, {http.StatusNotImplemented, envelope.APIError{}}}},
 		{
 			method: http.MethodGet, path: "/api/v1/sessions", id: "listSessions", tag: "sessions",
 			summary:    "List sessions",

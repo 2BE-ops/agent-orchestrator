@@ -12,6 +12,625 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 )
 
+type AdaptiveAgentManager struct {
+	ProjectID string
+	Revision  int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type AdaptiveAgentManagerAudit struct {
+	Seq                  int64
+	ProjectID            string
+	ConfigurationVersion int64
+	Action               string
+	Actor                string
+	Reason               string
+	CreatedAt            time.Time
+}
+
+type AdaptiveAgentManagerConfiguration struct {
+	ProjectID        string
+	Number           int64
+	AgentTypeID      string
+	AgentTypeVersion int64
+	Snapshot         string
+	ContentHash      string
+	CreatedAt        time.Time
+}
+
+type AdaptiveAgentManagerContext struct {
+	Sequence            int64
+	ID                  string
+	RequestID           string
+	Number              int64
+	ControllerID        string
+	SessionID           string
+	NativeGeneration    string
+	SourceOwner         string
+	Classification      string
+	EngagementID        string
+	PreviousContextHash string
+	Snapshot            string
+	ContentHash         string
+	CreatedAt           time.Time
+}
+
+type AdaptiveAgentManagerController struct {
+	ID                   string
+	ProjectID            string
+	ConfigurationVersion int64
+	Actor                string
+	Reason               string
+	CreatedAt            time.Time
+	ReleasedAt           sql.NullTime
+	ReleaseReason        string
+}
+
+type AdaptiveAgentManagerDecision struct {
+	ProposalID  string
+	RequestID   string
+	Outcome     string
+	Snapshot    string
+	ContentHash string
+	CreatedAt   time.Time
+}
+
+type AdaptiveAgentManagerDecisionCursor struct {
+	ID              int64
+	AfterProposalID string
+}
+
+type AdaptiveAgentManagerDelivery struct {
+	ID           string
+	RequestID    string
+	ContextID    string
+	ControllerID string
+	Number       int64
+	SessionID    string
+	Owner        string
+	DeliveryKey  string
+	State        string
+	Reason       string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type AdaptiveAgentManagerDispatch struct {
+	ControllerID      string
+	SessionID         string
+	ConfigurationHash string
+	CreatedAt         time.Time
+}
+
+type AdaptiveAgentManagerDispatchCursor struct {
+	ID            int64
+	AfterSequence int64
+}
+
+type AdaptiveAgentManagerExecutionOperation struct {
+	ID           string
+	ControllerID string
+	SessionID    string
+	SourceOwner  string
+	Kind         string
+	CreatedAt    time.Time
+}
+
+type AdaptiveAgentManagerExecutionResolution struct {
+	OperationID   string
+	ObservedOwner string
+	Outcome       string
+	Reason        string
+	CreatedAt     time.Time
+}
+
+type AdaptiveAgentManagerProposal struct {
+	ID             string
+	RequestID      string
+	Number         int64
+	IdempotencyKey string
+	ControllerID   string
+	SessionID      string
+	SourceOwner    string
+	Snapshot       string
+	ContentHash    string
+	CreatedAt      time.Time
+}
+
+type AdaptiveAgentManagerRegistryAction struct {
+	ID             string
+	ProjectID      string
+	RequestID      string
+	IdempotencyKey string
+	Action         string
+	Kind           string
+	EntryID        string
+	Version        int64
+	SourceOwner    string
+	Snapshot       string
+	ContentHash    string
+	CreatedAt      time.Time
+}
+
+type AdaptiveAgentManagerRequest struct {
+	Sequence             int64
+	ID                   string
+	ProjectID            string
+	TaskID               string
+	TaskRevision         int64
+	CriteriaVersion      int64
+	ConfigurationVersion int64
+	Snapshot             string
+	ContentHash          string
+	CreatedAt            time.Time
+}
+
+type AdaptiveAgentManagerRequestResolution struct {
+	RequestID string
+	Outcome   string
+	Actor     string
+	Reason    string
+	CreatedAt time.Time
+}
+
+type AdaptiveExperiment struct {
+	ID               string
+	ProjectID        string
+	Kind             string
+	EntryID          string
+	ControlVersion   int64
+	CandidateVersion int64
+	Hypothesis       string
+	MinimumSamples   int64
+	Status           string
+	Snapshot         string
+	ContentHash      string
+	CreatedAt        time.Time
+	ConcludedAt      sql.NullTime
+	Conclusion       sql.NullString
+}
+
+type AdaptiveOrchestratorNotice struct {
+	ID         string
+	ProjectID  string
+	TaskID     string
+	Fact       string
+	Anchor     string
+	Revision   int64
+	Detail     string
+	State      string
+	Reason     string
+	CreatedAt  time.Time
+	ResolvedAt sql.NullTime
+}
+
+type AdaptiveOrchestratorPlanReceipt struct {
+	ID             string
+	ProjectID      string
+	SessionID      string
+	IdempotencyKey string
+	ActionKind     string
+	RequestHash    string
+	Outcome        string
+	CreatedAt      time.Time
+}
+
+type AdaptiveProjectControl struct {
+	ProjectID string
+	State     string
+	Actor     string
+	Reason    string
+	UpdatedAt time.Time
+}
+
+type AdaptiveProjectGoal struct {
+	ProjectID      string
+	CurrentVersion int64
+	UpdatedAt      time.Time
+}
+
+type AdaptiveProjectGoalCompletion struct {
+	ID          string
+	ProjectID   string
+	GoalVersion int64
+	Summary     string
+	Evidence    string
+	Actor       string
+	Reason      string
+	CreatedAt   time.Time
+}
+
+type AdaptiveProjectGoalVersion struct {
+	ProjectID   string
+	Number      int64
+	Goal        string
+	Actor       string
+	Reason      string
+	ContentHash string
+	CreatedAt   time.Time
+}
+
+type AdaptiveProviderBinding struct {
+	ID        string
+	Name      string
+	Harness   string
+	Provider  string
+	ProjectID string
+	Enabled   int64
+	Revision  int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type AdaptiveProviderBindingAudit struct {
+	Seq       int64
+	BindingID string
+	Revision  int64
+	Action    string
+	ActorID   string
+	Reason    string
+	Name      string
+	Enabled   int64
+	CreatedAt time.Time
+}
+
+type AdaptiveRecommendation struct {
+	ID           string
+	ProjectID    string
+	Kind         string
+	EntryID      string
+	FromVersion  int64
+	Observation  string
+	SampleSize   int64
+	Proposed     string
+	ProposedHash string
+	Status       string
+	Snapshot     string
+	ContentHash  string
+	CreatedAt    time.Time
+	DecidedAt    sql.NullTime
+	Decision     sql.NullString
+}
+
+type AdaptiveRegistry struct {
+	ID                string
+	Kind              string
+	Name              string
+	Description       string
+	Origin            string
+	CreatedBy         string
+	Enabled           int64
+	ManagerCanSelect  int64
+	ManagerCanModify  int64
+	ManagerCanVersion int64
+	Revision          int64
+	ActiveVersion     int64
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+type AdaptiveRegistryAudit struct {
+	Seq           int64
+	EntryID       string
+	Revision      int64
+	Action        string
+	VersionNumber int64
+	ActorOrigin   string
+	ActorID       string
+	Reason        string
+	CreatedAt     time.Time
+}
+
+type AdaptiveRegistrySkillPin struct {
+	EntryID      string
+	Version      int64
+	OwnerKind    string
+	Position     int64
+	SkillID      string
+	SkillVersion int64
+	SkillKind    string
+}
+
+type AdaptiveRegistryVersion struct {
+	EntryID       string
+	Number        int64
+	Kind          string
+	ParentVersion sql.NullInt64
+	Definition    string
+	ContentHash   string
+	ActorOrigin   string
+	ActorID       string
+	Reason        string
+	CreatedAt     time.Time
+}
+
+type AdaptiveTask struct {
+	ID        string
+	ProjectID string
+	Revision  int64
+	ParentID  sql.NullString
+	CreatedBy string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type AdaptiveTaskAttempt struct {
+	ID              string
+	TaskID          string
+	TaskRevision    int64
+	CriteriaVersion int64
+	Number          int64
+	LaunchIntentID  string
+	Dependencies    string
+	Actor           string
+	Reason          string
+	CreatedAt       time.Time
+}
+
+type AdaptiveTaskAudit struct {
+	Seq       int64
+	TaskID    string
+	Revision  int64
+	Action    string
+	Actor     string
+	Reason    string
+	CreatedAt time.Time
+}
+
+type AdaptiveTaskContext struct {
+	AttemptID            string
+	SessionID            string
+	ExecutionOperationID string
+	ConfigurationHash    string
+	Snapshot             string
+	ContentHash          string
+	CreatedAt            time.Time
+}
+
+type AdaptiveTaskCriterium struct {
+	TaskID          string
+	Number          int64
+	PreviousVersion sql.NullInt64
+	Definition      string
+	ContentHash     string
+	Actor           string
+	Reason          string
+	CreatedAt       time.Time
+}
+
+type AdaptiveTaskDelegation struct {
+	AttemptID            string
+	Number               int64
+	ExecutionOperationID string
+	SessionID            string
+	ConfigurationHash    string
+	ContextHash          string
+	Snapshot             string
+	ContentHash          string
+	CreatedAt            time.Time
+}
+
+type AdaptiveTaskDependency struct {
+	ProjectID    string
+	TaskID       string
+	DependencyID string
+}
+
+type AdaptiveTaskDispatch struct {
+	AttemptID         string
+	SessionID         string
+	ConfigurationHash string
+	CreatedAt         time.Time
+}
+
+type AdaptiveTaskEvaluation struct {
+	ID              string
+	ProjectID       string
+	TaskID          string
+	AttemptID       string
+	ResultID        string
+	Number          int64
+	TaskRevision    int64
+	CriteriaVersion int64
+	IdempotencyKey  string
+	RequestHash     string
+	Snapshot        string
+	ContentHash     string
+	CreatedAt       time.Time
+}
+
+type AdaptiveTaskExecutionOperation struct {
+	ID          string
+	AttemptID   string
+	SessionID   string
+	Generation  int64
+	HolderID    string
+	SourceOwner string
+	Kind        string
+	CreatedAt   time.Time
+}
+
+type AdaptiveTaskExecutionResolution struct {
+	OperationID   string
+	ObservedOwner string
+	Outcome       string
+	Reason        string
+	CreatedAt     time.Time
+}
+
+type AdaptiveTaskIntent struct {
+	TaskID       string
+	Version      int64
+	TaskRevision int64
+	Intent       string
+	Actor        string
+	Reason       string
+	CreatedAt    time.Time
+}
+
+type AdaptiveTaskLease struct {
+	AttemptID      string
+	TaskID         string
+	Generation     int64
+	HolderID       string
+	HeartbeatAt    time.Time
+	LastActivityAt sql.NullTime
+	ExpiresAt      time.Time
+	ReleasedAt     sql.NullTime
+	ReleaseReason  string
+}
+
+type AdaptiveTaskMessage struct {
+	Sequence              int64
+	ID                    string
+	ProjectID             string
+	TaskID                string
+	AttemptID             string
+	SessionID             string
+	NativeGeneration      string
+	SourceOwner           string
+	TaskRevision          int64
+	CriteriaVersion       int64
+	ConfigurationHash     string
+	ConfigurationSequence int64
+	ContextHash           string
+	TargetTaskID          string
+	CorrelationID         string
+	ReplyToID             sql.NullString
+	ResultID              sql.NullString
+	IdempotencyKey        string
+	Definition            string
+	ContentHash           string
+	CreatedAt             time.Time
+}
+
+type AdaptiveTaskMessageDelivery struct {
+	ID              string
+	MessageID       string
+	Number          int64
+	TargetAttemptID string
+	SessionID       string
+	Owner           string
+	DeliveryKey     string
+	State           string
+	Reason          string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type AdaptiveTaskMessageDispatchCursor struct {
+	ID            int64
+	AfterSequence int64
+}
+
+type AdaptiveTaskNeedsHuman struct {
+	ID          string
+	TaskID      string
+	ProjectID   string
+	ReasonCode  string
+	Detail      string
+	Actor       string
+	Snapshot    string
+	ContentHash string
+	CreatedAt   time.Time
+	ResolvedAt  sql.NullTime
+	Resolution  sql.NullString
+	ResolvedBy  sql.NullString
+}
+
+type AdaptiveTaskResult struct {
+	ID                    string
+	AttemptID             string
+	TaskID                string
+	Number                int64
+	SessionID             string
+	NativeGeneration      string
+	SourceOwner           string
+	TaskRevision          int64
+	CriteriaVersion       int64
+	ConfigurationHash     string
+	ConfigurationSequence int64
+	ContextHash           string
+	IdempotencyKey        string
+	Definition            string
+	ContentHash           string
+	CreatedAt             time.Time
+}
+
+type AdaptiveTaskReviewContext struct {
+	RunID       string
+	ResultID    string
+	ScopeHash   string
+	Snapshot    string
+	ContentHash string
+	LaunchID    string
+	StartedAt   sql.NullTime
+	CreatedAt   time.Time
+}
+
+type AdaptiveTaskRevision struct {
+	TaskID          string
+	Number          int64
+	CriteriaVersion sql.NullInt64
+	Definition      string
+	ContentHash     string
+	Actor           string
+	Reason          string
+	CreatedAt       time.Time
+}
+
+type AdaptiveWorkerConfiguration struct {
+	SessionID        string
+	AgentTypeID      string
+	AgentTypeVersion int64
+	Configuration    string
+	ContentHash      string
+	CreatedAt        time.Time
+}
+
+type AdaptiveWorkerExecution struct {
+	ID                 string
+	SessionID          string
+	SourceKind         string
+	SourceID           string
+	PreviousActivation int64
+	Configuration      string
+	ContentHash        string
+	Origin             string
+	ActorID            string
+	Reason             string
+	CreatedAt          time.Time
+}
+
+type AdaptiveWorkerExecutionActivation struct {
+	Seq         int64
+	SessionID   string
+	ExecutionID sql.NullString
+	OperationID string
+	Action      string
+	CreatedAt   time.Time
+}
+
+type AdaptiveWorkerNativeChange struct {
+	ID                 string
+	SessionID          string
+	ConversationID     string
+	Owner              string
+	PreviousActivation int64
+	PreviousOptions    string
+	Requested          string
+	CreatedAt          time.Time
+}
+
+type AdaptiveWorkerNativeResolution struct {
+	ChangeID    string
+	Outcome     string
+	ExecutionID sql.NullString
+	Reason      string
+	CreatedAt   time.Time
+}
+
 type AgentInstallJob struct {
 	Target              string
 	Status              string
@@ -143,10 +762,11 @@ type AgentSwitchFailureReceipt struct {
 }
 
 type AppSetting struct {
-	ID                 int64
-	DefaultSessionMode domain.SessionMode
-	UpdatedAt          time.Time
-	CloudOffering      bool
+	ID                   int64
+	DefaultSessionMode   domain.SessionMode
+	UpdatedAt            time.Time
+	CloudOffering        bool
+	MaxConcurrentWorkers int64
 }
 
 type ChangeLog struct {
@@ -359,16 +979,17 @@ type ModelUsageEvent struct {
 }
 
 type Notification struct {
-	ID         string
-	SessionID  domain.SessionID
-	ProjectID  *domain.ProjectID
-	PRURL      string
-	Type       domain.NotificationType
-	Title      string
-	Body       string
-	Status     domain.NotificationStatus
-	CreatedAt  time.Time
-	ResolvedAt sql.NullTime
+	ID          string
+	SessionID   domain.SessionID
+	ProjectID   *domain.ProjectID
+	PRURL       string
+	Type        domain.NotificationType
+	Title       string
+	Body        string
+	Status      domain.NotificationStatus
+	CreatedAt   time.Time
+	ResolvedAt  sql.NullTime
+	DismissedAt sql.NullTime
 }
 
 type PR struct {
@@ -428,6 +1049,7 @@ type PRCheck struct {
 	CreatedAt  time.Time
 	Conclusion string
 	Details    string
+	ObservedAt sql.NullTime
 }
 
 type PRComment struct {
@@ -486,6 +1108,24 @@ type Project struct {
 	Kind          string
 }
 
+type ProjectKnowledge struct {
+	ID        string
+	ProjectID string
+	Version   int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type ProjectKnowledgeVersion struct {
+	KnowledgeID string
+	Number      int64
+	Definition  string
+	ContentHash string
+	Actor       string
+	Reason      string
+	CreatedAt   time.Time
+}
+
 type Review struct {
 	ID                    string
 	SessionID             domain.SessionID
@@ -516,6 +1156,7 @@ type ReviewRun struct {
 	BatchID          string
 	AutoInjectReview bool
 	TriggerSource    domain.ReviewTriggerSource
+	TaskScope        string
 }
 
 type Session struct {

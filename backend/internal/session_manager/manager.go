@@ -21,6 +21,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/agentlaunch"
 	"github.com/aoagents/agent-orchestrator/backend/internal/attachmentstore"
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
+	"github.com/aoagents/agent-orchestrator/backend/internal/httpd/apierr"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	aoprocess "github.com/aoagents/agent-orchestrator/backend/internal/process"
 	"github.com/aoagents/agent-orchestrator/backend/internal/sessionguard"
@@ -334,6 +335,7 @@ type Store interface {
 	ListWorkspaceRepos(ctx context.Context, projectID string) ([]domain.WorkspaceRepoRecord, error)
 	CreateSession(ctx context.Context, rec domain.SessionRecord) (domain.SessionRecord, error)
 	UpdateSession(ctx context.Context, rec domain.SessionRecord) error
+	UpdateSessionModel(ctx context.Context, id domain.SessionID, model string) (bool, error)
 	UpdateBrowserCapabilityVerifier(ctx context.Context, id domain.SessionID, expected domain.SessionControllerOwner, verifier string) (bool, error)
 	GetSession(ctx context.Context, id domain.SessionID) (domain.SessionRecord, bool, error)
 	ListSessions(ctx context.Context, project domain.ProjectID) ([]domain.SessionRecord, error)
@@ -369,10 +371,12 @@ type conversationSettingsStore interface {
 // Manager coordinates internal session spawn, restore, kill, and cleanup over
 // the outbound ports. User-facing read-model assembly lives in the service package.
 type Manager struct {
-	runtime   runtimeController
-	agents    ports.AgentResolver
-	workspace ports.Workspace
-	store     Store
+	runtime              runtimeController
+	agents               ports.AgentResolver
+	workspace            ports.Workspace
+	store                Store
+	workerConfigurations ports.WorkerConfigurationResolver
+	taskContexts         ports.TaskContextBuilder
 	// agentSwitchReporting supplies the exact authorization snapshot immediately
 	// before each failure-aware store transaction. Nil is fail-closed.
 	agentSwitchReporting ports.AgentSwitchReportingPolicy
@@ -519,6 +523,16 @@ func (m *Manager) SetModelCatalog(catalog interface {
 	Models(context.Context, string, string, bool) (ports.AgentModelCatalog, error)
 }) {
 	m.modelCatalog = catalog
+}
+
+// SetWorkerConfigurationResolver binds registry resolution before reconciliation.
+func (m *Manager) SetWorkerConfigurationResolver(resolver ports.WorkerConfigurationResolver) {
+	m.workerConfigurations = resolver
+}
+
+// SetTaskContextBuilder binds context sealing before task dispatch is admitted.
+func (m *Manager) SetTaskContextBuilder(builder ports.TaskContextBuilder) {
+	m.taskContexts = builder
 }
 
 // latestUserPromptRecorder narrows the post-delivery write to the pane prompt's
@@ -682,13 +696,15 @@ const (
 
 // Deps are the collaborators a Session Manager needs; New wires them together.
 type Deps struct {
-	Runtime         runtimeController
-	Agents          ports.AgentResolver
-	Workspace       ports.Workspace
-	Store           Store
-	ReportingPolicy ports.AgentSwitchReportingPolicy
-	DaemonRunID     string
-	Messenger       ports.AgentMessenger
+	WorkerConfigurations ports.WorkerConfigurationResolver
+	TaskContexts         ports.TaskContextBuilder
+	Runtime              runtimeController
+	Agents               ports.AgentResolver
+	Workspace            ports.Workspace
+	Store                Store
+	ReportingPolicy      ports.AgentSwitchReportingPolicy
+	DaemonRunID          string
+	Messenger            ports.AgentMessenger
 	// Defaults supplies the daemon-owned default session interface for spawns that
 	// name no mode. Nil means always use the compatibility default.
 	Defaults SessionModeDefaults
@@ -740,6 +756,8 @@ func New(d Deps) *Manager {
 		agents:                         d.Agents,
 		workspace:                      d.Workspace,
 		store:                          d.Store,
+		workerConfigurations:           d.WorkerConfigurations,
+		taskContexts:                   d.TaskContexts,
 		agentSwitchReporting:           d.ReportingPolicy,
 		daemonRunID:                    strings.TrimSpace(d.DaemonRunID),
 		defaults:                       d.Defaults,
@@ -828,6 +846,12 @@ func New(d Deps) *Manager {
 // materialization fails the still-seed row is deleted outright; a later failure
 // parks the row as terminated and rolls back what was built.
 func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.SessionRecord, int, int, error) {
+	if prior, found, err := m.managerDispatchReplay(ctx, cfg); err != nil || found {
+		return prior, 0, 0, err
+	}
+	if prior, found, err := m.taskDispatchReplay(ctx, cfg); err != nil || found {
+		return prior, 0, 0, err
+	}
 	project, err := m.loadProject(ctx, cfg.ProjectID)
 	if err != nil {
 		return domain.SessionRecord{}, 0, 0, fmt.Errorf("spawn: %w", err)
@@ -842,6 +866,13 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 	}
 	if projectKind == domain.ProjectKindScratch && strings.TrimSpace(cfg.Branch) != "" {
 		return domain.SessionRecord{}, 0, 0, fmt.Errorf("spawn: %w", ErrScratchBranchUnsupported)
+	}
+	var workerSnapshot *domain.WorkerConfiguration
+	if cfg.WorkerSelection != nil {
+		cfg, workerSnapshot, err = m.resolveConfiguredWorker(ctx, cfg, project)
+		if err != nil {
+			return domain.SessionRecord{}, 0, 0, err
+		}
 	}
 	if cfg.ParentSessionID != "" && cfg.AgentConfig.Permissions == "" {
 		permissions, err := m.inheritedSpawnPermissions(ctx, cfg.ProjectID, cfg.ParentSessionID)
@@ -871,7 +902,7 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 	// Resolve the effective agent config (project base + role override + spawn
 	// override) and validate the model before any durable state is created. A
 	// model the harness cannot honor should not leave a seed row behind.
-	agentConfig := applySpawnAgentConfig(effectiveAgentConfig(cfg.Harness, cfg.Kind, project.Config), cfg.AgentConfig)
+	agentConfig := spawnAgentConfig(cfg, project.Config)
 	if err := validateSpawnModel(cfg.Harness, agentConfig.Model); err != nil {
 		return domain.SessionRecord{}, 0, 0, fmt.Errorf("spawn: %w: %s", ErrUnsupportedModel, err.Error())
 	}
@@ -909,7 +940,7 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 				"harness", cfg.Harness, "error", err)
 			mode = domain.SessionModeTUI
 		}
-		if mode == domain.SessionModeChat {
+		if mode == domain.SessionModeChat && !cfg.AgentConfigResolved {
 			resolved, err := m.resolveChatAgentConfig(ctx, cfg, project.Config)
 			if err != nil {
 				return domain.SessionRecord{}, 0, 0, fmt.Errorf("spawn: %w", err)
@@ -935,12 +966,86 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 	promptBytes := len(prompt)
 	systemPromptBytes := len(systemPrompt)
 
-	rec, err := m.store.CreateSession(ctx, seedRecord(cfg, project.Config, m.clock()))
+	seed := seedRecord(cfg, project.Config, m.clock())
+	var rec domain.SessionRecord
+	if workerSnapshot != nil {
+		workerSnapshot.SystemPrompt = systemPrompt
+		workerSnapshot.ContentHash = workerSnapshot.Hash()
+		configuredStore, ok := m.store.(ports.WorkerConfigurationStore)
+		if !ok {
+			return domain.SessionRecord{}, 0, 0, fmt.Errorf("worker configuration storage is unavailable")
+		}
+		if cfg.TaskLease != nil {
+			taskStore, ok := m.store.(ports.TaskLeaseStore)
+			if !ok {
+				return domain.SessionRecord{}, 0, 0, taskExecutionUnavailable()
+			}
+			var created bool
+			rec, created, err = taskStore.CreateTaskWorkerSession(ctx, *cfg.TaskLease, seed, *workerSnapshot, m.clock())
+			if err == nil && !created {
+				return rec, 0, 0, nil
+			}
+		} else if cfg.ManagerController != nil {
+			managerStore, ok := m.store.(ports.AgentManagerControllerStore)
+			if !ok {
+				return domain.SessionRecord{}, 0, 0, managerExecutionUnavailable()
+			}
+			var created bool
+			rec, created, err = managerStore.CreateAgentManagerSession(ctx, *cfg.ManagerController, seed, *workerSnapshot, m.clock())
+			if err == nil && !created {
+				return rec, 0, 0, nil
+			}
+		} else {
+			rec, err = configuredStore.CreateConfiguredSession(ctx, seed, *workerSnapshot)
+		}
+	} else {
+		rec, err = m.store.CreateSession(ctx, seed)
+	}
 	if err != nil {
+		// Scheduler limits are deterministic admission refusals, not spawn
+		// failures: surface them as typed retryable envelopes.
+		switch {
+		case errors.Is(err, ports.ErrSchedulerWorkerLimit):
+			return domain.SessionRecord{}, 0, 0, apierr.TooManyRequests("SCHEDULER_WORKER_LIMIT", "The daemon-wide concurrent worker limit is reached; stop a worker or raise the cap in settings")
+		case errors.Is(err, ports.ErrSchedulerAgentTypeLimit):
+			return domain.SessionRecord{}, 0, 0, apierr.TooManyRequests("SCHEDULER_AGENT_TYPE_LIMIT", "This Agent Type reached its maxParallelWorkers limit; launch is refused until a worker stops")
+		case errors.Is(err, ports.ErrProjectAdmissionsFenced):
+			return domain.SessionRecord{}, 0, 0, apierr.TooManyRequests("PROJECT_ADMISSIONS_FENCED", "The project's control state fences new worker launches; resume or inspect the project control")
+		}
 		return domain.SessionRecord{}, 0, 0, wrapSpawnStageEarly(ErrSpawnCreate, err)
 	}
 	m.markFreshSessionStatusReady(rec.ID)
 	id := rec.ID
+	var taskExecution *domain.TaskExecutionOperation
+	var managerExecution *domain.AgentManagerExecutionOperation
+	if cfg.ManagerController != nil {
+		if err := m.beginAgentOperation(ctx, id, agentOperationManagerDispatch); err != nil {
+			return domain.SessionRecord{}, 0, 0, err
+		}
+		defer m.endAgentOperation(id, agentOperationManagerDispatch)
+		managerExecution, err = m.beginManagerExecution(ctx, rec, "dispatch", "")
+		if err != nil {
+			return domain.SessionRecord{}, 0, 0, err
+		}
+	}
+	if cfg.TaskLease != nil {
+		if err := m.beginAgentOperation(ctx, id, agentOperationTaskDispatch); err != nil {
+			return domain.SessionRecord{}, 0, 0, err
+		}
+		defer m.endAgentOperation(id, agentOperationTaskDispatch)
+		taskExecution, err = m.beginTaskExecution(ctx, id, "dispatch", "")
+		if err != nil {
+			return domain.SessionRecord{}, 0, 0, err
+		}
+	}
+	if workerSnapshot != nil {
+		systemPrompt, err = m.workerSnapshotPrompt(ctx, id, *workerSnapshot)
+		if err != nil {
+			m.rollbackSpawnSeedRowAfterFailure(ctx, id)
+			return domain.SessionRecord{}, 0, 0, wrapSpawnStage(id, ErrSpawnSystemPrompt, err)
+		}
+		systemPromptBytes = len(systemPrompt)
+	}
 	systemPromptFile, err := m.prepareSystemPromptFile(id, cfg.Harness, systemPrompt)
 	if err != nil {
 		m.rollbackSpawnSeedRowAfterFailure(ctx, id)
@@ -987,6 +1092,30 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 		prompt = appendAttachmentReferences(prompt, refs)
 	}
 
+	if taskExecution != nil {
+		workerExecutable, executableErr := m.executable()
+		if executableErr != nil || strings.TrimSpace(workerExecutable) == "" {
+			m.rollbackSeedSpawnWorkspace(ctx, rec, ws, workspaceProject, false)
+			return domain.SessionRecord{}, 0, 0, wrapSpawnStage(id, ErrSpawnPrompt, errors.Join(errors.New("resolve worker output executable"), executableErr))
+		}
+		workerRunFile := m.runFilePath
+		if workerRunFile == "" {
+			workerRunFile = strings.TrimSpace(os.Getenv(EnvRunFile))
+		}
+		contextSnapshot, contextErr := m.taskContexts.Build(ctx, ports.TaskContextRequest{
+			Lease: *cfg.TaskLease, SessionID: id, ExecutionOperationID: taskExecution.ID,
+			WorkspacePath: ws.Path, Prompt: prompt, SystemPrompt: systemPrompt,
+			WorkerExecutable:  workerExecutable,
+			WorkerRunFilePath: workerRunFile,
+		})
+		if contextErr != nil {
+			m.rollbackSeedSpawnWorkspace(ctx, rec, ws, workspaceProject, false)
+			return domain.SessionRecord{}, 0, 0, wrapSpawnStage(id, ErrSpawnPrompt, contextErr)
+		}
+		prompt = contextSnapshot.Prompt
+		promptBytes = len(prompt)
+	}
+
 	// Everything above is shared: project, harness, prompts, seed row, worktree,
 	// provisioning, attachments. From here the two modes launch different
 	// controllers, and exactly one of them runs.
@@ -1000,6 +1129,8 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 			workspaceProject: workspaceProject,
 			prompt:           prompt,
 			systemPrompt:     systemPrompt,
+			taskExecution:    taskExecution,
+			managerExecution: managerExecution,
 		})
 		if err != nil {
 			return domain.SessionRecord{}, 0, 0, err
@@ -1058,7 +1189,16 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 		return domain.SessionRecord{}, 0, 0, fmt.Errorf("spawn %s: %w", id, err)
 	}
 	m.augmentRuntimePATHForLaunchBinary(ctx, env, argv)
-	argv, launchID, err := m.superviseAgentProcess(agent, id, env, argv)
+	var launchID string
+	if taskExecution != nil {
+		launchID = taskExecution.ID
+		argv, err = m.wrapAgentProcessWithLaunchID(agent, id, env, argv, launchID, true)
+	} else if managerExecution != nil {
+		launchID = managerExecution.ID
+		argv, err = m.wrapAgentProcessWithLaunchID(agent, id, env, argv, launchID, true)
+	} else {
+		argv, launchID, err = m.superviseAgentProcess(agent, id, env, argv)
+	}
 	if err != nil {
 		m.rollbackSeedSpawnWorkspace(ctx, rec, ws, workspaceProject, true)
 		return domain.SessionRecord{}, 0, 0, wrapSpawnStage(id, ErrSpawnSupervisor, err)
@@ -1122,6 +1262,12 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 	}
 	rec, err = m.getRecord(ctx, id)
 	if err != nil {
+		return domain.SessionRecord{}, 0, 0, err
+	}
+	if err := m.finishTaskExecution(ctx, taskExecution); err != nil {
+		return domain.SessionRecord{}, 0, 0, err
+	}
+	if err := m.finishManagerExecution(ctx, managerExecution); err != nil {
 		return domain.SessionRecord{}, 0, 0, err
 	}
 	return rec, promptBytes, systemPromptBytes, nil
@@ -1614,6 +1760,13 @@ func restoredAgentConfig(rec domain.SessionRecord, cfg domain.ProjectConfig) por
 		merged.Model = rec.Metadata.Model
 	}
 	return merged
+}
+
+func spawnAgentConfig(cfg ports.SpawnConfig, project domain.ProjectConfig) ports.AgentConfig {
+	if cfg.AgentConfigResolved {
+		return cfg.AgentConfig
+	}
+	return applySpawnAgentConfig(effectiveAgentConfig(cfg.Harness, cfg.Kind, project), cfg.AgentConfig)
 }
 
 func applySpawnAgentConfig(base, override ports.AgentConfig) ports.AgentConfig {
@@ -2190,6 +2343,20 @@ func (m *Manager) RestoreWithMode(ctx context.Context, id domain.SessionID) (Res
 	// (Claude Code). restoreArgv returns ErrNotResumable only for a promptless,
 	// unresumable non-orchestrator (a worker with no task and no native id to resume).
 	// Orchestrators always relaunch fresh with the system prompt only.
+	taskExecution, err := m.beginTaskExecution(ctx, id, "restore", "")
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	if taskExecution != nil {
+		ctx = context.WithValue(ctx, taskExecutionContextKey{}, taskExecution)
+	}
+	managerExecution, err := m.beginManagerExecution(ctx, rec, "restore", "")
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	if managerExecution != nil {
+		ctx = context.WithValue(ctx, managerExecutionContextKey{}, managerExecution)
+	}
 
 	ws, err := m.restoreSessionWorkspace(ctx, project, rec)
 	if err != nil {
@@ -2439,6 +2606,24 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 			ctx, operation, rec, project, ws, requireNativeHistory, reservedGeneration, historyPolicy,
 		)
 	}
+	taskExecution, err := m.beginTaskExecution(ctx, rec.ID, "restore", reservedGeneration)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	if taskExecution != nil {
+		reservedGeneration = taskExecution.ID
+	}
+	managerExecution, err := m.beginManagerExecution(ctx, rec, "restore", reservedGeneration)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	if managerExecution != nil {
+		reservedGeneration = managerExecution.ID
+	}
+	rec, err = m.restoreTaskContext(ctx, rec, taskExecution)
+	if err != nil {
+		return RestoreResult{}, err
+	}
 
 	agent, ok := m.agents.Agent(rec.Harness)
 	if !ok {
@@ -2446,7 +2631,19 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 	}
 	// Recompute standing instructions, then reapply the durable finalized inbound
 	// handoff for this exact native conversation when one exists.
-	systemPrompt, err := m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	snapshot, err := m.workerSnapshot(ctx, rec.ID)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	if err := m.validateWorkerFreshRestore(ctx, snapshot, rec); err != nil {
+		return RestoreResult{}, err
+	}
+	var systemPrompt string
+	if snapshot != nil {
+		systemPrompt, err = m.workerSnapshotPrompt(ctx, rec.ID, *snapshot)
+	} else {
+		systemPrompt, err = m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	}
 	if err != nil {
 		return RestoreResult{}, fmt.Errorf("%s %s: system prompt: %w", operation, rec.ID, err)
 	}
@@ -2463,7 +2660,16 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 	// Restore resolves the project model while retaining this session's pinned
 	// permission policy independently of future project defaults.
 	agentConfig := restoredAgentConfig(rec, project.Config)
-	if rec.Metadata.Permissions != "" {
+	if snapshot != nil {
+		agentConfig = snapshot.Effective.Config
+	} else if model := strings.TrimSpace(rec.Metadata.Model); model != "" {
+		// A non-empty model picked in ChatUI is a durable session-level choice
+		// and must win over the project default for every harness on a TUI
+		// rebuild. Workers are excluded: their model is owned by the durable
+		// worker configuration surfaced in the snapshot.
+		agentConfig.Model = model
+	}
+	if snapshot == nil && rec.Metadata.Permissions != "" {
 		agentConfig.Permissions = rec.Metadata.Permissions
 	}
 	var env map[string]string
@@ -2589,6 +2795,12 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 	if err != nil {
 		return RestoreResult{}, err
 	}
+	if err := m.finishTaskExecution(ctx, taskExecution); err != nil {
+		return RestoreResult{}, err
+	}
+	if err := m.finishManagerExecution(ctx, managerExecution); err != nil {
+		return RestoreResult{}, err
+	}
 	return RestoreResult{Session: updated, Mode: mode}, nil
 }
 
@@ -2623,6 +2835,27 @@ func (m *Manager) getRecord(ctx context.Context, id domain.SessionID) (domain.Se
 		return domain.SessionRecord{}, fmt.Errorf("get %s: %w", id, ErrNotFound)
 	}
 	return rec, nil
+}
+
+// PersistChatModel records the model the user picked in ChatUI onto the
+// session before the next prompt routes. The durable, API-visible session
+// metadata is the exact source a TUI rebuild reads to refresh the model, so a
+// later interface transition back to TUI keeps the same selection instead of
+// reverting to the project's configured default. Model-only writes never touch
+// the conversation or spawn a new provider session, so history is preserved.
+func (m *Manager) PersistChatModel(ctx context.Context, id domain.SessionID, model string) error {
+	want := strings.TrimSpace(model)
+	if want == "" {
+		return nil
+	}
+	updated, err := m.store.UpdateSessionModel(ctx, id, want)
+	if err != nil {
+		return fmt.Errorf("persist chat model %s: %w", id, err)
+	}
+	if !updated {
+		return fmt.Errorf("persist chat model %s: %w", id, ErrNotFound)
+	}
+	return nil
 }
 
 // SaveAndTeardownAll captures uncommitted work and tears down every live
@@ -2751,6 +2984,13 @@ func (m *Manager) reconcileLive(ctx context.Context, rec domain.SessionRecord) e
 	}
 	projectKind := projectKindForSession(project, rec.ProjectID)
 	if rec.Metadata.WorkspacePath == "" || (rec.Metadata.Branch == "" && projectKind != domain.ProjectKindScratch) {
+		// The previous daemon died before Spawn committed a workspace (e.g. the
+		// app was closed while "Preparing the worker terminal" was still
+		// creating the worktree). Nothing observable was ever built, so — same
+		// as an ordinary in-request spawn failure — remove the seed row instead
+		// of leaving a non-terminated phantom that can never launch sitting in
+		// the sidebar forever.
+		m.rollbackSpawnSeedRow(ctx, rec.ID)
 		return nil
 	}
 	isChat := domain.NormalizeSessionMode(rec.Mode) == domain.SessionModeChat
@@ -4007,7 +4247,7 @@ func seedRecord(cfg ports.SpawnConfig, projectConfig domain.ProjectConfig, now t
 		// Resolved before this point and persisted here. There is no UPDATE
 		// statement that can change it afterwards.
 		Mode:              domain.NormalizeSessionMode(cfg.RequestedMode),
-		Metadata:          domain.SessionMetadata{Permissions: applySpawnAgentConfig(effectiveAgentConfig(cfg.Harness, cfg.Kind, projectConfig), cfg.AgentConfig).Permissions},
+		Metadata:          domain.SessionMetadata{Permissions: spawnAgentConfig(cfg, projectConfig).Permissions},
 		AutoReviewEnabled: projectConfig.AutoReview,
 		AutoInjectReview:  true,
 		AutoInjectCI:      true,
@@ -4090,6 +4330,8 @@ func buildPrompt(cfg ports.SpawnConfig) string {
 
 func promptRoleForKind(kind domain.SessionKind) sessionPromptRole {
 	switch kind {
+	case domain.KindAgentManager:
+		return sessionPromptRoleAgentManager
 	case domain.KindOrchestrator:
 		return sessionPromptRoleOrchestrator
 	case domain.KindWorker:
@@ -4227,6 +4469,14 @@ func (m *Manager) buildSystemPrompt(ctx context.Context, kind domain.SessionKind
 	switch kind {
 	case domain.KindOrchestrator:
 		cfg.OrchestratorRules = project.Config.OrchestratorRules
+		if section, err := m.orchestratorProtocolSection(ctx, projectID); err != nil {
+			return "", err
+		} else if section != "" {
+			cfg.AdditionalSections = append(cfg.AdditionalSections, section)
+		}
+	case domain.KindAgentManager:
+		// The Manager's exact Type/Skills carry its configuration. Worker and
+		// orchestrator repository rules are separate roles, not inherited policy.
 	case domain.KindWorker:
 		if projectID != "" {
 			orchestratorID, ok, err := m.activeOrchestratorSessionID(ctx, projectID)
@@ -4263,6 +4513,36 @@ func (m *Manager) buildSystemPrompt(ctx context.Context, kind domain.SessionKind
 		cfg.AdditionalSections = append(cfg.AdditionalSections, pointer)
 	}
 	return buildSystemPromptText(cfg), nil
+}
+
+// projectGoalReader is the optional store capability behind the orchestrator
+// planning protocol. Stores without it keep the legacy orchestrator prompt.
+type projectGoalReader interface {
+	GetProjectGoal(ctx context.Context, projectID domain.ProjectID) (domain.ProjectGoalVersion, error)
+}
+
+// orchestratorProtocolSection renders the sealed planning protocol when the
+// project has a current goal. Like the rest of the system prompt it is
+// recomputed from current store state on restore, so the pinned goal version
+// follows the project rather than any one orchestrator generation.
+func (m *Manager) orchestratorProtocolSection(ctx context.Context, projectID domain.ProjectID) (string, error) {
+	goals, ok := m.store.(projectGoalReader)
+	if !ok || projectID == "" {
+		return "", nil
+	}
+	goal, err := goals.GetProjectGoal(ctx, projectID)
+	if errors.Is(err, ports.ErrGoalNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	executable, err := m.executable()
+	if err != nil {
+		return "", err
+	}
+	protocol := domain.OrchestratorProtocolContext{ProjectID: projectID, GoalVersion: goal.Number, GoalHash: goal.ContentHash, Tools: &domain.OrchestratorToolPaths{SchemaVersion: 1, Executable: executable, RunFile: m.runFilePath}}
+	return protocol.ToolPrompt()
 }
 
 // aoSkillPointer is appended to every agent system prompt. It points the agent

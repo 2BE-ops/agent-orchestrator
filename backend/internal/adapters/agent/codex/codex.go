@@ -74,6 +74,7 @@ var _ ports.AgentInterfaceHandoffHistoryProbe = (*Plugin)(nil)
 var _ ports.TerminalActivityDetector = (*Plugin)(nil)
 var _ ports.EmptyComposerDetector = (*Plugin)(nil)
 var _ ports.TerminalSurfaceInspector = (*Plugin)(nil)
+var _ ports.AgentBinaryResolutionInvalidator = (*Plugin)(nil)
 
 // ComposerIsEmpty recognizes Codex's blank composer or its dim placeholder.
 // Normal text after the prompt marker is treated as a human draft and causes
@@ -106,6 +107,11 @@ func (p *Plugin) GetConfigSpec(ctx context.Context) (ports.ConfigSpec, error) {
 				Key:         "model",
 				Type:        ports.ConfigFieldString,
 				Description: "Model override passed to `codex --model`.",
+			},
+			{
+				Key: "permissions", Type: ports.ConfigFieldEnum,
+				Description: "Native Codex approval and sandbox policy.",
+				Enum:        []string{"default", "accept-edits", "auto", "bypass-permissions"},
 			},
 		},
 	}, nil
@@ -458,6 +464,15 @@ func (p *Plugin) codexBinary(ctx context.Context) (string, error) {
 	}
 	p.resolvedBinary = binary
 	return binary, nil
+}
+
+// InvalidateBinaryResolution makes the next operation resolve Codex again.
+// Installers can replace a CLI in place or make a different compatible
+// installation visible on PATH while the daemon remains running.
+func (p *Plugin) InvalidateBinaryResolution() {
+	p.binaryMu.Lock()
+	p.resolvedBinary = ""
+	p.binaryMu.Unlock()
 }
 
 // DoctorLaunchProbes returns argv tails `ao doctor` runs against the installed

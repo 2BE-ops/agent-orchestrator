@@ -106,6 +106,30 @@ func (p *Plugin) GetLaunchCommand(ctx context.Context, _ ports.LaunchConfig) (cm
 	return []string{sh, "-lc", timelineScript(phaseSleep())}, nil
 }
 
+// GetConfigSpec advertises the permission modes the deterministic timeline
+// silently accepts. The script never prompts, so every mode is behaviorally
+// identical — but worker-option resolution falls back to the "auto" permission
+// mode when nothing is configured, and launch validation compares that
+// resolved mode against the advertised set. A field-less spec (the agentbase
+// default) would make every registry launch of the fake permanently invalid,
+// so the spec lists the full typed vocabulary the timeline ignores.
+func (p *Plugin) GetConfigSpec(ctx context.Context) (ports.ConfigSpec, error) {
+	if err := ctx.Err(); err != nil {
+		return ports.ConfigSpec{}, err
+	}
+	return ports.ConfigSpec{Fields: []ports.ConfigField{{
+		Key:         "permissions",
+		Type:        ports.ConfigFieldEnum,
+		Description: "Accepted and ignored: the deterministic timeline never prompts.",
+		Enum: []string{
+			string(ports.PermissionModeDefault),
+			string(ports.PermissionModeAcceptEdits),
+			string(ports.PermissionModeAuto),
+			string(ports.PermissionModeBypassPermissions),
+		},
+	}}}, nil
+}
+
 // AuthStatus reports authorized ONLY when AO_FAKE_HARNESS is set to a truthy
 // value; otherwise it reports unauthorized. The fake needs no credentials, but
 // reporting authorized unconditionally would let it drift into the
@@ -121,6 +145,14 @@ func (p *Plugin) AuthStatus(ctx context.Context) (ports.AgentAuthStatus, error) 
 		return ports.AgentAuthStatusUnauthorized, nil
 	}
 	return ports.AgentAuthStatusAuthorized, nil
+}
+
+// OptIn reports whether the explicit AO_FAKE_HARNESS opt-in is active. The
+// agent registry consults it so the fake adapter is only constructed when a
+// human (e2e, dev, or a live lab run) asked for it; on every other machine the
+// shipped agent inventory stays byte-identical.
+func OptIn() bool {
+	return isTruthy(os.Getenv(HarnessEnv))
 }
 
 // isTruthy accepts the common opt-in tokens for an env-var gate. Matched

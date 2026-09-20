@@ -51,7 +51,7 @@ func TestReviewSubmitReadsBodyFile(t *testing.T) {
 	}
 
 	_, errOut, err := executeCLI(t, aliveDeps(),
-		"review", "submit", "mer-1", "--run", "run-1", "--verdict", "changes_requested", "--body", bodyFile)
+		"review", "submit", "mer-1", "--run", "run-1", "--verdict", "changes_requested", "--body", bodyFile, "--source-generation", "native-launch")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr=%s", err, errOut)
 	}
@@ -62,7 +62,7 @@ func TestReviewSubmitReadsBodyFile(t *testing.T) {
 	if err := json.Unmarshal([]byte(capture.body), &req); err != nil {
 		t.Fatalf("decode body: %v", err)
 	}
-	if req.RunID != "run-1" || req.Verdict != "changes_requested" || req.Body != "please fix" {
+	if req.RunID != "run-1" || req.Verdict != "changes_requested" || req.Body != "please fix" || req.SourceGeneration != "native-launch" {
 		t.Fatalf("request = %+v", req)
 	}
 }
@@ -114,7 +114,7 @@ func TestReviewSubmitBatchReadsReviewsFromStdin(t *testing.T) {
 	writeRunFileFor(t, cfg, srv)
 
 	deps := aliveDeps()
-	deps.In = strings.NewReader(`{"reviews":[{"runId":"run-1","verdict":"changes_requested","body":"fix auth","githubReviewId":"101"},{"runId":"run-2","verdict":"approved","body":"looks good"}]}`)
+	deps.In = strings.NewReader(`{"reviews":[{"runId":"run-1","sourceGeneration":"launch-1","verdict":"changes_requested","body":"fix auth","githubReviewId":"101"},{"runId":"run-2","sourceGeneration":"launch-2","verdict":"approved","body":"looks good"}]}`)
 	out, errOut, err := executeCLI(t, deps, "review", "submit", "mer-1", "--reviews", "-")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr=%s", err, errOut)
@@ -126,11 +126,20 @@ func TestReviewSubmitBatchReadsReviewsFromStdin(t *testing.T) {
 	if err := json.Unmarshal([]byte(capture.body), &req); err != nil {
 		t.Fatalf("decode body: %v", err)
 	}
-	if len(req.Reviews) != 2 || req.Reviews[0].RunID != "run-1" || req.Reviews[0].GithubReviewID != "101" || req.Reviews[1].Verdict != "approved" {
+	if len(req.Reviews) != 2 || req.Reviews[0].RunID != "run-1" || req.Reviews[0].GithubReviewID != "101" || req.Reviews[1].Verdict != "approved" || req.Reviews[0].SourceGeneration != "launch-1" || req.Reviews[1].SourceGeneration != "launch-2" {
 		t.Fatalf("request = %+v", req)
 	}
 	if req.RunID != "" || req.Verdict != "" {
 		t.Fatalf("batch request should not also set legacy fields: %+v", req)
+	}
+}
+
+func TestReviewSubmitBatchRejectsGlobalGeneration(t *testing.T) {
+	setConfigEnv(t)
+	_, _, err := executeCLI(t, aliveDeps(), "review", "submit", "worker", "--reviews", "-", "--source-generation", "global")
+	var usage usageError
+	if !errors.As(err, &usage) {
+		t.Fatalf("mixed batch generation should be usage error: %v", err)
 	}
 }
 

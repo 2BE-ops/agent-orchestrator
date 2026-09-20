@@ -1,6 +1,7 @@
 import { type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { BookOpen, Bot, Gauge, Network, Plus, ScrollText, SlidersHorizontal } from "lucide-react";
 import type { ProjectOrchestratorAction } from "../hooks/useProjectOrchestratorAction";
 import { getAgentActivityView } from "../lib/session-presentation";
 import { TopbarActionError, TopbarButton } from "./TopbarButton";
@@ -8,13 +9,16 @@ import { OrchestratorActivityIndicator } from "./OrchestratorActivityIndicator";
 import { OrchestratorIcon } from "./icons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
-export function ProjectBoardActions({ actions, placement, quiet = false, style }: {
+export function ProjectBoardActions({ actions, placement, quiet = false, style, adaptiveProjectId }: {
 	actions: ProjectOrchestratorAction;
 	placement: "header" | "empty";
 	quiet?: boolean;
 	style?: CSSProperties;
+	/** Project id enabling the adaptive surface entries (graph, manager, metrics, knowledge, audit, control). */
+	adaptiveProjectId?: string;
 }) {
 	const { t } = useTranslation();
+	const navigate = useNavigate();
 	const { orchestrator, isSpawning, isProjectRestarting, isProvisioning, spawnError, canCreateAsTui,
 		openNewTask, openOrchestrator } = actions;
 	const header = placement === "header";
@@ -73,8 +77,40 @@ export function ProjectBoardActions({ actions, placement, quiet = false, style }
 			{canCreateAsTui ? <TopbarButton disabled={busy} onClick={() => openOrchestrator("tui")} style={style}>{t("newTask.createAsTui")}</TopbarButton> : null}
 		</div>
 	) : null;
-	return header ? <>{feedback}{newTaskButton}{orchestratorButton}</> : <>
-		<div className="mt-5 flex items-center gap-2">{orchestratorButton}{newTaskButton}</div>
+	const adaptiveLinks: Array<{
+		to: "/projects/$projectId/tasks" | "/projects/$projectId/manager" | "/projects/$projectId/performance" | "/projects/$projectId/knowledge" | "/projects/$projectId/audit" | "/projects/$projectId/control";
+		icon: typeof Network;
+		label: string;
+		description: string;
+	}> = adaptiveProjectId ? [
+		{ to: "/projects/$projectId/tasks", icon: Network, label: t("shell.taskGraph", "Task graph"), description: t("shell.taskGraphDescription", "Task dependency graph and list") },
+		{ to: "/projects/$projectId/manager", icon: Bot, label: t("shell.managerDashboard", "Agent Manager"), description: t("shell.managerDashboardDescription", "Routing decisions and worker population") },
+		{ to: "/projects/$projectId/performance", icon: Gauge, label: t("shell.performance", "Performance"), description: t("shell.performanceDescription", "Attribution cohorts, routing and planning summaries") },
+		{ to: "/projects/$projectId/knowledge", icon: BookOpen, label: t("shell.knowledge", "Knowledge"), description: t("shell.knowledgeDescription", "Persistent project claims and review history") },
+		{ to: "/projects/$projectId/audit", icon: ScrollText, label: t("shell.audit", "Audit"), description: t("shell.auditDescription", "Chronological governance and task history") },
+		{ to: "/projects/$projectId/control", icon: SlidersHorizontal, label: t("shell.control", "Control"), description: t("shell.controlDescription", "Project state, Needs Human and cancel controls") },
+	] : [];
+	const adaptiveNav = adaptiveLinks.map((link) => (
+		<Tooltip key={link.to}>
+			<TooltipTrigger asChild>
+				<span className="inline-flex" style={style}>
+					<TopbarButton
+						aria-label={link.label}
+						className={header ? "topbar-control--labeled" : undefined}
+						data-priority={header ? "secondary" : undefined}
+						onClick={() => void navigate({ to: link.to, params: { projectId: adaptiveProjectId! } })}
+						variant={quiet ? "secondary" : "primary"}
+					>
+						<link.icon className="size-icon-md" aria-hidden="true" />
+						<span data-compact-label={header ? "" : undefined}>{link.label}</span>
+					</TopbarButton>
+				</span>
+			</TooltipTrigger>
+			<TooltipContent side="bottom">{link.description}</TooltipContent>
+		</Tooltip>
+	));
+	return header ? <>{feedback}{adaptiveNav}{newTaskButton}{orchestratorButton}</> : <>
+		<div className="mt-5 flex flex-wrap items-center gap-2">{orchestratorButton}{newTaskButton}{adaptiveNav}</div>
 		{feedback}
 	</>;
 }

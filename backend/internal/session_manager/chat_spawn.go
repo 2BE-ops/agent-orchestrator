@@ -81,6 +81,8 @@ func interfaceTransitionProviderBoundaryID(transitionID string) string {
 // chatSpawn bundles the shared state the chat launch needs from Spawn, so the
 // signature does not grow to a dozen positional arguments.
 type chatSpawn struct {
+	taskExecution    *domain.TaskExecutionOperation
+	managerExecution *domain.AgentManagerExecutionOperation
 	cfg              ports.SpawnConfig
 	project          domain.ProjectRecord
 	projectKind      domain.ProjectKind
@@ -126,7 +128,15 @@ func (m *Manager) launchChatController(ctx context.Context, in chatSpawn) (domai
 		controllerCommitted bool
 		completionErr       error
 	)
+	generation := ""
+	if in.taskExecution != nil {
+		generation = in.taskExecution.ID
+	}
+	if in.managerExecution != nil {
+		generation = in.managerExecution.ID
+	}
 	_, err = m.chat.StartChat(ctx, ChatStart{
+		ControllerGeneration:    generation,
 		SessionID:               id,
 		ProjectID:               in.cfg.ProjectID,
 		Kind:                    in.cfg.Kind,
@@ -212,6 +222,12 @@ func (m *Manager) launchChatController(ctx context.Context, in chatSpawn) (domai
 		}
 	}
 
+	if err := m.finishTaskExecution(ctx, in.taskExecution); err != nil {
+		return domain.SessionRecord{}, err
+	}
+	if err := m.finishManagerExecution(ctx, in.managerExecution); err != nil {
+		return domain.SessionRecord{}, err
+	}
 	return m.getRecord(ctx, id)
 }
 
@@ -320,10 +336,37 @@ func (m *Manager) resumeChatController(
 		return RestoreResult{}, fmt.Errorf("%s %s: %w", operation, rec.ID, err)
 	}
 	defer releaseCodexAdmission()
+	taskExecution, err := m.beginTaskExecution(ctx, rec.ID, "restore", controllerGeneration)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	if taskExecution != nil {
+		controllerGeneration = taskExecution.ID
+	}
+	managerExecution, err := m.beginManagerExecution(ctx, rec, "restore", controllerGeneration)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	if managerExecution != nil {
+		controllerGeneration = managerExecution.ID
+	}
+	rec, err = m.restoreTaskContext(ctx, rec, taskExecution)
+	if err != nil {
+		return RestoreResult{}, err
+	}
 
 	// Recomputed rather than persisted, matching the terminal path: a restored
 	// session keeps its standing instructions across the relaunch.
-	systemPrompt, err := m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	snapshot, err := m.workerSnapshot(ctx, rec.ID)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	var systemPrompt string
+	if snapshot != nil {
+		systemPrompt, err = m.workerSnapshotPrompt(ctx, rec.ID, *snapshot)
+	} else {
+		systemPrompt, err = m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	}
 	if err != nil {
 		return RestoreResult{}, fmt.Errorf("%s %s: system prompt: %w", operation, rec.ID, err)
 	}
@@ -333,7 +376,10 @@ func (m *Manager) resumeChatController(
 	}
 
 	agentConfig := restoredAgentConfig(rec, project.Config)
-	if rec.Metadata.Permissions != "" {
+	if snapshot != nil {
+		agentConfig = snapshot.Effective.Config
+	}
+	if snapshot == nil && rec.Metadata.Permissions != "" {
 		agentConfig.Permissions = rec.Metadata.Permissions
 	}
 	additionalDirectories, err := m.restoredWorkspaceProjectDirectories(ctx, rec, project, ws.Path)
@@ -371,6 +417,9 @@ func (m *Manager) resumeChatController(
 		AdditionalDirectories:   additionalDirectories,
 		ExpectedControllerOwner: rec.ControllerOwner(),
 		PrepareControllerEnv: func(launchCtx context.Context, expected domain.SessionControllerOwner) (map[string]string, error) {
+			if err := m.validateWorkerFreshRestore(launchCtx, snapshot, rec); err != nil {
+				return nil, err
+			}
 			prepared, launchEnv, prepareErr := m.prepareChatControllerEnv(
 				launchCtx, rec, project.Config.Env, expected,
 			)
@@ -436,6 +485,12 @@ func (m *Manager) resumeChatController(
 	}
 	// Native continuity: the provider still holds the conversation, so the agent
 	// resumes with its own history rather than a replayed prompt.
+	if err := m.finishTaskExecution(ctx, taskExecution); err != nil {
+		return RestoreResult{}, err
+	}
+	if err := m.finishManagerExecution(ctx, managerExecution); err != nil {
+		return RestoreResult{}, err
+	}
 	return RestoreResult{Session: restored, Mode: RestoreModeNative}, nil
 }
 

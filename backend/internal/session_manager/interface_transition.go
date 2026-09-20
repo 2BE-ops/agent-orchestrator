@@ -530,6 +530,7 @@ func (m *Manager) runInterfaceTransition(
 	err = m.startTransitionTarget(ctx, rec.ID, transition.NativeConversationID == "", true, transition.HistoryPolicy)
 	if errors.Is(err, ports.ErrChatHistoryUnsettled) &&
 		!errors.Is(err, ports.ErrChatRecoveryInconclusive) &&
+		!errors.Is(err, ports.ErrChatHistoryLoadFailed) &&
 		len(ports.ChatHistoryMismatchDimensions(err)) == 0 && transition.TargetMode == domain.SessionModeChat {
 		// An ACP history reader may expose an immutable snapshot for one provider
 		// session. Its unsettled result is authoritative for that controller, but
@@ -537,6 +538,8 @@ func (m *Manager) runInterfaceTransition(
 		// starting the target once more obtains a fresh provider observation. Keep
 		// the retry inside this durable transition, after the source was stopped,
 		// so the source is not relaunched and two target controllers never overlap.
+		// A provider that rejected the load outright is not retried: a second
+		// target would spend another full settle budget on the same refusal.
 		if stopErr := m.stopTransitionTargetConclusive(ctx, transition); stopErr != nil {
 			_ = m.retainUnconfirmedTransitionTarget(transition, errors.Join(err, stopErr))
 			return
@@ -546,6 +549,8 @@ func (m *Manager) runInterfaceTransition(
 	if err != nil {
 		code := "TARGET_RESUME_FAILED"
 		switch {
+		case errors.Is(err, ports.ErrChatHistoryLoadFailed):
+			code = "TARGET_HISTORY_LOAD_FAILED"
 		case errors.Is(err, ports.ErrChatHistoryUnavailable):
 			code = "TARGET_HISTORY_UNAVAILABLE"
 		case ports.ChatHistoryMismatchOnlyUntrustedText(err):
@@ -787,6 +792,10 @@ func (m *Manager) preflightInterfaceTarget(
 	rec domain.SessionRecord,
 	transition domain.SessionInterfaceTransition,
 ) error {
+	snapshot, err := m.prepareWorkerInterface(ctx, rec, transition)
+	if err != nil {
+		return err
+	}
 	if transition.TargetMode == domain.SessionModeChat {
 		if m.chat == nil {
 			return ports.ErrChatUnsupported
@@ -796,6 +805,9 @@ func (m *Manager) preflightInterfaceTarget(
 			return err
 		}
 		permissions := effectiveAgentConfig(rec.Harness, rec.Kind, project.Config).Permissions
+		if snapshot != nil {
+			permissions = snapshot.Effective.Config.Permissions
+		}
 		return m.chat.PreflightChat(ctx, rec.Harness, permissions)
 	}
 	agent, ok := m.agents.Agent(rec.Harness)
@@ -806,11 +818,24 @@ func (m *Manager) preflightInterfaceTarget(
 	if err != nil {
 		return err
 	}
-	systemPrompt, err := m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	var systemPrompt string
+	if snapshot != nil {
+		systemPrompt, err = m.workerSnapshotPrompt(ctx, rec.ID, *snapshot)
+	} else {
+		systemPrompt, err = m.buildSystemPrompt(ctx, rec.Kind, rec.ProjectID)
+	}
 	if err != nil {
 		return err
 	}
 	config := effectiveAgentConfig(rec.Harness, rec.Kind, project.Config)
+	if snapshot != nil {
+		config = snapshot.Effective.Config
+	} else if model := strings.TrimSpace(rec.Metadata.Model); model != "" {
+		// Refresh the model from the session's own persisted selection so the
+		// preflight validates the exact restore command the rebuild will run
+		// (ChatUI model changes must survive the handoff).
+		config.Model = model
+	}
 	var cmd []string
 	if transition.NativeConversationID == "" {
 		cmd, _, _, err = freshLaunchArgv(ctx, agent, rec.ID, rec.Metadata.WorkspacePath,

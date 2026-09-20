@@ -114,6 +114,21 @@ func (s *Store) inTx(ctx context.Context, what string, fn func(*gen.Queries) err
 	return s.inTxDB(ctx, what, func(q *gen.Queries, _ gen.DBTX) error { return fn(q) })
 }
 
+// readTx runs read-only work against one consistent snapshot of the read
+// pool. It never takes the write lock: simulations and projections must not
+// be able to mutate anything, and rollback is the always-safe ending.
+func (s *Store) readTx(ctx context.Context, what string, fn func(*gen.Queries) error) error {
+	tx, err := s.readDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return fmt.Errorf("begin %s: %w", what, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := fn(s.qr.WithTx(tx)); err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	return tx.Rollback()
+}
+
 // inTxDB is the raw-database variant used by handwritten transactional stores
 // while their sqlc artifacts are intentionally regenerated in a later slice.
 func (s *Store) inTxDB(ctx context.Context, what string, fn func(*gen.Queries, gen.DBTX) error) error {

@@ -130,7 +130,7 @@ func writePRRows(ctx context.Context, q *gen.Queries, pr domain.PullRequest, che
 		}
 	}
 	for _, c := range checks {
-		if err := q.UpsertPRCheck(ctx, genCheckParams(pr.URL, c)); err != nil {
+		if err := q.UpsertPRCheck(ctx, genCheckParams(pr.URL, c, pr.CIObservedAt)); err != nil {
 			return err
 		}
 	}
@@ -745,7 +745,7 @@ func prRowFromGen(p gen.PR) domain.PullRequest {
 	}
 }
 
-func genCheckParams(prURL string, c domain.PullRequestCheck) gen.UpsertPRCheckParams {
+func genCheckParams(prURL string, c domain.PullRequestCheck, observedAt time.Time) gen.UpsertPRCheckParams {
 	status := c.Status
 	if status == "" {
 		status = domain.PRCheckUnknown
@@ -754,6 +754,7 @@ func genCheckParams(prURL string, c domain.PullRequestCheck) gen.UpsertPRCheckPa
 		PRURL: prURL, Name: c.Name, CommitHash: c.CommitHash,
 		Status: status, URL: c.URL, LogTail: c.LogTail, CreatedAt: c.CreatedAt,
 		Conclusion: c.Conclusion, Details: c.Details,
+		ObservedAt: nullTime(observedAt),
 	}
 }
 

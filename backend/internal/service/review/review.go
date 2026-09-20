@@ -57,6 +57,7 @@ func reviewErrorKind(err error) string {
 
 // Manager is the reviews surface the HTTP controller depends on.
 type Manager interface {
+	ports.TaskReviewLauncher
 	Trigger(ctx context.Context, workerID domain.SessionID, harness domain.ReviewerHarness, config domain.AgentConfig) (reviewcore.TriggerResult, error)
 	RequestRereview(ctx context.Context, workerID domain.SessionID, prURL, reviewer string) error
 	ResolveReviewComment(ctx context.Context, workerID domain.SessionID, prURL, commentURL string) error
@@ -576,10 +577,11 @@ func (s *Service) ApplyReviewActivitySignal(ctx context.Context, reviewSessionID
 
 // SubmittedReview is one review result supplied by the reviewer CLI.
 type SubmittedReview struct {
-	RunID          string
-	Verdict        domain.ReviewVerdict
-	Body           string
-	GithubReviewID string
+	SourceGeneration string
+	RunID            string
+	Verdict          domain.ReviewVerdict
+	Body             string
+	GithubReviewID   string
 }
 
 // Submit records a reviewer's result for a specific worker review pass.
@@ -677,6 +679,12 @@ func (s *Service) submitOne(ctx context.Context, workerID domain.SessionID, revi
 	if run.SessionID != workerID {
 		return domain.ReviewRun{}, fmt.Errorf("%w: review run %q does not belong to worker %q", ErrInvalid, runID, workerID)
 	}
+	if run.TaskScope != "" {
+		if run.Status != domain.ReviewRunRunning && run.Status != domain.ReviewRunComplete && run.Status != domain.ReviewRunDelivered {
+			return domain.ReviewRun{}, fmt.Errorf("%w: review run %q is not running", errRunSuperseded, runID)
+		}
+		return s.submitTaskReview(ctx, workerID, review)
+	}
 
 	switch run.Status {
 	case domain.ReviewRunRunning:
@@ -702,23 +710,7 @@ func (s *Service) submitOne(ctx context.Context, workerID domain.SessionID, revi
 		// Only on the real running -> complete transition. Re-submitting an
 		// already-complete run returns early below, so telemetry stays idempotent
 		// the same way the store does.
-		s.emit(ctx, "ao.review.submitted", workerID, map[string]any{
-			"harness":            string(run.Harness),
-			"verdict":            string(verdict),
-			"duration_ms":        s.clock().Sub(run.CreatedAt).Milliseconds(),
-			"posted_to_provider": githubReviewID != "",
-			// Which pass produced this verdict. A manual and an automatic review
-			// mean different things about how the feature is being used, and the
-			// verdict split between them is the whole question.
-			"trigger": string(run.TriggerSource),
-			// A size, never the text. Review depth is otherwise unobservable: a
-			// changes-requested verdict with a two-line body and one with a full
-			// findings list are the same event without it.
-			"body_bytes": len(body),
-			// Whether the session policy will let this result reach the worker at
-			// all, recorded at the moment it is snapshotted onto the run.
-			"auto_inject": session.AutoInjectReview,
-		})
+		s.emitSubmittedReview(ctx, run)
 	case domain.ReviewRunComplete:
 		if run.Verdict != verdict {
 			return domain.ReviewRun{}, fmt.Errorf("%w: review run %q already recorded verdict %q", ErrInvalid, runID, run.Verdict)

@@ -24,6 +24,49 @@ vi.mock("./sentry", () => ({
 const captureMock = vi.mocked(captureRendererEvent);
 const sentryCaptureMock = vi.mocked(captureApiErrorToSentry);
 
+it("redacts Manager project, configuration and request identities from telemetry routes", () => {
+	expect(normalizeApiOperation("POST", "/api/v1/projects/private-project/agent-manager/controllers")).toBe("POST /api/v1/projects/:id/agent-manager/controllers");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/controller")).toBe("GET /api/v1/projects/:id/agent-manager/controller");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/controllers/private-controller")).toBe("GET /api/v1/projects/:id/agent-manager/controllers/:id");
+	expect(normalizeApiOperation("PUT", "/api/v1/projects/private-project/agent-manager")).toBe("PUT /api/v1/projects/:id/agent-manager");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/configurations")).toBe("GET /api/v1/projects/:id/agent-manager/configurations");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/configurations/42")).toBe("GET /api/v1/projects/:id/agent-manager/configurations/:id");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/audit")).toBe("GET /api/v1/projects/:id/agent-manager/audit");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/inbox")).toBe("GET /api/v1/projects/:id/agent-manager/inbox");
+	expect(normalizeApiOperation("POST", "/api/v1/projects/private-project/agent-manager/requests")).toBe("POST /api/v1/projects/:id/agent-manager/requests");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id");
+	expect(normalizeApiOperation("POST", "/api/v1/projects/private-project/agent-manager/requests/private-work/resolution")).toBe("POST /api/v1/projects/:id/agent-manager/requests/:id/resolution");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work/proposals/private-proposal")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id/proposals/:id");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work/contexts")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id/contexts");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work/contexts/private-context")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id/contexts/:id");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work/deliveries")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id/deliveries");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work/decisions")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id/decisions");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work/decisions/private-proposal")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id/decisions/:id");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work/candidates")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id/candidates");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/agent-manager/requests/private-work/candidates/private-type")).toBe("GET /api/v1/projects/:id/agent-manager/requests/:id/candidates/:id");
+	expect(normalizeApiOperation("POST", "/api/v1/sessions/private-manager/agent-manager/requests/private-work/proposals")).toBe("POST /api/v1/sessions/:id/agent-manager/requests/:id/proposals");
+});
+
+it("redacts knowledge identities from telemetry routes", () => {
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private/knowledge")).toBe("GET /api/v1/projects/:id/knowledge");
+	expect(normalizeApiOperation("POST", "/api/v1/knowledge/private-fact/versions")).toBe("POST /api/v1/knowledge/:id/versions");
+	expect(normalizeApiOperation("GET", "/api/v1/knowledge/private-fact/versions/2")).toBe("GET /api/v1/knowledge/:id/versions/:id");
+});
+
+it("redacts task and project identities from task telemetry routes", () => {
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/task-performance")).toBe("GET /api/v1/projects/:id/task-performance");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/task-performance/summary")).toBe("GET /api/v1/projects/:id/task-performance/summary");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/task-messages/private-message")).toBe("GET /api/v1/projects/:id/task-messages/:id");
+	expect(normalizeApiOperation("POST", "/api/v1/sessions/private-worker/task-messages")).toBe("POST /api/v1/sessions/:id/task-messages");
+	expect(normalizeApiOperation("GET", "/api/v1/tasks/private-task/attempts/private-attempt/results/private-result")).toBe("GET /api/v1/tasks/:id/attempts/:id/results/:id");
+	expect(normalizeApiOperation("POST", "/api/v1/sessions/private-worker/task-results")).toBe("POST /api/v1/sessions/:id/task-results");
+	expect(normalizeApiOperation("POST", "/api/v1/tasks/private-task/attempts/private-attempt/evaluations")).toBe("POST /api/v1/tasks/:id/attempts/:id/evaluations");
+	expect(normalizeApiOperation("GET", "/api/v1/tasks/private-task/attempts/private-attempt/evaluations/private-evaluation")).toBe("GET /api/v1/tasks/:id/attempts/:id/evaluations/:id");
+	expect(normalizeApiOperation("GET", "/api/v1/tasks/private-task/attempts/private-attempt/context")).toBe("GET /api/v1/tasks/:id/attempts/:id/context");
+	expect(normalizeApiOperation("GET", "/api/v1/projects/private-project/tasks")).toBe("GET /api/v1/projects/:id/tasks");
+	expect(normalizeApiOperation("GET", "/api/v1/tasks/private-task/criteria/12")).toBe("GET /api/v1/tasks/:id/criteria/:id");
+});
+
 describe("apiClient runtime base URL", () => {
 	afterEach(() => {
 		vi.restoreAllMocks();

@@ -22,6 +22,12 @@ type Reviewer interface {
 	ReviewMessage(ctx context.Context, inv ReviewInvocation) (string, error)
 }
 
+// ReviewerTaskContextSupport explicitly advertises consumption of AO-authored
+// task/system prompt files. One-shot reviewers must not claim this by inference.
+type ReviewerTaskContextSupport interface {
+	SupportsTaskContext() bool
+}
+
 // ReviewCancelMode names how AO should stop a running reviewer.
 type ReviewCancelMode string
 

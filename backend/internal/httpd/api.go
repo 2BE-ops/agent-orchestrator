@@ -33,6 +33,13 @@ type APIDeps struct {
 	PRs                prsvc.ActionManager
 	Reviews            reviewsvc.Manager
 	Notifications      controllers.NotificationService
+	Registry           controllers.RegistryService
+	AdaptiveTasks      controllers.AdaptiveTaskService
+	OrchestratorGoals  controllers.OrchestratorGoalService
+	AgentManagers      controllers.AgentManagerService
+	Evolution          controllers.EvolutionService
+	Control            controllers.ControlService
+	ProjectKnowledge   controllers.ProjectKnowledgeService
 	NotificationStream controllers.NotificationStream
 	Push               controllers.PushRegistry
 	Import             controllers.ImportService
@@ -61,6 +68,9 @@ type APIDeps struct {
 	Installer         controllers.Installer
 	AgentAuth         controllers.AgentAuthService
 	AgentSwitchPolicy AgentSwitchPolicyControl
+	// LinkPreview unfurls external URLs for the renderer's hover cards; nil
+	// leaves the route answering 501.
+	LinkPreview controllers.LinkPreviewService
 
 	// Presence tracks which mobile devices are currently running the app.
 	// Nil disables presence tracking (the roster then reports every device offline).
@@ -112,6 +122,13 @@ type API struct {
 	prs           *controllers.PRsController
 	reviews       *controllers.ReviewsController
 	notifications *controllers.NotificationsController
+	registry      *controllers.RegistryController
+	adaptiveTasks *controllers.AdaptiveTasksController
+	orchestrator  *controllers.OrchestratorController
+	agentManagers *controllers.AgentManagersController
+	evolution     *controllers.EvolutionController
+	control       *controllers.ControlController
+	knowledge     *controllers.ProjectKnowledgeController
 	push          *controllers.PushController
 	imports       *controllers.ImportController
 	shellTerms    *controllers.ShellTerminalsController
@@ -124,6 +141,7 @@ type API struct {
 	endpoints     *controllers.EndpointsController
 	systemInstall *controllers.SystemInstallController
 	agentAuth     *controllers.AgentAuthController
+	linkPreview   *controllers.LinkPreviewController
 	events        *EventsController
 }
 
@@ -154,6 +172,13 @@ func NewAPI(cfg config.Config, deps APIDeps) *API {
 		prs:           &controllers.PRsController{Svc: deps.PRs},
 		reviews:       &controllers.ReviewsController{Svc: deps.Reviews},
 		notifications: &controllers.NotificationsController{Svc: deps.Notifications, Stream: deps.NotificationStream},
+		registry:      &controllers.RegistryController{Svc: deps.Registry},
+		adaptiveTasks: &controllers.AdaptiveTasksController{Svc: deps.AdaptiveTasks},
+		orchestrator:  &controllers.OrchestratorController{Svc: deps.OrchestratorGoals},
+		agentManagers: &controllers.AgentManagersController{Svc: deps.AgentManagers},
+		evolution:     &controllers.EvolutionController{Svc: deps.Evolution},
+		control:       &controllers.ControlController{Svc: deps.Control},
+		knowledge:     &controllers.ProjectKnowledgeController{Svc: deps.ProjectKnowledge},
 		push:          &controllers.PushController{Registry: deps.Push},
 		imports:       &controllers.ImportController{Svc: deps.Import},
 		shellTerms:    &controllers.ShellTerminalsController{Svc: deps.ShellTerminals},
@@ -166,6 +191,7 @@ func NewAPI(cfg config.Config, deps APIDeps) *API {
 		endpoints:     &controllers.EndpointsController{Source: deps.Endpoints},
 		systemInstall: &controllers.SystemInstallController{Installer: deps.Installer},
 		agentAuth:     &controllers.AgentAuthController{Svc: deps.AgentAuth},
+		linkPreview:   &controllers.LinkPreviewController{Svc: deps.LinkPreview},
 		events:        &EventsController{Source: deps.CDC, Live: deps.Events},
 	}
 }
@@ -193,6 +219,13 @@ func (a *API) Register(root chi.Router) {
 			a.prs.Register(r)
 			a.reviews.Register(r)
 			a.notifications.Register(r)
+			a.registry.Register(r)
+			a.adaptiveTasks.Register(r)
+			a.orchestrator.Register(r)
+			a.agentManagers.Register(r)
+			a.evolution.Register(r)
+			a.control.Register(r)
+			a.knowledge.Register(r)
 			a.push.Register(r)
 			a.imports.Register(r)
 			a.shellTerms.Register(r)
@@ -205,6 +238,7 @@ func (a *API) Register(root chi.Router) {
 			a.endpoints.Register(r)
 			a.systemInstall.Register(r)
 			a.agentAuth.Register(r)
+			a.linkPreview.Register(r)
 			// Sibling REST controllers plug in here.
 		})
 		// Long-lived streams intentionally bypass the REST timeout middleware.

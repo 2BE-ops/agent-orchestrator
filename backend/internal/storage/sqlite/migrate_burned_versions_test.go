@@ -1,8 +1,6 @@
 package sqlite
 
 import (
-	"database/sql"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -152,6 +150,47 @@ var shippedMigrations = map[int64]string{
 	145: "0145_native_checkpoint_evidence.sql",
 	146: "0146_codex_account_management_simplification.sql",
 	147: "0147_native_history_provenance.sql",
+	148: "0148_registry_cdc.sql",
+	149: "0149_adaptive_registry.sql",
+	150: "0150_provider_bindings.sql",
+	151: "0151_worker_configurations.sql",
+	152: "0152_worker_execution_history.sql",
+	153: "0153_worker_native_configuration_changes.sql",
+	154: "0154_adaptive_task_cdc.sql",
+	155: "0155_adaptive_tasks.sql",
+	156: "0156_adaptive_task_leases.sql",
+	157: "0157_task_execution_guards.sql",
+	158: "0158_task_intents.sql",
+	159: "0159_project_knowledge_cdc.sql",
+	160: "0160_project_knowledge.sql",
+	161: "0161_task_contexts.sql",
+	162: "0162_task_results.sql",
+	163: "0163_task_messages.sql",
+	164: "0164_task_message_dispatch_cursor.sql",
+	165: "0165_task_evaluations.sql",
+	166: "0166_pr_check_observation_provenance.sql",
+	167: "0167_task_review_context.sql",
+	168: "0168_agent_manager_session_kind.sql",
+	169: "0169_agent_manager_governance.sql",
+	170: "0170_agent_manager_controllers.sql",
+	171: "0171_agent_manager_inbox.sql",
+	172: "0172_agent_manager_proposals.sql",
+	173: "0173_context_classification.sql",
+	174: "0174_agent_manager_contexts.sql",
+	175: "0175_agent_manager_deliveries.sql",
+	176: "0176_agent_manager_decisions.sql",
+	177: "0177_agent_manager_decision_cursor.sql",
+	178: "0178_agent_manager_registry_actions.sql",
+	179: "0179_max_concurrent_workers.sql",
+	180: "0180_orchestrator_goals.sql",
+	181: "0181_evolution_experiments.sql",
+	182: "0182_project_controls.sql",
+	183: "0183_orchestrator_notices.sql",
+	// Upstream shipped 0148_notification_dismissal after this fork had already
+	// claimed 0148–0183; the merge renumbers it into the fork's sequence as
+	// 0184 so goose's unique version ids hold (upstream databases were never a
+	// supported fork upgrade path past the stage-26 merge base).
+	184: "0184_notification_dismissal.sql",
 }
 
 // burnedVersion reports version numbers that must never be (re)used: they
@@ -229,13 +268,7 @@ func TestMigrationVersionLedger(t *testing.T) {
 // records a version they never shipped. goose runs with WithAllowMissing, which
 // is what makes the resulting gap harmless.
 func TestMigrationsApplyOverAForeignInterleavedVersion(t *testing.T) {
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "ao.db")+pragmas)
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	db.SetMaxOpenConns(1)
-	t.Cleanup(func() { _ = db.Close() })
-	upTo(t, db, 103)
+	db := openMigratedDatabaseCopy(t, 103)
 
 	// Stand in for the other branch's migration: applied here, absent from this
 	// tree, and numbered below everything this branch adds.
@@ -272,13 +305,7 @@ SELECT COUNT(*) FROM (
 // columns. Startup schema reconciliation must repair the physical schema so
 // the session list works instead of returning 500 INTERNAL_ERROR.
 func TestSessionListSucceedsOnBurnedMigrationHistory(t *testing.T) {
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "ao.db")+pragmas)
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-
-	upTo(t, db, 39) // the real 0040 has not run; diff-base columns are absent
+	db := openMigratedDatabaseCopy(t, 39) // the real 0040 has not run; diff-base columns are absent
 	for v := 40; v <= 51; v++ {
 		if _, err := db.Exec(
 			`INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, 1)`, v,

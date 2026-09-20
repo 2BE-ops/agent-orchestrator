@@ -20,6 +20,7 @@ type Store interface {
 	GetAppSettings(ctx context.Context) (Snapshot, error)
 	SetDefaultSessionMode(ctx context.Context, mode domain.SessionMode, now time.Time) error
 	SetCloudOffering(ctx context.Context, enabled bool, now time.Time) error
+	SetMaxConcurrentWorkers(ctx context.Context, limit int, now time.Time) error
 }
 
 // Snapshot is the current preference set.
@@ -27,7 +28,11 @@ type Snapshot struct {
 	DefaultSessionMode domain.SessionMode
 	// CloudOffering is the user's cloud toggle (Settings, Developer Mode).
 	CloudOffering bool
-	UpdatedAt     time.Time
+	// MaxConcurrentWorkers caps simultaneously running worker sessions. It is
+	// enforced transactionally at session creation; lowering it never kills a
+	// running worker.
+	MaxConcurrentWorkers int
+	UpdatedAt            time.Time
 }
 
 // Offering reports which AO offerings this daemon exposes to clients. It is
@@ -128,6 +133,29 @@ func (s *Service) SetDefaultSessionMode(ctx context.Context, mode domain.Session
 // new reads; nothing about running sessions changes.
 func (s *Service) SetCloudOffering(ctx context.Context, enabled bool) (Snapshot, error) {
 	if err := s.store.SetCloudOffering(ctx, enabled, s.now()); err != nil {
+		return Snapshot{}, err
+	}
+	return s.store.GetAppSettings(ctx)
+}
+
+// MaxConcurrentWorkers resolves the daemon-wide concurrent worker cap. A read
+// failure falls back to the durable default rather than failing every spawn:
+// an unreadable preference should not stop work.
+func (s *Service) MaxConcurrentWorkers(ctx context.Context) int {
+	snapshot, err := s.store.GetAppSettings(ctx)
+	if err != nil || snapshot.MaxConcurrentWorkers < 1 {
+		return 100
+	}
+	return snapshot.MaxConcurrentWorkers
+}
+
+// SetMaxConcurrentWorkers changes the cap applied to session-creation
+// transactions from now on. It never touches running workers.
+func (s *Service) SetMaxConcurrentWorkers(ctx context.Context, limit int) (Snapshot, error) {
+	if limit < 1 || limit > 1000 {
+		return Snapshot{}, fmt.Errorf("max concurrent workers must be between 1 and 1000")
+	}
+	if err := s.store.SetMaxConcurrentWorkers(ctx, limit, s.now()); err != nil {
 		return Snapshot{}, err
 	}
 	return s.store.GetAppSettings(ctx)

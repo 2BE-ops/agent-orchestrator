@@ -20,22 +20,28 @@ import (
 func (s *Store) CreateSession(ctx context.Context, rec domain.SessionRecord) (domain.SessionRecord, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
+	return createSessionRow(ctx, s.qw, rec)
+}
 
+func createSessionRow(ctx context.Context, q *gen.Queries, rec domain.SessionRecord) (domain.SessionRecord, error) {
+	if err := admitSessionByKind(ctx, q, rec); err != nil {
+		return domain.SessionRecord{}, err
+	}
 	var num int64
 	var err error
 	prefix := string(rec.ProjectID)
 	if rec.ProjectID == "" {
-		num, err = s.qw.NextStandaloneSessionNum(ctx)
+		num, err = q.NextStandaloneSessionNum(ctx)
 		prefix = "standalone"
 	} else {
-		num, err = s.qw.NextSessionNum(ctx, optionalProjectID(rec.ProjectID))
+		num, err = q.NextSessionNum(ctx, optionalProjectID(rec.ProjectID))
 	}
 	if err != nil {
 		return domain.SessionRecord{}, fmt.Errorf("next session num for %s: %w", rec.ProjectID, err)
 	}
 	for {
 		rec.ID = domain.SessionID(fmt.Sprintf("%s-%d", prefix, num))
-		exists, err := s.qw.SessionIDExists(ctx, rec.ID)
+		exists, err := q.SessionIDExists(ctx, rec.ID)
 		if err != nil {
 			return domain.SessionRecord{}, fmt.Errorf("check session id %s: %w", rec.ID, err)
 		}
@@ -44,7 +50,7 @@ func (s *Store) CreateSession(ctx context.Context, rec domain.SessionRecord) (do
 		}
 		num++
 	}
-	if err := s.qw.InsertSession(ctx, recordToInsert(rec, num)); err != nil {
+	if err := q.InsertSession(ctx, recordToInsert(rec, num)); err != nil {
 		return domain.SessionRecord{}, fmt.Errorf("insert session %s: %w", rec.ID, err)
 	}
 	return rec, nil
@@ -56,6 +62,21 @@ func (s *Store) UpdateSession(ctx context.Context, rec domain.SessionRecord) err
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	return s.qw.UpdateSession(ctx, recordToUpdate(rec))
+}
+
+// UpdateSessionModel changes only the selected model, leaving concurrent
+// lifecycle and controller ownership updates intact.
+func (s *Store) UpdateSessionModel(ctx context.Context, id domain.SessionID, model string) (bool, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	rows, err := s.qw.UpdateSessionModel(ctx, gen.UpdateSessionModelParams{
+		ID:    id,
+		Model: model,
+	})
+	if err != nil {
+		return false, fmt.Errorf("update session model for %s: %w", id, err)
+	}
+	return rows > 0, nil
 }
 
 // UpdateBrowserCapabilityVerifier rotates only the verifier when the caller's

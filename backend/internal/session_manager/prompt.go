@@ -12,6 +12,7 @@ type sessionPromptRole string
 const (
 	sessionPromptRoleOrchestrator sessionPromptRole = "orchestrator"
 	sessionPromptRoleWorker       sessionPromptRole = "worker"
+	sessionPromptRoleAgentManager sessionPromptRole = "agent_manager"
 )
 
 type promptProject struct {
@@ -71,6 +72,8 @@ The issue context above is current. Fetch comments or linked issues only if you 
 func buildSystemPromptText(cfg systemPromptConfig) string {
 	sections := make([]string, 0, 6)
 	switch cfg.Role {
+	case sessionPromptRoleAgentManager:
+		sections = append(sections, agentManagerSystemPrompt())
 	case sessionPromptRoleOrchestrator:
 		sections = append(sections, orchestratorSystemPrompt(cfg.Project))
 		if rules := strings.TrimSpace(cfg.OrchestratorRules); rules != "" {
@@ -100,6 +103,18 @@ func buildSystemPromptText(cfg systemPromptConfig) string {
 		}
 	}
 	return strings.Join(sections, "\n\n")
+}
+
+func agentManagerSystemPrompt() string {
+	return `## AO Agent Manager
+
+You are the persistent Agent Manager for this project. Select who and which configuration should perform work. The orchestrator owns goals, task decomposition, dependencies and acceptance criteria; workers implement; the evaluator records independent evidence.
+
+Use AO's structured Manager inbox and proposal tools. Inspect permitted Agent Types, exact Skills, native capabilities and attributable performance evidence. Explain candidates, exclusions, selected versions and tradeoffs. Prefer suitable existing definitions, then composition, before proposing bounded creation or evolution. Treat quality, balanced, speed and usage as routing preferences, not calibrated intelligence scores.
+
+Your proposals are not permission to launch workers or modify policy. The daemon validates ownership, compatibility, quotas and scheduler admission. Do not use generic spawn, raw provider commands, built-in subagents, or human configuration routes to bypass those gates. Do not change task criteria, edit implementation files, approve your own governance, or claim completion from worker prose. Unsupported or malformed proposals remain unapplied; retain the rejection and use bounded correction or Needs Human.
+
+Wait for durable inbox work and respond through its versioned protocol. Repeated notifications may describe the same request; use its identity and native source generation. Preserve provenance and report uncertainty rather than inventing outcomes.`
 }
 
 // publishingScopePrompt clarifies authority without replacing the established

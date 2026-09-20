@@ -30,11 +30,20 @@ import (
 )
 
 const (
-	nativeHistorySettlePoll  = 100 * time.Millisecond
-	nativeHistorySettleLimit = 45 * time.Second
-	branchHandoffReportLimit = 5 * time.Second
-	retryClientMessagePrefix = "retry-attempt/"
+	nativeHistorySettlePoll    = 100 * time.Millisecond
+	nativeHistorySettlePollMax = 2 * time.Second
+	nativeHistorySettleLimit   = 45 * time.Second
+	branchHandoffReportLimit   = 5 * time.Second
+	retryClientMessagePrefix   = "retry-attempt/"
 )
+
+// nativeHistoryLoadAttemptLimit bounds one provider re-observation inside the
+// settle budget. An ACP refresh is a full session/load; without this bound a
+// single stalled load consumes the whole nativeHistorySettleLimit before the
+// loop can classify anything. A variable so tests can shorten it.
+var nativeHistoryLoadAttemptLimit = 30 * time.Second
+
+var errNativeHistoryLoadAttemptTimeout = errors.New("native history load attempt exceeded its time limit")
 
 // Store is the durable conversation surface the controller needs. Implemented by
 // the SQLite store.
@@ -806,7 +815,7 @@ func (c *Controller) readNativeHistory(
 	refresher, refreshable := reader.(ports.ChatHistoryRefresher)
 	sawUnsettled := false
 	var lastUnsettled error
-	for {
+	for refresh := 0; ; refresh++ {
 		if err == nil && required {
 			if mismatches := checkpoint.mismatches(
 				events, existingTurns, existingMessages, existingActivities,
@@ -819,6 +828,13 @@ func (c *Controller) readNativeHistory(
 		}
 		if errors.Is(err, ports.ErrChatHistoryUnavailable) && !required {
 			return nil, nil
+		}
+		if errors.Is(err, ports.ErrChatHistoryLoadFailed) {
+			// The provider failed the replay or one attempt hit its bound while
+			// the settle budget was still live. Another identical load cannot
+			// settle anything, and this must not read as the settle wait's own
+			// deadline even though the bounded attempt carries a context error.
+			return nil, fmt.Errorf("read native conversation history: %w", err)
 		}
 		if sawUnsettled && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
 			return nil, fmt.Errorf("wait for settled native conversation history: %w: %w",
@@ -833,7 +849,7 @@ func (c *Controller) readNativeHistory(
 			return nil, fmt.Errorf("native conversation history snapshot is incomplete and cannot be refreshed: %w", err)
 		}
 
-		timer := time.NewTimer(nativeHistorySettlePoll)
+		timer := time.NewTimer(nativeHistorySettleDelay(refresh))
 		select {
 		case <-historyCtx.Done():
 			timer.Stop()
@@ -841,7 +857,7 @@ func (c *Controller) readNativeHistory(
 				lastUnsettled, historyCtx.Err())
 		case <-timer.C:
 		}
-		events, err = refresher.RefreshHistory(historyCtx)
+		events, err = refreshNativeHistoryAttempt(historyCtx, refresher)
 	}
 	for _, event := range events {
 		if event.ProviderEventID == "" {
@@ -849,6 +865,45 @@ func (c *Controller) readNativeHistory(
 		}
 	}
 	return events, nil
+}
+
+// refreshNativeHistoryAttempt runs one provider re-observation under its own
+// deadline, a child of the settle context so parent cancellation still wins.
+// Only a timeout the attempt bound caused, while the settle budget is still
+// live, is reported as a load failure; the parent's own expiry keeps its
+// context error so the caller's settle-wait reporting is unchanged.
+func refreshNativeHistoryAttempt(
+	parent context.Context,
+	refresher ports.ChatHistoryRefresher,
+) ([]ports.ChatEvent, error) {
+	attemptCtx, cancel := context.WithTimeoutCause(
+		parent, nativeHistoryLoadAttemptLimit, errNativeHistoryLoadAttemptTimeout)
+	defer cancel()
+	events, err := refresher.RefreshHistory(attemptCtx)
+	if err != nil && parent.Err() == nil &&
+		errors.Is(context.Cause(attemptCtx), errNativeHistoryLoadAttemptTimeout) {
+		return nil, fmt.Errorf("%w: %w after %v: %w",
+			ports.ErrChatHistoryLoadFailed, errNativeHistoryLoadAttemptTimeout,
+			nativeHistoryLoadAttemptLimit, err)
+	}
+	return events, err
+}
+
+// nativeHistorySettleDelay is the pause before the refresh-th provider
+// re-observation. Each refresh is a full ACP session/load transcript replay,
+// so the poll backs off exponentially from nativeHistorySettlePoll to
+// nativeHistorySettlePollMax instead of hammering the provider every 100ms
+// for the whole nativeHistorySettleLimit budget. The first retry stays fast
+// because a turn that is about to settle usually does so within a beat.
+func nativeHistorySettleDelay(refresh int) time.Duration {
+	delay := nativeHistorySettlePoll
+	for i := 0; i < refresh && delay < nativeHistorySettlePollMax; i++ {
+		delay *= 2
+	}
+	if delay > nativeHistorySettlePollMax {
+		delay = nativeHistorySettlePollMax
+	}
+	return delay
 }
 
 // projectNativeHistory durably imports a previously reconciled snapshot.
@@ -1291,6 +1346,9 @@ func (c *Controller) sendLocked(
 	msg ports.ChatUserMessage,
 	queueWhenBusy bool,
 ) (domain.ConversationTurn, error) {
+	if err := c.checkWorkerNativeRecovery(ctx); err != nil {
+		return domain.ConversationTurn{}, err
+	}
 	c.mu.Lock()
 	handoff := c.handoff != controllerHandoffNone
 	c.mu.Unlock()
@@ -1410,6 +1468,9 @@ func (c *Controller) RetryTurn(ctx context.Context, turnID string) (domain.Conve
 		return domain.ConversationTurn{}, ErrTurnRunning
 	}
 
+	if err := c.checkWorkerNativeRecovery(ctx); err != nil {
+		return domain.ConversationTurn{}, err
+	}
 	content, err := retryPromptContent(prompt.DeliveryContentJSON, c.Capabilities())
 	if err != nil {
 		return domain.ConversationTurn{}, err
@@ -1579,7 +1640,11 @@ func (c *Controller) dispatch(
 	c.mu.Lock()
 	c.dispatchingTurnID = turnID
 	c.mu.Unlock()
-	ref, err := c.conv.SendTurn(ctx, msg)
+	var ref ports.ChatTurnRef
+	err := c.checkWorkerNativeRecovery(ctx)
+	if err == nil {
+		ref, err = c.conv.SendTurn(ctx, msg)
+	}
 	if err != nil {
 		c.mu.Lock()
 		if c.dispatchingTurnID == turnID {
@@ -1674,6 +1739,10 @@ func (c *Controller) drain(ctx context.Context) {
 // allowDispatch gates sending the next queued turn. A pending Stop cutoff forces
 // it true so messages typed after Stop still send.
 func (c *Controller) drainLocked(ctx context.Context, allowDispatch bool) {
+	if err := c.checkWorkerNativeRecovery(ctx); err != nil {
+		c.log.Debug("queued dispatch waits for native configuration recovery", "session", c.sessionID, "error", err)
+		return
+	}
 	c.mu.Lock()
 	cutoff := c.cancelQueuedAt
 	c.cancelQueuedAt = time.Time{}

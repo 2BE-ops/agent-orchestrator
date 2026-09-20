@@ -32,6 +32,9 @@ var _ ports.Reviewer = (*Reviewer)(nil)
 var _ ports.ReviewerCanceller = (*Reviewer)(nil)
 var _ ports.ReviewerRestorer = (*Reviewer)(nil)
 
+// SupportsTaskContext declares that both sealed prompt files reach native Codex.
+func (*Reviewer) SupportsTaskContext() bool { return true }
+
 // ReviewCommand launches the reviewer with an enforced read-only filesystem
 // sandbox. Auto approval lets the headless session request the narrowly needed
 // network access for posting the review and reporting its result.

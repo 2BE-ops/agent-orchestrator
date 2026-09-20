@@ -39,6 +39,16 @@ func TestResolveCodexBinaryFindsLocalAppDataNPMShimOnWindows(t *testing.T) {
 	}
 }
 
+func TestInvalidateBinaryResolutionClearsCachedPath(t *testing.T) {
+	p := &Plugin{resolvedBinary: "old-codex"}
+
+	p.InvalidateBinaryResolution()
+
+	if p.resolvedBinary != "" {
+		t.Fatalf("resolvedBinary = %q, want empty after invalidation", p.resolvedBinary)
+	}
+}
+
 func TestNativeConversationIDRequiresCapturedCodexThreadForTUI(t *testing.T) {
 	p := &Plugin{}
 	if id, ok, err := p.NativeConversationID(context.Background(), ports.SessionRef{
@@ -644,7 +654,7 @@ func TestGetPromptDeliveryStrategyIsInCommand(t *testing.T) {
 	}
 }
 
-func TestGetConfigSpecReportsModelField(t *testing.T) {
+func TestGetConfigSpecReportsSupportedFields(t *testing.T) {
 	plugin := &Plugin{}
 
 	spec, err := plugin.GetConfigSpec(context.Background())
@@ -656,6 +666,11 @@ func TestGetConfigSpecReportsModelField(t *testing.T) {
 			Key:         "model",
 			Type:        ports.ConfigFieldString,
 			Description: "Model override passed to `codex --model`.",
+		},
+		{
+			Key: "permissions", Type: ports.ConfigFieldEnum,
+			Description: "Native Codex approval and sandbox policy.",
+			Enum:        []string{"default", "accept-edits", "auto", "bypass-permissions"},
 		},
 	}
 	if !reflect.DeepEqual(spec.Fields, want) {

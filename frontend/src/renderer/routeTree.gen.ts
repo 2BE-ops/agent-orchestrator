@@ -14,10 +14,17 @@ import { Route as ShellIndexRouteImport } from './routes/_shell.index'
 import { Route as ShellTerminalsRouteImport } from './routes/_shell.terminals'
 import { Route as ShellSettingsRouteImport } from './routes/_shell.settings'
 import { Route as ShellSessionsRouteImport } from './routes/_shell.sessions'
+import { Route as ShellRegistryRouteImport } from './routes/_shell.registry'
 import { Route as ShellSessionsIndexRouteImport } from './routes/_shell.sessions.index'
 import { Route as ShellSessionsSessionIdRouteImport } from './routes/_shell.sessions.$sessionId'
 import { Route as ShellProjectsProjectIdRouteImport } from './routes/_shell.projects.$projectId'
+import { Route as ShellProjectsProjectIdTasksRouteImport } from './routes/_shell.projects.$projectId_.tasks'
 import { Route as ShellProjectsProjectIdSettingsRouteImport } from './routes/_shell.projects.$projectId_.settings'
+import { Route as ShellProjectsProjectIdPerformanceRouteImport } from './routes/_shell.projects.$projectId_.performance'
+import { Route as ShellProjectsProjectIdManagerRouteImport } from './routes/_shell.projects.$projectId_.manager'
+import { Route as ShellProjectsProjectIdKnowledgeRouteImport } from './routes/_shell.projects.$projectId_.knowledge'
+import { Route as ShellProjectsProjectIdControlRouteImport } from './routes/_shell.projects.$projectId_.control'
+import { Route as ShellProjectsProjectIdAuditRouteImport } from './routes/_shell.projects.$projectId_.audit'
 import { Route as ShellProjectsProjectIdSessionsSessionIdRouteImport } from './routes/_shell.projects.$projectId_.sessions.$sessionId'
 
 const ShellRoute = ShellRouteImport.update({
@@ -44,6 +51,11 @@ const ShellSessionsRoute = ShellSessionsRouteImport.update({
   path: '/sessions',
   getParentRoute: () => ShellRoute,
 } as any)
+const ShellRegistryRoute = ShellRegistryRouteImport.update({
+  id: '/registry',
+  path: '/registry',
+  getParentRoute: () => ShellRoute,
+} as any)
 const ShellSessionsIndexRoute = ShellSessionsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -59,10 +71,46 @@ const ShellProjectsProjectIdRoute = ShellProjectsProjectIdRouteImport.update({
   path: '/projects/$projectId',
   getParentRoute: () => ShellRoute,
 } as any)
+const ShellProjectsProjectIdTasksRoute =
+  ShellProjectsProjectIdTasksRouteImport.update({
+    id: '/projects/$projectId_/tasks',
+    path: '/projects/$projectId/tasks',
+    getParentRoute: () => ShellRoute,
+  } as any)
 const ShellProjectsProjectIdSettingsRoute =
   ShellProjectsProjectIdSettingsRouteImport.update({
     id: '/projects/$projectId_/settings',
     path: '/projects/$projectId/settings',
+    getParentRoute: () => ShellRoute,
+  } as any)
+const ShellProjectsProjectIdPerformanceRoute =
+  ShellProjectsProjectIdPerformanceRouteImport.update({
+    id: '/projects/$projectId_/performance',
+    path: '/projects/$projectId/performance',
+    getParentRoute: () => ShellRoute,
+  } as any)
+const ShellProjectsProjectIdManagerRoute =
+  ShellProjectsProjectIdManagerRouteImport.update({
+    id: '/projects/$projectId_/manager',
+    path: '/projects/$projectId/manager',
+    getParentRoute: () => ShellRoute,
+  } as any)
+const ShellProjectsProjectIdKnowledgeRoute =
+  ShellProjectsProjectIdKnowledgeRouteImport.update({
+    id: '/projects/$projectId_/knowledge',
+    path: '/projects/$projectId/knowledge',
+    getParentRoute: () => ShellRoute,
+  } as any)
+const ShellProjectsProjectIdControlRoute =
+  ShellProjectsProjectIdControlRouteImport.update({
+    id: '/projects/$projectId_/control',
+    path: '/projects/$projectId/control',
+    getParentRoute: () => ShellRoute,
+  } as any)
+const ShellProjectsProjectIdAuditRoute =
+  ShellProjectsProjectIdAuditRouteImport.update({
+    id: '/projects/$projectId_/audit',
+    path: '/projects/$projectId/audit',
     getParentRoute: () => ShellRoute,
   } as any)
 const ShellProjectsProjectIdSessionsSessionIdRoute =
@@ -74,28 +122,43 @@ const ShellProjectsProjectIdSessionsSessionIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof ShellIndexRoute
+  '/registry': typeof ShellRegistryRoute
   '/sessions': typeof ShellSessionsRouteWithChildren
   '/settings': typeof ShellSettingsRoute
   '/terminals': typeof ShellTerminalsRoute
   '/projects/$projectId': typeof ShellProjectsProjectIdRoute
   '/sessions/$sessionId': typeof ShellSessionsSessionIdRoute
   '/sessions/': typeof ShellSessionsIndexRoute
+  '/projects/$projectId/audit': typeof ShellProjectsProjectIdAuditRoute
+  '/projects/$projectId/control': typeof ShellProjectsProjectIdControlRoute
+  '/projects/$projectId/knowledge': typeof ShellProjectsProjectIdKnowledgeRoute
+  '/projects/$projectId/manager': typeof ShellProjectsProjectIdManagerRoute
+  '/projects/$projectId/performance': typeof ShellProjectsProjectIdPerformanceRoute
   '/projects/$projectId/settings': typeof ShellProjectsProjectIdSettingsRoute
+  '/projects/$projectId/tasks': typeof ShellProjectsProjectIdTasksRoute
   '/projects/$projectId/sessions/$sessionId': typeof ShellProjectsProjectIdSessionsSessionIdRoute
 }
 export interface FileRoutesByTo {
+  '/registry': typeof ShellRegistryRoute
   '/settings': typeof ShellSettingsRoute
   '/terminals': typeof ShellTerminalsRoute
   '/': typeof ShellIndexRoute
   '/projects/$projectId': typeof ShellProjectsProjectIdRoute
   '/sessions/$sessionId': typeof ShellSessionsSessionIdRoute
   '/sessions': typeof ShellSessionsIndexRoute
+  '/projects/$projectId/audit': typeof ShellProjectsProjectIdAuditRoute
+  '/projects/$projectId/control': typeof ShellProjectsProjectIdControlRoute
+  '/projects/$projectId/knowledge': typeof ShellProjectsProjectIdKnowledgeRoute
+  '/projects/$projectId/manager': typeof ShellProjectsProjectIdManagerRoute
+  '/projects/$projectId/performance': typeof ShellProjectsProjectIdPerformanceRoute
   '/projects/$projectId/settings': typeof ShellProjectsProjectIdSettingsRoute
+  '/projects/$projectId/tasks': typeof ShellProjectsProjectIdTasksRoute
   '/projects/$projectId/sessions/$sessionId': typeof ShellProjectsProjectIdSessionsSessionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_shell': typeof ShellRouteWithChildren
+  '/_shell/registry': typeof ShellRegistryRoute
   '/_shell/sessions': typeof ShellSessionsRouteWithChildren
   '/_shell/settings': typeof ShellSettingsRoute
   '/_shell/terminals': typeof ShellTerminalsRoute
@@ -103,34 +166,55 @@ export interface FileRoutesById {
   '/_shell/projects/$projectId': typeof ShellProjectsProjectIdRoute
   '/_shell/sessions/$sessionId': typeof ShellSessionsSessionIdRoute
   '/_shell/sessions/': typeof ShellSessionsIndexRoute
+  '/_shell/projects/$projectId_/audit': typeof ShellProjectsProjectIdAuditRoute
+  '/_shell/projects/$projectId_/control': typeof ShellProjectsProjectIdControlRoute
+  '/_shell/projects/$projectId_/knowledge': typeof ShellProjectsProjectIdKnowledgeRoute
+  '/_shell/projects/$projectId_/manager': typeof ShellProjectsProjectIdManagerRoute
+  '/_shell/projects/$projectId_/performance': typeof ShellProjectsProjectIdPerformanceRoute
   '/_shell/projects/$projectId_/settings': typeof ShellProjectsProjectIdSettingsRoute
+  '/_shell/projects/$projectId_/tasks': typeof ShellProjectsProjectIdTasksRoute
   '/_shell/projects/$projectId_/sessions/$sessionId': typeof ShellProjectsProjectIdSessionsSessionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/registry'
     | '/sessions'
     | '/settings'
     | '/terminals'
     | '/projects/$projectId'
     | '/sessions/$sessionId'
     | '/sessions/'
+    | '/projects/$projectId/audit'
+    | '/projects/$projectId/control'
+    | '/projects/$projectId/knowledge'
+    | '/projects/$projectId/manager'
+    | '/projects/$projectId/performance'
     | '/projects/$projectId/settings'
+    | '/projects/$projectId/tasks'
     | '/projects/$projectId/sessions/$sessionId'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/registry'
     | '/settings'
     | '/terminals'
     | '/'
     | '/projects/$projectId'
     | '/sessions/$sessionId'
     | '/sessions'
+    | '/projects/$projectId/audit'
+    | '/projects/$projectId/control'
+    | '/projects/$projectId/knowledge'
+    | '/projects/$projectId/manager'
+    | '/projects/$projectId/performance'
     | '/projects/$projectId/settings'
+    | '/projects/$projectId/tasks'
     | '/projects/$projectId/sessions/$sessionId'
   id:
     | '__root__'
     | '/_shell'
+    | '/_shell/registry'
     | '/_shell/sessions'
     | '/_shell/settings'
     | '/_shell/terminals'
@@ -138,7 +222,13 @@ export interface FileRouteTypes {
     | '/_shell/projects/$projectId'
     | '/_shell/sessions/$sessionId'
     | '/_shell/sessions/'
+    | '/_shell/projects/$projectId_/audit'
+    | '/_shell/projects/$projectId_/control'
+    | '/_shell/projects/$projectId_/knowledge'
+    | '/_shell/projects/$projectId_/manager'
+    | '/_shell/projects/$projectId_/performance'
     | '/_shell/projects/$projectId_/settings'
+    | '/_shell/projects/$projectId_/tasks'
     | '/_shell/projects/$projectId_/sessions/$sessionId'
   fileRoutesById: FileRoutesById
 }
@@ -183,6 +273,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellSessionsRouteImport
       parentRoute: typeof ShellRoute
     }
+    '/_shell/registry': {
+      id: '/_shell/registry'
+      path: '/registry'
+      fullPath: '/registry'
+      preLoaderRoute: typeof ShellRegistryRouteImport
+      parentRoute: typeof ShellRoute
+    }
     '/_shell/sessions/': {
       id: '/_shell/sessions/'
       path: '/'
@@ -204,11 +301,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellProjectsProjectIdRouteImport
       parentRoute: typeof ShellRoute
     }
+    '/_shell/projects/$projectId_/tasks': {
+      id: '/_shell/projects/$projectId_/tasks'
+      path: '/projects/$projectId/tasks'
+      fullPath: '/projects/$projectId/tasks'
+      preLoaderRoute: typeof ShellProjectsProjectIdTasksRouteImport
+      parentRoute: typeof ShellRoute
+    }
     '/_shell/projects/$projectId_/settings': {
       id: '/_shell/projects/$projectId_/settings'
       path: '/projects/$projectId/settings'
       fullPath: '/projects/$projectId/settings'
       preLoaderRoute: typeof ShellProjectsProjectIdSettingsRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/projects/$projectId_/performance': {
+      id: '/_shell/projects/$projectId_/performance'
+      path: '/projects/$projectId/performance'
+      fullPath: '/projects/$projectId/performance'
+      preLoaderRoute: typeof ShellProjectsProjectIdPerformanceRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/projects/$projectId_/manager': {
+      id: '/_shell/projects/$projectId_/manager'
+      path: '/projects/$projectId/manager'
+      fullPath: '/projects/$projectId/manager'
+      preLoaderRoute: typeof ShellProjectsProjectIdManagerRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/projects/$projectId_/knowledge': {
+      id: '/_shell/projects/$projectId_/knowledge'
+      path: '/projects/$projectId/knowledge'
+      fullPath: '/projects/$projectId/knowledge'
+      preLoaderRoute: typeof ShellProjectsProjectIdKnowledgeRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/projects/$projectId_/control': {
+      id: '/_shell/projects/$projectId_/control'
+      path: '/projects/$projectId/control'
+      fullPath: '/projects/$projectId/control'
+      preLoaderRoute: typeof ShellProjectsProjectIdControlRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/projects/$projectId_/audit': {
+      id: '/_shell/projects/$projectId_/audit'
+      path: '/projects/$projectId/audit'
+      fullPath: '/projects/$projectId/audit'
+      preLoaderRoute: typeof ShellProjectsProjectIdAuditRouteImport
       parentRoute: typeof ShellRoute
     }
     '/_shell/projects/$projectId_/sessions/$sessionId': {
@@ -236,22 +375,37 @@ const ShellSessionsRouteWithChildren = ShellSessionsRoute._addFileChildren(
 )
 
 interface ShellRouteChildren {
+  ShellRegistryRoute: typeof ShellRegistryRoute
   ShellSessionsRoute: typeof ShellSessionsRouteWithChildren
   ShellSettingsRoute: typeof ShellSettingsRoute
   ShellTerminalsRoute: typeof ShellTerminalsRoute
   ShellIndexRoute: typeof ShellIndexRoute
   ShellProjectsProjectIdRoute: typeof ShellProjectsProjectIdRoute
+  ShellProjectsProjectIdAuditRoute: typeof ShellProjectsProjectIdAuditRoute
+  ShellProjectsProjectIdControlRoute: typeof ShellProjectsProjectIdControlRoute
+  ShellProjectsProjectIdKnowledgeRoute: typeof ShellProjectsProjectIdKnowledgeRoute
+  ShellProjectsProjectIdManagerRoute: typeof ShellProjectsProjectIdManagerRoute
+  ShellProjectsProjectIdPerformanceRoute: typeof ShellProjectsProjectIdPerformanceRoute
   ShellProjectsProjectIdSettingsRoute: typeof ShellProjectsProjectIdSettingsRoute
+  ShellProjectsProjectIdTasksRoute: typeof ShellProjectsProjectIdTasksRoute
   ShellProjectsProjectIdSessionsSessionIdRoute: typeof ShellProjectsProjectIdSessionsSessionIdRoute
 }
 
 const ShellRouteChildren: ShellRouteChildren = {
+  ShellRegistryRoute: ShellRegistryRoute,
   ShellSessionsRoute: ShellSessionsRouteWithChildren,
   ShellSettingsRoute: ShellSettingsRoute,
   ShellTerminalsRoute: ShellTerminalsRoute,
   ShellIndexRoute: ShellIndexRoute,
   ShellProjectsProjectIdRoute: ShellProjectsProjectIdRoute,
+  ShellProjectsProjectIdAuditRoute: ShellProjectsProjectIdAuditRoute,
+  ShellProjectsProjectIdControlRoute: ShellProjectsProjectIdControlRoute,
+  ShellProjectsProjectIdKnowledgeRoute: ShellProjectsProjectIdKnowledgeRoute,
+  ShellProjectsProjectIdManagerRoute: ShellProjectsProjectIdManagerRoute,
+  ShellProjectsProjectIdPerformanceRoute:
+    ShellProjectsProjectIdPerformanceRoute,
   ShellProjectsProjectIdSettingsRoute: ShellProjectsProjectIdSettingsRoute,
+  ShellProjectsProjectIdTasksRoute: ShellProjectsProjectIdTasksRoute,
   ShellProjectsProjectIdSessionsSessionIdRoute:
     ShellProjectsProjectIdSessionsSessionIdRoute,
 }

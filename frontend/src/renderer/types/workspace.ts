@@ -26,7 +26,11 @@ export type ChangedFile = {
 	staged?: boolean;
 };
 
-export type SessionKind = "worker" | "orchestrator";
+export type SessionKind = "worker" | "orchestrator" | "agent_manager";
+
+export function toSessionKind(kind?: string): SessionKind | undefined {
+	return kind === "worker" || kind === "orchestrator" || kind === "agent_manager" ? kind : undefined;
+}
 
 /** Lifecycle state of a single pull request, mirrors the daemon's enum. */
 export type PRState = "open" | "draft" | "merged" | "closed";
@@ -228,7 +232,7 @@ export function primaryPR(session: WorkspaceSession): PullRequestFacts | undefin
 }
 
 export function isOrchestratorSession(session: Pick<WorkspaceSession, "id" | "kind">): boolean {
-	return session.kind === "orchestrator" || session.id.endsWith("-orchestrator");
+	return session.kind !== "agent_manager" && (session.kind === "orchestrator" || session.id.endsWith("-orchestrator"));
 }
 
 /**
@@ -295,7 +299,7 @@ function validTimestamp(value?: string): number | undefined {
 }
 
 export function workerSessions(sessions: WorkspaceSession[]): WorkspaceSession[] {
-	return sessions.filter((s) => !isOrchestratorSession(s));
+	return sessions.filter((s) => s.kind !== "agent_manager" && !isOrchestratorSession(s));
 }
 
 /** Worker sessions ordered by session update time, newest first. */
@@ -389,4 +393,42 @@ export function orchestratorHealth(workspace: WorkspaceSummary, restarting = fal
 export function toAgentProvider(provider?: string): AgentProvider {
 	if (provider === "fake") return provider;
 	return AGENT_OPTIONS.find((candidate) => candidate === provider) ?? "codex";
+}
+
+export type NextSessionNavigation =
+	| { target: "session"; sessionId: string }
+	| { target: "project" };
+
+/**
+ * Resolves where to navigate after an active session is killed.
+ * Prioritizes:
+ * 1. Adjacent remaining worker session (previous if available, else first remaining).
+ * 2. Active non-terminated orchestrator if no worker sessions remain.
+ * 3. Project board if no alive sessions remain.
+ */
+export function resolveNextNavigationAfterSessionKill(
+	workspace: WorkspaceSummary | undefined,
+	killedSessionId: string,
+	sessionsInDisplayOrder?: WorkspaceSession[],
+): NextSessionNavigation {
+	if (!workspace) return { target: "project" };
+
+	const workerList = (sessionsInDisplayOrder ?? sortedWorkerSessions(workspace.sessions)).filter(
+		(s) => s.isTerminated !== true,
+	);
+	const currentIndex = workerList.findIndex((s) => s.id === killedSessionId);
+	const remaining = workerList.filter((s) => s.id !== killedSessionId);
+
+	if (remaining.length > 0) {
+		const nextIndex = currentIndex > 0 ? currentIndex - 1 : 0;
+		const nextSession = remaining[nextIndex] ?? remaining[0];
+		return { target: "session", sessionId: nextSession.id };
+	}
+
+	const orchestrator = newestActiveOrchestrator(workspace.sessions);
+	if (orchestrator && orchestrator.id !== killedSessionId && orchestrator.isTerminated !== true) {
+		return { target: "session", sessionId: orchestrator.id };
+	}
+
+	return { target: "project" };
 }

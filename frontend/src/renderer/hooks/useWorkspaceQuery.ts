@@ -11,6 +11,8 @@ import { usesPreviewWorkspaceData } from "../lib/preview-mode";
 import { toReviewerHarnessId } from "../lib/reviewer-harnesses";
 import { captureRendererEvent } from "../lib/telemetry";
 import { agentSwitchVisibility } from "../lib/agent-switch-visibility";
+import { applyOptimisticSessionKills } from "./optimistic-session-kills";
+import { appI18n } from "../i18n";
 import {
 	type AgentSwitchSummary,
 	type PRState,
@@ -20,6 +22,7 @@ import {
 	toProjectKind,
 	toSessionActivity,
 	toSessionStatus,
+	toSessionKind,
 	newestActiveOrchestrator,
 	attentionZone,
 	workerSessions,
@@ -29,7 +32,9 @@ import {
 	STANDALONE_WORKSPACE_ID,
 } from "../types/workspace";
 
-const AD_HOC_AGENTS_WORKSPACE_NAME = "Ad hoc agents";
+function standaloneWorkspaceName(): string {
+	return appI18n.t("standalone.workspaceName");
+}
 
 function placeStandaloneWorkspaceLast(workspaces: WorkspaceSummary[]): WorkspaceSummary[] {
 	const standalone = workspaces.find((workspace) => workspace.id === STANDALONE_WORKSPACE_ID);
@@ -99,7 +104,7 @@ function toWorkspaceSession(
 			}
 			: undefined,
 		autoReviewEnabled: session.autoReviewEnabled ?? false,
-		kind: session.kind === "orchestrator" ? "orchestrator" : session.kind === "worker" ? "worker" : undefined,
+		kind: toSessionKind(session.kind),
 		mode: session.mode === "chat" ? "chat" : "tui",
 		branch: session.branch || undefined,
 		status,
@@ -166,7 +171,7 @@ function toLocalWorkspaceSession(
 			permissions: session.reviewerConfig.permissions ?? undefined,
 		} : undefined,
 		autoReviewEnabled: session.autoReviewEnabled ?? false,
-		kind: session.kind === "orchestrator" ? "orchestrator" : session.kind === "worker" ? "worker" : undefined,
+		kind: toSessionKind(session.kind),
 		// Carried through verbatim: the session surface must render from
 		// the mode this session was created with, not from the current default.
 		mode: session.mode === "chat" ? "chat" : "tui",
@@ -205,7 +210,8 @@ async function fetchWorkspaces(): Promise<WorkspaceSummary[]> {
 			typeof window !== "undefined"
 				? (window as unknown as { __aoFakeAgent?: FakeAgentSeam }).__aoFakeAgent
 				: undefined;
-		return fake ? fake.snapshot() : mockWorkspaces;
+		const snapshot = fake ? fake.snapshot() : mockWorkspaces;
+		return applyOptimisticSessionKills(snapshot) ?? snapshot;
 	}
 	if (!hasTrustedApiBaseUrl()) {
 		throw new Error("AO daemon API is not ready");
@@ -223,6 +229,7 @@ async function fetchWorkspaces(): Promise<WorkspaceSummary[]> {
 	agentSwitchVisibility.setQueryHealthy("history", true, "workspaces");
 
 	const sessions = sessionsData?.sessions ?? [];
+	const standaloneName = standaloneWorkspaceName();
 	const projects = (projectsData?.projects ?? []).map((project) => {
 		const kind = toProjectKind(project.kind);
 		return {
@@ -239,14 +246,17 @@ async function fetchWorkspaces(): Promise<WorkspaceSummary[]> {
 	});
 	const standalone: WorkspaceSummary = {
 		id: STANDALONE_WORKSPACE_ID,
-		name: AD_HOC_AGENTS_WORKSPACE_NAME,
+		name: standaloneName,
 		kind: STANDALONE_PROJECT_KIND,
 		path: "Not attached to a project",
 		sessions: sessions
 			.filter((session) => !session.projectId)
-			.map((session) => toLocalWorkspaceSession(session, STANDALONE_WORKSPACE_ID, AD_HOC_AGENTS_WORKSPACE_NAME)),
+			.map((session) => toLocalWorkspaceSession(session, STANDALONE_WORKSPACE_ID, standaloneName)),
 	};
-	return standalone.sessions.length > 0 ? placeStandaloneWorkspaceLast([...projects, standalone]) : projects;
+	const workspaces =
+		standalone.sessions.length > 0 ? placeStandaloneWorkspaceLast([...projects, standalone]) : projects;
+	// Pending optimistic kills must survive CDC/refetch while the daemon kill is in flight.
+	return applyOptimisticSessionKills(workspaces) ?? workspaces;
 }
 
 // Shared so route loaders can prefetch via queryClient.ensureQueryData (paired
@@ -293,7 +303,7 @@ function toCloudWorkspaceSession(
 		workspaceName: project.displayName,
 		title: session.displayName || session.id,
 		provider: toAgentProvider(session.harness),
-		kind: session.kind === "orchestrator" ? "orchestrator" : "worker",
+		kind: toSessionKind(session.kind) ?? "worker",
 		branch: session.branch || undefined,
 		status: toSessionStatus(session.status, session.isTerminated),
 		isTerminated: session.isTerminated,
@@ -428,7 +438,7 @@ export function useWorkspaceSession(sessionId: string) {
 			const project = session.projectId
 				? localWorkspaces.data?.find((workspace) => workspace.id === session.projectId) ??
 					({ id: session.projectId, name: "" } satisfies Pick<WorkspaceSummary, "id" | "name">)
-				: ({ id: STANDALONE_WORKSPACE_ID, name: AD_HOC_AGENTS_WORKSPACE_NAME } satisfies Pick<WorkspaceSummary, "id" | "name">);
+				: ({ id: STANDALONE_WORKSPACE_ID, name: standaloneWorkspaceName() } satisfies Pick<WorkspaceSummary, "id" | "name">);
 			return toWorkspaceSession(session, project);
 		},
 	});

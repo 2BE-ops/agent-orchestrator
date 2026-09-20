@@ -19,6 +19,11 @@ Natural-language-to-command mappings for common AO tasks.
 | Capture the page | `ao browser screenshot [path]` |
 | Spawn a worker on issue N | `ao spawn --project <p> --issue N --name "<=20 chars>" --prompt "..."` |
 | Message a running agent | `ao send --session <id> --message "..."` |
+| Submit results for my reserved task | `ao task submit-result <session-id> --file <path|->` using the generation in the AO launch protocol |
+| Coordinate with another adaptive task | `ao task send-message <session-id> --file <path|->` using the typed message protocol |
+| Inspect task context and omissions | `ao task context <task-id> <attempt-id>` |
+| Observe task coordination | `ao task messages <project> --task <task-id>` |
+| Inspect accepted project knowledge | `ao knowledge list <project>` and inspect each entry's status/provenance |
 | Kill a session | `ao session kill <id>` |
 | List sessions | `ao session ls` |
 | Register a repo as a project | `ao project add --path <abs-path> --name <name>` |

@@ -23,6 +23,34 @@ type openAPISchemaNode struct {
 	OneOf      []openAPISchemaNode          `yaml:"oneOf"`
 }
 
+func TestBuild_TaskContractsPreserveNullableHistoricalArraysAndHideLeaseHolder(t *testing.T) {
+	got, err := specgen.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Components struct {
+			Schemas map[string]openAPISchemaNode `yaml:"schemas"`
+		} `yaml:"components"`
+	}
+	if err := yaml.Unmarshal(got, &doc); err != nil {
+		t.Fatal(err)
+	}
+	definition := doc.Components.Schemas["TaskDefinition"]
+	for _, field := range []string{"dependencies", "requiredCapabilities"} {
+		types, ok := definition.Properties[field].Type.([]any)
+		if !ok || !slices.Contains(types, any("array")) || !slices.Contains(types, any("null")) {
+			t.Fatalf("historical null array excluded: %+v", definition.Properties[field])
+		}
+	}
+	lease := doc.Components.Schemas["TaskLease"]
+	for _, key := range []string{"HolderID", "holderId", "holderID"} {
+		if _, exists := lease.Properties[key]; exists {
+			t.Fatalf("scheduler ownership leaked in schema: %s", key)
+		}
+	}
+}
+
 func TestBuild_CodexSwitchContractIsRedactedAndOnlyMountedRoutesAreDocumented(t *testing.T) {
 	got, err := specgen.Build()
 	if err != nil {
