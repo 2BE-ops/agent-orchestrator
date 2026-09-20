@@ -4,7 +4,67 @@ Recorded 2026-09-18. The latest milestone evidence below supersedes the historic
 initial audit/environment failures retained later in this file. This is not the
 final platform validation report.
 
-## Stage 25 - Real Electron validation and harness evidence (2026-09-20)
+## Stage 26 - Upstream update, whole-diff review and documentation (2026-09-20)
+
+Upstream reconciliation plus the whole-diff architectural review. At fetch time
+upstream/main had advanced from the two previously assessed commits
+(`795286c4e1`) to 28 commits through `b9601f38c`. Headline entries: Qwen Code
+Chat UI via native ACP (`qwenacp` chat driver), usable Windows Codex account
+storage (`account_home_windows.go`) and all Codex/Claude login methods exposed,
+ACP `session/load` replay buffering, phantom session-row removal in the session
+manager, the task-composer dropdown split with mandatory model preselect, link
+preview cards, a bundled notification sound, Linux tmux crash and detach fixes,
+telemetry GitHub-handle attribution and a mobile UX pass.
+
+Assessment before any merge: upstream added **zero** SQLite migrations, so the
+branch's 0148–0183 sequence has no numbering collision, and of upstream's 442
+changed files only 25 overlap with this branch's 641. `git merge upstream/main`
+auto-resolved 20 of those and left 5 content conflicts, each resolved by
+combining both intents rather than taking a side:
+
+- `backend/internal/daemon/daemon.go` — adjacent import lines; both kept
+  (branch `knowledgesvc` + upstream `linkpreviewsvc`, alphabetical).
+- `frontend/src/renderer/components/TaskComposer.tsx` — the semantic one.
+  The branch's `workerSelection` guards survived on `agent`, `model`, `mode`,
+  `approvalMode` and `modelWarning` (a registry Agent-Type launch must not send
+  legacy single-worker fields), while upstream's behavioral change was adopted
+  inside them: an explicitly touched effort now survives a TUI retry
+  (`workerSelection || !effortTouched ? undefined : effort`), and the merged
+  `modelWarning` identifier replaced the branch-local
+  `displayedModelWarning`.
+- `frontend/src/renderer/components/TaskComposer.test.tsx` — both sides added
+  tests at the same insertion point; both sets kept (3 workerSelection tests +
+  upstream's standalone model-prompt test).
+- `backend/internal/httpd/apispec/openapi.yaml` and
+  `frontend/src/api/schema.ts` — generated artifacts; taken from the branch and
+  regenerated from the merged sources (`npm run api`), and `sqlc generate`
+  re-run with zero drift.
+
+Merged-tree validation (merge commit `de5fcedac`, with gofmt normalization of
+three auto-merged files — `hookutil`, `ports/agent`, `ports/chat`, the known
+CRLF-after-merge class — folded in by amend):
+
+- `go build ./...` clean; `go vet ./...` reports only the pre-existing POSIX
+  `syscall.Kill` persistenthost test file (never compiled on Linux CI).
+- Full `go test ./...`: every failure was proven identical at pre-merge HEAD
+  `626a32ae2` via scratch-worktree control runs — the aider/kilocode/kimchi/
+  kimi/modelcatalog auth-config, file-permission and binary-discovery classes,
+  session_manager's eight, reviewer/claudecode's one, and httpd/controllers'
+  `TestBridgeStatusConcurrentSecurePairing` + `TestProjectsAPI_Clone`
+  (Windows-environmental; Linux CI runs them green). No merge-introduced
+  failure anywhere.
+- Frontend `tsc --noEmit` clean; TaskComposer vitest 37/37 (branch + upstream
+  tests coexisting).
+- Pinned golangci-lint v2.12.2: exactly the six documented Windows-only
+  findings in files the branch never touched (errcheck 1, errorlint 1, gosec 4).
+
+Whole-diff shape against the merged upstream head: 577 backend files,
+~88k insertions; by area 231 storage, 83 service, 76 domain, 55 httpd, 45 cli,
+30 ports, 24 session_manager — the registry/tasks/governance core the mission
+added, with the desktop surfaces (38 components) riding the generated typed
+client. The stage-15+ architecture review requested alongside this stage is
+`docs/adaptive-agent-platform-review.md`.
+
 
 Live in-app validation on Windows 11 against an isolated lab: a dedicated
 worktree at the stage-24 tip (advanced per fix below), a real `npm ci`,

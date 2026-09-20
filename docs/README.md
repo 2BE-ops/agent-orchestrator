@@ -17,6 +17,7 @@ Start with [architecture.md](architecture.md) for the current backend model and
 | [adaptive-agent-platform-design.md](adaptive-agent-platform-design.md) | Proposed adaptive platform: source audit, capability gaps, reuse boundaries and architecture (not implemented). |
 | [adaptive-agent-platform-checklist.md](adaptive-agent-platform-checklist.md) | Adaptive platform milestones, acceptance coverage and current blockers. |
 | [adaptive-agent-platform-validation.md](adaptive-agent-platform-validation.md) | Initial environment and baseline-test evidence; distinct from final feature validation. |
+| [adaptive-agent-platform-review.md](adaptive-agent-platform-review.md) | Stage-26 thematic architecture review of the stage 15+ implementation. |
 | [scm-observer.md](scm-observer.md)                     | SCM subsystem: polling pipeline, durable-state invariants, PR identity model, and the rename/transfer design.         |
 | [backend-code-structure.md](backend-code-structure.md) | Package ownership rules for the Go backend: domain, services, ports, adapters, storage, HTTP, CLI, and daemon wiring. |
 | [cli/README.md](cli/README.md)                         | CLI commands and daemon control surface.                                                                              |
