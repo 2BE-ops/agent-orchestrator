@@ -1214,7 +1214,7 @@ describe("SessionInspector completion controls", () => {
       <SessionInspector
         session={session([], {
           workspaceId: STANDALONE_WORKSPACE_ID,
-          workspaceName: "Ad hoc agents",
+          workspaceName: "Scratchpad",
           status: "idle",
         })}
       />,

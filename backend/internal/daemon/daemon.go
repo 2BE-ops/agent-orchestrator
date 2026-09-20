@@ -58,6 +58,7 @@ import (
 	evolutionsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/evolution"
 	importsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/importer"
 	knowledgesvc "github.com/aoagents/agent-orchestrator/backend/internal/service/knowledge"
+	linkpreviewsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/linkpreview"
 	notificationsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/notification"
 	orchestratorsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/orchestrator"
 	"github.com/aoagents/agent-orchestrator/backend/internal/service/orchestratorfeed"
@@ -829,6 +830,7 @@ func Run() error {
 			},
 		}),
 		Browser:             browserService,
+		LinkPreview:         linkpreviewsvc.New(nil),
 		PreviewServer:       managedPreview,
 		SessionCapabilities: browserAuthority,
 		AgentSwitchPolicy:   policyCoordinator,

@@ -168,7 +168,7 @@ func (s *Service) taskTitleOrchestrator(ctx context.Context, projectID domain.Pr
 	}
 	unlock()
 
-	orchestrator, err := s.SpawnOrchestrator(ctx, projectID, false, "")
+	orchestrator, err := s.SpawnOrchestrator(ctx, projectID, false, "", "")
 	if err != nil {
 		return "", fmt.Errorf("start project orchestrator: %w", err)
 	}
