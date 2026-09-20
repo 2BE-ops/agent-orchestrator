@@ -21,6 +21,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/cursor"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/devin"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/droid"
+	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/fake"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/goose"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/grok"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/kilocode"
@@ -41,9 +42,10 @@ import (
 // Constructors returns a fresh instance of every agent adapter the daemon
 // ships, in a stable registration order. Adding a new harness means adding its
 // constructor here (and a domain.AgentHarness constant) — the one edit the
-// daemon picks up.
+// daemon picks up. The opt-in fake harness is appended only when its explicit
+// AO_FAKE_HARNESS gate is set, so default inventories never list it.
 func Constructors() []adapters.Adapter {
-	return []adapters.Adapter{
+	cons := []adapters.Adapter{
 		claudecode.New(),
 		codex.New(),
 		opencode.New(),
@@ -72,6 +74,10 @@ func Constructors() []adapters.Adapter {
 		primeagent.New(),
 		autohand.New(),
 	}
+	if fake.OptIn() {
+		cons = append(cons, fake.New())
+	}
+	return cons
 }
 
 // Build returns a registry populated with the shipped agent adapters, keyed by

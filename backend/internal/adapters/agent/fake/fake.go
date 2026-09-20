@@ -123,6 +123,14 @@ func (p *Plugin) AuthStatus(ctx context.Context) (ports.AgentAuthStatus, error) 
 	return ports.AgentAuthStatusAuthorized, nil
 }
 
+// OptIn reports whether the explicit AO_FAKE_HARNESS opt-in is active. The
+// agent registry consults it so the fake adapter is only constructed when a
+// human (e2e, dev, or a live lab run) asked for it; on every other machine the
+// shipped agent inventory stays byte-identical.
+func OptIn() bool {
+	return isTruthy(os.Getenv(HarnessEnv))
+}
+
 // isTruthy accepts the common opt-in tokens for an env-var gate. Matched
 // case-insensitively; whitespace is trimmed. Empty / unset / any other value
 // (including "0", "false", "no") is treated as off.

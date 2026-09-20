@@ -46,8 +46,10 @@ func TestGetLaunchCommandIsScriptedTimeline(t *testing.T) {
 		t.Fatal(err)
 	}
 	// argv[0] must be the RESOLVED shell path (what Manager.Spawn validates), not
-	// a bare "sh" — see ResolveBinary / #2692 review.
-	if len(cmd) != 3 || cmd[1] != "-lc" || !strings.HasSuffix(cmd[0], "sh") || !strings.Contains(cmd[0], "/") {
+	// a bare "sh" — see ResolveBinary / #2692 review. Windows resolves to
+	// sh.exe with backslash separators, so the shape check stays separator- and
+	// extension-aware instead of assuming a POSIX path.
+	if len(cmd) != 3 || cmd[1] != "-lc" || !isResolvedShellPath(cmd[0]) {
 		t.Fatalf("launch command shape = %#v, want [<resolved sh path> -lc <script>]", cmd)
 	}
 
@@ -86,9 +88,24 @@ func TestResolveBinaryReturnsResolvedShellPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveBinary: unexpected error: %v", err)
 	}
-	if !strings.HasSuffix(got, "sh") || !strings.Contains(got, "/") {
+	if !isResolvedShellPath(got) {
 		t.Fatalf("ResolveBinary = %q, want an absolute resolved sh path", got)
 	}
+}
+
+// isResolvedShellPath reports whether path names a concrete shell executable
+// (never a bare "sh"): absolute, carrying a separator, and ending in sh with
+// the platform's executable extension when one applies (sh on POSIX, sh.exe on
+// Windows).
+func isResolvedShellPath(path string) bool {
+	if !filepath.IsAbs(path) {
+		return false
+	}
+	if !strings.ContainsRune(path, '/') && !strings.ContainsRune(path, '\\') {
+		return false
+	}
+	name := strings.ToLower(filepath.Base(path))
+	return name == "sh" || strings.TrimSuffix(name, filepath.Ext(name)) == "sh"
 }
 
 // When no runnable sh is on PATH (Windows / stripped PATH), the fake must report
