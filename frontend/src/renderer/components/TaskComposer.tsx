@@ -541,7 +541,7 @@ export function TaskComposer({
 						: submitTask(brief, "tui")),
 				onSubmit: (brief) => void submitTask(brief, requiresTuiFallback ? "tui" : undefined),
 			}}
-			renderAgentControl={(control) => <DesktopAgentControl {...control} />}
+			renderAgentControl={(control) => <DesktopAgentControl {...control} manageAgents={!isCloudProject} />}
 			renderEffortControl={(control) => <TaskEffortPicker {...control} />}
 			renderModelControl={(control) => <TaskModelPicker {...control} onRefresh={refreshSelectedModels} />}
 			showEffort={!requiresTuiFallback && effortOptions.length > 0}
@@ -579,10 +579,11 @@ function formatEffortLabel(value: string): string {
 	return value === "xhigh" ? "Extra high" : value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function DesktopAgentControl(control: TaskComposerAgentControl) {
+function DesktopAgentControl({ manageAgents, ...control }: TaskComposerAgentControl & { manageAgents: boolean }) {
 	return (
 		<RequiredAgentField
 			{...control}
+			manageAgents={manageAgents}
 			variant="chip"
 			triggerClassName="composer-toolbar-option w-full justify-between"
 		/>
