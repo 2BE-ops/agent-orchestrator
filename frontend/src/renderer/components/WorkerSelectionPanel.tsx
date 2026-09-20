@@ -33,7 +33,11 @@ export function WorkerSelectionPanel({
 		initialPageParam: "",
 		getNextPageParam: (page) => page.nextCursor || undefined,
 	});
-	const entries = types.data?.pages.flatMap((page) => page.items) ?? [];
+	// `?? []` per page: a success-shaped response missing `items`/`versions`
+	// (e.g. a mocked or otherwise malformed payload) must degrade to an empty
+	// list, not crash the whole New Task dialog on `item.entry` below.
+	const entries =
+		types.data?.pages.flatMap((page) => page.items ?? []) ?? [];
 	const selected = entries.find(
 		(item) => item.entry.id === selection?.agentTypeId,
 	);
@@ -46,7 +50,7 @@ export function WorkerSelectionPanel({
 		getNextPageParam: (page) => page.nextCursor || undefined,
 	});
 	const versionEntries =
-		versions.data?.pages.flatMap((page) => page.versions) ?? [];
+		versions.data?.pages.flatMap((page) => page.versions ?? []) ?? [];
 	const version = useQuery({
 		queryKey: [
 			...registryQueryRoot,
