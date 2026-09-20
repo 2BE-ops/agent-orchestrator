@@ -224,6 +224,28 @@ func (m *Manager) project(ctx context.Context, id domain.ProjectID) error {
 	return nil
 }
 
+// LiveOrchestrator exposes the project's current live orchestrator session for
+// daemon-owned push delivery. It resolves and never spawns: a project without
+// a live orchestrator reports found=false rather than an error.
+func (m *Manager) LiveOrchestrator(ctx context.Context, project domain.ProjectID) (domain.SessionRecord, bool, error) {
+	if err := m.project(ctx, project); err != nil {
+		var apiErr *apierr.Error
+		if errors.As(err, &apiErr) && apiErr.Code == "PROJECT_NOT_FOUND" {
+			return domain.SessionRecord{}, false, nil
+		}
+		return domain.SessionRecord{}, false, err
+	}
+	rec, err := m.activeOrchestrator(ctx, project)
+	if err != nil {
+		var apiErr *apierr.Error
+		if errors.As(err, &apiErr) && apiErr.Code == "ORCHESTRATOR_NOT_FOUND" {
+			return domain.SessionRecord{}, false, nil
+		}
+		return domain.SessionRecord{}, false, err
+	}
+	return rec, true, nil
+}
+
 // activeOrchestrator resolves the project's live orchestrator session. Spawn
 // semantics keep at most one active orchestrator per project; when a
 // replacement overlaps, the newest live session owns planning.

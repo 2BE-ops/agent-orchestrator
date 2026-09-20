@@ -60,6 +60,7 @@ import (
 	knowledgesvc "github.com/aoagents/agent-orchestrator/backend/internal/service/knowledge"
 	notificationsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/notification"
 	orchestratorsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/orchestrator"
+	"github.com/aoagents/agent-orchestrator/backend/internal/service/orchestratorfeed"
 	prsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/pr"
 	projectsvc "github.com/aoagents/agent-orchestrator/backend/internal/service/project"
 	registrysvc "github.com/aoagents/agent-orchestrator/backend/internal/service/registry"
@@ -897,6 +898,7 @@ func Run() error {
 	var startupReconcileDone <-chan struct{}
 	var taskMessagesDone <-chan struct{}
 	var managerInboxDone <-chan struct{}
+	var orchestratorNoticesDone <-chan struct{}
 	var managerDecisionsDone <-chan struct{}
 	runErr := srv.RunWithReady(ctx, func() {
 		// Agent-readiness warming is advisory and idempotent, and request paths
@@ -953,6 +955,19 @@ func Run() error {
 				dispatcher.Run(ctx)
 			}()
 		}
+		if noticeTransport, ok := sessMgr.(ports.OrchestratorNoticeTransport); ok {
+			noticeDone := make(chan struct{})
+			orchestratorNoticesDone = noticeDone
+			go func() {
+				defer close(noticeDone)
+				select {
+				case <-ctx.Done():
+					return
+				case <-done:
+				}
+				orchestratorfeed.New(store, orchestratorsvc.New(store), noticeTransport, log).Run(ctx)
+			}()
+		}
 		go func() {
 			defer close(done)
 			if reconcileErr := reconcilePersistentChatHosts(ctx, cfg.DataDir, store); reconcileErr != nil {
@@ -1004,6 +1019,15 @@ func Run() error {
 			log.Error("task message dispatcher shutdown timed out; retained claims require reconciliation")
 		}
 		messageStopCancel()
+	}
+	if orchestratorNoticesDone != nil {
+		noticeStopCtx, noticeStopCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		select {
+		case <-orchestratorNoticesDone:
+		case <-noticeStopCtx.Done():
+			log.Error("orchestrator notice dispatcher shutdown timed out; pending notices require reconciliation")
+		}
+		noticeStopCancel()
 	}
 	if agentSwitchDispatcher != nil {
 		dispatcherStopContext, dispatcherStopCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)

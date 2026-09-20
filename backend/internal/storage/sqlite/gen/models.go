@@ -191,6 +191,20 @@ type AdaptiveExperiment struct {
 	Conclusion       sql.NullString
 }
 
+type AdaptiveOrchestratorNotice struct {
+	ID         string
+	ProjectID  string
+	TaskID     string
+	Fact       string
+	Anchor     string
+	Revision   int64
+	Detail     string
+	State      string
+	Reason     string
+	CreatedAt  time.Time
+	ResolvedAt sql.NullTime
+}
+
 type AdaptiveOrchestratorPlanReceipt struct {
 	ID             string
 	ProjectID      string

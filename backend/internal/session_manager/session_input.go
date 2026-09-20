@@ -13,18 +13,19 @@ import (
 type agentOperationKind string
 
 const (
-	agentOperationTaskDispatch      agentOperationKind = "task_dispatch"
-	agentOperationManagerDispatch   agentOperationKind = "manager_dispatch"
-	agentOperationTaskMessage       agentOperationKind = "task_message"
-	agentOperationManagerMessage    agentOperationKind = "manager_message"
-	agentOperationSwitch            agentOperationKind = "switch"
-	agentOperationExit              agentOperationKind = "exit"
-	agentOperationResume            agentOperationKind = "resume"
-	agentOperationKill              agentOperationKind = "kill"
-	agentOperationRestore           agentOperationKind = "restore"
-	agentOperationRetire            agentOperationKind = "retire"
-	agentOperationReconcile         agentOperationKind = "reconcile"
-	agentOperationInterfaceRecovery agentOperationKind = "interface_recovery"
+	agentOperationTaskDispatch       agentOperationKind = "task_dispatch"
+	agentOperationManagerDispatch    agentOperationKind = "manager_dispatch"
+	agentOperationTaskMessage        agentOperationKind = "task_message"
+	agentOperationManagerMessage     agentOperationKind = "manager_message"
+	agentOperationOrchestratorNotice agentOperationKind = "orchestrator_notice"
+	agentOperationSwitch             agentOperationKind = "switch"
+	agentOperationExit               agentOperationKind = "exit"
+	agentOperationResume             agentOperationKind = "resume"
+	agentOperationKill               agentOperationKind = "kill"
+	agentOperationRestore            agentOperationKind = "restore"
+	agentOperationRetire             agentOperationKind = "retire"
+	agentOperationReconcile          agentOperationKind = "reconcile"
+	agentOperationInterfaceRecovery  agentOperationKind = "interface_recovery"
 )
 
 var errAgentOperationInProgress = errors.New("session: another exclusive operation is in progress")

@@ -187,6 +187,7 @@ var shippedMigrations = map[int64]string{
 	180: "0180_orchestrator_goals.sql",
 	181: "0181_evolution_experiments.sql",
 	182: "0182_project_controls.sql",
+	183: "0183_orchestrator_notices.sql",
 }
 
 // burnedVersion reports version numbers that must never be (re)used: they
