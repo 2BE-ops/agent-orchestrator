@@ -36,6 +36,27 @@ func (q *Queries) GetTaskDelegation(ctx context.Context, arg GetTaskDelegationPa
 	return i, err
 }
 
+const getTaskDelegationByOperation = `-- name: GetTaskDelegationByOperation :one
+SELECT attempt_id, number, execution_operation_id, session_id, configuration_hash, context_hash, snapshot, content_hash, created_at FROM adaptive_task_delegations WHERE execution_operation_id=?
+`
+
+func (q *Queries) GetTaskDelegationByOperation(ctx context.Context, executionOperationID string) (AdaptiveTaskDelegation, error) {
+	row := q.db.QueryRowContext(ctx, getTaskDelegationByOperation, executionOperationID)
+	var i AdaptiveTaskDelegation
+	err := row.Scan(
+		&i.AttemptID,
+		&i.Number,
+		&i.ExecutionOperationID,
+		&i.SessionID,
+		&i.ConfigurationHash,
+		&i.ContextHash,
+		&i.Snapshot,
+		&i.ContentHash,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const insertTaskDelegation = `-- name: InsertTaskDelegation :exec
 INSERT INTO adaptive_task_delegations(attempt_id,number,execution_operation_id,session_id,configuration_hash,context_hash,snapshot,content_hash,created_at)
 VALUES (?,?,?,?,?,?,?,?,?)
@@ -109,4 +130,15 @@ func (q *Queries) ListTaskDelegations(ctx context.Context, arg ListTaskDelegatio
 		return nil, err
 	}
 	return items, nil
+}
+
+const maxTaskDelegationNumber = `-- name: MaxTaskDelegationNumber :one
+SELECT CAST(COALESCE(MAX(number), 0) AS INTEGER) AS number FROM adaptive_task_delegations WHERE attempt_id=?
+`
+
+func (q *Queries) MaxTaskDelegationNumber(ctx context.Context, attemptID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, maxTaskDelegationNumber, attemptID)
+	var number int64
+	err := row.Scan(&number)
+	return number, err
 }

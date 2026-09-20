@@ -350,7 +350,7 @@ func (m *Manager) resumeChatController(
 	if managerExecution != nil {
 		controllerGeneration = managerExecution.ID
 	}
-	rec, err = m.restoreTaskContext(ctx, rec)
+	rec, err = m.restoreTaskContext(ctx, rec, taskExecution)
 	if err != nil {
 		return RestoreResult{}, err
 	}

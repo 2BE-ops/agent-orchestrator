@@ -91,6 +91,19 @@ func TestTaskContextReachesNativeLaunchAndFreshRestoreWithoutRebuilding(t *testi
 			if err != nil || retained.ContentHash != frozen.ContentHash {
 				t.Fatalf("restore changed context: %v", err)
 			}
+			// The replacement generation journalled its restore: a second
+			// immutable delegation version carries the retained bytes and the
+			// same sealed context hash, bound to its own restore operation.
+			versions, err := f.store.ListTaskDelegations(ctx, f.lease.AttemptID, 0, 10)
+			if err != nil || len(versions) != 2 {
+				t.Fatalf("replacement receipt missing: %+v err=%v", versions, err)
+			}
+			replacement := versions[1]
+			if replacement.Number != 2 || replacement.ExecutionOperationID == versions[0].ExecutionOperationID ||
+				replacement.Prompt != frozen.Prompt || replacement.ContextHash != frozen.ContentHash ||
+				replacement.SystemPrompt != frozen.SystemPrompt {
+				t.Fatalf("replacement receipt changed retained input: %+v", replacement)
+			}
 		})
 	}
 }

@@ -2619,7 +2619,7 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 	if managerExecution != nil {
 		reservedGeneration = managerExecution.ID
 	}
-	rec, err = m.restoreTaskContext(ctx, rec)
+	rec, err = m.restoreTaskContext(ctx, rec, taskExecution)
 	if err != nil {
 		return RestoreResult{}, err
 	}

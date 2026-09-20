@@ -2,8 +2,11 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
@@ -75,4 +78,65 @@ func insertInitialTaskDelegation(ctx context.Context, q *gen.Queries, snapshot d
 	}
 	return q.InsertTaskDelegation(ctx, gen.InsertTaskDelegationParams{AttemptID: d.AttemptID, Number: d.Number, ExecutionOperationID: d.ExecutionOperationID,
 		SessionID: string(d.SessionID), ConfigurationHash: d.ConfigurationHash, ContextHash: d.ContextHash, Snapshot: string(encoded), ContentHash: d.ContentHash, CreatedAt: d.CreatedAt})
+}
+
+// AppendTaskDelegation journals the output instructions a replacement native
+// generation restored. The retained snapshot's exact bytes are copied into a
+// new immutable version bound to the restore execution operation: sealed
+// context is never rewritten and a live configuration can never substitute for
+// it. Replaying the same operation returns the existing receipt; legacy
+// schema-v1 contexts predate journalled instructions and stay unreadable
+// instead of inventing text.
+func (s *Store) AppendTaskDelegation(ctx context.Context, op domain.TaskExecutionOperation, snapshot domain.TaskContextSnapshot, now time.Time) (domain.TaskDelegation, bool, error) {
+	if op.Kind != "restore" || op.SessionID == "" || op.ID == "" || op.Lease.AttemptID == "" {
+		return domain.TaskDelegation{}, false, fmt.Errorf("%w: only a restore execution operation can journal replacement instructions", ports.ErrTaskInvalid)
+	}
+	if snapshot.SchemaVersion < 2 {
+		return domain.TaskDelegation{}, false, nil
+	}
+	if snapshot.AttemptID != op.Lease.AttemptID || snapshot.SessionID != op.SessionID {
+		return domain.TaskDelegation{}, false, fmt.Errorf("%w: retained context does not belong to this execution", ports.ErrTaskForbidden)
+	}
+	if err := s.writeMu.LockContext(ctx); err != nil {
+		return domain.TaskDelegation{}, false, err
+	}
+	defer s.writeMu.Unlock()
+	var appended domain.TaskDelegation
+	created := false
+	err := s.inTx(ctx, "append task delegation", func(q *gen.Queries) error {
+		row, err := q.GetTaskDelegationByOperation(ctx, op.ID)
+		switch {
+		case err == nil:
+			appended, err = taskDelegationFromRow(row)
+			return err
+		case !errors.Is(err, sql.ErrNoRows):
+			return err
+		}
+		highest, err := q.MaxTaskDelegationNumber(ctx, snapshot.AttemptID)
+		if err != nil {
+			return err
+		}
+		if highest >= 1000 {
+			return fmt.Errorf("%w: delegation history is bounded at 1000 versions", ports.ErrTaskInvalid)
+		}
+		d := domain.TaskDelegation{SchemaVersion: 1, AttemptID: snapshot.AttemptID, Number: highest + 1, SessionID: snapshot.SessionID,
+			ExecutionOperationID: op.ID, ConfigurationHash: snapshot.ConfigurationHash, ContextHash: snapshot.ContentHash,
+			MaxContextClass: snapshot.MaxContextClass, Classification: snapshot.Classification, EngagementID: snapshot.EngagementID,
+			SystemPrompt: snapshot.SystemPrompt, Prompt: snapshot.Prompt, CreatedAt: now}
+		d.ContentHash = d.Hash()
+		if err := d.Validate(); err != nil {
+			return err
+		}
+		encoded, err := json.Marshal(d)
+		if err != nil {
+			return err
+		}
+		if err := q.InsertTaskDelegation(ctx, gen.InsertTaskDelegationParams{AttemptID: d.AttemptID, Number: d.Number, ExecutionOperationID: d.ExecutionOperationID,
+			SessionID: string(d.SessionID), ConfigurationHash: d.ConfigurationHash, ContextHash: d.ContextHash, Snapshot: string(encoded), ContentHash: d.ContentHash, CreatedAt: d.CreatedAt}); err != nil {
+			return err
+		}
+		appended, created = d, true
+		return nil
+	})
+	return appended, created, err
 }

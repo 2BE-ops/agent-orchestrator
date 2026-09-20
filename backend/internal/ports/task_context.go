@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 )
@@ -17,6 +18,7 @@ type TaskContextStore interface {
 type TaskDelegationStore interface {
 	GetTaskDelegation(context.Context, string, int64) (domain.TaskDelegation, error)
 	ListTaskDelegations(context.Context, string, int64, int) ([]domain.TaskDelegation, error)
+	AppendTaskDelegation(context.Context, domain.TaskExecutionOperation, domain.TaskContextSnapshot, time.Time) (domain.TaskDelegation, bool, error)
 }
 
 // TaskContextRequest is internal manager context, never public file-path input.
