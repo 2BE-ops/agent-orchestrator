@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -75,4 +76,27 @@ func TestSkillResourceFileDirectoryConflicts(t *testing.T) {
 			t.Fatalf("accepted file/directory conflict: %v", paths)
 		}
 	}
+}
+
+// TestAgentTypeFakeHarnessValidatesOnlyUnderOptIn pins the live authoring
+// path: an Agent Type pinned to the deterministic fake harness is refused by
+// default and validates exactly when the shared AO_FAKE_HARNESS opt-in is
+// truthy, so lab/e2e machines can author the type normal users cannot.
+func TestAgentTypeFakeHarnessValidatesOnlyUnderOptIn(t *testing.T) {
+	def := RegistryDefinition{AgentType: &AgentTypeDefinition{
+		Harness:            HarnessFake,
+		MaxParallelWorkers: 1,
+	}}
+	t.Run("default refuses", func(t *testing.T) {
+		os.Unsetenv("AO_FAKE_HARNESS") //nolint:errcheck // test-local env hygiene
+		if err := def.Validate(RegistryAgentType); err == nil {
+			t.Fatal("fake-harness Agent Type validated without the opt-in")
+		}
+	})
+	t.Run("opt-in accepts", func(t *testing.T) {
+		t.Setenv("AO_FAKE_HARNESS", "1")
+		if err := def.Validate(RegistryAgentType); err != nil {
+			t.Fatalf("fake-harness Agent Type refused under the opt-in: %v", err)
+		}
+	})
 }
