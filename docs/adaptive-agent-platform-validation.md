@@ -65,6 +65,19 @@ added, with the desktop surfaces (38 components) riding the generated typed
 client. The stage-15+ architecture review requested alongside this stage is
 `docs/adaptive-agent-platform-review.md`.
 
+Fork CI outcome: 16/17 checks green immediately (api/sqlc drift, lint,
+windows-workspace, both native matrix legs, renderer-smoke, test). The Linux
+race leg (`go test -race -timeout=20m ./...`) failed twice on
+`internal/storage/sqlite` hitting the per-binary 20m budget — with a
+**different** test mid-run at each expiry (`TestMigrateRepairsRenumberedUsageCostHistory`,
+then `TestUpgradeMatrixCleanDatabaseStartsAtAdaptiveBaseline`), proving
+cumulative suite duration rather than a hang: upstream added new test packages
+that compete for CPU while the migration-heavy sqlite binary runs, and the
+same suite had fit the window pre-merge. Fixed by raising the race timeout to
+30m — the second such bump, following the workflow comment's own precedent
+(15m→20m for the same reason); no tests are excluded. All local non-race
+sqlite runs pass well inside normal bounds.
+
 
 Live in-app validation on Windows 11 against an isolated lab: a dedicated
 worktree at the stage-24 tip (advanced per fix below), a real `npm ci`,
